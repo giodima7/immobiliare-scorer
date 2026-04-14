@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Favourites — Immobiliare Scorer</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:      #0f1117;
+  --surface: #1a1d27;
+  --surf2:   #22263a;
+  --surf3:   #1e2235;
+  --border:  #2e3250;
+  --accent:  #4f8ef7;
+  --green:   #22c55e;
+  --yellow:  #f59e0b;
+  --red:     #ef4444;
+  --purple:  #a78bfa;
+  --text:    #e2e8f0;
+  --muted:   #8892aa;
+  --radius:  10px;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  min-height: 100vh;
+}
+
+/* ── Header ── */
+header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+header h1 { font-size: 18px; font-weight: 700; }
+header h1 span { color: #ef4444; }
+.back-link {
+  font-size: 13px; color: var(--accent);
+  text-decoration: none; padding: 5px 10px;
+  border: 1px solid rgba(79,142,247,0.35); border-radius: 6px;
+}
+.back-link:hover { background: rgba(79,142,247,0.1); }
+.fav-count {
+  font-size: 13px; color: var(--muted);
+  background: var(--surf2); padding: 4px 12px;
+  border-radius: 20px; border: 1px solid var(--border);
+}
+.btn-compare {
+  background: rgba(79,142,247,0.15);
+  border: 1px solid rgba(79,142,247,0.4);
+  color: var(--accent);
+  border-radius: 6px; padding: 6px 14px;
+  cursor: pointer; font-size: 13px; font-weight: 600;
+  transition: background 0.15s;
+}
+.btn-compare:hover { background: rgba(79,142,247,0.25); }
+.btn-compare.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn-clear-all {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid rgba(239,68,68,0.35);
+  color: #f87171; border-radius: 6px; padding: 5px 12px;
+  cursor: pointer; font-size: 12px;
+}
+.btn-clear-all:hover { background: rgba(239,68,68,0.1); }
+
+/* ── Compare table ── */
+#compareSection {
+  overflow-x: auto;
+  border-bottom: 2px solid var(--accent);
+  background: var(--surface);
+}
+.compare-table {
+  border-collapse: collapse;
+  min-width: 600px;
+  width: 100%;
+}
+.compare-table th, .compare-table td {
+  border: 1px solid var(--border);
+  padding: 7px 12px;
+  text-align: right;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.compare-table th { background: var(--surf2); color: var(--muted); font-weight: 600; text-align: left; }
+.compare-table td:first-child { text-align: left; color: var(--muted); }
+.compare-table thead th { background: var(--surf3); color: var(--text); text-align: center; font-size: 13px; }
+.compare-table thead th:first-child { text-align: left; color: var(--muted); }
+.compare-best { color: var(--green); font-weight: 700; }
+.compare-worst { color: var(--red); }
+
+/* ── Cards ── */
+.cards-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.fav-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.fav-card:hover { border-color: var(--accent); }
+
+/* Card top strip */
+.fav-card-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px 20px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.score-badge {
+  width: 60px; height: 60px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; font-weight: 800;
+  flex-shrink: 0;
+}
+.score-badge.high { background: rgba(34,197,94,0.18); color: var(--green); border: 2px solid var(--green); }
+.score-badge.mid  { background: rgba(245,158,11,0.15); color: var(--yellow); border: 2px solid var(--yellow); }
+.score-badge.low  { background: rgba(239,68,68,0.12); color: var(--red); border: 2px solid var(--red); }
+
+.fav-card-title { flex: 1; }
+.fav-card-title .neigh { font-size: 18px; font-weight: 700; line-height: 1.3; }
+.fav-card-title .address { font-size: 12px; color: var(--muted); margin-top: 3px; }
+
+.city-tag {
+  display: inline-block; font-size: 10px; font-weight: 600;
+  padding: 2px 8px; border-radius: 10px; margin-top: 4px;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.tag-napoli { background: rgba(79,142,247,0.18); color: #7eb5ff; }
+.tag-milano { background: rgba(124,92,191,0.2);  color: #b39ddb; }
+.tag-roma   { background: rgba(239,68,68,0.15);  color: #f87171; }
+.tag-other  { background: rgba(34,197,94,0.15);  color: #6ee7b7; }
+
+.fascia-badge {
+  font-size: 10px; font-weight: 700;
+  padding: 2px 8px; border-radius: 4px; margin-left: 8px;
+}
+.fascia-A { background: rgba(79,142,247,0.2);  color: var(--accent); }
+.fascia-B { background: rgba(245,158,11,0.15); color: var(--yellow); }
+.fascia-C { background: rgba(239,68,68,0.12);  color: var(--red); }
+
+.fav-card-actions { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
+.btn-remove-fav {
+  background: transparent;
+  border: 1px solid rgba(239,68,68,0.35);
+  color: #f87171; border-radius: 6px; padding: 5px 12px;
+  cursor: pointer; font-size: 12px; white-space: nowrap;
+}
+.btn-remove-fav:hover { background: rgba(239,68,68,0.1); }
+.btn-view {
+  font-size: 12px; color: var(--accent);
+  text-decoration: none; padding: 5px 12px;
+  border: 1px solid rgba(79,142,247,0.35); border-radius: 5px;
+  white-space: nowrap;
+}
+.btn-view:hover { background: rgba(79,142,247,0.12); }
+
+/* Card body grid */
+.fav-card-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0;
+}
+@media (max-width: 700px) {
+  .fav-card-body { grid-template-columns: 1fr 1fr; }
+}
+
+.info-section {
+  padding: 14px 20px;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.info-section:last-child, .info-section:nth-child(3n) { border-right: none; }
+
+.section-title {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.8px; color: var(--muted);
+  margin-bottom: 10px; padding-bottom: 5px;
+  border-bottom: 1px solid var(--border);
+}
+
+.info-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 8px; margin-bottom: 5px;
+  font-size: 12px;
+}
+.info-row .lbl { color: var(--muted); }
+.info-row .val { font-weight: 600; text-align: right; }
+.info-row .val.green  { color: var(--green); }
+.info-row .val.yellow { color: var(--yellow); }
+.info-row .val.red    { color: var(--red); }
+.info-row .val.accent { color: var(--accent); }
+.info-row .val.purple { color: var(--purple); }
+
+.big-val {
+  font-size: 22px; font-weight: 700;
+  margin-bottom: 2px;
+}
+.sub-val { font-size: 11px; color: var(--muted); }
+
+/* Score breakdown */
+.score-breakdown {
+  display: flex; gap: 0;
+  border-top: 1px solid var(--border);
+}
+.score-part {
+  flex: 1; text-align: center;
+  padding: 10px 8px;
+  border-right: 1px solid var(--border);
+}
+.score-part:last-child { border-right: none; }
+.sp-val { font-size: 20px; font-weight: 700; }
+.sp-lbl { font-size: 10px; color: var(--muted); margin-top: 2px; line-height: 1.3; }
+.sp-wt  { font-size: 9px; color: var(--muted); opacity: 0.65; }
+.s-price  { color: var(--accent); }
+.s-yield  { color: var(--green); }
+.s-fascia { color: var(--purple); }
+.s-total  { color: var(--text); }
+
+/* Unmatched warning */
+.unmatched-warn {
+  font-size: 11px; color: var(--yellow);
+  background: rgba(245,158,11,0.08);
+  border: 1px solid rgba(245,158,11,0.25);
+  border-radius: 4px; padding: 2px 8px;
+  margin-left: 8px;
+}
+
+/* vs-OMI badge */
+.vs-omi {
+  font-size: 12px; font-weight: 600;
+  padding: 2px 8px; border-radius: 5px;
+}
+.vs-below { background: rgba(34,197,94,0.15); color: var(--green); }
+.vs-at    { background: rgba(245,158,11,0.12); color: var(--yellow); }
+.vs-above { background: rgba(239,68,68,0.10); color: var(--red); }
+
+/* Coeff pill */
+.coeff-pill {
+  display: inline-block;
+  font-size: 11px; color: var(--muted);
+  background: var(--surf2);
+  border: 1px solid var(--border);
+  border-radius: 4px; padding: 1px 7px;
+  margin-right: 4px;
+}
+
+/* Empty state */
+.empty {
+  text-align: center; padding: 80px 20px; color: var(--muted);
+}
+.empty h2 { font-size: 24px; margin-bottom: 14px; color: var(--text); }
+.empty p  { line-height: 1.8; }
+.empty a  { color: var(--accent); }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header>
+  <a class="back-link" href="/">← Dashboard</a>
+  <h1>♥ <span>Favourites</span></h1>
+  <span class="fav-count" id="favCount">0 saved</span>
+  <button class="btn-compare" id="btnCompare">⇔ Compare table</button>
+  <button class="btn-clear-all" id="btnClearAll">✕ Clear all</button>
+</header>
+
+<!-- ── Comparison table (hidden by default) ── -->
+<div id="compareSection" hidden></div>
+
+<!-- ── Cards ── -->
+<div class="cards-container" id="cardsContainer">
+  <div class="empty" id="emptyState" hidden>
+    <h2>No favourites yet</h2>
+    <p>Go to the <a href="/">dashboard</a> and click the ♡ heart on any listing to save it here.</p>
+  </div>
+</div>
+
+<script>
+// ── Constants ──────────────────────────────────────────────────────────────
+const FAV_KEY = 'immo_favourites';
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function getFavourites()     { try { return JSON.parse(localStorage.getItem(FAV_KEY)) || []; } catch { return []; } }
+function saveFavourites(ids) { localStorage.setItem(FAV_KEY, JSON.stringify(ids)); }
+function removeFavourite(id) {
+  const ids = getFavourites().filter(x => x !== String(id));
+  saveFavourites(ids);
+}
+
+const fmt       = n   => n != null ? Number(n).toLocaleString('it-IT') : '–';
+const fmtPct    = n   => n != null ? n.toFixed(2) + '%' : '–';
+const scoreClass= s   => s >= 70 ? 'high' : s >= 45 ? 'mid' : 'low';
+const vsClass   = p   => p <= -5 ? 'vs-below' : p >= 5 ? 'vs-above' : 'vs-at';
+function cityTag(ck) {
+  return { napoli:'tag-napoli', milano:'tag-milano', roma:'tag-roma' }[ck] || 'tag-other';
+}
+
+// ── Render a single detailed card ─────────────────────────────────────────
+function renderFavCard(l) {
+  const sc   = scoreClass(l.score_total);
+  const ct   = cityTag(l.city_key);
+  const vc   = vsClass(l.vs_omi_pct);
+
+  const surfCoeffStr = l.surf_coeff != null ? '×' + Number(l.surf_coeff).toFixed(2) + ' size'       : null;
+  const condCoeffStr = l.cond_coeff != null ? '×' + Number(l.cond_coeff).toFixed(2) + ' condition'  : null;
+
+  const mapLink = (l.lat && l.lng)
+    ? `<a href="https://www.google.com/maps?q=${l.lat},${l.lng}" target="_blank" rel="noopener"
+          style="color:var(--accent);font-size:11px">📍 Map</a>`
+    : '';
+
+  const card = document.createElement('div');
+  card.className = 'fav-card';
+  card.dataset.id = l.id;
+
+  card.innerHTML = `
+    <!-- Top strip -->
+    <div class="fav-card-top">
+      <div class="score-badge ${sc}"
+           title="Total score = 40% price + 35% yield + 25% fascia">
+        ${l.score_total ?? '–'}
+      </div>
+      <div class="fav-card-title">
+        <div class="neigh">
+          ${l.neighbourhood || '–'}
+          <span class="fascia-badge fascia-${l.omi_fascia}"
+                title="OMI zone classification: A = prime, B = semi-central, C = peripheral">
+            Fascia ${l.omi_fascia || '?'}
+          </span>
+          ${l.omi_zone === 'city average'
+            ? '<span class="unmatched-warn" title="No OMI zone matched — city-average benchmark used">⚠ unmatched zone</span>'
+            : ''}
+        </div>
+        ${l.address ? `<div class="address">${l.address}</div>` : ''}
+        <span class="city-tag ${ct}">${l.city || l.city_key}</span>
+        ${mapLink}
+      </div>
+      <div class="fav-card-actions">
+        <button class="btn-remove-fav" data-id="${l.id}">♥ Remove</button>
+        <a class="btn-view" href="${l.url}" target="_blank" rel="noopener">View listing →</a>
+      </div>
+    </div>
+
+    <!-- Body grid -->
+    <div class="fav-card-body">
+
+      <!-- Price & property -->
+      <div class="info-section">
+        <div class="section-title">Price &amp; Property</div>
+        <div class="big-val">€${fmt(l.price)}</div>
+        <div class="sub-val" style="margin-bottom:10px">${fmt(l.sqm)} m² · €${fmt(l.ask_psqm)}/m²</div>
+        <div class="info-row">
+          <span class="lbl">Rooms</span>
+          <span class="val">${l.rooms ?? '–'}</span>
+        </div>
+        <div class="info-row">
+          <span class="lbl">Floor</span>
+          <span class="val">${l.floor ?? '–'}</span>
+        </div>
+        <div class="info-row">
+          <span class="lbl">Condition</span>
+          <span class="val">${l.condition || '–'}</span>
+        </div>
+        ${l.elevator != null ? `
+        <div class="info-row">
+          <span class="lbl">Elevator</span>
+          <span class="val">${l.elevator ? 'Yes' : 'No'}</span>
+        </div>` : ''}
+        <div class="info-row" style="margin-top:8px">
+          <span class="lbl">vs OMI benchmark</span>
+          <span class="vs-omi ${vc}">${l.vs_omi_label || '–'}</span>
+        </div>
+      </div>
+
+      <!-- OMI Analysis -->
+      <div class="info-section">
+        <div class="section-title">OMI Analysis</div>
+        <div class="info-row">
+          <span class="lbl">Zone</span>
+          <span class="val accent">${l.omi_zone || '–'}</span>
+        </div>
+        <div class="info-row">
+          <span class="lbl">Fascia</span>
+          <span class="val">${l.omi_fascia || '–'}</span>
+        </div>
+        <div class="info-row">
+          <span class="lbl">Buy range (min)</span>
+          <span class="val">€${fmt(l.omi_bmin)}/m²</span>
+        </div>
+        <div class="info-row">
+          <span class="lbl">Buy range (max)</span>
+          <span class="val">€${fmt(l.omi_bmax)}/m²</span>
+        </div>
+        <div class="info-row">
+          <span class="lbl">Benchmark mid</span>
+          <span class="val accent" title="Mid-point of OMI buy range used for scoring">€${fmt(l.omi_bench)}/m²</span>
+        </div>
+        <div class="info-row" style="margin-top:6px">
+          <span class="lbl">Rent range (min)</span>
+          <span class="val">€${fmt(l.omi_rmin)}/m²/yr</span>
+        </div>
+        <div class="info-row">
+          <span class="lbl">Rent range (max)</span>
+          <span class="val">€${fmt(l.omi_rmax)}/m²/yr</span>
+        </div>
+      </div>
+
+      <!-- Rent & Yield -->
+      <div class="info-section">
+        <div class="section-title">Rent &amp; Yield Estimate</div>
+        <div class="big-val green">${fmtPct(l.est_yield_pct)}</div>
+        <div class="sub-val" style="margin-bottom:10px">Gross yield · net ~1.5–2 pp lower</div>
+        <div class="info-row">
+          <span class="lbl">Est. monthly rent</span>
+          <span class="val green">€${fmt(l.est_rent_mo)}</span>
+        </div>
+        <div class="info-row" style="margin-top:4px">
+          <span class="lbl">Coefficients applied</span>
+          <span class="val" style="font-size:11px">
+            ${surfCoeffStr ? `<span class="coeff-pill">${surfCoeffStr}</span>` : ''}
+            ${condCoeffStr ? `<span class="coeff-pill">${condCoeffStr}</span>` : ''}
+          </span>
+        </div>
+        <div class="info-row">
+          <span class="lbl">Raw OMI ref rent</span>
+          <span class="val" style="opacity:0.55">€${fmt(l.omi_rent_raw)}/mo</span>
+        </div>
+        <div class="info-row" style="margin-top:6px">
+          <span class="lbl">Rent range (min/yr)</span>
+          <span class="val">€${fmt(l.omi_rmin ? Math.round(l.omi_rmin * l.sqm) : null)}</span>
+        </div>
+        <div class="info-row">
+          <span class="lbl">Rent range (max/yr)</span>
+          <span class="val">€${fmt(l.omi_rmax ? Math.round(l.omi_rmax * l.sqm) : null)}</span>
+        </div>
+      </div>
+
+    </div><!-- /body grid -->
+
+    <!-- Score breakdown -->
+    <div class="score-breakdown">
+      <div class="score-part">
+        <div class="sp-val s-price"
+             title="Price score: how cheap vs OMI. −20% = 100, at bench = 50, +20% = 0">
+          ${l.score_price ?? '–'}
+        </div>
+        <div class="sp-lbl">Price score</div>
+        <div class="sp-wt">weight 40%</div>
+      </div>
+      <div class="score-part">
+        <div class="sp-val s-yield"
+             title="Yield score: gross yield quality. 7%+ = 100, 4% ≈ 50, 2.5% = 0">
+          ${l.score_yield ?? '–'}
+        </div>
+        <div class="sp-lbl">Yield score</div>
+        <div class="sp-wt">weight 35%</div>
+      </div>
+      <div class="score-part">
+        <div class="sp-val s-fascia"
+             title="Fascia score: position among same-fascia listings by price/m². Cheapest = 100, most expensive = 0">
+          ${l.score_fascia ?? '–'}
+        </div>
+        <div class="sp-lbl">Fascia score</div>
+        <div class="sp-wt">weight 25%</div>
+      </div>
+      <div class="score-part">
+        <div class="sp-val s-total"
+             style="font-size:24px; font-weight:800; color:${l.score_total >= 70 ? 'var(--green)' : l.score_total >= 45 ? 'var(--yellow)' : 'var(--red)'}">
+          ${l.score_total ?? '–'}
+        </div>
+        <div class="sp-lbl"><strong>Total score</strong></div>
+        <div class="sp-wt">out of 100</div>
+      </div>
+    </div>
+  `;
+
+  card.querySelector('.btn-remove-fav').addEventListener('click', () => {
+    removeFavourite(l.id);
+    card.remove();
+    updateAfterRemoval();
+  });
+
+  return card;
+}
+
+// ── Comparison table ───────────────────────────────────────────────────────
+function renderCompareTable(listings) {
+  if (!listings.length) return '';
+
+  const rows = [
+    { label: 'Price',               key: 'price',          fmt: v => '€' + fmt(v),         best: 'min' },
+    { label: 'Size (m²)',           key: 'sqm',            fmt: v => fmt(v) + ' m²',        best: 'max' },
+    { label: 'Price/m²',           key: 'ask_psqm',       fmt: v => '€' + fmt(v),          best: 'min' },
+    { label: 'Rooms',               key: 'rooms',          fmt: v => v ?? '–',              best: 'max' },
+    { label: 'Floor',               key: 'floor',          fmt: v => v ?? '–',              best: null  },
+    { label: 'Condition',           key: 'condition',      fmt: v => v || '–',              best: null  },
+    { label: 'OMI zone',            key: 'omi_zone',       fmt: v => v || '–',              best: null  },
+    { label: 'Fascia',              key: 'omi_fascia',     fmt: v => v || '–',              best: null  },
+    { label: 'OMI benchmark (€/m²)',key: 'omi_bench',      fmt: v => '€' + fmt(v),          best: null  },
+    { label: 'vs OMI',              key: 'vs_omi_pct',     fmt: v => (v >= 0 ? '+' : '') + (v != null ? v.toFixed(1) : '–') + '%', best: 'min' },
+    { label: 'Est. rent/mo',        key: 'est_rent_mo',    fmt: v => '€' + fmt(v),          best: 'max' },
+    { label: 'Gross yield',         key: 'est_yield_pct',  fmt: v => fmtPct(v),             best: 'max' },
+    { label: 'Size coefficient',    key: 'surf_coeff',     fmt: v => v != null ? '×' + Number(v).toFixed(2) : '–', best: null },
+    { label: 'Condition coefficient',key:'cond_coeff',     fmt: v => v != null ? '×' + Number(v).toFixed(2) : '–', best: null },
+    { label: 'Price score',         key: 'score_price',    fmt: v => v ?? '–',              best: 'max' },
+    { label: 'Yield score',         key: 'score_yield',    fmt: v => v ?? '–',              best: 'max' },
+    { label: 'Fascia score',        key: 'score_fascia',   fmt: v => v ?? '–',              best: 'max' },
+    { label: 'Total score',         key: 'score_total',    fmt: v => v ?? '–',              best: 'max' },
+  ];
+
+  let html = `<div style="padding:4px 24px 0;font-size:11px;color:var(--muted);padding-top:8px">
+    <span style="color:var(--green)">■</span> best value &nbsp;
+    <span style="color:var(--red)">■</span> worst value
+  </div>
+  <table class="compare-table">
+    <thead><tr>
+      <th>Field</th>
+      ${listings.map(l => `<th>${l.neighbourhood || l.city || '–'}</th>`).join('')}
+    </tr></thead>
+    <tbody>`;
+
+  for (const row of rows) {
+    const vals = listings.map(l => l[row.key]);
+    let bestIdx = -1, worstIdx = -1;
+    if (row.best === 'max') {
+      const nums = vals.map(v => (v != null && !isNaN(v)) ? +v : null);
+      const max  = Math.max(...nums.filter(v => v != null));
+      const min  = Math.min(...nums.filter(v => v != null));
+      bestIdx  = nums.indexOf(max);
+      worstIdx = nums.indexOf(min);
+    } else if (row.best === 'min') {
+      const nums = vals.map(v => (v != null && !isNaN(v)) ? +v : null);
+      const min  = Math.min(...nums.filter(v => v != null));
+      const max  = Math.max(...nums.filter(v => v != null));
+      bestIdx  = nums.indexOf(min);
+      worstIdx = nums.indexOf(max);
+    }
+
+    html += `<tr><td>${row.label}</td>`;
+    vals.forEach((v, i) => {
+      const cls = i === bestIdx ? 'compare-best' : i === worstIdx ? 'compare-worst' : '';
+      html += `<td class="${cls}">${row.fmt(v)}</td>`;
+    });
+    html += `</tr>`;
+  }
+
+  html += `</tbody></table>`;
+  return html;
+}
+
+// ── Update state after removal ─────────────────────────────────────────────
+function updateAfterRemoval() {
+  const remaining = document.querySelectorAll('.fav-card').length;
+  document.getElementById('favCount').textContent = remaining + ' saved';
+  if (!remaining) {
+    document.getElementById('emptyState').hidden = false;
+    document.getElementById('compareSection').hidden = true;
+    document.getElementById('btnCompare').hidden = true;
+    document.getElementById('btnClearAll').hidden = true;
+  }
+  // Rebuild compare table if visible
+  if (!document.getElementById('compareSection').hidden) {
+    rebuildCompareTable();
+  }
+}
+
+function rebuildCompareTable() {
+  const visibleIds = [...document.querySelectorAll('.fav-card')].map(c => c.dataset.id);
+  const listings   = (window._ALL_LISTINGS || []).filter(l => visibleIds.includes(String(l.id)));
+  document.getElementById('compareSection').innerHTML = renderCompareTable(listings);
+}
+
+// ── Main ───────────────────────────────────────────────────────────────────
+async function init() {
+  const isHttp = location.protocol === 'http:' || location.protocol === 'https:';
+  if (!isHttp) {
+    document.getElementById('cardsContainer').innerHTML = `
+      <div class="empty">
+        <h2>Needs an HTTP server</h2>
+        <p>Run <code style="background:var(--surf2);padding:2px 8px;border-radius:4px">python3 api.py</code>
+        and open <strong>http://localhost:8000/</strong></p>
+      </div>`;
+    return;
+  }
+
+  let allListings;
+  try {
+    const resp = await fetch('/listings');
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    allListings = await resp.json();
+  } catch (e) {
+    document.getElementById('cardsContainer').innerHTML = `
+      <div class="empty">
+        <h2>Could not load listings</h2>
+        <p>Make sure <code style="background:var(--surf2);padding:2px 8px;border-radius:4px">python3 api.py</code> is running.</p>
+        <p style="margin-top:8px;font-size:12px;color:var(--muted)">${e.message}</p>
+      </div>`;
+    return;
+  }
+
+  window._ALL_LISTINGS = allListings;
+
+  const favIds   = getFavourites();
+  const listings = allListings.filter(l => favIds.includes(String(l.id)));
+
+  document.getElementById('favCount').textContent = listings.length + ' saved';
+
+  if (!listings.length) {
+    document.getElementById('emptyState').hidden = false;
+    document.getElementById('btnCompare').hidden = true;
+    document.getElementById('btnClearAll').hidden = true;
+    return;
+  }
+
+  const container = document.getElementById('cardsContainer');
+  listings.forEach(l => container.appendChild(renderFavCard(l)));
+
+  // Compare button
+  document.getElementById('btnCompare').addEventListener('click', () => {
+    const sec = document.getElementById('compareSection');
+    const btn = document.getElementById('btnCompare');
+    if (sec.hidden) {
+      rebuildCompareTable();
+      sec.hidden = false;
+      btn.classList.add('active');
+      btn.textContent = '✕ Hide table';
+      sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      sec.hidden = true;
+      btn.classList.remove('active');
+      btn.textContent = '⇔ Compare table';
+    }
+  });
+
+  // Clear all button
+  document.getElementById('btnClearAll').addEventListener('click', () => {
+    if (!confirm(`Remove all ${listings.length} favourites?`)) return;
+    saveFavourites([]);
+    document.querySelectorAll('.fav-card').forEach(c => c.remove());
+    updateAfterRemoval();
+  });
+}
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,2226 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Immobiliare Scorer</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:      #0f1117;
+  --surface: #1a1d27;
+  --surf2:   #22263a;
+  --border:  #2e3250;
+  --accent:  #4f8ef7;
+  --green:   #22c55e;
+  --yellow:  #f59e0b;
+  --red:     #ef4444;
+  --text:    #e2e8f0;
+  --muted:   #8892aa;
+  --radius:  10px;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  min-height: 100vh;
+}
+
+/* ── Header ── */
+header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+header h1 { font-size: 18px; font-weight: 700; white-space: nowrap; }
+header h1 span { color: var(--accent); }
+
+.server-note {
+  font-size: 11px;
+  color: var(--yellow);
+  background: rgba(245,158,11,0.1);
+  border: 1px solid rgba(245,158,11,0.25);
+  border-radius: 4px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+.meta { color: var(--muted); font-size: 12px; margin-left: auto; white-space: nowrap; }
+
+.btn-fetch-toggle {
+  background: rgba(79,142,247,0.15);
+  border: 1px solid rgba(79,142,247,0.4);
+  color: var(--accent);
+  border-radius: 6px;
+  padding: 6px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.btn-fetch-toggle:hover    { background: rgba(79,142,247,0.25); }
+.btn-fetch-toggle.is-open  { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* ── Fetch panel ── */
+.fetch-panel {
+  background: var(--surface);
+  border-bottom: 2px solid var(--accent);
+  padding: 14px 24px 12px;
+}
+.fetch-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+.fetch-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 20px;
+  align-items: flex-end;
+  margin-bottom: 10px;
+}
+.fetch-group { display: flex; flex-direction: column; gap: 4px; }
+.fetch-lbl   { font-size: 11px; color: var(--muted); }
+
+.city-checks { display: flex; flex-wrap: wrap; gap: 5px 14px; }
+.city-checks label {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 13px; cursor: pointer;
+}
+.city-checks input[type=checkbox] { accent-color: var(--accent); }
+
+.fetch-input {
+  background: var(--surf2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 13px;
+  outline: none;
+}
+.fetch-input:focus { border-color: var(--accent); }
+
+.expected-pill {
+  font-size: 12px;
+  color: var(--accent);
+  background: rgba(79,142,247,0.1);
+  border: 1px solid rgba(79,142,247,0.25);
+  border-radius: 20px;
+  padding: 4px 12px;
+  white-space: nowrap;
+  align-self: center;
+}
+.btn-start-fetch {
+  background: var(--accent);
+  border: none;
+  color: #fff;
+  border-radius: 6px;
+  padding: 8px 20px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+}
+.btn-start-fetch:hover:not(:disabled) { opacity: 0.88; }
+.btn-start-fetch:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.fetch-warn {
+  font-size: 11px;
+  color: var(--muted);
+  align-self: center;
+  line-height: 1.5;
+}
+
+/* Log panel */
+.log-panel {
+  margin-top: 10px;
+  background: #0a0c12;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 14px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.log-output {
+  font-family: 'SF Mono', 'Fira Code', 'Menlo', monospace;
+  font-size: 12px;
+  color: #8fa0bb;
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1.6;
+}
+
+/* ── Filter bar ── */
+.filters {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 24px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.filter-group { display: flex; align-items: center; gap: 6px; }
+.filter-group label { color: var(--muted); font-size: 12px; white-space: nowrap; }
+
+select {
+  background: var(--surf2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 13px;
+  outline: none;
+}
+select:focus { border-color: var(--accent); }
+input[type=range] { padding: 0; width: 100px; accent-color: var(--accent); }
+.range-val { color: var(--accent); font-size: 12px; min-width: 26px; }
+.filter-sep { width: 1px; height: 28px; background: var(--border); flex-shrink: 0; }
+
+.btn-reset {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 5px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  margin-left: auto;
+}
+.btn-reset:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Sort tabs ── */
+.sort-tabs { display: flex; gap: 4px; }
+.sort-tab {
+  background: var(--surf2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 5px;
+  padding: 5px 10px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.sort-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* ── Stats bar ── */
+.stats-bar {
+  padding: 8px 24px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  color: var(--muted);
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+.stats-bar strong { color: var(--text); }
+
+/* ── Grid ── */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+  padding: 20px 24px;
+}
+
+/* ── Card ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.card:hover { border-color: var(--accent); transform: translateY(-2px); }
+
+/* Card header */
+.card-header { padding: 14px 16px 8px; display: flex; align-items: flex-start; gap: 10px; }
+
+.score-badge {
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; font-weight: 800;
+  flex-shrink: 0;
+  cursor: help;
+}
+.score-badge.high { background: rgba(34,197,94,0.18); color: var(--green); border: 2px solid var(--green); }
+.score-badge.mid  { background: rgba(245,158,11,0.15); color: var(--yellow); border: 2px solid var(--yellow); }
+.score-badge.low  { background: rgba(239,68,68,0.12); color: var(--red); border: 2px solid var(--red); }
+
+.card-title { flex: 1; overflow: hidden; }
+.card-title .neigh { font-size: 15px; font-weight: 600; line-height: 1.3; }
+.city-tag {
+  display: inline-block;
+  font-size: 10px; font-weight: 600;
+  padding: 1px 7px; border-radius: 10px; margin-top: 3px;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.tag-napoli { background: rgba(79,142,247,0.18); color: #7eb5ff; }
+.tag-milano { background: rgba(124,92,191,0.2);  color: #b39ddb; }
+.tag-roma   { background: rgba(239,68,68,0.15);  color: #f87171; }
+.tag-other  { background: rgba(34,197,94,0.15);  color: #6ee7b7; }
+
+.fascia-badge {
+  font-size: 10px; font-weight: 700;
+  padding: 2px 7px; border-radius: 4px; margin-left: 6px;
+}
+.fascia-A { background: rgba(79,142,247,0.2);  color: var(--accent); }
+.fascia-B { background: rgba(245,158,11,0.15); color: var(--yellow); }
+.fascia-C { background: rgba(239,68,68,0.12);  color: var(--red);    }
+
+/* Price row */
+.price-row {
+  padding: 2px 16px 10px;
+  display: flex; align-items: baseline; gap: 10px;
+}
+.price-main { font-size: 22px; font-weight: 700; }
+.price-psqm { font-size: 12px; color: var(--muted); }
+.vs-omi {
+  font-size: 12px; font-weight: 600;
+  padding: 2px 8px; border-radius: 5px; margin-left: auto;
+  cursor: help; white-space: nowrap;
+}
+.vs-below { background: rgba(34,197,94,0.15); color: var(--green); }
+.vs-at    { background: rgba(245,158,11,0.12); color: var(--yellow); }
+.vs-above { background: rgba(239,68,68,0.10); color: var(--red); }
+
+/* Fascia bar */
+.fascia-bar-wrap { padding: 0 16px 6px; }
+.fascia-bar-header {
+  font-size: 11px; color: var(--muted);
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 5px;
+}
+.fascia-bar-track {
+  height: 6px; background: var(--surf2);
+  border-radius: 3px; position: relative; overflow: visible;
+}
+.fascia-bar-fill {
+  position: absolute; left: 0; top: 0;
+  width: 100%; height: 100%; border-radius: 3px;
+  background: linear-gradient(90deg, var(--green) 0%, var(--yellow) 55%, var(--red) 100%);
+}
+.fascia-bar-marker {
+  width: 11px; height: 11px; border-radius: 50%;
+  background: #fff; border: 2px solid var(--accent);
+  position: absolute; top: -2.5px;
+  transform: translateX(-50%);
+  box-shadow: 0 0 6px rgba(79,142,247,0.6);
+}
+.fascia-bar-axis {
+  display: flex; justify-content: space-between;
+  font-size: 9px; color: var(--muted);
+  margin-top: 3px; opacity: 0.8;
+}
+
+/* Stats grid */
+.stats-grid {
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  gap: 1px; background: var(--border);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.stat-cell { background: var(--surf2); padding: 8px 10px; text-align: center; }
+.stat-cell .val { font-size: 14px; font-weight: 700; }
+.stat-cell .lbl { font-size: 10px; color: var(--muted); margin-top: 2px; line-height: 1.4; }
+.stat-cell .lbl abbr { text-decoration: underline dotted; cursor: help; }
+.stat-cell .sub-note { font-size: 9px; color: var(--muted); opacity: 0.65; margin-top: 2px; }
+
+/* Sub-scores */
+.subscores-section { padding: 8px 16px 4px; }
+.subscores { display: flex; gap: 8px; }
+.subscore { flex: 1; text-align: center; }
+.s-val { font-size: 16px; font-weight: 700; }
+.s-lbl { font-size: 10px; color: var(--muted); margin-top: 2px; line-height: 1.3; }
+.s-price  { color: var(--accent); }
+.s-yield  { color: var(--green); }
+.s-fascia { color: #a78bfa; }
+.scores-legend {
+  font-size: 9px; color: var(--muted); opacity: 0.75;
+  text-align: center; margin-top: 5px; padding-bottom: 2px;
+}
+
+/* Card footer */
+.card-footer {
+  padding: 8px 16px;
+  border-top: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin-top: auto;
+}
+.detail-row { font-size: 12px; color: var(--muted); }
+.detail-row span { color: var(--text); }
+.link-btn {
+  font-size: 12px; color: var(--accent);
+  text-decoration: none;
+  padding: 4px 10px;
+  border: 1px solid rgba(79,142,247,0.35);
+  border-radius: 5px; white-space: nowrap;
+}
+.link-btn:hover { background: rgba(79,142,247,0.12); }
+
+/* Empty / error */
+.empty {
+  grid-column: 1/-1;
+  text-align: center; padding: 60px 20px; color: var(--muted);
+}
+.empty h3 { font-size: 20px; margin-bottom: 10px; color: var(--text); }
+.empty code {
+  background: var(--surf2); padding: 3px 9px;
+  border-radius: 5px; font-size: 13px;
+}
+.empty p { line-height: 1.7; }
+
+/* ── Favourite (star) button ── */
+.btn-fav {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: var(--muted);
+  padding: 0 4px;
+  line-height: 1;
+  transition: color 0.15s, transform 0.12s;
+  flex-shrink: 0;
+}
+.btn-fav:hover  { color: #f59e0b; transform: scale(1.25); }
+.btn-fav.is-fav { color: #f59e0b; }
+
+/* ── Favourites header link ── */
+.fav-link {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 600;
+  color: var(--muted);
+  text-decoration: none;
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s;
+}
+.fav-link:hover { color: var(--text); border-color: #f59e0b; }
+.fav-badge {
+  background: #f59e0b;
+  color: #000;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 10px;
+  padding: 1px 6px;
+  min-width: 18px;
+  text-align: center;
+  display: none;
+}
+.fav-badge.visible { display: inline-block; }
+
+/* ── Multi-select dropdown ── */
+.msd-wrap { position: relative; }
+.msd-trigger {
+  background: var(--surf2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex; align-items: center; gap: 6px;
+  min-width: 140px;
+  white-space: nowrap;
+  transition: border-color 0.15s;
+}
+.msd-trigger:hover { border-color: var(--accent); }
+.msd-trigger.has-selection { border-color: var(--accent); color: var(--accent); }
+.msd-caret { margin-left: auto; opacity: 0.6; font-size: 10px; }
+.msd-panel {
+  display: none;   /* hidden by default — toggled via .is-open class, NOT the hidden attribute */
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.45);
+  z-index: 300;
+  width: 240px;
+  flex-direction: column;
+  max-height: 340px;
+}
+.msd-panel.is-open { display: flex; }
+.msd-search-input {
+  background: var(--surf2);
+  border: none; border-bottom: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 12px; font-size: 12px;
+  outline: none; border-radius: 8px 8px 0 0;
+  width: 100%;
+}
+.msd-list {
+  overflow-y: auto; flex: 1; padding: 4px 0;
+}
+.msd-group-header {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.7px; color: var(--muted);
+  padding: 6px 12px 2px;
+}
+.msd-option {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 12px; cursor: pointer; font-size: 12px;
+  user-select: none;
+}
+.msd-option:hover { background: var(--surf2); }
+.msd-option input[type=checkbox] { accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+.msd-footer {
+  border-top: 1px solid var(--border);
+  padding: 5px 10px;
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+}
+.msd-footer-btn {
+  background: none; border: 1px solid var(--border);
+  color: var(--muted); border-radius: 5px;
+  padding: 3px 10px; font-size: 11px; cursor: pointer;
+}
+.msd-footer-btn:hover { border-color: var(--accent); color: var(--accent); }
+.msd-footer-clear:hover { border-color: var(--red); color: var(--red); }
+
+/* ── Tab bar ── */
+.tab-bar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  display: flex;
+  gap: 0;
+}
+.tab-btn {
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: var(--muted);
+  font-size: 13px; font-weight: 600;
+  padding: 10px 18px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  margin-bottom: -1px;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ── Scanner panel ── */
+.scanner-panel {
+  background: var(--surface);
+  border-bottom: 2px solid var(--green);
+  padding: 12px 24px;
+}
+.scanner-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px;
+  margin-bottom: 8px;
+}
+.scanner-status-wrap {
+  display: flex; align-items: center; gap: 8px;
+}
+.scanner-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--muted); flex-shrink: 0;
+  transition: background 0.3s;
+}
+.scanner-dot.running { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.scanner-label { font-size: 13px; font-weight: 600; color: var(--muted); }
+.scanner-meta  { font-size: 11px; color: var(--muted); }
+.scanner-new-badge {
+  display: none; font-size: 11px; font-weight: 700;
+  background: rgba(34,197,94,0.15); color: var(--green);
+  border: 1px solid rgba(34,197,94,0.3); border-radius: 20px;
+  padding: 2px 10px;
+}
+.scanner-new-badge.visible { display: inline-block; }
+
+.btn-scanner {
+  border: none; border-radius: 6px;
+  padding: 7px 16px; cursor: pointer;
+  font-size: 13px; font-weight: 600;
+  transition: opacity 0.15s;
+}
+.btn-scanner:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn-start { background: var(--green); color: #000; }
+.btn-start:hover:not(:disabled) { opacity: 0.85; }
+.btn-stop  { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); color: var(--red); }
+.btn-stop:hover:not(:disabled)  { background: rgba(239,68,68,0.25); }
+
+/* ── Card thumbnail ── */
+.card-thumb {
+  width: 100%;
+  height: 155px;
+  object-fit: cover;
+  display: block;
+  background: var(--surf2);
+}
+.card-thumb-placeholder {
+  width: 100%; height: 0;   /* hidden when no image */
+}
+
+/* ── Spese total row ── */
+.rent-total-row {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 1px;
+}
+.rent-total-row strong { color: var(--text); }
+
+/* ── Email digest panel ── */
+.email-panel {
+  background: var(--surface);
+  border-bottom: 2px solid var(--accent);
+  padding: 0 24px;
+  overflow: hidden;
+}
+.email-panel-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 0;
+  cursor: pointer;
+  user-select: none;
+}
+.email-panel-header h3 {
+  font-size: 13px; font-weight: 700; color: var(--text);
+  text-transform: uppercase; letter-spacing: 0.6px;
+}
+.email-panel-body {
+  display: none;
+  padding-bottom: 14px;
+}
+.email-panel-body.is-open { display: block; }
+.email-panel-caret {
+  font-size: 11px; color: var(--muted);
+  transition: transform 0.2s;
+}
+.email-panel-caret.open { transform: rotate(180deg); }
+
+.email-row {
+  display: flex; flex-wrap: wrap; gap: 12px 20px;
+  align-items: flex-end; margin-bottom: 10px;
+}
+.email-group { display: flex; flex-direction: column; gap: 4px; }
+.email-lbl   { font-size: 11px; color: var(--muted); }
+.email-input {
+  background: var(--surf2); border: 1px solid var(--border);
+  color: var(--text); border-radius: 5px; padding: 5px 9px;
+  font-size: 13px;
+}
+.email-input:focus { outline: none; border-color: var(--accent); }
+.email-input[type="password"] { letter-spacing: 2px; }
+
+.email-section-sep {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.8px; color: var(--muted); margin: 10px 0 8px;
+}
+
+/* Toggle switch */
+.email-toggle-wrap { display: flex; align-items: center; gap: 8px; }
+.email-toggle {
+  position: relative; display: inline-block;
+  width: 38px; height: 22px; flex-shrink: 0;
+}
+.email-toggle input { opacity: 0; width: 0; height: 0; }
+.email-slider {
+  position: absolute; inset: 0; background: var(--surf2);
+  border: 1px solid var(--border); border-radius: 22px;
+  cursor: pointer; transition: background 0.2s;
+}
+.email-slider::before {
+  content: ''; position: absolute;
+  width: 14px; height: 14px; left: 3px; bottom: 3px;
+  background: var(--muted); border-radius: 50%;
+  transition: transform 0.2s, background 0.2s;
+}
+.email-toggle input:checked + .email-slider { background: rgba(79,142,247,0.3); border-color: var(--accent); }
+.email-toggle input:checked + .email-slider::before { transform: translateX(16px); background: var(--accent); }
+
+.btn-email {
+  border: none; border-radius: 6px;
+  padding: 7px 14px; cursor: pointer;
+  font-size: 13px; font-weight: 600;
+  transition: opacity 0.15s;
+}
+.btn-email-save { background: var(--accent); color: #fff; }
+.btn-email-save:hover { opacity: 0.85; }
+.btn-email-send { background: var(--surf2); border: 1px solid var(--border); color: var(--text); }
+.btn-email-send:hover { border-color: var(--accent); color: var(--accent); }
+.email-status { font-size: 12px; color: var(--muted); }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header>
+  <h1>Immobiliare <span>Scorer</span></h1>
+  <span class="server-note" title="Requires python3 api.py running locally — does not work as a static file">⚙ local server only</span>
+  <div class="meta" id="meta">Loading…</div>
+  <button class="btn-fetch-toggle" id="btnFetchToggle">▶ Fetch new data</button>
+  <a class="fav-link" href="/favourites" id="favLink">★ Favourites <span class="fav-badge" id="favBadge"></span></a>
+</header>
+
+<!-- ── Tab bar ── -->
+<nav class="tab-bar">
+  <button class="tab-btn" id="tabSales" data-tab="sales">🏡 Sales</button>
+  <button class="tab-btn active" id="tabRentals" data-tab="rentals">🔑 Rentals</button>
+</nav>
+
+<!-- ══════════════════════════════════════════════════════════════
+     SALES VIEW
+═══════════════════════════════════════════════════════════════ -->
+<div id="salesView" hidden>
+
+<!-- ── Fetch panel (hidden by default) ── -->
+<div class="fetch-panel" id="fetchPanel" hidden>
+  <div class="fetch-section-title">Fetch new listings from Immobiliare.it</div>
+
+  <div class="fetch-row">
+    <div class="fetch-group">
+      <span class="fetch-lbl">Cities</span>
+      <div class="city-checks">
+        <label><input type="checkbox" name="city" value="napoli"  checked> Napoli</label>
+        <label><input type="checkbox" name="city" value="milano"  checked> Milano</label>
+        <label><input type="checkbox" name="city" value="roma">           Roma</label>
+        <label><input type="checkbox" name="city" value="torino">         Torino</label>
+        <label><input type="checkbox" name="city" value="firenze">        Firenze</label>
+        <label><input type="checkbox" name="city" value="bologna">        Bologna</label>
+        <label><input type="checkbox" name="city" value="palermo">        Palermo</label>
+        <label><input type="checkbox" name="city" value="bari">           Bari</label>
+        <label><input type="checkbox" name="city" value="catania">        Catania</label>
+        <label><input type="checkbox" name="city" value="verona">         Verona</label>
+      </div>
+    </div>
+  </div>
+
+  <div class="fetch-row">
+    <div class="fetch-group">
+      <label class="fetch-lbl" for="fPages">Pages per city</label>
+      <input class="fetch-input" type="number" id="fPages" min="1" max="20" value="3" style="width:58px">
+    </div>
+    <div class="fetch-group">
+      <label class="fetch-lbl" for="fFetchMaxPrice">Max price €</label>
+      <input class="fetch-input" type="number" id="fFetchMaxPrice" placeholder="any" style="width:100px">
+    </div>
+    <div class="fetch-group">
+      <label class="fetch-lbl" for="fFetchMinSqm">Min m²</label>
+      <input class="fetch-input" type="number" id="fFetchMinSqm" placeholder="any" style="width:78px">
+    </div>
+    <div class="fetch-group">
+      <label class="fetch-lbl" for="fFetchMinRooms">Min rooms</label>
+      <input class="fetch-input" type="number" id="fFetchMinRooms" placeholder="any" style="width:70px">
+    </div>
+    <span class="expected-pill" id="expectedPill">~150 listings</span>
+    <div style="flex:1"></div>
+    <button class="btn-start-fetch" id="btnStartFetch">▶ Start fetch</button>
+    <span class="fetch-warn">Opens an Edge browser window · ~30 s per page</span>
+  </div>
+
+  <div class="log-panel" id="logPanel" hidden>
+    <pre class="log-output" id="logOutput"></pre>
+  </div>
+</div>
+
+<!-- ── Filter bar ── -->
+<div class="filters">
+  <div class="filter-group">
+    <label>City</label>
+    <select id="fCity"><option value="">All cities</option></select>
+  </div>
+  <div class="filter-sep"></div>
+  <div class="filter-group">
+    <label>Fascia</label>
+    <select id="fFascia">
+      <option value="">A + B + C</option>
+      <option value="A">A only</option>
+      <option value="B">B only</option>
+      <option value="C">C only</option>
+    </select>
+  </div>
+  <div class="filter-sep"></div>
+  <div class="filter-group">
+    <label>Min total score</label>
+    <input type="range" id="fScore" min="0" max="100" value="0" step="5">
+    <span class="range-val" id="fScoreVal">0</span>
+  </div>
+  <div class="filter-sep"></div>
+  <div class="filter-group">
+    <label>Max price €</label>
+    <select id="fPrice">
+      <option value="">Any</option>
+      <option value="100000">100k</option>
+      <option value="200000">200k</option>
+      <option value="300000">300k</option>
+      <option value="500000">500k</option>
+      <option value="750000">750k</option>
+      <option value="1000000">1M</option>
+    </select>
+  </div>
+  <div class="filter-sep"></div>
+  <div class="filter-group">
+    <label>Min m²</label>
+    <select id="fSqm">
+      <option value="">Any</option>
+      <option value="40">40+</option>
+      <option value="60">60+</option>
+      <option value="80">80+</option>
+      <option value="100">100+</option>
+    </select>
+  </div>
+  <div class="filter-sep"></div>
+  <div class="filter-group">
+    <label>Sort</label>
+    <div class="sort-tabs">
+      <button class="sort-tab active" data-sort="score_total">Score</button>
+      <button class="sort-tab" data-sort="est_yield_pct">Yield</button>
+      <button class="sort-tab" data-sort="vs_omi_pct">vs OMI</button>
+      <button class="sort-tab" data-sort="price">Price ↑</button>
+    </div>
+  </div>
+  <button class="btn-reset" id="btnReset">Reset</button>
+</div>
+
+<!-- ── Stats bar ── -->
+<div class="stats-bar">
+  <span>Showing <strong id="showCount">–</strong> listings</span>
+  <span>Avg total score <strong id="avgScore">–</strong> / 100</span>
+  <span>Avg gross yield <strong id="avgYield">–</strong></span>
+  <span>Unmatched zones <strong id="fallbackCount">–</strong></span>
+</div>
+
+<!-- ── Cards grid ── -->
+<div class="grid" id="grid"></div>
+
+</div><!-- /salesView -->
+
+<!-- ══════════════════════════════════════════════════════════════
+     RENTALS VIEW
+═══════════════════════════════════════════════════════════════ -->
+<div id="rentalsView">
+
+  <!-- Scanner panel -->
+  <div class="scanner-panel">
+    <div class="fetch-section-title">Rental scanner — Milano</div>
+    <div class="scanner-row">
+      <div class="scanner-status-wrap">
+        <div class="scanner-dot" id="scannerDot"></div>
+        <span class="scanner-label" id="scannerLabel">Scanner stopped</span>
+      </div>
+      <span class="scanner-meta" id="scannerLastRun"></span>
+      <span class="scanner-new-badge" id="scannerNewBadge"></span>
+      <div style="flex:1"></div>
+      <button class="btn-scanner btn-start" id="btnStartScanner">▶ Start scanner</button>
+      <button class="btn-scanner btn-stop"  id="btnStopScanner"  disabled>■ Stop</button>
+    </div>
+    <div class="scanner-row" style="margin-bottom:0">
+      <div class="fetch-group">
+        <label class="fetch-lbl" for="sScanPages">Pages per run</label>
+        <input class="fetch-input" type="number" id="sScanPages" min="1" max="20" value="3" style="width:58px">
+      </div>
+      <div class="fetch-group">
+        <label class="fetch-lbl" for="sScanMaxRent">Max monthly rent €</label>
+        <input class="fetch-input" type="number" id="sScanMaxRent" placeholder="any" style="width:110px">
+      </div>
+      <div class="fetch-group">
+        <label class="fetch-lbl" for="sScanMinRooms">Min rooms</label>
+        <input class="fetch-input" type="number" id="sScanMinRooms" placeholder="any" min="1" max="10" style="width:70px">
+      </div>
+      <div class="fetch-group">
+        <span class="fetch-lbl">Areas to scan</span>
+        <div class="msd-wrap" id="scanAreaWrap">
+          <button type="button" class="msd-trigger" id="scanAreaTrigger">All Milano <span class="msd-caret">▾</span></button>
+          <div class="msd-panel" id="scanAreaPanel">
+            <input class="msd-search-input" id="scanAreaSearch" placeholder="Search areas…" type="text" autocomplete="off">
+            <div class="msd-list" id="scanAreaList"></div>
+            <div class="msd-footer">
+              <button type="button" class="msd-footer-btn msd-footer-clear" id="scanAreaClear">Clear</button>
+              <button type="button" class="msd-footer-btn"                  id="scanAreaDone">Done ✓</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <span class="fetch-warn">Opens Edge · ~30 s/page · reruns every 60 min</span>
+    </div>
+  </div>
+
+  <!-- Email digest panel -->
+  <div class="email-panel">
+    <div class="email-panel-header" id="emailPanelHeader">
+      <span>📧</span>
+      <h3>Email digest</h3>
+      <label class="email-toggle" title="Enable daily email digest" onclick="event.stopPropagation()">
+        <input type="checkbox" id="emailEnabled">
+        <span class="email-slider"></span>
+      </label>
+      <span id="emailEnabledLabel" class="email-status" style="margin-right:auto"></span>
+      <span class="email-status" id="emailLastSent"></span>
+      <span class="email-panel-caret" id="emailPanelCaret">▼</span>
+    </div>
+    <div class="email-panel-body" id="emailPanelBody">
+
+      <div class="email-section-sep">SMTP / Gmail settings</div>
+      <div class="email-row">
+        <div class="email-group">
+          <label class="email-lbl" for="emailSmtpUser">Gmail address (sender)</label>
+          <input class="email-input" type="email" id="emailSmtpUser" placeholder="you@gmail.com" style="width:220px">
+        </div>
+        <div class="email-group">
+          <label class="email-lbl" for="emailSmtpPass">
+            App password
+            <a href="https://myaccount.google.com/apppasswords" target="_blank"
+               style="color:var(--accent);font-size:10px;margin-left:4px">get one ↗</a>
+          </label>
+          <input class="email-input" type="password" id="emailSmtpPass" placeholder="xxxx xxxx xxxx xxxx" style="width:200px">
+        </div>
+        <div class="email-group">
+          <label class="email-lbl" for="emailToAddr">Send to</label>
+          <input class="email-input" type="email" id="emailToAddr" placeholder="you@gmail.com" style="width:220px">
+        </div>
+        <div class="email-group">
+          <label class="email-lbl" for="emailDigestHour">Daily send time</label>
+          <div style="display:flex;align-items:center;gap:4px">
+            <input class="email-input" type="number" id="emailDigestHour" min="0" max="23" value="8" style="width:55px">
+            <span style="color:var(--muted);font-size:13px">:00</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="email-section-sep">Digest filters <span style="font-weight:400;text-transform:none">(applied on top of scanner output — only listings matching these will be emailed)</span></div>
+      <div class="email-row">
+        <div class="email-group">
+          <label class="email-lbl" for="emailMinScore">Min score</label>
+          <input class="email-input" type="number" id="emailMinScore" placeholder="any" min="0" max="100" style="width:75px">
+        </div>
+        <div class="email-group">
+          <label class="email-lbl" for="emailMaxRent">Max rent €/mo</label>
+          <input class="email-input" type="number" id="emailMaxRent" placeholder="any" style="width:110px">
+        </div>
+        <div class="email-group">
+          <label class="email-lbl" for="emailMinRooms">Min rooms</label>
+          <input class="email-input" type="number" id="emailMinRooms" placeholder="any" min="1" max="10" style="width:75px">
+        </div>
+        <div class="email-group">
+          <span class="email-lbl">Areas (blank = all)</span>
+          <div class="msd-wrap" id="emailAreaWrap">
+            <button type="button" class="msd-trigger" id="emailAreaTrigger" style="min-width:160px">All areas <span class="msd-caret">▾</span></button>
+            <div class="msd-panel" id="emailAreaPanel">
+              <input class="msd-search-input" id="emailAreaSearch" placeholder="Search areas…" type="text" autocomplete="off">
+              <div class="msd-list" id="emailAreaList"></div>
+              <div class="msd-footer">
+                <button type="button" class="msd-footer-btn msd-footer-clear" id="emailAreaClear">Clear</button>
+                <button type="button" class="msd-footer-btn"                  id="emailAreaDone">Done ✓</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="email-row" style="margin-top:4px">
+        <button class="btn-email btn-email-save" id="btnEmailSave">💾 Save settings</button>
+        <button class="btn-email btn-email-send" id="btnEmailSendNow">📤 Send now</button>
+        <span class="email-status" id="emailSaveStatus"></span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Rentals filter bar -->
+  <div class="filters">
+    <div class="filter-group">
+      <label>Area</label>
+      <div class="msd-wrap" id="filterAreaWrap">
+        <button type="button" class="msd-trigger" id="filterAreaTrigger">All areas <span class="msd-caret">▾</span></button>
+        <div class="msd-panel" id="filterAreaPanel">
+          <input class="msd-search-input" id="filterAreaSearch" placeholder="Search areas…" type="text" autocomplete="off">
+          <div class="msd-list" id="filterAreaList"></div>
+          <div class="msd-footer">
+            <button type="button" class="msd-footer-btn msd-footer-clear" id="filterAreaClear">Clear</button>
+            <button type="button" class="msd-footer-btn"                   id="filterAreaDone">Done ✓</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="filter-sep"></div>
+    <div class="filter-group">
+      <label>Fascia</label>
+      <select id="rFascia">
+        <option value="">A + B + C</option>
+        <option value="A">A only</option>
+        <option value="B">B only</option>
+        <option value="C">C only</option>
+      </select>
+    </div>
+    <div class="filter-sep"></div>
+    <div class="filter-group">
+      <label>Max rent €/mo</label>
+      <select id="rMaxRent">
+        <option value="">Any</option>
+        <option value="800">800</option>
+        <option value="1000">1,000</option>
+        <option value="1500">1,500</option>
+        <option value="2000">2,000</option>
+        <option value="3000">3,000</option>
+        <option value="5000">5,000</option>
+      </select>
+    </div>
+    <div class="filter-sep"></div>
+    <div class="filter-group">
+      <label>Min m²</label>
+      <select id="rMinSqm">
+        <option value="">Any</option>
+        <option value="30">30+</option>
+        <option value="50">50+</option>
+        <option value="70">70+</option>
+        <option value="90">90+</option>
+      </select>
+    </div>
+    <div class="filter-sep"></div>
+    <div class="filter-group">
+      <label>Min rooms</label>
+      <select id="rMinRooms">
+        <option value="">Any</option>
+        <option value="1">1+</option>
+        <option value="2">2+</option>
+        <option value="3">3+</option>
+        <option value="4">4+</option>
+        <option value="5">5+</option>
+      </select>
+    </div>
+    <div class="filter-sep"></div>
+    <div class="filter-group">
+      <label>Min score</label>
+      <input type="range" id="rScore" min="0" max="100" value="0" step="5">
+      <span class="range-val" id="rScoreVal">0</span>
+    </div>
+    <div class="filter-sep"></div>
+    <div class="filter-group">
+      <label>Sort</label>
+      <div class="sort-tabs" id="rentSortTabs">
+        <button class="sort-tab active" data-rsort="score_total">Score</button>
+        <button class="sort-tab" data-rsort="vs_omi_rent_pct">vs OMI</button>
+        <button class="sort-tab" data-rsort="rent_mo">Rent ↑</button>
+      </div>
+    </div>
+    <button class="btn-reset" id="rBtnReset">Reset</button>
+  </div>
+
+  <!-- Rentals stats bar -->
+  <div class="stats-bar">
+    <span>Showing <strong id="rShowCount">–</strong> rentals</span>
+    <span>Avg score <strong id="rAvgScore">–</strong> / 100</span>
+    <span>Avg rent <strong id="rAvgRent">–</strong> /mo</span>
+    <span>Unmatched zones <strong id="rFallbackCount">–</strong></span>
+  </div>
+
+  <!-- Rentals grid -->
+  <div class="grid" id="rentGrid"></div>
+
+</div><!-- /rentalsView -->
+
+<script>
+// ── Global state ──────────────────────────────────────────────────────────────
+let ALL          = [];
+let fasciaRanges = {};   // { A: {min, max}, B: {min, max}, C: {min, max} }
+let sortKey      = 'score_total';
+let isFetching   = false;
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const scoreClass = s => s >= 70 ? 'high' : s >= 45 ? 'mid' : 'low';
+const fmt = n => n != null ? Number(n).toLocaleString('it-IT') : '–';
+const vsClass = p => p <= -5 ? 'vs-below' : p >= 5 ? 'vs-above' : 'vs-at';
+
+function cityTag(ck) {
+  return { napoli: 'tag-napoli', milano: 'tag-milano', roma: 'tag-roma' }[ck] || 'tag-other';
+}
+
+// Compute per-fascia min/max asking €/m² from ALL loaded data.
+// Bar position = (ask_psqm − min) / (max − min).
+// Left = cheapest in fascia (green), right = most expensive (red).
+function computeFasciaRanges(data) {
+  const r = {};
+  for (const f of ['A', 'B', 'C']) {
+    const prices = data.filter(l => l.omi_fascia === f && l.ask_psqm > 0).map(l => l.ask_psqm);
+    if (prices.length) r[f] = { min: Math.min(...prices), max: Math.max(...prices) };
+  }
+  return r;
+}
+
+function getBarPct(l) {
+  const r = fasciaRanges[l.omi_fascia];
+  if (!r || r.max <= r.min) return 50;
+  return Math.max(0, Math.min(100,
+    Math.round((l.ask_psqm - r.min) / (r.max - r.min) * 100)
+  ));
+}
+
+// ── Card rendering ────────────────────────────────────────────────────────────
+function renderCard(l) {
+  const sc      = scoreClass(l.score_total);
+  const ct      = cityTag(l.city_key);
+  const vc      = vsClass(l.vs_omi_pct);
+  const barPct  = getBarPct(l);
+
+  // Fascia label colour
+  const fasciaColour =
+    l.fascia_pct <= 33 ? 'var(--green)' :
+    l.fascia_pct <= 66 ? 'var(--yellow)' : 'var(--red)';
+
+  const yieldStr   = l.est_yield_pct != null ? l.est_yield_pct.toFixed(2) + '%' : '–';
+  const rentStr    = l.est_rent_mo   != null ? '€' + fmt(l.est_rent_mo) + ' / mo' : '–';
+  const rawRentStr = l.omi_rent_raw  != null ? '€' + fmt(l.omi_rent_raw) + ' / mo' : null;
+  const surfCoeff  = l.surf_coeff    != null ? '×' + l.surf_coeff.toFixed(2) : null;
+  const condCoeff  = l.cond_coeff    != null ? '×' + l.cond_coeff.toFixed(2) : null;
+  const coeffNote  = (surfCoeff && condCoeff) ? `${surfCoeff} size · ${condCoeff} condition` : 'OMI mid-rent × m²';
+
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = `
+    <div class="card-header">
+      <div class="score-badge ${sc}"
+           title="Total score ${l.score_total}/100 = 40% price score + 35% yield score + 25% fascia score">
+        ${l.score_total ?? '–'}
+      </div>
+      <div class="card-title">
+        <div class="neigh">${l.neighbourhood || '–'}
+          <span class="fascia-badge fascia-${l.omi_fascia}"
+                title="OMI price zone classification: A = prime, B = semi-central, C = peripheral">
+            Fascia ${l.omi_fascia || '?'}
+          </span>
+        </div>
+        <span class="city-tag ${ct}">${l.city}</span>
+        ${l.omi_zone === 'city average'
+          ? '<span style="font-size:11px;color:var(--yellow);margin-left:6px" title="No OMI zone matched — city-average benchmark used, accuracy reduced">⚠ unmatched zone</span>'
+          : ''}
+      </div>
+    </div>
+
+    <div class="price-row">
+      <span class="price-main">€${fmt(l.price)}</span>
+      <span class="price-psqm">${fmt(l.sqm)} m² · <strong>€${fmt(l.ask_psqm)}/m²</strong></span>
+      <span class="vs-omi ${vc}"
+            title="Asking price vs OMI mid-range benchmark of €${fmt(l.omi_bench)}/m² for zone '${l.omi_zone}'">
+        ${l.vs_omi_label || '–'}
+      </span>
+    </div>
+
+    <div class="fascia-bar-wrap">
+      <div class="fascia-bar-header">
+        <span>Price position within Fascia ${l.omi_fascia}</span>
+        <span style="color:${fasciaColour}">${l.fascia_label || '–'}</span>
+      </div>
+      <div class="fascia-bar-track">
+        <div class="fascia-bar-fill"></div>
+        <div class="fascia-bar-marker" style="left:${barPct}%"
+             title="€${fmt(l.ask_psqm)}/m² — ${barPct}th percentile by price among Fascia ${l.omi_fascia} listings"></div>
+      </div>
+      <div class="fascia-bar-axis">
+        <span>← cheap</span>
+        <span>expensive →</span>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-cell">
+        <div class="val" style="color:var(--green)">${yieldStr}</div>
+        <div class="lbl"><strong>Gross</strong> yield est.</div>
+        <div class="sub-note"
+             title="Subtract ~1.5–2 percentage points for cedolare secca (21% flat tax on rent) and typical running costs (maintenance, vacancy, agency) to estimate net yield">
+          net ~1.5–2 pp lower ⓘ
+        </div>
+      </div>
+      <div class="stat-cell">
+        <div class="val">${rentStr}</div>
+        <div class="lbl">Est. monthly rent</div>
+        <div class="sub-note"
+             title="Corrected rent = OMI mid-rent × m² × size coefficient × condition coefficient">${coeffNote}</div>
+        ${rawRentStr ? `<div class="sub-note" style="opacity:0.45" title="Raw OMI rent before size and condition corrections">raw ${rawRentStr}</div>` : ''}
+      </div>
+      <div class="stat-cell">
+        <div class="val">€${fmt(l.omi_bench)}/m²</div>
+        <div class="lbl">
+          <abbr title="Agenzia Entrate OMI (Osservatorio del Mercato Immobiliare) official reference purchase price per m² for zone '${l.omi_zone}' (2° sem 2025). This is the benchmark used for all vs-OMI calculations.">
+            OMI benchmark (€/m²)
+          </abbr>
+        </div>
+        <div class="sub-note">zone: ${l.omi_zone}</div>
+      </div>
+    </div>
+
+    <div class="subscores-section">
+      <div class="subscores">
+        <div class="subscore">
+          <div class="s-val s-price"
+               title="Price score (0–100): how cheap vs OMI benchmark. −20% under → 100, at bench → 50, +20% over → 0.">
+            ${l.score_price ?? '–'}
+          </div>
+          <div class="s-lbl">Price score</div>
+        </div>
+        <div class="subscore">
+          <div class="s-val s-yield"
+               title="Yield score (0–100): estimated gross yield quality. 7%+ → 100, 5% → ~70, 4% → ~50, 2.5% → 0.">
+            ${l.score_yield ?? '–'}
+          </div>
+          <div class="s-lbl">Yield score</div>
+        </div>
+        <div class="subscore">
+          <div class="s-val s-fascia"
+               title="Fascia score (0–100): position within all listings in the same fascia by asking €/m². Cheapest = 100, most expensive = 0.">
+            ${l.score_fascia ?? '–'}
+          </div>
+          <div class="s-lbl">Fascia score</div>
+        </div>
+      </div>
+      <div class="scores-legend">all scores 0–100 · total = 40% price + 35% yield + 25% fascia</div>
+    </div>
+
+    <div class="card-footer">
+      <div class="detail-row">
+        ${l.rooms    != null ? `<span>${l.rooms} rooms</span>` : ''}
+        ${l.floor    != null ? ` · floor <span>${l.floor}</span>` : ''}
+        ${l.condition ? ` · <span>${l.condition}</span>` : ''}
+      </div>
+      <button class="btn-fav${isFavourite(l.id) ? ' is-fav' : ''}"
+              data-id="${l.id}"
+              title="${isFavourite(l.id) ? 'Remove from favourites' : 'Add to favourites'}">
+        ${isFavourite(l.id) ? '★' : '☆'}
+      </button>
+      <a class="link-btn" href="${l.url}" target="_blank" rel="noopener">View →</a>
+    </div>
+  `;
+
+  card.querySelector('.btn-fav').addEventListener('click', e => {
+    const id  = e.currentTarget.dataset.id;
+    const now = toggleFavourite(id);
+    e.currentTarget.textContent = now ? '★' : '☆';
+    e.currentTarget.classList.toggle('is-fav', now);
+    e.currentTarget.title = now ? 'Remove from favourites' : 'Add to favourites';
+  });
+
+  return card;
+}
+
+// ── Filter & sort ─────────────────────────────────────────────────────────────
+function getFilters() {
+  return {
+    city:     document.getElementById('fCity').value,
+    fascia:   document.getElementById('fFascia').value,
+    minScore: parseInt(document.getElementById('fScore').value) || 0,
+    maxPrice: parseInt(document.getElementById('fPrice').value) || 0,
+    minSqm:   parseInt(document.getElementById('fSqm').value)   || 0,
+  };
+}
+
+function applyFilters(data, f) {
+  return data.filter(l => {
+    if (f.city     && l.city_key   !== f.city)        return false;
+    if (f.fascia   && l.omi_fascia !== f.fascia)       return false;
+    if (f.minScore && (l.score_total ?? 0) < f.minScore) return false;
+    if (f.maxPrice && l.price > f.maxPrice)            return false;
+    if (f.minSqm   && l.sqm   < f.minSqm)             return false;
+    return true;
+  });
+}
+
+function avg(arr, key) {
+  const vals = arr.map(l => l[key]).filter(v => v != null && !isNaN(v));
+  return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+}
+
+function render() {
+  const f    = getFilters();
+  let   data = applyFilters(ALL, f);
+
+  const asc = sortKey === 'price' || sortKey === 'vs_omi_pct';
+  data.sort((a, b) => {
+    const av = a[sortKey] ?? (asc ? Infinity : -Infinity);
+    const bv = b[sortKey] ?? (asc ? Infinity : -Infinity);
+    return asc ? av - bv : bv - av;
+  });
+
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  if (!data.length) {
+    grid.innerHTML = '<div class="empty"><h3>No listings match</h3><p>Try relaxing your filters.</p></div>';
+  } else {
+    const frag = document.createDocumentFragment();
+    data.forEach(l => frag.appendChild(renderCard(l)));
+    grid.appendChild(frag);
+  }
+
+  document.getElementById('showCount').textContent = data.length;
+  const as = avg(data, 'score_total');
+  const ay = avg(data, 'est_yield_pct');
+  document.getElementById('avgScore').textContent     = as != null ? as.toFixed(0) : '–';
+  document.getElementById('avgYield').textContent     = ay != null ? ay.toFixed(2) + '%' : '–';
+  document.getElementById('fallbackCount').textContent =
+    data.filter(l => l.omi_zone === 'city average').length;
+}
+
+// ── Data loading ──────────────────────────────────────────────────────────────
+async function reloadListings() {
+  const resp = await fetch('/listings');
+  if (!resp.ok) throw new Error('HTTP ' + resp.status);
+  ALL = await resp.json();
+  fasciaRanges = computeFasciaRanges(ALL);
+
+  // Rebuild city dropdown, keeping selection
+  const sel  = document.getElementById('fCity');
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">All cities</option>';
+  [...new Set(ALL.map(l => l.city_key))].sort().forEach(ck => {
+    const o = document.createElement('option');
+    o.value = ck;
+    o.textContent = ck.charAt(0).toUpperCase() + ck.slice(1);
+    sel.appendChild(o);
+  });
+  if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
+
+  const ts = new Date().toLocaleDateString('it-IT', { day:'2-digit', month:'short', year:'numeric' });
+  document.getElementById('meta').textContent = `${ALL.length} listings · ${ts}`;
+  render();
+}
+
+// ── Fetch panel logic ─────────────────────────────────────────────────────────
+function updateExpectedPill() {
+  const pages  = parseInt(document.getElementById('fPages').value) || 3;
+  const cities = document.querySelectorAll('input[name=city]:checked').length;
+  const n = pages * 25 * Math.max(1, cities);
+  document.getElementById('expectedPill').textContent =
+    `~${n} listings (${pages} × 25 × ${cities} ${cities === 1 ? 'city' : 'cities'})`;
+}
+
+async function startFetch() {
+  if (isFetching) return;
+
+  const cities = [...document.querySelectorAll('input[name=city]:checked')].map(cb => cb.value);
+  if (!cities.length) { alert('Select at least one city.'); return; }
+
+  const body = {
+    cities,
+    pages: parseInt(document.getElementById('fPages').value) || 3,
+  };
+  const maxPrice = document.getElementById('fFetchMaxPrice').value;
+  const minSqm   = document.getElementById('fFetchMinSqm').value;
+  const minRooms = document.getElementById('fFetchMinRooms').value;
+  if (maxPrice) body.max_price = parseInt(maxPrice);
+  if (minSqm)   body.min_sqm   = parseInt(minSqm);
+  if (minRooms) body.min_rooms = parseInt(minRooms);
+
+  const logPanel  = document.getElementById('logPanel');
+  const logOutput = document.getElementById('logOutput');
+  const btn       = document.getElementById('btnStartFetch');
+
+  logOutput.textContent = '';
+  logPanel.hidden = false;
+  btn.disabled = true;
+  btn.textContent = '⏳ Running…';
+  isFetching = true;
+
+  function appendLog(text) {
+    logOutput.textContent += text + '\n';
+    logOutput.scrollTop = logOutput.scrollHeight;
+  }
+
+  try {
+    const resp = await fetch('/fetch', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(body),
+    });
+
+    if (resp.status === 409) {
+      appendLog('⚠ A fetch is already running on the server. Please wait.');
+      return;
+    }
+    if (!resp.ok) {
+      appendLog(`✗ Server error: HTTP ${resp.status}`);
+      return;
+    }
+
+    const reader  = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let   buffer  = '';
+    let   isDone  = false;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();   // keep partial last line
+
+      for (const line of lines) {
+        if (line.startsWith('data: '))   appendLog(line.slice(6));
+        if (line.trim() === 'event: done') isDone = true;
+      }
+      if (isDone) break;
+    }
+
+    if (isDone) {
+      await reloadListings();
+      appendLog('\n✓ Dashboard reloaded with new listings.');
+    }
+  } catch (e) {
+    appendLog(`✗ ${e.message}`);
+  } finally {
+    isFetching = false;
+    btn.disabled = false;
+    btn.textContent = '▶ Start fetch';
+  }
+}
+
+// ── Favourites ────────────────────────────────────────────────────────────────
+const FAV_KEY = 'immo_favourites';
+function getFavourites()     { try { return JSON.parse(localStorage.getItem(FAV_KEY)) || []; } catch { return []; } }
+function saveFavourites(ids) { localStorage.setItem(FAV_KEY, JSON.stringify(ids)); }
+function isFavourite(id)     { return getFavourites().includes(String(id)); }
+
+function toggleFavourite(id) {
+  const ids = getFavourites();
+  const i   = ids.indexOf(String(id));
+  if (i === -1) ids.push(String(id)); else ids.splice(i, 1);
+  saveFavourites(ids);
+  updateFavBadge();
+  return i === -1;   // true = now favourited
+}
+
+function updateFavBadge() {
+  const n     = getFavourites().length;
+  const badge = document.getElementById('favBadge');
+  if (!badge) return;
+  badge.textContent = n;
+  badge.classList.toggle('visible', n > 0);
+}
+
+// ── Rental favourites (separate key from sales) ───────────────────────────────
+const RENT_FAV_KEY = 'immo_rent_favourites';
+function getRentFavs()       { try { return JSON.parse(localStorage.getItem(RENT_FAV_KEY)) || []; } catch { return []; } }
+function saveRentFavs(ids)   { localStorage.setItem(RENT_FAV_KEY, JSON.stringify(ids)); }
+function isRentFav(id)       { return getRentFavs().includes(String(id)); }
+
+function toggleRentFav(id) {
+  const ids = getRentFavs();
+  const i   = ids.indexOf(String(id));
+  if (i === -1) ids.push(String(id)); else ids.splice(i, 1);
+  saveRentFavs(ids);
+  return i === -1;
+}
+
+// ── Live-API vs static-mode detection ────────────────────────────────────────
+let IS_LIVE = false;   // true when running via api.py locally
+
+function applyStaticMode() {
+  // Hide scanner controls and email config panel — not usable on Netlify
+  const scannerPanel = document.querySelector('.scanner-panel');
+  const emailPanel   = document.querySelector('.email-panel');
+  if (scannerPanel) scannerPanel.style.display = 'none';
+  if (emailPanel)   emailPanel.style.display   = 'none';
+
+  // Insert a small "read-only" notice above the rentals grid
+  const rentalsView = document.getElementById('rentalsView');
+  if (rentalsView && !document.getElementById('staticNotice')) {
+    const notice = document.createElement('div');
+    notice.id = 'staticNotice';
+    notice.style.cssText = 'background:rgba(79,142,247,0.12);border:1px solid rgba(79,142,247,0.3);'
+      + 'border-radius:6px;padding:8px 14px;font-size:12px;color:#7eb5ff;margin-bottom:12px;';
+    notice.textContent = '📡 View-only mode — scanner runs locally on your Mac. '
+      + 'Run \`python3 fetch_rentals.py --daemon --git-push\` to update this data.';
+    rentalsView.insertBefore(notice, rentalsView.firstChild);
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+async function init() {
+  const isHttp = location.protocol === 'http:' || location.protocol === 'https:';
+  if (!isHttp) {
+    document.getElementById('grid').innerHTML = `
+      <div class="empty">
+        <h3>Needs an HTTP server</h3>
+        <p style="margin-bottom:12px">Open a terminal in the project folder and run:</p>
+        <code style="display:block;background:var(--surf2);padding:10px 16px;border-radius:6px;font-size:14px;margin-bottom:12px">python3 api.py</code>
+        <p>Then open <strong>http://localhost:8000/</strong> in your browser.</p>
+      </div>`;
+    document.getElementById('meta').textContent = 'needs HTTP server';
+    return;
+  }
+
+  // Detect live-API vs static (Netlify) mode
+  try {
+    const ping = await fetch('/api-ping');
+    IS_LIVE = ping.ok;
+  } catch {
+    IS_LIVE = false;
+  }
+  if (!IS_LIVE) applyStaticMode();
+
+  // Disable fetch button if a run is already in progress
+  try {
+    const st = await fetch('/status').then(r => r.json());
+    if (st.running) {
+      const btn = document.getElementById('btnStartFetch');
+      btn.disabled = true;
+      btn.textContent = '⏳ Fetch in progress…';
+    }
+  } catch { /* /status may not exist on non-api server */ }
+
+  try {
+    await reloadListings();
+  } catch (e) {
+    document.getElementById('grid').innerHTML = `
+      <div class="empty">
+        <h3>Could not load listings</h3>
+        <p>Make sure <code>api.py</code> is running: <code>python3 api.py</code></p>
+        <p style="margin-top:8px;font-size:12px;color:var(--muted)">${e.message}</p>
+      </div>`;
+    document.getElementById('meta').textContent = 'error';
+  }
+}
+
+// ── Event listeners ───────────────────────────────────────────────────────────
+['fCity','fFascia','fPrice','fSqm'].forEach(id =>
+  document.getElementById(id).addEventListener('change', render));
+
+document.getElementById('fScore').addEventListener('input', function () {
+  document.getElementById('fScoreVal').textContent = this.value;
+  render();
+});
+
+document.getElementById('btnReset').addEventListener('click', () => {
+  document.getElementById('fCity').value   = '';
+  document.getElementById('fFascia').value = '';
+  document.getElementById('fScore').value  = 0;
+  document.getElementById('fScoreVal').textContent = '0';
+  document.getElementById('fPrice').value  = '';
+  document.getElementById('fSqm').value    = '';
+  sortKey = 'score_total';
+  document.querySelectorAll('.sort-tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.sort === 'score_total'));
+  render();
+});
+
+document.querySelectorAll('.sort-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    sortKey = btn.dataset.sort;
+    document.querySelectorAll('.sort-tab').forEach(t =>
+      t.classList.toggle('active', t === btn));
+    render();
+  });
+});
+
+document.getElementById('btnFetchToggle').addEventListener('click', () => {
+  const panel = document.getElementById('fetchPanel');
+  const btn   = document.getElementById('btnFetchToggle');
+  panel.hidden = !panel.hidden;
+  btn.classList.toggle('is-open', !panel.hidden);
+  btn.textContent = panel.hidden ? '▶ Fetch new data' : '✕ Close';
+});
+
+document.getElementById('btnStartFetch').addEventListener('click', startFetch);
+
+document.querySelectorAll('input[name=city]').forEach(cb =>
+  cb.addEventListener('change', updateExpectedPill));
+document.getElementById('fPages').addEventListener('input', updateExpectedPill);
+
+updateExpectedPill();
+updateFavBadge();
+init();
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+let activeTab = 'rentals';
+
+function switchTab(tab) {
+  activeTab = tab;
+  document.getElementById('salesView').hidden   = (tab !== 'sales');
+  document.getElementById('rentalsView').hidden = (tab !== 'rentals');
+  document.querySelectorAll('.tab-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.tab === tab));
+  if (tab === 'rentals') {
+    startScannerPoll();
+    if (!ALL_RENT.length) loadRentals();
+  } else {
+    stopScannerPoll();
+  }
+}
+
+document.querySelectorAll('.tab-btn').forEach(btn =>
+  btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
+
+// ── Milan areas (from OMI data) ───────────────────────────────────────────────
+const MILAN_AREAS = {
+  A: ['Amendola','Arco della Pace','Brera','Buenos Aires','Buonarroti','Centrale',
+      'Corso Como','Corso Genova','Duomo','Garibaldi','Guastalla','Indipendenza',
+      'Isola','Melchiorre','Moscova','Navigli','Paolo Sarpi','Piave','Porta Romana',
+      'Porta Ticinese','Porta Venezia','Solari','Ticinese','Tortona','Tricolore',
+      'Vincenzo Monti','Washington'],
+  B: ['Affori','Argonne','Bicocca','Bovisa','Ca Granda','Casoretto','Cenisio',
+      'Cimiano','Città Studi','Corsica','Dergano','Feltre','Ghisolfa','Lambrate',
+      'Loreto','Lotto','Maggiolina',"Medaglie d'oro",'Monte Rosa','Montenero',
+      'Niguarda','Parco Trotter','Pasteur','Pezzotti','Plebisciti','Precotto',
+      'Rovereto','San Siro','Siena','Tre Castelli','Turro','Udine','Via Padova',
+      'Villa San Giovanni'],
+  C: ['Abbiategrasso','Adriano','Bisceglie','Bonola','Bruzzano','Cascina Merlata',
+      'Cermenate','Certosa','Comasina','Corvetto','Famagosta','Forlanini',
+      'Giambellino','Gratosoglio','Lorenteggio','Mecenate','Musocco',
+      'Quarto Oggiaro','Ripamonti','Rogoredo','Romolo','Trenno','Uptown','Vigentino'],
+};
+const FASCIA_LABEL = { A: 'Fascia A — prime', B: 'Fascia B — semi-central', C: 'Fascia C — peripheral' };
+
+// ── Multi-select component ────────────────────────────────────────────────────
+function buildMultiSelect({ wrapId, triggerId, panelId, searchId, listId,
+                             clearId, doneId, allLabel = 'All areas', onChange }) {
+  const trigger = document.getElementById(triggerId);
+  const panel   = document.getElementById(panelId);
+  const search  = document.getElementById(searchId);
+  const list    = document.getElementById(listId);
+  const selected = new Set();
+
+  function renderList(q = '') {
+    list.innerHTML = '';
+    const ql = q.toLowerCase();
+    for (const [fascia, names] of Object.entries(MILAN_AREAS)) {
+      const matches = names.filter(n => !ql || n.toLowerCase().includes(ql));
+      if (!matches.length) continue;
+      const hdr = document.createElement('div');
+      hdr.className = 'msd-group-header';
+      hdr.textContent = FASCIA_LABEL[fascia];
+      list.appendChild(hdr);
+      for (const name of matches) {
+        const lbl = document.createElement('label');
+        lbl.className = 'msd-option';
+        const cb = document.createElement('input');
+        cb.type    = 'checkbox';
+        cb.value   = name;
+        cb.checked = selected.has(name);
+        cb.addEventListener('change', () => {
+          cb.checked ? selected.add(name) : selected.delete(name);
+          updateTrigger();
+          onChange([...selected]);
+        });
+        lbl.appendChild(cb);
+        lbl.append(' ' + name);
+        list.appendChild(lbl);
+      }
+    }
+  }
+
+  function updateTrigger() {
+    const n = selected.size;
+    trigger.innerHTML = (n === 0 ? allLabel : `${n} area${n === 1 ? '' : 's'} selected`)
+      + ' <span class="msd-caret">▾</span>';
+    trigger.classList.toggle('has-selection', n > 0);
+  }
+
+  function open()  { panel.classList.add('is-open');    }
+  function close() { panel.classList.remove('is-open'); }
+  function isOpen(){ return panel.classList.contains('is-open'); }
+
+  // Toggle panel open/close
+  trigger.addEventListener('click', e => {
+    e.stopPropagation();
+    if (!isOpen()) {
+      open();
+      search.value = '';
+      renderList();
+      search.focus();
+    } else {
+      close();
+    }
+  });
+
+  // Close on click outside
+  document.addEventListener('click', e => {
+    if (!document.getElementById(wrapId).contains(e.target)) close();
+  });
+
+  search.addEventListener('input', () => renderList(search.value));
+
+  document.getElementById(clearId).addEventListener('click', e => {
+    e.stopPropagation();
+    selected.clear();
+    renderList(search.value);
+    updateTrigger();
+    onChange([]);
+  });
+
+  document.getElementById(doneId).addEventListener('click', e => {
+    e.stopPropagation();
+    close();
+  });
+
+  return {
+    getSelected: ()    => [...selected],
+    clear:       ()    => { selected.clear(); updateTrigger(); },
+    setSelected: (arr) => {
+      selected.clear();
+      (arr || []).forEach(v => selected.add(v));
+      updateTrigger();
+    },
+  };
+}
+
+// Instantiate for scanner config (what to fetch from Immobiliare.it)
+const scanAreaMsd = buildMultiSelect({
+  wrapId: 'scanAreaWrap', triggerId: 'scanAreaTrigger', panelId: 'scanAreaPanel',
+  searchId: 'scanAreaSearch', listId: 'scanAreaList',
+  clearId: 'scanAreaClear', doneId: 'scanAreaDone',
+  onChange: () => { if (typeof saveScanPrefs === 'function') saveScanPrefs(); },
+});
+
+// Instantiate for filter bar (client-side filtering of loaded data)
+let rentSelectedAreas = [];
+const filterAreaMsd = buildMultiSelect({
+  wrapId: 'filterAreaWrap', triggerId: 'filterAreaTrigger', panelId: 'filterAreaPanel',
+  searchId: 'filterAreaSearch', listId: 'filterAreaList',
+  clearId: 'filterAreaClear', doneId: 'filterAreaDone',
+  onChange: areas => { rentSelectedAreas = areas; renderRentals(); },
+});
+
+// ── Rentals — global state ────────────────────────────────────────────────────
+let ALL_RENT          = [];
+let rentFasciaRanges  = {};
+let rentSortKey       = 'score_total';
+
+// ── Rentals — helpers ─────────────────────────────────────────────────────────
+function computeRentFasciaRanges(data) {
+  const r = {};
+  for (const f of ['A', 'B', 'C']) {
+    const ps = data.filter(l => l.omi_fascia === f && l.ask_psqm > 0).map(l => l.ask_psqm);
+    if (ps.length) r[f] = { min: Math.min(...ps), max: Math.max(...ps) };
+  }
+  return r;
+}
+
+function getRentBarPct(l) {
+  const r = rentFasciaRanges[l.omi_fascia];
+  if (!r || r.max <= r.min) return 50;
+  return Math.max(0, Math.min(100,
+    Math.round((l.ask_psqm - r.min) / (r.max - r.min) * 100)));
+}
+
+// ── Rentals — card renderer ───────────────────────────────────────────────────
+function renderRentalCard(l) {
+  const sc       = scoreClass(l.score_total);
+  const vc       = vsClass(l.vs_omi_rent_pct);
+  const barPct   = getRentBarPct(l);
+  const fasciaColour = barPct <= 33 ? 'var(--green)' : barPct <= 66 ? 'var(--yellow)' : 'var(--red)';
+
+  const rentStr   = l.rent_mo  != null ? '€' + fmt(l.rent_mo) + '/mo'   : '–';
+  const psqmStr   = l.ask_psqm != null ? '€' + l.ask_psqm.toFixed(1) + '/m²/mo' : '–';
+  const omiRange  = (l.omi_rmin != null && l.omi_rmax != null)
+    ? `€${l.omi_rmin}–${l.omi_rmax}/m²/mo`
+    : '–';
+
+  // Thumbnail
+  const thumbHtml = l.thumbnail
+    ? `<img class="card-thumb" src="${l.thumbnail}" alt="" loading="lazy">`
+    : '';
+
+  // Total cost (rent + spese)
+  const totalMo  = (l.rent_mo && l.spese_condominiali)
+    ? l.rent_mo + l.spese_condominiali : null;
+  const totalRow = totalMo
+    ? `<div class="rent-total-row">Total incl. fees: <strong>€${fmt(totalMo)}/mo</strong></div>`
+    : '';
+
+  // Spese badge — show in price row
+  const spese = l.spese_condominiali != null
+    ? `<span style="font-size:11px;color:var(--muted)"> + €${fmt(l.spese_condominiali)} fees</span>`
+    : '';
+
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = `
+    ${thumbHtml}
+    <div class="card-header">
+      <div class="score-badge ${sc}"
+           title="Total score ${l.score_total}/100 = 60% rent score + 40% fascia score">
+        ${l.score_total ?? '–'}
+      </div>
+      <div class="card-title">
+        <div class="neigh">${l.neighbourhood || '–'}
+          <span class="fascia-badge fascia-${l.omi_fascia}"
+                title="OMI zone: A = prime, B = semi-central, C = peripheral">
+            Fascia ${l.omi_fascia || '?'}
+          </span>
+        </div>
+        <span class="city-tag tag-milano">Milano · Affitto</span>
+        ${l.omi_zone === 'city average'
+          ? '<span style="font-size:11px;color:var(--yellow);margin-left:6px" title="No OMI zone matched — city-average benchmark used">⚠ unmatched zone</span>'
+          : ''}
+      </div>
+    </div>
+
+    <div class="price-row">
+      <span class="price-main">${rentStr}</span>${spese}
+      ${totalRow}
+      <span class="price-psqm">${fmt(l.sqm)} m² · <strong>${psqmStr}</strong></span>
+      <span class="vs-omi ${vc}"
+            title="Asking rent vs OMI mid-range of €${l.omi_rent_mid}/m²/mo for zone '${l.omi_zone}'">
+        ${l.vs_omi_label || '–'}
+      </span>
+    </div>
+
+    <div class="fascia-bar-wrap">
+      <div class="fascia-bar-header">
+        <span>Rent position within Fascia ${l.omi_fascia}</span>
+        <span style="color:${fasciaColour}">${l.fascia_label || '–'}</span>
+      </div>
+      <div class="fascia-bar-track">
+        <div class="fascia-bar-fill"></div>
+        <div class="fascia-bar-marker" style="left:${barPct}%"
+             title="€${l.ask_psqm}/m²/mo — ${barPct}th percentile by rent among Fascia ${l.omi_fascia}"></div>
+      </div>
+      <div class="fascia-bar-axis"><span>← cheap</span><span>expensive →</span></div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-cell">
+        <div class="val" style="color:var(--accent)">€${fmt(l.omi_rent_mid)}/m²</div>
+        <div class="lbl">
+          <abbr title="OMI mid-point rent benchmark for zone '${l.omi_zone}' (€/m²/month). Used as the reference for vs-OMI scoring.">
+            OMI rent mid
+          </abbr>
+        </div>
+        <div class="sub-note">range: ${omiRange}</div>
+      </div>
+      <div class="stat-cell">
+        <div class="val" style="color:var(--text)">
+          ${l.rooms != null ? l.rooms + ' room' + (l.rooms !== 1 ? 's' : '') : '–'}
+        </div>
+        <div class="lbl">Rooms</div>
+        <div class="sub-note">${l.floor != null ? 'Floor ' + l.floor : ''}</div>
+      </div>
+      <div class="stat-cell">
+        <div class="val" style="color:var(--muted)">${l.condition || '–'}</div>
+        <div class="lbl">Condition</div>
+        <div class="sub-note">${l.spese_condominiali != null ? '+ €' + fmt(l.spese_condominiali) + '/mo fees' : ''}</div>
+      </div>
+    </div>
+
+    <div class="subscores-section">
+      <div class="subscores">
+        <div class="subscore">
+          <div class="s-val s-price"
+               title="Rent score (0–100): how cheap vs OMI. −20% = 100, at mid = 50, +20% = 0">
+            ${l.score_rent ?? '–'}
+          </div>
+          <div class="s-lbl">Rent score</div>
+        </div>
+        <div class="subscore">
+          <div class="s-val s-fascia"
+               title="Fascia score (0–100): position among same-fascia rentals by €/m²/mo. Cheapest = 100.">
+            ${l.score_fascia ?? '–'}
+          </div>
+          <div class="s-lbl">Fascia score</div>
+        </div>
+      </div>
+      <div class="scores-legend">all scores 0–100 · total = 60% rent + 40% fascia</div>
+    </div>
+
+    <div class="card-footer">
+      <div class="detail-row">
+        ${l.address ? `<span style="color:var(--muted);font-size:11px">${l.address}</span>` : ''}
+      </div>
+      <button class="btn-fav${isRentFav(l.id) ? ' is-fav' : ''}"
+              data-rent-id="${l.id}"
+              title="${isRentFav(l.id) ? 'Remove from favourites' : 'Add to favourites'}">
+        ${isRentFav(l.id) ? '★' : '☆'}
+      </button>
+      <a class="link-btn" href="${l.url}" target="_blank" rel="noopener">View →</a>
+    </div>
+  `;
+
+  card.querySelector('[data-rent-id]').addEventListener('click', e => {
+    const id  = e.currentTarget.dataset.rentId;
+    const now = toggleRentFav(id);
+    e.currentTarget.textContent = now ? '★' : '☆';
+    e.currentTarget.classList.toggle('is-fav', now);
+    e.currentTarget.title = now ? 'Remove from favourites' : 'Add to favourites';
+  });
+
+  return card;
+}
+
+// ── Rentals — filter & render ─────────────────────────────────────────────────
+function getRentFilters() {
+  return {
+    areas:    rentSelectedAreas,
+    fascia:   document.getElementById('rFascia').value,
+    maxRent:  parseInt(document.getElementById('rMaxRent').value)   || 0,
+    minSqm:   parseInt(document.getElementById('rMinSqm').value)    || 0,
+    minRooms: parseInt(document.getElementById('rMinRooms').value)  || 0,
+    minScore: parseInt(document.getElementById('rScore').value)     || 0,
+  };
+}
+
+function applyRentFilters(data, f) {
+  return data.filter(l => {
+    if (f.areas.length) {
+      const nb = (l.neighbourhood || '').toLowerCase();
+      if (!f.areas.some(a => nb.includes(a.toLowerCase()))) return false;
+    }
+    if (f.fascia   && l.omi_fascia !== f.fascia)              return false;
+    if (f.maxRent  && l.rent_mo > f.maxRent)                  return false;
+    if (f.minSqm   && l.sqm < f.minSqm)                       return false;
+    if (f.minRooms && (l.rooms ?? 0) < f.minRooms)            return false;
+    if (f.minScore && (l.score_total ?? 0) < f.minScore)      return false;
+    return true;
+  });
+}
+
+function renderRentals() {
+  const f    = getRentFilters();
+  const asc  = (rentSortKey === 'rent_mo' || rentSortKey === 'vs_omi_rent_pct');
+  let   data = applyRentFilters(ALL_RENT, f);
+  data.sort((a, b) => {
+    const av = a[rentSortKey] ?? (asc ? Infinity : -Infinity);
+    const bv = b[rentSortKey] ?? (asc ? Infinity : -Infinity);
+    return asc ? av - bv : bv - av;
+  });
+
+  const grid = document.getElementById('rentGrid');
+  grid.innerHTML = '';
+  if (!data.length) {
+    grid.innerHTML = ALL_RENT.length
+      ? '<div class="empty"><h3>No rentals match</h3><p>Try relaxing your filters.</p></div>'
+      : '<div class="empty"><h3>No rental data yet</h3><p>Start the scanner above, or run <code>python3 fetch_rentals.py</code> to fetch listings.</p></div>';
+  } else {
+    const frag = document.createDocumentFragment();
+    data.forEach(l => frag.appendChild(renderRentalCard(l)));
+    grid.appendChild(frag);
+  }
+
+  document.getElementById('rShowCount').textContent     = data.length;
+  const as = avg(data, 'score_total');
+  const ar = avg(data, 'rent_mo');
+  document.getElementById('rAvgScore').textContent      = as != null ? as.toFixed(0) : '–';
+  document.getElementById('rAvgRent').textContent       = ar != null ? '€' + fmt(Math.round(ar)) : '–';
+  document.getElementById('rFallbackCount').textContent = data.filter(l => l.omi_zone === 'city average').length;
+}
+
+// ── Rentals — data loading ────────────────────────────────────────────────────
+async function loadRentals() {
+  try {
+    const resp = await fetch('/rentals');
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    ALL_RENT = await resp.json();
+  } catch {
+    ALL_RENT = [];
+  }
+  rentFasciaRanges = computeRentFasciaRanges(ALL_RENT);
+  renderRentals();
+}
+
+// ── Scanner status polling ────────────────────────────────────────────────────
+let _scannerPollTimer = null;
+
+function startScannerPoll() {
+  if (_scannerPollTimer) return;
+  updateScannerStatus();   // immediate check
+  _scannerPollTimer = setInterval(updateScannerStatus, 10000);
+}
+
+function stopScannerPoll() {
+  if (_scannerPollTimer) { clearInterval(_scannerPollTimer); _scannerPollTimer = null; }
+}
+
+let _lastScannerRun = null;   // ISO string of last known run — detect new run to reload
+
+async function updateScannerStatus() {
+  try {
+    const st    = await fetch('/scanner-status').then(r => r.json());
+    const dot   = document.getElementById('scannerDot');
+    const lbl   = document.getElementById('scannerLabel');
+    const meta  = document.getElementById('scannerLastRun');
+    const badge = document.getElementById('scannerNewBadge');
+
+    dot.classList.toggle('running', !!st.running);
+    lbl.textContent   = st.running ? 'Scanner running' : 'Scanner stopped';
+    lbl.style.color   = st.running ? 'var(--green)' : 'var(--muted)';
+
+    document.getElementById('btnStartScanner').disabled = !!st.running;
+    document.getElementById('btnStopScanner').disabled  = !st.running;
+
+    if (st.last_run) {
+      meta.textContent = 'Last run: ' + st.last_run.replace('T', ' ');
+      // Auto-reload rentals grid when a new scan completes
+      if (!st.running && st.last_run !== _lastScannerRun) {
+        const isFirstPoll = _lastScannerRun === null;
+        _lastScannerRun = st.last_run;
+        await loadRentals();
+        if (!isFirstPoll) {
+          // Flash "↻ Updated" on the stats bar to confirm the grid refreshed
+          const bar = document.querySelector('#rentalsView .stats-bar');
+          if (bar) {
+            const flash = document.createElement('span');
+            flash.textContent = '↻ Updated';
+            flash.style.cssText = 'color:var(--green);font-weight:700;transition:opacity 1.5s';
+            bar.appendChild(flash);
+            setTimeout(() => { flash.style.opacity = '0'; }, 1500);
+            setTimeout(() => { flash.remove(); }, 3000);
+          }
+        }
+      }
+      _lastScannerRun = st.last_run;
+    }
+
+    if (st.new_count != null && st.new_count > 0) {
+      badge.textContent = st.new_count + ' new listing' + (st.new_count !== 1 ? 's' : '');
+      badge.classList.add('visible');
+    } else {
+      badge.classList.remove('visible');
+    }
+  } catch { /* /scanner-status unavailable — no-op */ }
+}
+
+// ── Scanner start/stop buttons ────────────────────────────────────────────────
+document.getElementById('btnStartScanner').addEventListener('click', async () => {
+  saveScanPrefs();
+  const body = {
+    pages: parseInt(document.getElementById('sScanPages').value) || 3,
+  };
+  const areas    = scanAreaMsd.getSelected();
+  const maxRent  = document.getElementById('sScanMaxRent').value;
+  const minRooms = document.getElementById('sScanMinRooms').value;
+  if (areas.length) body.areas     = areas;
+  if (maxRent)      body.max_rent  = parseInt(maxRent);
+  if (minRooms)     body.min_rooms = parseInt(minRooms);
+
+  try {
+    const r = await fetch('/start-scanner', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (r.status === 409) { alert('Scanner is already running.'); return; }
+    await updateScannerStatus();
+  } catch (e) { alert('Could not start scanner: ' + e.message); }
+});
+
+document.getElementById('btnStopScanner').addEventListener('click', async () => {
+  try {
+    await fetch('/stop-scanner', { method: 'POST' });
+    await updateScannerStatus();
+  } catch (e) { alert('Could not stop scanner: ' + e.message); }
+});
+
+// ── Rentals filter event listeners ───────────────────────────────────────────
+['rFascia','rMaxRent','rMinSqm','rMinRooms'].forEach(id =>
+  document.getElementById(id).addEventListener('change', renderRentals));
+
+document.getElementById('rScore').addEventListener('input', function () {
+  document.getElementById('rScoreVal').textContent = this.value;
+  renderRentals();
+});
+
+document.querySelectorAll('#rentSortTabs .sort-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    rentSortKey = btn.dataset.rsort;
+    document.querySelectorAll('#rentSortTabs .sort-tab').forEach(t =>
+      t.classList.toggle('active', t === btn));
+    renderRentals();
+  });
+});
+
+document.getElementById('rBtnReset').addEventListener('click', () => {
+  filterAreaMsd.clear();
+  rentSelectedAreas = [];
+  document.getElementById('rFascia').value    = '';
+  document.getElementById('rMaxRent').value   = '';
+  document.getElementById('rMinSqm').value    = '';
+  document.getElementById('rMinRooms').value  = '';
+  document.getElementById('rScore').value     = 0;
+  document.getElementById('rScoreVal').textContent = '0';
+  rentSortKey = 'score_total';
+  document.querySelectorAll('#rentSortTabs .sort-tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.rsort === 'score_total'));
+  renderRentals();
+});
+
+// ── Email digest panel ─────────────────────────────────────────────────────────
+let emailAreaMsd;
+let emailSelectedAreas = [];
+
+// Collapsible panel toggle
+document.getElementById('emailPanelHeader').addEventListener('click', () => {
+  const body  = document.getElementById('emailPanelBody');
+  const caret = document.getElementById('emailPanelCaret');
+  const open  = body.classList.toggle('is-open');
+  caret.classList.toggle('open', open);
+  if (open) loadEmailConfig();
+});
+
+// Build the email areas multi-select
+emailAreaMsd = buildMultiSelect({
+  wrapId:    'emailAreaWrap',
+  triggerId: 'emailAreaTrigger',
+  panelId:   'emailAreaPanel',
+  searchId:  'emailAreaSearch',
+  listId:    'emailAreaList',
+  clearId:   'emailAreaClear',
+  doneId:    'emailAreaDone',
+  allLabel:  'All areas',
+  onChange(sel) {
+    emailSelectedAreas = sel;
+  },
+});
+
+// Load config from server and populate fields
+async function loadEmailConfig() {
+  try {
+    const r   = await fetch('/email-config');
+    const cfg = await r.json();
+
+    document.getElementById('emailEnabled').checked    = !!cfg.enabled;
+    document.getElementById('emailSmtpUser').value     = cfg.smtp_user  || '';
+    document.getElementById('emailSmtpPass').value     = cfg.smtp_pass  || '';   // shows •••• if set
+    document.getElementById('emailToAddr').value       = (cfg.to_addrs  || [])[0] || '';
+    document.getElementById('emailDigestHour').value   = cfg.digest_hour ?? 8;
+
+    const f = cfg.filters || {};
+    document.getElementById('emailMinScore').value  = f.min_score || '';
+    document.getElementById('emailMaxRent').value   = f.max_rent  || '';
+    document.getElementById('emailMinRooms').value  = f.min_rooms || '';
+
+    emailSelectedAreas = f.areas || [];
+    if (emailSelectedAreas.length) {
+      emailAreaMsd.setSelected(emailSelectedAreas);
+    } else {
+      emailAreaMsd.clear();
+    }
+    updateEmailEnabledLabel();
+
+    if (cfg.last_sent) {
+      const d = new Date(cfg.last_sent);
+      document.getElementById('emailLastSent').textContent =
+        'Last sent: ' + d.toLocaleDateString('it-IT') + ' ' + d.toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'});
+    }
+  } catch(e) {
+    console.warn('loadEmailConfig failed', e);
+  }
+}
+
+function updateEmailEnabledLabel() {
+  const on  = document.getElementById('emailEnabled').checked;
+  const lbl = document.getElementById('emailEnabledLabel');
+  lbl.textContent    = on ? '● Active' : '○ Disabled';
+  lbl.style.color    = on ? 'var(--green)' : 'var(--muted)';
+}
+document.getElementById('emailEnabled').addEventListener('change', updateEmailEnabledLabel);
+
+// Save config
+document.getElementById('btnEmailSave').addEventListener('click', async () => {
+  const toAddr = document.getElementById('emailToAddr').value.trim();
+  const pass   = document.getElementById('emailSmtpPass').value.trim();
+  const body   = {
+    enabled:     document.getElementById('emailEnabled').checked,
+    smtp_user:   document.getElementById('emailSmtpUser').value.trim(),
+    to_addrs:    toAddr ? [toAddr] : [],
+    digest_hour: parseInt(document.getElementById('emailDigestHour').value) || 8,
+    filters: {
+      min_score:  parseInt(document.getElementById('emailMinScore').value)  || 0,
+      max_rent:   parseInt(document.getElementById('emailMaxRent').value)   || 0,
+      min_rooms:  parseInt(document.getElementById('emailMinRooms').value)  || 0,
+      areas:      emailSelectedAreas,
+    },
+  };
+  // Only send password if the user typed something (not the masked placeholder)
+  if (pass && pass !== '••••••••') body.smtp_pass = pass;
+
+  const statusEl = document.getElementById('emailSaveStatus');
+  statusEl.textContent = 'Saving…';
+  try {
+    const r = await fetch('/email-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const j = await r.json();
+    statusEl.textContent    = j.saved ? '✓ Saved' : '✗ Error';
+    statusEl.style.color    = j.saved ? 'var(--green)' : 'var(--red)';
+    setTimeout(() => { statusEl.textContent = ''; }, 3000);
+    updateEmailEnabledLabel();
+  } catch(e) {
+    statusEl.textContent = '✗ ' + e.message;
+    statusEl.style.color = 'var(--red)';
+  }
+});
+
+// Send now (test)
+document.getElementById('btnEmailSendNow').addEventListener('click', async () => {
+  const statusEl = document.getElementById('emailSaveStatus');
+  // Save current settings first
+  document.getElementById('btnEmailSave').click();
+  await new Promise(r => setTimeout(r, 500));
+
+  statusEl.textContent = 'Sending…';
+  statusEl.style.color = 'var(--muted)';
+  try {
+    const r = await fetch('/send-digest-now', { method: 'POST' });
+    let j;
+    try { j = await r.json(); }
+    catch { throw new Error('Server returned non-JSON — please restart api.py'); }
+    if (j.error) throw new Error(j.error);
+    if (!document.getElementById('emailSmtpUser').value.trim()) {
+      statusEl.textContent = '✓ Printed to terminal (SMTP not configured)';
+    } else {
+      statusEl.textContent = `✓ Sent (${j.count} listings)`;
+    }
+    statusEl.style.color = 'var(--green)';
+    setTimeout(() => { statusEl.textContent = ''; }, 5000);
+  } catch(e) {
+    statusEl.textContent = '✗ ' + e.message;
+    statusEl.style.color = 'var(--red)';
+  }
+});
+
+// ── Scanner filter persistence ─────────────────────────────────────────────────
+const SCAN_PREFS_KEY = 'immo_scan_prefs';
+
+function saveScanPrefs() {
+  localStorage.setItem(SCAN_PREFS_KEY, JSON.stringify({
+    pages:    document.getElementById('sScanPages').value,
+    maxRent:  document.getElementById('sScanMaxRent').value,
+    minRooms: document.getElementById('sScanMinRooms').value,
+    areas:    scanAreaMsd.getSelected(),
+  }));
+}
+
+function restoreScanPrefs() {
+  try {
+    const prefs = JSON.parse(localStorage.getItem(SCAN_PREFS_KEY));
+    if (!prefs) return;
+    if (prefs.pages)    document.getElementById('sScanPages').value    = prefs.pages;
+    if (prefs.maxRent)  document.getElementById('sScanMaxRent').value  = prefs.maxRent;
+    if (prefs.minRooms) document.getElementById('sScanMinRooms').value = prefs.minRooms;
+    if (prefs.areas && prefs.areas.length) scanAreaMsd.setSelected(prefs.areas);
+  } catch { /* corrupt prefs — ignore */ }
+}
+
+// Persist whenever any scanner field changes
+['sScanPages','sScanMaxRent','sScanMinRooms'].forEach(id =>
+  document.getElementById(id).addEventListener('change', saveScanPrefs));
+
+// Restore saved prefs (scanAreaMsd is now fully initialised above)
+restoreScanPrefs();
+
+// Start polling and load data — rentals is the default tab
+startScannerPoll();
+loadRentals();
+</script>
+</body>
+</html>

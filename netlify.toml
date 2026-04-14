@@ -1,0 +1,37 @@
+[build]
+  publish = "dashboard"
+
+# Map Flask API paths to the static JSON files in the publish dir
+[[redirects]]
+  from   = "/rentals"
+  to     = "/rentals_latest.json"
+  status = 200
+
+[[redirects]]
+  from   = "/listings"
+  to     = "/latest.json"
+  status = 200
+
+[[redirects]]
+  from   = "/scanner-status"
+  to     = "/scanner_status.json"
+  status = 200
+
+[[redirects]]
+  from   = "/favourites"
+  to     = "/favourites.html"
+  status = 200
+
+# All other /api/* or unmatched calls → 404 JSON (signals "static mode" to JS)
+[[redirects]]
+  from   = "/api-ping"
+  to     = "/404"
+  status = 404
+  force  = true
+
+# Prevent caching of data files so fresh data shows immediately after a redeploy
+[[headers]]
+  for = "/*.json"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+    Pragma        = "no-cache"

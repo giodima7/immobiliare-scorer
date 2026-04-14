@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Sensitive config — SMTP password lives here
+email_config.json
+
+# Runtime state — local only, not needed on Netlify
+seen_ids.json
+.digest_sent_date
+
+# Bulky raw export files in project root
+listings_*.json
+listings_*.csv
+test_run_*.json
+test_run_*.csv
+
+# macOS
+.DS_Store
+
+# Virtual environments
+venv/
+.venv/
