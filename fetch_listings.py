@@ -24,6 +24,7 @@ import csv
 import json
 import re as _re
 import sys
+import unicodedata
 import time
 from datetime import datetime
 from typing import Optional
@@ -32,6 +33,18 @@ from urllib.parse import urlencode
 import nodriver as uc
 
 EDGE_PATH = "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"
+
+
+def to_url_slug(name: str) -> str:
+    """Normalise a neighbourhood name to a URL path segment.
+
+    Examples: 'Città Studi' → 'citta-studi', 'Porta Venezia' → 'porta-venezia'
+    """
+    name = unicodedata.normalize("NFKD", name)
+    name = name.encode("ascii", "ignore").decode("ascii")
+    name = name.lower().strip()
+    name = _re.sub(r"[^a-z0-9]+", "-", name)
+    return name.strip("-")
 
 # ── City config ───────────────────────────────────────────────────────────────
 # url_slug: the /vendita-case/{slug}/ URL segment
@@ -263,6 +276,24 @@ def condition_coeff(condition: str) -> float:
     return 0.85   # unknown / missing → conservative default
 
 
+def _normalize_condition(raw: str) -> str:
+    """Map raw Italian condition text to canonical scoring value."""
+    c = (raw or "").lower()
+    if "da ristrutturare" in c:
+        return "da_ristrutturare"
+    if "fatiscente" in c:
+        return "fatiscente"
+    if any(k in c for k in ("ristrutturato",)):
+        return "ristrutturato"
+    if any(k in c for k in ("nuovo", "eccellente", "ottimo")):
+        return "ottimo"
+    if any(k in c for k in ("buono", "normale")):
+        return "buono"
+    if any(k in c for k in ("abitabile", "discreto")):
+        return "abitabile"
+    return raw or ""   # keep raw text if nothing matched
+
+
 # ── OMI matching ──────────────────────────────────────────────────────────────
 
 def match_omi(city_key: str, neighbourhood: str) -> dict:
@@ -442,7 +473,154 @@ def parse_listing(item: dict, city_key: str, city_label: str) -> Optional[dict]:
     else:
         floor = str(floor_raw).strip() if floor_raw is not None else None
 
-    elevator = prop.get("elevator") or prop.get("hasElevator")
+    # floor_n: numeric floor number
+    floor_n = None
+    if floor_raw is not None:
+        raw_str = (
+            str(floor_raw).strip().lower()
+            if not isinstance(floor_raw, dict)
+            else (floor_raw.get("abbreviation") or "").strip().lower()
+        )
+        if raw_str in ("t", "terra", "pt", "rdc", "ground", "p.t.", "pt."):
+            floor_n = 0
+        elif raw_str in ("r", "roof", "attico", "ultimo"):
+            floor_n = -1
+        else:
+            try:
+                floor_n = int(raw_str)
+            except (ValueError, TypeError):
+                pass
+
+    # elevator — normalise to bool
+    elevator_raw = prop.get("elevator") or prop.get("hasElevator")
+    elevator_bool = None
+    if elevator_raw is not None:
+        elevator_bool = (
+            bool(elevator_raw)
+            if not isinstance(elevator_raw, str)
+            else elevator_raw.lower() not in ("false", "no", "0", "")
+        )
+
+    # is_external
+    ext_raw = prop.get("isExternal") or prop.get("external") or prop.get("ga4Exposure")
+    is_external = None
+    if ext_raw is not None:
+        if isinstance(ext_raw, bool):
+            is_external = ext_raw
+        elif isinstance(ext_raw, str):
+            is_external = ext_raw.lower() in ("true", "yes", "esterno", "1")
+
+    # energy_class
+    energy_class = (
+        prop.get("energyClass") or prop.get("energy_class")
+        or re_data.get("energyClass") or ""
+    )
+    energy_class = str(energy_class).strip().upper() if energy_class else None
+
+    # year_built
+    year_built = prop.get("yearBuilt") or prop.get("year_built") or re_data.get("yearBuilt")
+    if year_built is not None:
+        try:
+            year_built = int(year_built)
+        except (TypeError, ValueError):
+            year_built = None
+
+    # bathrooms
+    baths_raw = prop.get("bathrooms") or prop.get("bathRooms")
+    bathrooms = None
+    if baths_raw is not None:
+        try:
+            bathrooms = int(baths_raw)
+        except (TypeError, ValueError):
+            pass
+
+    # features[] array — collect type/label keywords for quick lookup
+    _feature_types: set = set()
+    for feat in (prop.get("features") or re_data.get("features") or []):
+        ft = feat.get("type") or feat.get("name") or ""
+        _feature_types.add(str(ft).lower())
+        lbl = str(feat.get("label") or "").lower()
+        for kw in ("balcon", "terrazza", "giardino", "box", "garage", "parcheggio",
+                   "arredato", "autonomo", "centralizzato"):
+            if kw in lbl:
+                _feature_types.add(kw)
+
+    # has_balcony
+    has_balcony = None
+    for field in ("hasBalcony", "balcony", "hasTerrace", "terrace", "hasGarden", "garden"):
+        v = prop.get(field)
+        if v is not None:
+            has_balcony = bool(v) if not isinstance(v, str) else v.lower() not in ("false", "no", "0", "")
+            if has_balcony:
+                break
+    if has_balcony is None and _feature_types:
+        has_balcony = bool({"balcony", "terrace", "garden", "balcon", "terrazza", "giardino"} & _feature_types)
+
+    # has_parking
+    has_parking = None
+    for field in ("hasParking", "parking", "garage", "hasGarage"):
+        v = prop.get(field)
+        if v is not None:
+            has_parking = bool(v) if not isinstance(v, str) else v.lower() not in ("false", "no", "0", "")
+            if has_parking:
+                break
+    if has_parking is None and _feature_types:
+        has_parking = bool({"parking", "garage", "box", "parcheggio"} & _feature_types)
+
+    # heating_type
+    heat_raw = prop.get("heatingType") or prop.get("heating") or ""
+    heat_str = str(heat_raw).lower()
+    if "autonom" in heat_str or "individual" in heat_str or "indipendent" in heat_str:
+        heating_type = "autonomous"
+    elif "central" in heat_str or "condominil" in heat_str:
+        heating_type = "centralised"
+    elif heat_str:
+        heating_type = "unknown"
+    else:
+        heating_type = None
+    if heating_type is None and _feature_types:
+        if {"autonomo", "autonom"} & _feature_types:
+            heating_type = "autonomous"
+        elif {"centralizzato", "central"} & _feature_types:
+            heating_type = "centralised"
+
+    # furnished
+    furn_raw = (prop.get("furnished") or prop.get("isFurnished")
+                or prop.get("arredato") or re_data.get("furnished"))
+    furnished = None
+    if furn_raw is not None:
+        if isinstance(furn_raw, bool):
+            furnished = furn_raw
+        elif isinstance(furn_raw, str):
+            furnished = furn_raw.lower() in ("true", "yes", "arredato", "1", "si", "sì")
+    if furnished is None and "arredato" in _feature_types:
+        furnished = True
+
+    # thumbnail — first photo URL
+    photos    = prop.get("multimedia", {}).get("photos", [])
+    thumbnail = None
+    if photos:
+        first = photos[0]
+        urls  = first.get("urls", {})
+        thumbnail = (
+            urls.get("medium") or urls.get("large") or
+            urls.get("small") or first.get("url") or first.get("src")
+        )
+    photo_count = len(photos)
+
+    # days_on_market
+    days_on_market = None
+    for date_field in ("firstSeenDate", "publicationDate", "insertionDate",
+                       "created_at", "createdAt", "insertDate", "datePublished"):
+        raw_date = re_data.get(date_field) or prop.get(date_field)
+        if raw_date:
+            try:
+                from datetime import date as _date
+                pub = datetime.fromisoformat(str(raw_date)[:10]).date()
+                days_on_market = (_date.today() - pub).days
+                break
+            except Exception:
+                pass
 
     # condition
     condition_raw = (
@@ -450,116 +628,158 @@ def parse_listing(item: dict, city_key: str, city_label: str) -> Optional[dict]:
         or prop.get("condition")
         or re_data.get("typology", {}).get("name", "")
     )
+    condition = _normalize_condition(condition_raw)
 
     listing_id = re_data.get("id", "")
     url = f"https://www.immobiliare.it/annunci/{listing_id}/" if listing_id else ""
 
+    # Exclude auction ("All'Asta") and bare-ownership ("Nuda Proprietà") listings —
+    # these have non-standard pricing that breaks the OMI scoring model.
+    _typology_name = (re_data.get("typology") or {}).get("name", "").lower()
+    _title_lower   = re_data.get("title", "").lower()
+    _EXCLUDE_KW    = ("asta", "nuda propriet")
+    if any(kw in _typology_name or kw in _title_lower for kw in _EXCLUDE_KW):
+        return None
+
     omi = match_omi(city_key, neighbourhood)
 
     return {
-        "id":            str(listing_id),
-        "city":          city_label,
-        "city_key":      city_key,
-        "title":         re_data.get("title", ""),
-        "neighbourhood": neighbourhood,
-        "address":       address,
-        "latitude":      latitude,
-        "longitude":     longitude,
-        "price":         price,
-        "sqm":           sqm,
-        "ask_psqm":      ask_psqm,
-        "rooms":         rooms,
-        "floor":         floor,
-        "elevator":      elevator,
-        "condition":     condition_raw,
-        "url":           url,
-        "omi":           omi,   # temporary – removed before CSV export
+        "id":              str(listing_id),
+        "source":          "sale",
+        "city":            city_label,
+        "city_key":        city_key,
+        "title":           re_data.get("title", ""),
+        "neighbourhood":   neighbourhood,
+        "address":         address,
+        "latitude":        latitude,
+        "longitude":       longitude,
+        "price":           price,
+        "sqm":             sqm,
+        "ask_psqm":        ask_psqm,
+        "rooms":           rooms,
+        "floor":           floor,
+        "floor_n":         floor_n,
+        "elevator":        elevator_bool,
+        "is_external":     is_external,
+        "energy_class":    energy_class,
+        "year_built":      year_built,
+        "bathrooms":       bathrooms,
+        "has_balcony":     has_balcony,
+        "has_parking":     has_parking,
+        "heating_type":    heating_type,
+        "furnished":       furnished,
+        "photo_count":     photo_count,
+        "days_on_market":  days_on_market,
+        "condition":       condition,
+        "thumbnail":       thumbnail,
+        "url":             url,
+        "fetched_at":      datetime.now().isoformat(timespec="seconds"),
+        "omi":             omi,   # temporary – removed before CSV export
     }
 
 
 async def _fetch_city_async(city_key: str, pages: int, extra_filters: dict,
-                             delay: float, browser) -> list:
-    """Async inner: navigate pages for one city and extract __NEXT_DATA__."""
+                             delay: float, browser,
+                             area_slugs: list | None = None) -> list:
+    """Async inner: navigate pages for one city and extract __NEXT_DATA__.
+
+    When area_slugs is provided each area is fetched in its own page loop;
+    a shared seen_ids set prevents cross-area duplicates.
+    """
     cfg = CITIES[city_key]
     slug = cfg["url_slug"]
     all_items = []
-    max_pages = pages
 
-    page_ids_seen = set()   # IDs seen in previous pages — detects recycled content
+    # Cross-area deduplication: IDs accumulated across all areas.
+    seen_ids: set = set()
 
-    for page in range(1, pages + 1):
-        # Embed filters directly in the URL — the site pre-filters server-side,
-        # so we get fewer results per page and need fewer pages overall.
-        params = {}
-        if extra_filters.get("max_price"): params["prezzoMassimo"]    = extra_filters["max_price"]
-        if extra_filters.get("min_price"): params["prezzoMinimo"]     = extra_filters["min_price"]
-        if extra_filters.get("min_sqm"):   params["superficieMinima"] = extra_filters["min_sqm"]
-        if extra_filters.get("max_sqm"):   params["superficieMassima"]= extra_filters["max_sqm"]
-        if extra_filters.get("min_rooms"): params["localiMinimo"]     = extra_filters["min_rooms"]
-        if page > 1:                       params["pag"]              = page
+    # None sentinel means city-level (no area sub-path)
+    targets = area_slugs if area_slugs else [None]
 
-        url = f"https://www.immobiliare.it/vendita-case/{slug}/"
-        if params:
-            url += "?" + urlencode(params)
+    for area_slug in targets:
+        page_ids_seen: set = set()   # recycled-page detector, reset per area
+        max_pages = pages
 
-        tab = await browser.get(url)
-        await asyncio.sleep(delay)
+        for page in range(1, pages + 1):
+            # Embed filters directly in the URL — the site pre-filters server-side,
+            # so we get fewer results per page and need fewer pages overall.
+            params = {}
+            if extra_filters.get("max_price"): params["prezzoMassimo"]     = extra_filters["max_price"]
+            if extra_filters.get("min_price"): params["prezzoMinimo"]      = extra_filters["min_price"]
+            if extra_filters.get("min_sqm"):   params["superficieMinima"]  = extra_filters["min_sqm"]
+            if extra_filters.get("max_sqm"):   params["superficieMassima"] = extra_filters["max_sqm"]
+            if extra_filters.get("min_rooms"): params["localiMinimo"]      = extra_filters["min_rooms"]
+            if page > 1:                       params["pag"]               = page
 
-        try:
-            raw = await tab.evaluate("JSON.stringify(window.__NEXT_DATA__)")
-            nd = json.loads(raw)
-            queries = nd["props"]["pageProps"]["dehydratedState"]["queries"]
-            data = queries[0]["state"]["data"]
-        except Exception as e:
-            print(f"\n  ⚠  Could not parse __NEXT_DATA__ on page {page}: {e}")
-            break
+            base = (
+                f"https://www.immobiliare.it/vendita-case/{slug}/{area_slug}/"
+                if area_slug else
+                f"https://www.immobiliare.it/vendita-case/{slug}/"
+            )
+            url = base + ("?" + urlencode(params) if params else "")
 
-        results = data.get("results", [])
-        if not results:
-            print(f" (empty, done)", end="", flush=True)
-            break
+            tab = await browser.get(url)
+            await asyncio.sleep(delay)
 
-        # Detect recycled content: if every ID on this page was seen in a prior page,
-        # the site is serving page 1 again (pag= param being ignored).
-        page_ids = {
-            str(item.get("realEstate", {}).get("id", ""))
-            for item in results
-            if item.get("realEstate", {}).get("id")
-        }
-        if page > 1 and page_ids and page_ids.issubset(page_ids_seen):
-            print(f" (repeat page, done)", end="", flush=True)
-            break
-        page_ids_seen.update(page_ids)
+            try:
+                raw = await tab.evaluate("JSON.stringify(window.__NEXT_DATA__)")
+                nd = json.loads(raw)
+                queries = nd["props"]["pageProps"]["dehydratedState"]["queries"]
+                data = queries[0]["state"]["data"]
+            except Exception as e:
+                print(f"\n  ⚠  Could not parse __NEXT_DATA__ on page {page}: {e}")
+                break
 
-        # Client-side guard (belt-and-suspenders in case site leaks a listing through)
-        for item in results:
-            parsed = parse_listing(item, city_key, cfg["label"])
-            if not parsed:
-                continue
-            if extra_filters.get("max_price") and parsed["price"] > extra_filters["max_price"]:
-                continue
-            if extra_filters.get("min_price") and parsed["price"] < extra_filters["min_price"]:
-                continue
-            if extra_filters.get("min_sqm") and parsed["sqm"] < extra_filters["min_sqm"]:
-                continue
-            if extra_filters.get("max_sqm") and parsed["sqm"] > extra_filters["max_sqm"]:
-                continue
-            if extra_filters.get("min_rooms") and (parsed["rooms"] or 0) < extra_filters["min_rooms"]:
-                continue
-            all_items.append(parsed)
+            results = data.get("results", [])
+            if not results:
+                print(f" (empty, done)", end="", flush=True)
+                break
 
-        site_max  = data.get("maxPages") or pages
-        max_pages = min(pages, site_max)
-        print(f" p{page}/{max_pages}", end="", flush=True)
+            # Detect recycled content: if every ID on this page was seen in a prior
+            # page of this same area, the site is looping (pag= param being ignored).
+            page_ids = {
+                str(item.get("realEstate", {}).get("id", ""))
+                for item in results
+                if item.get("realEstate", {}).get("id")
+            }
+            if page > 1 and page_ids and page_ids.issubset(page_ids_seen):
+                print(f" (repeat page, done)", end="", flush=True)
+                break
+            page_ids_seen.update(page_ids)
 
-        if page >= max_pages:
-            break
+            # Client-side guard (belt-and-suspenders in case site leaks a listing through)
+            for item in results:
+                parsed = parse_listing(item, city_key, cfg["label"])
+                if not parsed:
+                    continue
+                if parsed["id"] in seen_ids:
+                    continue
+                if extra_filters.get("max_price") and parsed["price"] > extra_filters["max_price"]:
+                    continue
+                if extra_filters.get("min_price") and parsed["price"] < extra_filters["min_price"]:
+                    continue
+                if extra_filters.get("min_sqm") and parsed["sqm"] < extra_filters["min_sqm"]:
+                    continue
+                if extra_filters.get("max_sqm") and parsed["sqm"] > extra_filters["max_sqm"]:
+                    continue
+                if extra_filters.get("min_rooms") and (parsed["rooms"] or 0) < extra_filters["min_rooms"]:
+                    continue
+                seen_ids.add(parsed["id"])
+                all_items.append(parsed)
+
+            site_max  = data.get("maxPages") or pages
+            max_pages = min(pages, site_max)
+            area_tag  = f"/{area_slug}" if area_slug else ""
+            print(f" p{page}/{max_pages}{area_tag}", end="", flush=True)
+
+            if page >= max_pages:
+                break
 
     return all_items
 
 
 def fetch_city(city_key: str, pages: int = 3, extra_filters: dict = None,
-               delay: float = 2.5) -> list:
+               delay: float = 2.5, area_slugs: list | None = None) -> list:
     """Fetch listings for one city using a real Edge browser via nodriver."""
     cfg = CITIES[city_key]
     print(f"  Fetching {cfg['label']}...", end="", flush=True)
@@ -572,7 +792,7 @@ def fetch_city(city_key: str, pages: int = 3, extra_filters: dict = None,
         )
         try:
             items = await _fetch_city_async(
-                city_key, pages, extra_filters or {}, delay, browser
+                city_key, pages, extra_filters or {}, delay, browser, area_slugs
             )
         finally:
             browser.stop()
@@ -586,8 +806,11 @@ def fetch_city(city_key: str, pages: int = 3, extra_filters: dict = None,
 # ── Export ────────────────────────────────────────────────────────────────────
 
 CSV_FIELDS = [
-    "id", "city", "neighbourhood", "address", "price", "sqm", "ask_psqm",
-    "rooms", "floor", "elevator", "condition", "url",
+    "id", "source", "city", "neighbourhood", "address", "price", "sqm", "ask_psqm",
+    "rooms", "floor", "floor_n", "elevator", "is_external", "energy_class",
+    "year_built", "bathrooms", "has_balcony", "has_parking", "heating_type",
+    "furnished", "photo_count", "days_on_market", "condition", "thumbnail", "url",
+    "fetched_at",
     "omi_zone", "omi_fascia", "omi_bench", "omi_bmin", "omi_bmax",
     "omi_rmin", "omi_rmax", "vs_omi_pct", "vs_omi_label",
     "omi_rent_raw", "surf_coeff", "cond_coeff",
@@ -614,11 +837,11 @@ def export(listings: list, prefix: str):
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(json_listings, f, ensure_ascii=False, indent=2)
 
-    # Always mirror to dashboard/latest.json so the HTML dashboard auto-refreshes
+    # Always mirror to dashboard/sales_latest.json so the dashboard auto-refreshes
     import os as _os
     dashboard_dir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "dashboard")
     _os.makedirs(dashboard_dir, exist_ok=True)
-    latest_path = _os.path.join(dashboard_dir, "latest.json")
+    latest_path = _os.path.join(dashboard_dir, "sales_latest.json")
     with open(latest_path, "w", encoding="utf-8") as f:
         json.dump(json_listings, f, ensure_ascii=False, indent=2)
 
@@ -640,6 +863,7 @@ def parse_args():
     p.add_argument("--min-sqm",    type=int,                    help="Min surface m²")
     p.add_argument("--max-sqm",    type=int,                    help="Max surface m²")
     p.add_argument("--min-rooms",  type=int,                    help="Min number of rooms")
+    p.add_argument("--areas",      help="Comma-separated area names to filter by (e.g. 'isola,navigli,brera')")
     p.add_argument("--delay",      type=float, default=2.5,     help="Seconds to wait after each page load (default 2.5)")
     p.add_argument("--output",     default="listings",          help="Output file prefix (default: listings)")
     return p.parse_args()
@@ -666,10 +890,18 @@ def main():
     if args.max_sqm:   extra["max_sqm"]   = args.max_sqm
     if args.min_rooms: extra["min_rooms"] = args.min_rooms
 
+    # Parse --areas into URL slugs
+    area_slugs = None
+    if args.areas:
+        raw_areas = [a.strip() for a in args.areas.split(",") if a.strip()]
+        area_slugs = [to_url_slug(a) for a in raw_areas]
+
     print(f"\n{'─'*52}")
     print(f"  Immobiliare Scorer — fetch run")
     print(f"  Cities : {', '.join(c.title() for c in cities)}")
     print(f"  Pages  : {args.pages} per city (~{args.pages*25} listings max)")
+    if area_slugs:
+        print(f"  Areas  : {', '.join(area_slugs)}")
     if extra:
         print(f"  Filters: {extra}")
     print(f"{'─'*52}\n")
@@ -678,7 +910,8 @@ def main():
     all_raw = []
     for city_key in cities:
         raw = fetch_city(city_key, pages=args.pages,
-                         extra_filters=extra or None, delay=args.delay)
+                         extra_filters=extra or None, delay=args.delay,
+                         area_slugs=area_slugs)
         all_raw.extend(raw)
 
     if not all_raw:

@@ -3,12 +3,15 @@ __pycache__/
 *.pyc
 *.pyo
 
-# Sensitive config — SMTP password lives here
+# Sensitive config — SMTP password / Netlify token / API keys live here
 email_config.json
+netlify_config.json
+.env
 
 # Runtime state — local only, not needed on Netlify
 seen_ids.json
 .digest_sent_date
+scanner.log
 
 # Bulky raw export files in project root
 listings_*.json
