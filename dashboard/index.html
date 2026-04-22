@@ -4129,7 +4129,6 @@ function renderRentalCard(l) {
   const _rentFloorDisp = (() => {
     if (!_rentFloorLbl) return null;
     const fn = l.floor_n;
-    if (fn != null && fn < 0) return _rentFloorLbl + ' ⚠';
     if (fn != null && fn > 2 && l.elevator !== true) return _rentFloorLbl + ' · lift?';
     return _rentFloorLbl;
   })();
@@ -4628,7 +4627,6 @@ function renderSaleCard(l) {
   const _saleFloorDisp = (() => {
     if (!_saleFloorLbl) return null;
     const fn = l.floor_n;
-    if (fn != null && fn < 0) return _saleFloorLbl + ' ⚠';
     if (fn != null && fn > 2 && l.elevator !== true) return _saleFloorLbl + ' · lift?';
     return _saleFloorLbl;
   })();
