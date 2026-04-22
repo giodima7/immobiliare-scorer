@@ -24,8 +24,10 @@ Formula
 
 from __future__ import annotations
 import json
+import re as _re
 import sys
 from pathlib import Path
+from re import compile as re_compile
 
 from comps_engine import get_comps_benchmark
 import omi_lookup
@@ -151,6 +153,149 @@ def _load_settings() -> dict:
         return dict(_DEFAULT_SETTINGS)
 
 
+# ── Floor parsing ────────────────────────────────────────────────────────────
+
+_FLOOR_MAP: dict[str, int] = {
+    # Piano terra / ground
+    'T': 0, 'PT': 0, 'TERRA': 0, 'PIANO TERRA': 0,
+    'P.T.': 0, 'PT.': 0, 'RDC': 0, 'GROUND': 0, 'G': 0,
+    # Piano rialzato / raised ground
+    'R': 1, 'RIALZATO': 1, 'PR': 1, 'PIANO RIALZATO': 1,
+    # Seminterrato (first below-ground level)
+    'S': -1, 'S1': -1, 'SEMI': -1, 'SEMINTERRATO': -1,
+    # Interrato / sottosuolo (deeper below ground — cap at -2)
+    'I': -2, 'INTERRATO': -2, 'SOTTOSUOLO': -2,
+    'S2': -2, 'S3': -2, 'S4': -2, 'S5': -2,
+}
+_RIALZATO_TOKENS: frozenset[str] = frozenset({'R', 'RIALZATO', 'PR', 'PIANO RIALZATO'})
+_RE_FLOOR_NUM = re_compile(r'-?\d+')
+
+
+def _floor_token(tok: str) -> tuple[int | None, bool]:
+    """Parse one floor token. Returns (floor_n, is_rialzato)."""
+    t = tok.strip().upper()
+    if t in _FLOOR_MAP:
+        return _FLOOR_MAP[t], t in _RIALZATO_TOKENS
+    m = _RE_FLOOR_NUM.search(t)
+    if m:
+        return int(m.group()), False
+    return None, False
+
+
+def parse_floor(raw_floor) -> tuple[int | None, str | None]:
+    """
+    Parse an Immobiliare.it floor field into (floor_n, floor_label).
+
+    Handles:
+      - Single codes: T→0, R→1, S→-1, I→-2, digits
+      - Sub-basement codes: S2/S3/S4/S5 → -2
+      - Compound ranges:  'S, 3' → -1 | '4 - 5' → 4 | 'T, R' → 0
+      - Dict with 'abbreviation' key (API floor object)
+
+    Returns (None, None) when unparseable.
+    The floor_n for compound strings is the minimum floor (most conservative).
+    """
+    if raw_floor is None:
+        return None, None
+    if isinstance(raw_floor, dict):
+        raw_floor = raw_floor.get('abbreviation') or raw_floor.get('value') or ''
+    s = str(raw_floor).strip()
+    if not s or s.upper() in ('NONE', 'N/A', ''):
+        return None, None
+
+    # Split compound strings: "S, 3" → ["S","3"], "4 - 5" → ["4","5"]
+    import re as _re2
+    tokens = _re2.split(r',\s*|\s+[-–]\s+', s)
+    tokens = [t.strip() for t in tokens if t.strip()]
+    if not tokens:
+        return None, None
+
+    parsed: list[int] = []
+    has_rialzato = False
+    for tok in tokens:
+        fn, is_r = _floor_token(tok)
+        if fn is not None:
+            parsed.append(fn)
+        if is_r:
+            has_rialzato = True
+
+    if not parsed:
+        return None, None
+
+    floor_n = min(parsed)   # most conservative: lowest floor in compound range
+
+    if floor_n <= -2:
+        label = 'Interrato'
+    elif floor_n == -1:
+        label = 'Seminterrato'
+    elif floor_n == 0:
+        label = 'Piano terra'
+    elif floor_n == 1 and has_rialzato:
+        label = 'Piano rialzato'
+    else:
+        label = f'{floor_n}° piano'
+
+    return floor_n, label
+
+
+# ── Floor scoring ─────────────────────────────────────────────────────────────
+
+def floor_score(listing: dict) -> tuple[int, int]:
+    """
+    Returns (physical_pts, penalty_deduction) for floor + elevator combination.
+
+    physical_pts:      contribution to property_score (0–25)
+    penalty_deduction: subtracted from penalty_score (0–60)
+
+    Called by property_score() and penalty_score(); never call directly.
+    """
+    floor_n  = listing.get('floor_n')
+    elevator = listing.get('elevator')   # True / False / None
+
+    # ── Physical contribution from floor height ───────────────────────────────
+    if floor_n is None:
+        physical = 8    # unknown — neutral, slight benefit of doubt
+    elif floor_n <= -2:
+        physical = 0    # interrato — worst possible
+    elif floor_n == -1:
+        physical = 2    # seminterrato — nearly as bad
+    elif floor_n == 0:
+        physical = 5    # piano terra — poor but usable
+    elif floor_n == 1:
+        physical = 12   # rialzato/1st — acceptable
+    elif floor_n == 2:
+        physical = 16   # decent
+    elif floor_n <= 5:
+        physical = 22   # sweet spot
+    elif floor_n <= 10:
+        physical = 25   # premium
+    else:
+        physical = 20   # very high — penthouse premium but lift-dependent
+
+    # ── Penalty deductions ────────────────────────────────────────────────────
+    penalty = 0
+
+    if floor_n is not None and floor_n <= -2:
+        penalty += 55   # interrato — near-disqualifying
+    elif floor_n is not None and floor_n == -1:
+        penalty += 40   # seminterrato — severe
+    elif floor_n == 0:
+        penalty += 20   # ground floor — light/security/dampness risk
+
+    # High floor without confirmed elevator
+    if floor_n is not None and floor_n > 2:
+        if elevator is False:
+            penalty += 40   # confirmed no lift — severe
+        elif elevator is None:
+            penalty += 15   # unknown lift — mild
+
+    # Very high floor without confirmed elevator — extra penalty
+    if floor_n is not None and floor_n > 6 and elevator is not True:
+        penalty += 15   # 7th floor+ without confirmed lift is a dealbreaker
+
+    return physical, min(penalty, 60)   # cap total deduction at 60
+
+
 # ── Energy class → numeric ───────────────────────────────────────────────────
 
 ENERGY_SCORE = {
@@ -187,27 +332,12 @@ def property_score(listing: dict, settings: dict | None = None) -> int:
     n_known = 0
     max_pos = 0   # max POSITIVE points achievable from fields that are present
 
-    # ── Floor + elevator (combined) ──────────────────────────────────────────
-    floor    = listing.get("floor_n")
-    has_lift = listing.get("elevator")
-    lift_bonus  = int(settings.get("floor_lift_bonus",   28))
-    nolift_pen  = int(settings.get("floor_nolift_penalty", -15))
-
-    if floor is not None:
+    # ── Floor + elevator (unified via floor_score) ──────────────────────────────
+    if listing.get("floor_n") is not None:
+        physical, _ = floor_score(listing)
         n_known += 1
-        if floor == 0:
-            pass                # ground-floor penalty lives in penalty_score(); no upside here
-        elif 1 <= floor <= 2:
-            score   += 5
-            max_pos += 5
-        else:                   # floor >= 3: potential is lift_bonus regardless of actual lift
-            max_pos += lift_bonus
-            if has_lift is True:
-                score += lift_bonus
-            elif has_lift is False:
-                score += nolift_pen
-            else:
-                score += 10     # unknown lift: mild positive
+        max_pos += 25   # max achievable from floor (floors 6–10 with lift = 25)
+        score   += physical
 
     # ── External facing ──────────────────────────────────────────────────────
     ext = listing.get("is_external")
@@ -392,22 +522,16 @@ def penalty_score(listing: dict, settings: dict) -> int:
 
     Returns int 0–100.
     """
-    score = 100
-    floor     = listing.get("floor_n")
-    has_lift  = listing.get("elevator")
-    sqm       = listing.get("sqm") or 0
-    rooms     = listing.get("rooms") or 0
-    dom       = listing.get("days_on_market") or 0
-    rent_mo   = listing.get("rent_mo") or 0
-    spese     = listing.get("spese_condominiali") or 0
+    score  = 100
+    sqm    = listing.get("sqm") or 0
+    rooms  = listing.get("rooms") or 0
+    dom    = listing.get("days_on_market") or 0
+    rent_mo = listing.get("rent_mo") or 0
+    spese   = listing.get("spese_condominiali") or 0
 
-    # Ground floor (security + light penalty)
-    if floor == 0:
-        score -= 20
-
-    # High floor with no lift
-    if floor is not None and floor > 4 and has_lift is False:
-        score -= 30
+    # Floor + elevator penalty (unified via floor_score)
+    _, deduction = floor_score(listing)
+    score -= deduction
 
     # Size mismatch: very small for rooms declared
     if sqm > 0 and rooms > 0 and sqm / rooms < 12:
@@ -538,6 +662,12 @@ def score_rental(listing: dict, all_listings: list, settings: dict | None = None
         total = apply_price_ceiling(total_raw, delta_label_pct)
     else:
         total = total_raw
+
+    # Below-ground hard cap: seminterrato/interrato cannot score above 55
+    # regardless of price or location — the habitat is fundamentally compromised.
+    _fn = listing.get("floor_n")
+    if _fn is not None and _fn < 0:
+        total = min(total, 55)
 
     score_was_capped = total < total_raw
 
@@ -804,6 +934,11 @@ def score_sale_listing(listing: dict, all_listings: list, settings: dict | None 
         total = apply_price_ceiling(total_raw, delta_label_pct)
     else:
         total = total_raw
+
+    # Below-ground hard cap (sale)
+    _fn = listing.get("floor_n")
+    if _fn is not None and _fn < 0:
+        total = min(total, 55)
 
     score_was_capped = total < total_raw
 
@@ -1084,7 +1219,44 @@ if __name__ == "__main__":
                       f"pen={l.get('score_penalty')}  ldi={l.get('ldi_score')}  "
                       f"delta={l.get('comps_delta_pct')}")
 
+    # ── Floor score validation table ──────────────────────────────────────────
+    print("Floor score validation:")
+    _floor_cases = [
+        # (label,           floor_n, elevator, exp_phys, exp_pen)
+        ("Interrato",          -2,   None,        0,     55),
+        ("Seminterrato",       -1,   None,        2,     40),
+        ("Piano terra",         0,   None,        5,     20),
+        ("Piano rialzato (1)",  1,   None,       12,      0),
+        ("Floor 3, no lift",    3,   False,      22,     40),
+        ("Floor 3, lift",       3,   True,       22,      0),
+        ("Floor 12, lift",     12,   True,       20,      0),   # >10 floors → physical=20
+        ("Floor 12, no lift",  12,   False,      20,     55),
+    ]
+    print(f"  {'Case':<26}  {'phys':>6}  {'pen':>5}  {'ok?':>4}")
+    _floor_ok = True
+    for lbl, fn, elev, exp_phys, exp_pen in _floor_cases:
+        _dummy = {"floor_n": fn}
+        if elev is not None:
+            _dummy["elevator"] = elev
+        got_phys, got_pen = floor_score(_dummy)
+        ok = (got_phys == exp_phys and got_pen == exp_pen)
+        mark = "✓" if ok else "✗"
+        if not ok:
+            _floor_ok = False
+        print(f"  {mark} {lbl:<25}  {got_phys:>3} (exp {exp_phys:>2})  "
+              f"{got_pen:>3} (exp {exp_pen:>2})")
+    # Below-ground hard-cap assertion
+    _bg_listings = [l for l in scored if (l.get("floor_n") or 0) < 0]
+    _bg_above_55 = [l for l in _bg_listings if (l.get("score_total") or 0) > 55]
+    if _bg_above_55:
+        print(f"  ✗ {len(_bg_above_55)} below-ground listings scored above 55 — cap broken!")
+        _floor_ok = False
+    else:
+        print(f"  ✓ All {len(_bg_listings)} below-ground listings capped at ≤55")
+    if not _floor_ok:
+        all_ok = False
     print()
+
     n_capped = sum(1 for l in scored if l.get("score_was_capped"))
     print(f"Hidden Gems:    {len(gems)}  (was: {gems_before} before fix)")
     print(f"Good Value:     {len(good)}  (was: {good_before} before fix)")

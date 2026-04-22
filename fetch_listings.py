@@ -34,6 +34,71 @@ import nodriver as uc
 
 EDGE_PATH = "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"
 
+# ── Floor parsing ──────────────────────────────────────────────────────────────
+
+_FLOOR_MAP: dict[str, int] = {
+    'T': 0, 'PT': 0, 'TERRA': 0, 'PIANO TERRA': 0,
+    'P.T.': 0, 'PT.': 0, 'RDC': 0, 'GROUND': 0, 'G': 0,
+    'R': 1, 'RIALZATO': 1, 'PR': 1, 'PIANO RIALZATO': 1,
+    'S': -1, 'S1': -1, 'SEMI': -1, 'SEMINTERRATO': -1,
+    'I': -2, 'INTERRATO': -2, 'SOTTOSUOLO': -2,
+    'S2': -2, 'S3': -2, 'S4': -2, 'S5': -2,
+}
+_RIALZATO_TOKENS: frozenset = frozenset({'R', 'RIALZATO', 'PR', 'PIANO RIALZATO'})
+_RE_FLOOR_NUM = _re.compile(r'-?\d+')
+
+
+def _floor_token(tok: str) -> tuple:
+    t = tok.strip().upper()
+    if t in _FLOOR_MAP:
+        return _FLOOR_MAP[t], t in _RIALZATO_TOKENS
+    m = _RE_FLOOR_NUM.search(t)
+    if m:
+        return int(m.group()), False
+    return None, False
+
+
+def parse_floor(raw_floor) -> tuple:
+    """
+    Parse an Immobiliare.it floor field → (floor_n: int|None, floor_label: str|None).
+    Handles single codes (T, R, S), sub-basement codes (S2-S5),
+    compound ranges ('S, 3', '4 - 5', 'T, R'), and dict abbreviations.
+    Returns (None, None) when unparseable.
+    """
+    if raw_floor is None:
+        return None, None
+    if isinstance(raw_floor, dict):
+        raw_floor = raw_floor.get('abbreviation') or raw_floor.get('value') or ''
+    s = str(raw_floor).strip()
+    if not s or s.upper() in ('NONE', 'N/A', ''):
+        return None, None
+    tokens = _re.split(r',\s*|\s+[-–]\s+', s)
+    tokens = [t.strip() for t in tokens if t.strip()]
+    if not tokens:
+        return None, None
+    parsed: list = []
+    has_rialzato = False
+    for tok in tokens:
+        fn, is_r = _floor_token(tok)
+        if fn is not None:
+            parsed.append(fn)
+        if is_r:
+            has_rialzato = True
+    if not parsed:
+        return None, None
+    floor_n = min(parsed)
+    if floor_n <= -2:
+        label = 'Interrato'
+    elif floor_n == -1:
+        label = 'Seminterrato'
+    elif floor_n == 0:
+        label = 'Piano terra'
+    elif floor_n == 1 and has_rialzato:
+        label = 'Piano rialzato'
+    else:
+        label = f'{floor_n}° piano'
+    return floor_n, label
+
 
 def to_url_slug(name: str) -> str:
     """Normalise a neighbourhood name to a URL path segment.
@@ -473,23 +538,10 @@ def parse_listing(item: dict, city_key: str, city_label: str) -> Optional[dict]:
     else:
         floor = str(floor_raw).strip() if floor_raw is not None else None
 
-    # floor_n: numeric floor number
-    floor_n = None
-    if floor_raw is not None:
-        raw_str = (
-            str(floor_raw).strip().lower()
-            if not isinstance(floor_raw, dict)
-            else (floor_raw.get("abbreviation") or "").strip().lower()
-        )
-        if raw_str in ("t", "terra", "pt", "rdc", "ground", "p.t.", "pt."):
-            floor_n = 0
-        elif raw_str in ("r", "roof", "attico", "ultimo"):
-            floor_n = -1
-        else:
-            try:
-                floor_n = int(raw_str)
-            except (ValueError, TypeError):
-                pass
+    # floor_n + floor_label: parsed from raw floor field
+    floor_n, floor_label = parse_floor(floor_raw)
+    is_below_ground = floor_n is not None and floor_n < 0
+    is_ground_floor = floor_n == 0
 
     # elevator — normalise to bool
     elevator_raw = prop.get("elevator") or prop.get("hasElevator")
@@ -659,6 +711,9 @@ def parse_listing(item: dict, city_key: str, city_label: str) -> Optional[dict]:
         "rooms":           rooms,
         "floor":           floor,
         "floor_n":         floor_n,
+        "floor_label":     floor_label,
+        "is_below_ground": is_below_ground,
+        "is_ground_floor": is_ground_floor,
         "elevator":        elevator_bool,
         "is_external":     is_external,
         "energy_class":    energy_class,

@@ -362,6 +362,8 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--accent); }
 .fact-cell + .fact-cell { border-left: 1px solid var(--border); }
 .fact-cell .fc-val { font-size: 12px; font-weight: 700; color: var(--text); letter-spacing: -0.1px; line-height: 1.2; }
 .fact-cell .fc-sub { font-size: 10px; color: var(--muted); margin-top: 2px; }
+.fact-cell--alert .fc-val { color: #DC2626; }
+.fact-cell--warn  .fc-val { color: #D97706; }
 
 /* Why sentence */
 .why-sentence {
@@ -2861,6 +2863,30 @@ function formatAddress(str) {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const scoreClass = s => s >= 70 ? 'high' : s >= 45 ? 'mid' : 'low';
 const fmt = n => n != null ? Number(n).toLocaleString('it-IT') : '–';
+
+// ── Floor display helpers ─────────────────────────────────────────────────────
+function _floorLabel(l) {
+  if (l.floor_label) return l.floor_label;
+  const fn = l.floor_n;
+  if (fn == null) return null;
+  if (fn <= -2) return 'Interrato';
+  if (fn === -1) return 'Seminterrato';
+  if (fn === 0) return 'Piano terra';
+  // Legacy: old data had R→-1 incorrectly; detect via raw floor field
+  if (fn === 1 && l.floor === 'R') return 'Piano rialzato';
+  return `${fn}° piano`;
+}
+function _floorCls(l) {
+  const fn = l.floor_n;
+  if (fn == null) return '';
+  if (fn < 0) return 'fact-cell--alert';
+  if (fn === 0) return 'fact-cell--warn';
+  const lbl = _floorLabel(l);
+  if (lbl === 'Piano rialzato') return 'fact-cell--warn';
+  if (fn > 2 && l.elevator !== true) return 'fact-cell--warn';
+  return '';
+}
+
 function conditionEmoji(cond) {
   if (!cond) return '';
   const c = cond.toLowerCase();
@@ -3973,7 +3999,7 @@ function renderRentalCard(l) {
       <div class="details-section-title">🏠 Physical</div>
       <div class="details-grid">
         ${_dRow('Rooms', l.rooms != null ? l.rooms + ' room' + (l.rooms !== 1 ? 's' : '') : null, l.rooms == null ? 'muted' : '')}
-        ${(() => { const fn = l.floor_n != null ? l.floor_n : (l.floor != null && l.floor !== '' ? l.floor : null); return _dRow('Floor', fn != null ? 'Floor ' + fn : null, fn != null ? (fn >= 3 ? 'good' : '') : 'muted'); })()}
+        ${(() => { const lbl = _floorLabel(l); const fn = l.floor_n; const cls = fn == null ? 'muted' : fn < 0 ? 'bad' : fn >= 3 ? 'good' : ''; return _dRow('Floor', lbl, cls); })()}
         ${_dRow('Elevator', l.elevator === true ? 'Yes ✓' : l.elevator === false ? 'No' : null, l.elevator === true ? 'good' : l.elevator == null ? 'muted' : '')}
         ${_dRow('External', l.is_external === true ? 'Yes ✓' : l.is_external === false ? 'No' : null, l.is_external === true ? 'good' : l.is_external == null ? 'muted' : '')}
         ${_dRow('Energy', l.energy_class, l.energy_class ? (ENERGY_RANK[l.energy_class] >= 5 ? 'good' : '') : 'muted')}
@@ -4099,17 +4125,23 @@ function renderRentalCard(l) {
   })();
 
   // 4-up facts strip (rooms | floor+lift | metro | comps median)
-  const floorN = l.floor_n ?? (l.floor !== '' && l.floor !== -1 ? l.floor : null);
+  const _rentFloorLbl = _floorLabel(l);
+  const _rentFloorDisp = (() => {
+    if (!_rentFloorLbl) return null;
+    const fn = l.floor_n;
+    if (fn != null && fn < 0) return _rentFloorLbl + ' ⚠';
+    if (fn != null && fn > 2 && l.elevator !== true) return _rentFloorLbl + ' · lift?';
+    return _rentFloorLbl;
+  })();
   const facts  = [
     {
       v: l.rooms != null ? `${l.rooms} rooms` : l.sqm ? `${fmt(l.sqm)} m²` : '–',
       s: l.condition ? l.condition.split(' / ')[0] : (l.sqm ? `${fmt(l.sqm)} m²` : 'no data'),
     },
     {
-      v: floorN != null
-          ? `${l.elevator === true ? '🛗 ' : ''}Floor ${floorN}`
-          : '–',
+      v: _rentFloorDisp != null ? `${l.elevator === true ? '🛗 ' : ''}${_rentFloorDisp}` : '–',
       s: l.elevator === true ? 'with lift' : l.elevator === false ? 'no lift' : 'lift unknown',
+      cls: _floorCls(l),
     },
     {
       v: l.metro_nearest_name ? `🚇 ${l.metro_nearest_name}` : '–',
@@ -4126,8 +4158,8 @@ function renderRentalCard(l) {
        : 'no comps data',
     },
   ];
-  const factsHtml = facts.map((c, i) =>
-    `<div class="fact-cell">
+  const factsHtml = facts.map(c =>
+    `<div class="fact-cell${c.cls ? ' ' + c.cls : ''}">
        <div class="fc-val">${c.v}</div>
        <div class="fc-sub">${c.s}</div>
      </div>`
@@ -4592,7 +4624,14 @@ function renderSaleCard(l) {
   })();
 
   // 4-up facts strip (rooms | floor+lift | metro | sale comps median)
-  const floorN  = l.floor_n ?? (l.floor !== '' && l.floor !== -1 ? l.floor : null);
+  const _saleFloorLbl = _floorLabel(l);
+  const _saleFloorDisp = (() => {
+    if (!_saleFloorLbl) return null;
+    const fn = l.floor_n;
+    if (fn != null && fn < 0) return _saleFloorLbl + ' ⚠';
+    if (fn != null && fn > 2 && l.elevator !== true) return _saleFloorLbl + ' · lift?';
+    return _saleFloorLbl;
+  })();
   const saleMed = l.comps_sale_median;
   const facts   = [
     {
@@ -4600,8 +4639,9 @@ function renderSaleCard(l) {
       s: l.condition ? l.condition.split(' / ')[0] : (l.sqm ? `${fmt(l.sqm)} m²` : 'no data'),
     },
     {
-      v: floorN != null ? `${l.elevator === true ? '🛗 ' : ''}Floor ${floorN}` : '–',
+      v: _saleFloorDisp != null ? `${l.elevator === true ? '🛗 ' : ''}${_saleFloorDisp}` : '–',
       s: l.elevator === true ? 'with lift' : l.elevator === false ? 'no lift' : 'lift unknown',
+      cls: _floorCls(l),
     },
     {
       v: l.metro_nearest_name ? `🚇 ${l.metro_nearest_name}` : '–',
@@ -4619,7 +4659,7 @@ function renderSaleCard(l) {
     },
   ];
   const factsHtml = facts.map(c =>
-    `<div class="fact-cell">
+    `<div class="fact-cell${c.cls ? ' ' + c.cls : ''}">
        <div class="fc-val">${c.v}</div>
        <div class="fc-sub">${c.s}</div>
      </div>`
@@ -4673,7 +4713,7 @@ function renderSaleCard(l) {
       <div class="details-section-title">🏠 Physical</div>
       <div class="details-grid">
         ${_dRow('Rooms', l.rooms != null ? l.rooms + ' room' + (l.rooms !== 1 ? 's' : '') : null, l.rooms == null ? 'muted' : '')}
-        ${(() => { const fn = l.floor_n != null ? l.floor_n : (l.floor != null && l.floor !== '' ? l.floor : null); return _dRow('Floor', fn != null ? 'Floor ' + fn : null, fn != null ? (fn >= 3 ? 'good' : '') : 'muted'); })()}
+        ${(() => { const lbl = _floorLabel(l); const fn = l.floor_n; const cls = fn == null ? 'muted' : fn < 0 ? 'bad' : fn >= 3 ? 'good' : ''; return _dRow('Floor', lbl, cls); })()}
         ${_dRow('Elevator', l.elevator === true ? 'Yes ✓' : l.elevator === false ? 'No' : null, l.elevator === true ? 'good' : l.elevator == null ? 'muted' : '')}
         ${_dRow('External', l.is_external === true ? 'Yes ✓' : l.is_external === false ? 'No' : null, l.is_external === true ? 'good' : l.is_external == null ? 'muted' : '')}
         ${_dRow('Energy', l.energy_class, l.energy_class ? (ENERGY_RANK[l.energy_class] >= 5 ? 'good' : '') : 'muted')}
