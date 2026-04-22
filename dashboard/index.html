@@ -1188,7 +1188,8 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--accent); }
     margin-top: calc(56px + 44px + env(safe-area-inset-top));
   }
   /* Hide desktop filter bar on mobile — replaced by drawer */
-  #rentalsView > .filters {
+  #rentalsView > .filters,
+  #salesView > .filters {
     display: none !important;
   }
   /* Map view: fill exactly the space below fixed header + tab bar */
@@ -1254,7 +1255,8 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--accent); }
 }
 #mobileFilterBackdrop.is-open { display: block; opacity: 1; }
 
-#mobileFilterDrawer {
+#mobileFilterDrawer,
+#mobileSaleFilterDrawer {
   position: fixed;
   left: 0; right: 0; bottom: 0;
   background: var(--surface);
@@ -1267,10 +1269,12 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--accent); }
   transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   padding-bottom: env(safe-area-inset-bottom);
 }
-#mobileFilterDrawer.is-open {
+#mobileFilterDrawer.is-open,
+#mobileSaleFilterDrawer.is-open {
   transform: translateY(0);
 }
-#mobileFilterDrawer.is-closing {
+#mobileFilterDrawer.is-closing,
+#mobileSaleFilterDrawer.is-closing {
   transition: transform 0.25s ease-in;
 }
 
@@ -1350,7 +1354,7 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--accent); }
 .area-chip.selected {
   background: var(--accent); border-color: var(--accent); color: #fff;
 }
-#dAreaChips { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 2px; }
+#dAreaChips, #sdAreaChips { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 2px; }
 
 /* Mobile map filter button — hidden on desktop */
 #mapFilterBtn { display: none; }
@@ -1734,6 +1738,67 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--accent); }
     </div>
   </div>
   <button class="drawer-show-btn" id="drawerShowBtn">Show results</button>
+</div>
+
+<!-- ── Mobile SALES filter drawer ── -->
+<div id="mobileSaleFilterDrawer" role="dialog" aria-label="Sale Filters">
+  <div class="drawer-handle"></div>
+  <div class="drawer-title-row">
+    <span class="drawer-title">Sale Filters</span>
+    <button class="drawer-reset-btn" id="sdReset">Reset</button>
+  </div>
+  <div class="drawer-body">
+    <div class="drawer-field">
+      <label>Areas</label>
+      <div id="sdAreaChips"></div>
+    </div>
+    <div class="drawer-field">
+      <label>Max price €</label>
+      <input type="number" id="sdMaxPrice" placeholder="any" min="0" step="50000">
+    </div>
+    <div class="drawer-field">
+      <label>Min m²</label>
+      <input type="number" id="sdMinSqm" placeholder="any" min="0" step="5">
+    </div>
+    <div class="drawer-field">
+      <label>Min rooms</label>
+      <input type="number" id="sdMinRooms" placeholder="any" min="1" max="10">
+    </div>
+    <div class="drawer-field">
+      <label>Fascia</label>
+      <select id="sdFascia">
+        <option value="">All</option>
+        <option value="B">B — Centrale</option>
+        <option value="C">C — Semicentrale</option>
+        <option value="D">D — Periferica</option>
+        <option value="E">E — Periferica outer</option>
+      </select>
+    </div>
+    <div class="drawer-field">
+      <label>Max metro distance</label>
+      <select id="sdMaxMetro">
+        <option value="">Any</option>
+        <option value="500">≤500m</option>
+        <option value="800">≤800m</option>
+        <option value="1200">≤1200m</option>
+      </select>
+    </div>
+    <div class="drawer-field">
+      <label>Min score: <span id="sdScoreVal" style="color:var(--accent);font-weight:700">0</span></label>
+      <div class="drawer-range-wrap">
+        <input type="range" id="sdScore" min="0" max="100" value="0" step="5">
+      </div>
+    </div>
+    <div class="drawer-field">
+      <label>Gems</label>
+      <div class="drawer-gem-row" id="sdGemFilter">
+        <button class="gem-tab active" data-sdgem="">All</button>
+        <button class="gem-tab" data-sdgem="hidden">✦ Hidden</button>
+        <button class="gem-tab" data-sdgem="good">↑ Great Value!</button>
+      </div>
+    </div>
+  </div>
+  <button class="drawer-show-btn" id="sdShowBtn">Show results</button>
 </div>
 
 <!-- ── Header ── -->
@@ -3572,24 +3637,26 @@ const FASCIA_LABEL = { A: 'Fascia A — prime', B: 'Fascia B — semi-central', 
 // Uses active scan areas when the local server is available, otherwise falls
 // back to all MILAN_AREAS so chips always appear in static (Netlify) mode.
 function _populateDrawerAreaFromActive() {
-  const container = document.getElementById('dAreaChips');
-  if (!container) return;
-  // Preserve any existing selections by name
-  const prevSelected = new Set(
-    [...container.querySelectorAll('.area-chip.selected')].map(b => b.textContent)
-  );
   // Active areas from server, or every known Milan area as fallback
   const activeNames = (_settingsCurrentAreas || []).filter(a => a.active).length
     ? (_settingsCurrentAreas || []).filter(a => a.active).map(a => a.name).sort((a, b) => a.localeCompare(b))
     : Object.values(MILAN_AREAS).flat().sort((a, b) => a.localeCompare(b));
-  container.innerHTML = '';
-  for (const name of activeNames) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'area-chip' + (prevSelected.has(name) ? ' selected' : '');
-    btn.textContent = name;
-    btn.addEventListener('click', () => btn.classList.toggle('selected'));
-    container.appendChild(btn);
+
+  for (const containerId of ['dAreaChips', 'sdAreaChips']) {
+    const container = document.getElementById(containerId);
+    if (!container) continue;
+    const prevSelected = new Set(
+      [...container.querySelectorAll('.area-chip.selected')].map(b => b.textContent)
+    );
+    container.innerHTML = '';
+    for (const name of activeNames) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'area-chip' + (prevSelected.has(name) ? ' selected' : '');
+      btn.textContent = name;
+      btn.addEventListener('click', () => btn.classList.toggle('selected'));
+      container.appendChild(btn);
+    }
   }
 }
 
@@ -4234,6 +4301,7 @@ const RENT_PAGE        = 25;
 let _rentFilteredData  = [];
 let _rentRenderedCount = 0;
 let _rentObserver      = null;
+let _saleFilteredData  = [];
 
 function _rentAppendBatch() {
   const grid  = document.getElementById('rentGrid');
@@ -4725,6 +4793,7 @@ function renderSales() {
     const bv = b[sSortKey] ?? (asc ? Infinity : -Infinity);
     return asc ? av - bv : bv - av;
   });
+  _saleFilteredData = data;
 
   const grid = document.getElementById('salesGrid');
   if (!grid) return;
@@ -5507,7 +5576,14 @@ document.getElementById('btnCacheClear')?.addEventListener('click', async () => 
     }
   }
 
-  if (openBtn)      openBtn.addEventListener('click',      () => openDrawer(false));
+  if (openBtn) openBtn.addEventListener('click', () => {
+    const activeTab = document.querySelector('.tab-btn.active')?.dataset.tab;
+    if (activeTab === 'sales' && typeof window._openSaleDrawer === 'function') {
+      window._openSaleDrawer();
+    } else {
+      openDrawer(false);
+    }
+  });
   if (mapFilterBtn) mapFilterBtn.addEventListener('click', () => openDrawer(true));
   backdrop.addEventListener('click', () => closeDrawer(false));
   showBtn.addEventListener('click',  () => closeDrawer(true));
@@ -5542,6 +5618,145 @@ document.getElementById('btnCacheClear')?.addEventListener('click', async () => 
   drawer.addEventListener('touchend', e => {
     const dy = e.changedTouches[0].clientY - _touchStartY;
     if (dy > 80) closeDrawer(false);
+  }, { passive: true });
+})();
+
+// ── Mobile SALES filter drawer ───────────────────────────────────────────────
+(function () {
+  const backdrop = document.getElementById('mobileFilterBackdrop');
+  const drawer   = document.getElementById('mobileSaleFilterDrawer');
+  const showBtn  = document.getElementById('sdShowBtn');
+  const resetBtn = document.getElementById('sdReset');
+  if (!drawer) return;
+
+  function _getSdAreas() {
+    return [...document.querySelectorAll('#sdAreaChips .area-chip.selected')]
+      .map(b => b.textContent);
+  }
+  function _setSdAreas(arr) {
+    const set = new Set(arr || []);
+    document.querySelectorAll('#sdAreaChips .area-chip').forEach(b => {
+      b.classList.toggle('selected', set.has(b.textContent));
+    });
+  }
+
+  function _updateShowBtn() {
+    showBtn.textContent = `Show ${_saleFilteredData.length} results`;
+  }
+
+  function openDrawer() {
+    backdrop.classList.add('is-open');
+    drawer.classList.remove('is-closing');
+    drawer.classList.add('is-open');
+    document.body.style.overflow = 'hidden';
+    _syncFromMain();
+    _updateShowBtn();
+  }
+  function closeDrawer(apply) {
+    drawer.classList.add('is-closing');
+    drawer.classList.remove('is-open');
+    backdrop.classList.remove('is-open');
+    document.body.style.overflow = '';
+    if (apply) _applyToMain();
+  }
+
+  function _syncFromMain() {
+    const get = id => document.getElementById(id);
+    _setSdAreas(saleSelectedAreas);
+    const mp = get('sMaxPrice');  if (mp)  get('sdMaxPrice').value  = mp.value;
+    const ms = get('sMinSqm');    if (ms)  get('sdMinSqm').value    = ms.value;
+    const mr = get('sMinRooms');  if (mr)  get('sdMinRooms').value  = mr.value;
+    const mf = get('sFascia');    if (mf)  get('sdFascia').value    = mf.value;
+    const mm = get('sMaxMetro');  if (mm)  get('sdMaxMetro').value  = mm.value;
+    const sc = get('sScore');
+    if (sc) {
+      get('sdScore').value = sc.value;
+      get('sdScoreVal').textContent = sc.value;
+    }
+    const gemActive = document.querySelector('#sGemFilterBar .gem-tab.active');
+    const gemVal = gemActive ? (gemActive.dataset.sgem || '') : '';
+    document.querySelectorAll('#sdGemFilter .gem-tab').forEach(b => {
+      b.classList.toggle('active', b.dataset.sdgem === gemVal);
+    });
+  }
+
+  function _applyToMain() {
+    const get = id => document.getElementById(id);
+    saleSelectedAreas = _getSdAreas();
+    if (typeof saleAreaMsd !== 'undefined' && saleAreaMsd) {
+      saleSelectedAreas.length ? saleAreaMsd.setSelected(saleSelectedAreas) : saleAreaMsd.clear();
+    }
+    if (get('sMaxPrice'))  get('sMaxPrice').value  = get('sdMaxPrice').value;
+    if (get('sMinSqm'))    get('sMinSqm').value    = get('sdMinSqm').value;
+    if (get('sMinRooms'))  get('sMinRooms').value  = get('sdMinRooms').value;
+    if (get('sFascia'))    get('sFascia').value     = get('sdFascia').value;
+    if (get('sMaxMetro'))  get('sMaxMetro').value   = get('sdMaxMetro').value;
+    if (get('sScore')) {
+      const sv = get('sdScore').value;
+      get('sScore').value = sv;
+      const rvEl = get('sScoreVal');
+      if (rvEl) rvEl.textContent = sv;
+    }
+    const sdGemActive = document.querySelector('#sdGemFilter .gem-tab.active');
+    const sdGemVal = sdGemActive ? (sdGemActive.dataset.sdgem || '') : '';
+    sSaleGemFilter = sdGemVal;
+    document.querySelectorAll('#sGemFilterBar .gem-tab').forEach(b => {
+      b.classList.toggle('active', b.dataset.sgem === sdGemVal);
+    });
+    if (typeof renderSales === 'function') renderSales();
+  }
+
+  // Expose opener for the header filter button
+  window._openSaleDrawer = openDrawer;
+
+  backdrop.addEventListener('click', () => closeDrawer(false));
+  showBtn.addEventListener('click',  () => closeDrawer(true));
+
+  // Range sync
+  const sdScore = document.getElementById('sdScore');
+  if (sdScore) sdScore.addEventListener('input', () => {
+    document.getElementById('sdScoreVal').textContent = sdScore.value;
+    _updateShowBtn();
+  });
+
+  // Live count on input/change
+  ['sdMaxPrice','sdMinSqm','sdMinRooms'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', _updateShowBtn);
+  });
+  ['sdFascia','sdMaxMetro'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', _updateShowBtn);
+  });
+
+  // Gem tabs
+  document.querySelectorAll('#sdGemFilter .gem-tab').forEach(btn =>
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#sdGemFilter .gem-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      _updateShowBtn();
+    }));
+
+  // Reset
+  resetBtn.addEventListener('click', () => {
+    ['sdMaxPrice','sdMinSqm','sdMinRooms'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.value = '';
+    });
+    ['sdFascia','sdMaxMetro'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.value = '';
+    });
+    document.querySelectorAll('#sdAreaChips .area-chip').forEach(b => b.classList.remove('selected'));
+    const sc = document.getElementById('sdScore'); if (sc) sc.value = 0;
+    document.getElementById('sdScoreVal').textContent = '0';
+    document.querySelectorAll('#sdGemFilter .gem-tab').forEach(b =>
+      b.classList.toggle('active', b.dataset.sdgem === ''));
+  });
+
+  // Swipe-down to close
+  let _touchStartY = 0;
+  drawer.addEventListener('touchstart', e => { _touchStartY = e.touches[0].clientY; }, { passive: true });
+  drawer.addEventListener('touchend', e => {
+    if (e.changedTouches[0].clientY - _touchStartY > 80) closeDrawer(false);
   }, { passive: true });
 })();
 
