@@ -588,7 +588,7 @@ async function init() {
   // Fetch both listing sets in parallel
   const [rentResp, salesResp] = await Promise.allSettled([
     rentFavIds.length  ? fetch('/rentals').then(r => r.ok ? r.json() : []) : Promise.resolve([]),
-    salesFavIds.length ? fetch('/listings').then(r => r.ok ? r.json() : []) : Promise.resolve([]),
+    salesFavIds.length ? fetch('/sales').then(r => r.ok ? r.json() : []) : Promise.resolve([]),
   ]);
 
   const allRentals = rentResp.status  === 'fulfilled' ? (rentResp.value  || []) : [];
