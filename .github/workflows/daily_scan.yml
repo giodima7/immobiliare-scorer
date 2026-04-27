@@ -29,6 +29,8 @@ jobs:
       - name: Run rentals scanner
         env:
           BROWSER_EXECUTABLE_PATH: /usr/bin/google-chrome
+          NO_SANDBOX: "1"
+          DISPLAY: ":99"
           IDEALISTA_KEY: ${{ secrets.IDEALISTA_KEY }}
           IDEALISTA_SECRET: ${{ secrets.IDEALISTA_SECRET }}
         run: python fetch_rentals.py --pages 5
@@ -43,6 +45,8 @@ jobs:
       - name: Run sales scanner
         env:
           BROWSER_EXECUTABLE_PATH: /usr/bin/google-chrome
+          NO_SANDBOX: "1"
+          DISPLAY: ":99"
         run: python fetch_listings.py --pages 5
         continue-on-error: true
 
