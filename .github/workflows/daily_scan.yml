@@ -20,39 +20,33 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 1
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip3 install -r requirements.txt
 
       - name: Run rentals scanner
         env:
           IDEALISTA_KEY: ${{ secrets.IDEALISTA_KEY }}
           IDEALISTA_SECRET: ${{ secrets.IDEALISTA_SECRET }}
-        run: python fetch_rentals.py --pages 5
+        run: python3 fetch_rentals.py --pages 5
 
       - name: Run Idealista scanner
         env:
           IDEALISTA_KEY: ${{ secrets.IDEALISTA_KEY }}
           IDEALISTA_SECRET: ${{ secrets.IDEALISTA_SECRET }}
-        run: python fetch_idealista.py --pages 5
+        run: python3 fetch_idealista.py --pages 5
         continue-on-error: true
 
       - name: Run sales scanner
-        run: python fetch_listings.py --pages 5
+        run: python3 fetch_listings.py --pages 5
         continue-on-error: true
 
       - name: Trim old cache entries
-        run: python trim_cache.py --max-age-days 90
+        run: python3 trim_cache.py --max-age-days 90
 
       - name: Print scan summary
         run: |
           echo "=== Scan complete ==="
-          python -c "
+          python3 -c "
           import json
           r = json.load(open('dashboard/rentals_latest.json'))
           print(f'Rentals: {len(r)} listings')
