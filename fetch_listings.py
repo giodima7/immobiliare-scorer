@@ -958,6 +958,14 @@ def main():
     else:
         cities = ["milano"]   # last-resort default
 
+    # Pages: use prefs when arg is at its default value
+    pages = args.pages
+    if pages == 3 and _prefs.get("pages"):
+        try:
+            pages = int(_prefs["pages"])
+        except (ValueError, TypeError):
+            pass
+
     # Build client-side filter dict (applied after parsing each listing)
     extra = {}
     if args.max_price:          extra["max_price"] = args.max_price
@@ -982,7 +990,7 @@ def main():
     print(f"\n{'─'*52}")
     print(f"  Immobiliare Scorer — fetch run")
     print(f"  Cities : {', '.join(c.title() for c in cities)}")
-    print(f"  Pages  : {args.pages} per city (~{args.pages*25} listings max)")
+    print(f"  Pages  : {pages} per city (~{pages*25} listings max)")
     if area_slugs:
         print(f"  Areas  : {', '.join(area_slugs)}")
     if extra:
@@ -992,7 +1000,7 @@ def main():
     # Fetch all cities
     all_raw = []
     for city_key in cities:
-        raw = fetch_city(city_key, pages=args.pages,
+        raw = fetch_city(city_key, pages=pages,
                          extra_filters=extra or None, delay=args.delay,
                          area_slugs=area_slugs)
         all_raw.extend(raw)
