@@ -303,9 +303,20 @@ header h1 span { color: var(--accent); }
 
 <div class="cards-container" id="cardsContainer"></div>
 
+<script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
 <script>
-const FAV_KEY      = 'immo_favourites';
-const RENT_FAV_KEY = 'immo_rent_favourites';
+// Scope localStorage keys per-user, matching the Storage module in index.html.
+// netlifyIdentity.currentUser() is synchronous once init() has run.
+(function () {
+  const ni = window.netlifyIdentity;
+  if (ni) ni.init();
+  const userId = ni?.currentUser()?.id || 'guest';
+  window._FAV_KEY      = `scorer_favourites_${userId}`;
+  window._RENT_FAV_KEY = `scorer_rentFavourites_${userId}`;
+})();
+
+const FAV_KEY      = window._FAV_KEY;
+const RENT_FAV_KEY = window._RENT_FAV_KEY;
 
 function getSalesFavs() { try { return JSON.parse(localStorage.getItem(FAV_KEY)) || []; } catch { return []; } }
 function getRentFavs()  { try { return JSON.parse(localStorage.getItem(RENT_FAV_KEY)) || []; } catch { return []; } }

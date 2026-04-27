@@ -1516,7 +1516,10 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--accent); }
   z-index: 1000;
   background: #FAFAF9;
   /* no overflow:hidden — the inner .onboard-slides handles its own scrolling */
-  display: flex; flex-direction: column;
+  display: none; flex-direction: column;
+}
+#onboardingOverlay.is-visible {
+  display: flex;
 }
 #onboardingOverlay.hiding {
   animation: onboardFadeOut 0.4s ease forwards;
@@ -1801,6 +1804,8 @@ function showApp() {
   if (r) r.style.display = 'block';
   restoreFilters();
   if (typeof applyFilters === 'function') applyFilters();
+  // Deferred until here so Auth.userId() is the real user ID, not 'guest'
+  if (typeof _checkOnboarding === 'function') _checkOnboarding();
 }
 function hideApp() {
   const r = document.getElementById('app-root');
@@ -6383,15 +6388,23 @@ function setDrawerMode(mode) {
 })();
 
 // ── Onboarding ──────────────────────────────────────────────────────────────
+// Called by showApp() AFTER auth resolves so Auth.userId() is the real user ID.
+function _checkOnboarding() {
+  const overlay = document.getElementById('onboardingOverlay');
+  if (!overlay) return;
+  if (Storage.get('onboarded')) {
+    overlay.remove();
+  } else {
+    overlay.classList.add('is-visible');
+  }
+}
+
 (function () {
   const overlay = document.getElementById('onboardingOverlay');
   if (!overlay) return;
 
-  // Skip if already onboarded (per-user via Storage module)
-  if (Storage.get('onboarded')) {
-    overlay.remove();
-    return;
-  }
+  // Event listeners and animations are set up here (at parse time).
+  // Visibility is decided later by _checkOnboarding() inside showApp().
 
   const slides     = document.getElementById('onboardSlides');
   const dots       = document.querySelectorAll('.onboard-dot');
