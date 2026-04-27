@@ -3475,6 +3475,10 @@ async function init() {
   // instead of /rentals), getting a Flask 404 and showing an empty grid.
   await loadRentals();
   loadCacheStats();
+
+  // Re-run with IS_LIVE now settled so it fetches the server-saved prefs file
+  // instead of the localStorage fallback used by the initial call below.
+  restoreSaleFetchPrefs();
 }
 
 // Set sticky top offsets once the DOM is painted
