@@ -10,6 +10,7 @@
 <meta name="apple-mobile-web-app-title" content="Scorer">
 <meta name="theme-color" content="#2D6A4F">
 <title>Immobiliare Scorer</title>
+<script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
@@ -1265,6 +1266,28 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--accent); }
   .stats-bar { padding: 6px 12px; gap: 10px; font-size: 11px; }
   /* Scanner panel padding */
   .scanner-panel { padding: 10px 12px; }
+  /* Hide map inline filter rows on mobile — drawer is used instead */
+  #mapRentFilters,
+  #mapSaleFilters {
+    display: none !important;
+  }
+  /* Hide the sales & rentals scanner control panels on mobile */
+  #sScanPanel,
+  #rentalsView > .scanner-panel {
+    display: none !important;
+  }
+  /* Favourites: icon-only on mobile */
+  .fav-label { display: none; }
+  .fav-btn { width: 36px; height: 36px; padding: 0;
+              display: flex; align-items: center; justify-content: center; }
+  /* Scan status / meta: prevent header overflow on mobile */
+  .scanner-meta, .scan-status-indicator, #sScanMeta {
+    flex-shrink: 1; min-width: 0; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; max-width: 100px;
+  }
+  header { overflow: hidden; max-width: 100vw; }
+  /* User avatar: full size on mobile too */
+  #user-avatar { flex-shrink: 0; }
 }
 
 /* Mobile filter trigger — hidden on desktop */
@@ -1570,6 +1593,181 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--accent); }
 </head>
 <body>
 
+<!--
+  NETLIFY IDENTITY SETUP (one-time, in Netlify dashboard):
+  1. Site → Identity → Enable Identity
+  2. Registration: set to "Invite only"
+  3. External providers: enable Google (optional)
+  4. To invite a friend: Identity → Invite users → enter email
+-->
+<div id="login-screen" style="display:none;flex-direction:column;align-items:center;
+  justify-content:center;min-height:100svh;background:#FAFAF9;
+  padding:24px;box-sizing:border-box">
+  <div style="margin-bottom:40px;text-align:center">
+    <div style="font-size:28px;font-weight:700;color:#1a1a1a">
+      Immobiliare <span style="color:#2D6A4F">Scorer</span>
+    </div>
+    <div style="font-size:14px;color:#6B7280;margin-top:8px">
+      Milan rental &amp; sales intelligence
+    </div>
+  </div>
+  <div style="background:white;border-radius:20px;padding:32px;
+    width:100%;max-width:360px;box-shadow:0 4px 24px rgba(0,0,0,0.08)">
+    <h2 style="font-size:20px;font-weight:700;color:#111827;margin:0 0 6px">Welcome back</h2>
+    <p style="font-size:13px;color:#6B7280;margin:0 0 24px">This app is invite-only.</p>
+    <button onclick="window.netlifyIdentity && window.netlifyIdentity.open('login')" style="
+      width:100%;padding:14px;border-radius:12px;background:#2D6A4F;color:white;
+      border:none;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:10px">
+      Sign in
+    </button>
+    <p style="font-size:12px;color:#9CA3AF;text-align:center;margin:0">
+      No account? Ask the owner for an invite.
+    </p>
+  </div>
+</div>
+
+<script>
+// ── Auth ─────────────────────────────────────────────────────────────────────
+const Auth = (() => {
+  // Graceful fallback when running locally without the CDN
+  const _ni = window.netlifyIdentity;
+  const _fake = { init(){}, currentUser(){ return null; },
+                  on(){}, logout(){}, open(){} };
+  const ni = _ni || _fake;
+
+  const module = {
+    user: null,
+
+    init() {
+      ni.init();
+      this.user = ni.currentUser();
+      ni.on('login',  user => { this.user = user;  this._onLogin(user); });
+      ni.on('logout', ()   => { this.user = null;  this._onLogout(); });
+
+      if (this.user) {
+        this._onLogin(this.user);
+      } else if (_ni) {
+        showLoginScreen();  // only gate on Netlify, not local
+      } else {
+        showApp();           // local dev: skip auth
+      }
+    },
+
+    userId()   { return this.user?.id || 'guest'; },
+    userName() {
+      return this.user?.user_metadata?.full_name || this.user?.email || 'User';
+    },
+    userInitial() { return this.userName()[0].toUpperCase(); },
+
+    _onLogin(user) {
+      hideLoginScreen();
+      Storage.migrate(user.id);
+      showApp();
+      updateUserAvatar();
+    },
+    _onLogout() { showLoginScreen(); hideApp(); },
+
+    signOut() {
+      if (confirm(`Signed in as ${this.userName()}\n\nSign out?`)) ni.logout();
+    }
+  };
+  return module;
+})();
+
+// ── Per-user storage ──────────────────────────────────────────────────────────
+const Storage = {
+  key(name) { return `scorer_${name}_${Auth.userId()}`; },
+
+  get(name, fallback = null) {
+    try {
+      const raw = localStorage.getItem(this.key(name));
+      return raw !== null ? JSON.parse(raw) : fallback;
+    } catch { return fallback; }
+  },
+
+  set(name, value) {
+    try { localStorage.setItem(this.key(name), JSON.stringify(value)); }
+    catch (e) { console.warn('Storage.set failed:', e); }
+  },
+
+  remove(name) { localStorage.removeItem(this.key(name)); },
+
+  // On first login, migrate any data saved under 'guest' key to real user key
+  migrate(userId) {
+    ['favourites', 'filters', 'onboarded'].forEach(name => {
+      const guestKey = `scorer_${name}_guest`;
+      const userKey  = `scorer_${name}_${userId}`;
+      const guestVal = localStorage.getItem(guestKey);
+      if (guestVal && !localStorage.getItem(userKey)) {
+        localStorage.setItem(userKey, guestVal);
+        localStorage.removeItem(guestKey);
+      }
+    });
+  }
+};
+
+// ── Auth screen helpers ───────────────────────────────────────────────────────
+function showLoginScreen() {
+  document.getElementById('login-screen').style.display = 'flex';
+  const r = document.getElementById('app-root');
+  if (r) r.style.display = 'none';
+}
+function hideLoginScreen() {
+  document.getElementById('login-screen').style.display = 'none';
+}
+function showApp() {
+  const r = document.getElementById('app-root');
+  if (r) r.style.display = 'block';
+  restoreFilters();
+  if (typeof applyFilters === 'function') applyFilters();
+}
+function hideApp() {
+  const r = document.getElementById('app-root');
+  if (r) r.style.display = 'none';
+}
+
+function updateUserAvatar() {
+  const el = document.getElementById('user-avatar');
+  if (!el) return;
+  el.textContent = Auth.userInitial();
+  el.style.display = 'flex';
+  el.title = `Signed in as ${Auth.userName()} — click to sign out`;
+}
+
+function restoreFilters() {
+  const filters = Storage.get('filters');
+  if (!filters) return;
+  const set = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val; };
+  set('rFascia',   filters.fascia);
+  set('rMaxRent',  filters.maxRent);
+  set('sMaxPrice', filters.maxPrice);
+  set('rMinSqm',   filters.minSqm);
+  set('rMinRooms', filters.minRooms);
+  set('rMaxMetro', filters.maxMetro);
+  set('rMinFloor', filters.minFloor);
+  set('rScore',    filters.minScore);
+  const elev = document.getElementById('rElevator');
+  if (elev && filters.elevator != null) elev.checked = filters.elevator;
+}
+
+function saveFilters() {
+  const filters = {
+    fascia:   document.getElementById('rFascia')?.value,
+    maxRent:  document.getElementById('rMaxRent')?.value,
+    maxPrice: document.getElementById('sMaxPrice')?.value,
+    minSqm:   document.getElementById('rMinSqm')?.value,
+    minRooms: document.getElementById('rMinRooms')?.value,
+    maxMetro: document.getElementById('rMaxMetro')?.value,
+    minFloor: document.getElementById('rMinFloor')?.value,
+    elevator: document.getElementById('rElevator')?.checked,
+    minScore: document.getElementById('rScore')?.value,
+  };
+  Storage.set('filters', filters);
+}
+</script>
+
+<div id="app-root" style="display:none">
+
 <!-- Global fixed tooltip — avoids overflow:hidden clipping inside cards -->
 <div id="globalTooltip"></div>
 
@@ -1860,13 +2058,19 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--accent); }
   <div class="meta" id="meta">Loading…</div>
   <button class="btn-fetch-toggle" id="btnFetchToggle">▶ Fetch new data</button>
   <a class="fav-link" href="/zone-mappings" id="zonesLink" title="Fix unmatched OMI zones">🗺 Zones <span class="fav-badge" id="unmatchedBadge" style="display:none"></span></a>
-  <a class="fav-link" href="/favourites" id="favLink">★ Favourites <span class="fav-badge" id="favBadge"></span></a>
+  <a class="fav-link fav-btn" href="/favourites" id="favLink"><span class="fav-icon">★</span><span class="fav-label"> Favourites</span> <span class="fav-badge" id="favBadge"></span></a>
   <!-- Mobile-only filter trigger -->
   <button class="mobile-filter-btn" id="mobileFilterBtn" aria-label="Open filters" title="Filters">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
     </svg>
   </button>
+  <!-- User avatar (shown after auth) -->
+  <div id="user-avatar" onclick="Auth.signOut()" style="
+    display:none;width:32px;height:32px;border-radius:50%;
+    background:#2D6A4F;color:white;font-size:13px;font-weight:600;
+    align-items:center;justify-content:center;cursor:pointer;
+    flex-shrink:0;user-select:none" title=""></div>
 </header>
 
 <!-- ── Tab bar ── -->
@@ -2740,6 +2944,18 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--accent); }
       </table>
     </div>
     <div id="dqTblCount" style="font-size:11px;color:var(--muted);margin-top:6px"></div>
+  </div>
+
+  <!-- ── Access (Netlify Identity invite) ──────────────────────────── -->
+  <div class="settings-section" style="margin-top:16px">
+    <h3 style="font-size:14px;font-weight:600;margin-bottom:8px">Access</h3>
+    <p style="font-size:13px;color:#6B7280;margin:0">
+      To invite a friend: go to your
+      <a href="https://app.netlify.com" target="_blank" style="color:#2D6A4F">
+        Netlify dashboard
+      </a>
+      → Identity → Invite users → enter their email address.
+    </p>
   </div>
 </div>
 
@@ -3627,8 +3843,6 @@ async function updateSaleFetchStatus() {
   } catch { /* API not running */ }
 }
 
-const SALE_FETCH_PREFS_KEY = 'saleFetchPrefs_v1';
-
 function saveSaleFetchPrefs() {
   const prefs = {
     pages:    document.getElementById('sSaleFetchPages').value,
@@ -3640,7 +3854,7 @@ function saveSaleFetchPrefs() {
     cities:   saleCityMsd.getSelected(),
     areas:    saleAreaFetchMsd.getSelected(),
   };
-  localStorage.setItem(SALE_FETCH_PREFS_KEY, JSON.stringify(prefs));
+  Storage.set('saleFetchPrefs', prefs);
   // Persist to disk so the daily CI workflow picks up the same settings
   if (IS_LIVE) {
     fetch('/sale-fetch-prefs', {
@@ -3663,20 +3877,20 @@ function _applySaleFetchPrefs(prefs) {
 }
 
 function restoreSaleFetchPrefs() {
-  // Prefer server-persisted prefs (source of truth for CI); fall back to localStorage
+  // Prefer server-persisted prefs (source of truth for CI); fall back to Storage module
   if (IS_LIVE) {
     fetch('/sale-fetch-prefs').then(r => r.ok ? r.json() : null).then(prefs => {
       if (prefs && Object.keys(prefs).length) {
         _applySaleFetchPrefs(prefs);
-        localStorage.setItem(SALE_FETCH_PREFS_KEY, JSON.stringify(prefs));
+        Storage.set('saleFetchPrefs', prefs);
       } else {
-        try { _applySaleFetchPrefs(JSON.parse(localStorage.getItem(SALE_FETCH_PREFS_KEY))); } catch {}
+        _applySaleFetchPrefs(Storage.get('saleFetchPrefs'));
       }
     }).catch(() => {
-      try { _applySaleFetchPrefs(JSON.parse(localStorage.getItem(SALE_FETCH_PREFS_KEY))); } catch {}
+      _applySaleFetchPrefs(Storage.get('saleFetchPrefs'));
     });
   } else {
-    try { _applySaleFetchPrefs(JSON.parse(localStorage.getItem(SALE_FETCH_PREFS_KEY))); } catch {}
+    _applySaleFetchPrefs(Storage.get('saleFetchPrefs'));
   }
 }
 
@@ -5192,12 +5406,12 @@ document.getElementById('btnStopScanner').addEventListener('click', async () => 
 
 // ── Rentals filter event listeners ───────────────────────────────────────────
 ['rFascia','rMaxMetro','rMinFloor','rMinEnergy'].forEach(id =>
-  document.getElementById(id).addEventListener('change', renderRentals));
+  document.getElementById(id).addEventListener('change', () => { renderRentals(); saveFilters(); }));
 const _debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
-const _renderRentalsDebounced = _debounce(renderRentals, 350);
+const _renderRentalsDebounced = _debounce(() => { renderRentals(); saveFilters(); }, 350);
 ['rMaxRent','rMinSqm','rMinRooms'].forEach(id =>
   document.getElementById(id).addEventListener('input', _renderRentalsDebounced));
-document.getElementById('rElevator').addEventListener('change', renderRentals);
+document.getElementById('rElevator').addEventListener('change', () => { renderRentals(); saveFilters(); });
 document.querySelectorAll('#rSourceFilter .sort-tab').forEach(btn =>
   btn.addEventListener('click', () => {
     document.querySelectorAll('#rSourceFilter .sort-tab').forEach(b => b.classList.remove('active'));
@@ -5215,6 +5429,7 @@ document.querySelectorAll('#rGemFilter .gem-tab').forEach(btn =>
 document.getElementById('rScore').addEventListener('input', function () {
   document.getElementById('rScoreVal').textContent = this.value;
   renderRentals();
+  saveFilters();
 });
 
 document.querySelectorAll('#rentSortTabs .sort-tab').forEach(btn => {
@@ -5446,7 +5661,7 @@ if (IS_LIVE) {
     if (activeNames.length) {
       scanAreaMsd.setSelected(activeNames);
       // Pre-select the same active areas for the sales fetch panel
-      const savedSalePrefs = (() => { try { return JSON.parse(localStorage.getItem(SALE_FETCH_PREFS_KEY)); } catch { return null; } })();
+      const savedSalePrefs = Storage.get('saleFetchPrefs');
       if (!savedSalePrefs?.areas?.length) saleAreaFetchMsd.setSelected(activeNames);
     }
   }).catch(() => {});
@@ -5938,12 +6153,11 @@ document.getElementById('btnCacheClear')?.addEventListener('click', async () => 
 
 // ── Onboarding ──────────────────────────────────────────────────────────────
 (function () {
-  const STORAGE_KEY = 'scorer_onboarded';
   const overlay = document.getElementById('onboardingOverlay');
   if (!overlay) return;
 
-  // Skip if already onboarded
-  if (localStorage.getItem(STORAGE_KEY)) {
+  // Skip if already onboarded (per-user via Storage module)
+  if (Storage.get('onboarded')) {
     overlay.remove();
     return;
   }
@@ -5958,7 +6172,7 @@ document.getElementById('btnCacheClear')?.addEventListener('click', async () => 
   let _ob2Done = false, _ob4Done = false;
 
   function _finish() {
-    localStorage.setItem(STORAGE_KEY, '1');
+    Storage.set('onboarded', true);
     overlay.classList.add('hiding');
     setTimeout(() => overlay.remove(), 420);
   }
@@ -7148,6 +7362,11 @@ document.getElementById('btnDqExport')?.addEventListener('click', () => {
   a.download = `data_quality_${new Date().toISOString().slice(0,10)}.csv`;
   a.click();
 });
+
+// ── Boot Auth ─────────────────────────────────────────────────────────────────
+Auth.init();
 </script>
+
+</div><!-- /app-root -->
 </body>
 </html>
