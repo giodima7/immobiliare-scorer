@@ -840,13 +840,10 @@ def fetch_rentals(pages: int = 3, area_names: list = None, max_rent: int = 0,
     print(f"  Fetching rentals ({desc})...", end="", flush=True)
 
     async def _run():
-        _ci = bool(os.environ.get("NO_SANDBOX"))
         browser = await uc.start(
             browser_executable_path=EDGE_PATH,
-            headless=True,
+            headless=False,
             lang="it-IT",
-            sandbox=not _ci,
-            browser_args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"] if _ci else [],
         )
         try:
             items, skipped = await _fetch_async(

@@ -2,13 +2,16 @@ name: Daily Rental Scan
 
 on:
   schedule:
-    - cron: '0 12 * * *'   # 12:00 UTC daily
+    - cron: '0 12 * * *'   # 12:00 UTC daily (2pm Milan time)
   workflow_dispatch:         # allows manual trigger from GitHub UI
 
 jobs:
   scan:
-    runs-on: ubuntu-latest
-    timeout-minutes: 90     # scan can take up to 90 min with enrichment
+    # Runs on your local Mac via the GitHub Actions self-hosted runner.
+    # Immobiliare.it blocks datacenter IPs (Azure/GH-hosted), so the scan
+    # must use a real residential IP + real browser profile.
+    runs-on: self-hosted
+    timeout-minutes: 90
 
     steps:
       - name: Checkout repo
@@ -26,21 +29,8 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Install Playwright Chromium
-        run: |
-          pip install playwright
-          playwright install chromium --with-deps
-          # Write the Chromium executable path into GITHUB_ENV so all
-          # subsequent steps can read it as $BROWSER_EXECUTABLE_PATH
-          python3 -c "
-          from playwright.sync_api import sync_playwright
-          with sync_playwright() as p:
-              print('BROWSER_EXECUTABLE_PATH=' + p.chromium.executable_path)
-          " >> $GITHUB_ENV
-
       - name: Run rentals scanner
         env:
-          NO_SANDBOX: "1"
           IDEALISTA_KEY: ${{ secrets.IDEALISTA_KEY }}
           IDEALISTA_SECRET: ${{ secrets.IDEALISTA_SECRET }}
         run: python fetch_rentals.py --pages 5
@@ -50,11 +40,9 @@ jobs:
           IDEALISTA_KEY: ${{ secrets.IDEALISTA_KEY }}
           IDEALISTA_SECRET: ${{ secrets.IDEALISTA_SECRET }}
         run: python fetch_idealista.py --pages 5
-        continue-on-error: true   # Idealista failing should not block Immobiliare data
+        continue-on-error: true
 
       - name: Run sales scanner
-        env:
-          NO_SANDBOX: "1"
         run: python fetch_listings.py --pages 5
         continue-on-error: true
 
@@ -84,6 +72,5 @@ jobs:
           git add dashboard/sales_latest.json
           git add enriched_cache.json
           git add seen_ids.json
-          # Only commit if something changed
           git diff --staged --quiet || git commit -m "chore: daily scan $(date -u '+%Y-%m-%d %H:%M UTC')"
           git push

@@ -844,13 +844,10 @@ def fetch_city(city_key: str, pages: int = 3, extra_filters: dict = None,
     print(f"  Fetching {cfg['label']}...", end="", flush=True)
 
     async def _run():
-        _ci = bool(os.environ.get("NO_SANDBOX"))
         browser = await uc.start(
             browser_executable_path=EDGE_PATH,
-            headless=True,
+            headless=False,
             lang="it-IT",
-            sandbox=not _ci,
-            browser_args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"] if _ci else [],
         )
         try:
             items = await _fetch_city_async(
