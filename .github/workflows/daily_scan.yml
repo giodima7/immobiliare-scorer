@@ -26,11 +26,21 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Install Playwright Chromium
+        run: |
+          pip install playwright
+          playwright install chromium --with-deps
+          # Write the Chromium executable path into GITHUB_ENV so all
+          # subsequent steps can read it as $BROWSER_EXECUTABLE_PATH
+          python3 -c "
+          from playwright.sync_api import sync_playwright
+          with sync_playwright() as p:
+              print('BROWSER_EXECUTABLE_PATH=' + p.chromium.executable_path)
+          " >> $GITHUB_ENV
+
       - name: Run rentals scanner
         env:
-          BROWSER_EXECUTABLE_PATH: /usr/bin/google-chrome
           NO_SANDBOX: "1"
-          DISPLAY: ":99"
           IDEALISTA_KEY: ${{ secrets.IDEALISTA_KEY }}
           IDEALISTA_SECRET: ${{ secrets.IDEALISTA_SECRET }}
         run: python fetch_rentals.py --pages 5
@@ -44,9 +54,7 @@ jobs:
 
       - name: Run sales scanner
         env:
-          BROWSER_EXECUTABLE_PATH: /usr/bin/google-chrome
           NO_SANDBOX: "1"
-          DISPLAY: ":99"
         run: python fetch_listings.py --pages 5
         continue-on-error: true
 
