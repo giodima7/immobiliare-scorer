@@ -16,6 +16,11 @@ sale_fetch.log
 scanner_status.json
 seen_ids.backup.json
 
+# User-configured scan preferences — edited via localhost:8000 dashboard.
+# Kept local-only so git pull never overwrites the user's settings.
+scan_prefs.json
+sale_fetch_prefs.json
+
 # Bulky raw export files in project root
 listings_*.json
 listings_*.csv
