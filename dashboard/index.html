@@ -3316,6 +3316,19 @@ function applyStaticMode() {
   if (pill) {
     pill.style.display = '';  // visible on desktop
   }
+
+  // Show last-scan time from the JSON file's Last-Modified HTTP header
+  try {
+    const head = await fetch('./rentals_latest.json', { method: 'HEAD' });
+    const lastMod = head.headers.get('Last-Modified');
+    if (lastMod) {
+      const d = new Date(lastMod);
+      const fmt = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+                + ', ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) + ' UTC';
+      const meta = document.getElementById('meta');
+      if (meta) meta.textContent = 'Last updated: ' + fmt;
+    }
+  } catch { /* ignore — HEAD may not be available in file:// dev */ }
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -4440,7 +4453,8 @@ function renderRentals() {
 // ── Rentals — data loading ────────────────────────────────────────────────────
 async function loadRentals() {
   try {
-    const resp = await fetch('/rentals');
+    const url  = IS_LIVE ? '/rentals' : './rentals_latest.json';
+    const resp = await fetch(url);
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     ALL_RENT = await resp.json();
   } catch {
@@ -6618,6 +6632,7 @@ let _dqActiveCell = null;
 let _dqChart      = null;
 
 async function _dqLoad(force = false) {
+  if (!IS_LIVE) return;   // data-quality endpoint only available locally
   if (!force && _dqData && Date.now() - _dqFetchedAt < 60000) {
     _dqRender(); return;
   }
@@ -6900,6 +6915,7 @@ let _dqSaleSortKey   = 'completeness_pct';
 let _dqSaleSortDir   = 'asc';
 
 async function _dqSaleLoad(force = false) {
+  if (!IS_LIVE) return;   // data-quality endpoint only available locally
   if (!force && _dqSaleData && Date.now() - _dqSaleFetchedAt < 60000) {
     _dqSaleRender(); return;
   }

@@ -1,0 +1,152 @@
+{
+  "porta nuova": {
+    "zone_code": "C14",
+    "fascia": "A",
+    "rmin": 16.0,
+    "rmax": 24.0
+  },
+  "porta vittoria": {
+    "zone_code": "B19",
+    "fascia": "A",
+    "rmin": 19.0,
+    "rmax": 27.0
+  },
+  "sant'ambrogio": {
+    "zone_code": "B16",
+    "fascia": "A",
+    "rmin": 22.0,
+    "rmax": 28.5
+  },
+  "san vittore": {
+    "zone_code": "B16",
+    "fascia": "A",
+    "rmin": 22.0,
+    "rmax": 28.5
+  },
+  "palestro": {
+    "zone_code": "B18",
+    "fascia": "A",
+    "rmin": 21.5,
+    "rmax": 29.0
+  },
+  "dezza": {
+    "zone_code": "C18",
+    "fascia": "A",
+    "rmin": 15.0,
+    "rmax": 20.0
+  },
+  "cadore": {
+    "zone_code": "C20",
+    "fascia": "B",
+    "rmin": 11.5,
+    "rmax": 18.5
+  },
+  "lanza": {
+    "zone_code": "B15",
+    "fascia": "A",
+    "rmin": 26.0,
+    "rmax": 35.0
+  },
+  "carrobbio": {
+    "zone_code": "B12",
+    "fascia": "A",
+    "rmin": 25.0,
+    "rmax": 35.0
+  },
+  "bocconi": {
+    "zone_code": "B20",
+    "fascia": "A",
+    "rmin": 17.0,
+    "rmax": 22.0
+  },
+  "cascina merlata - musocco": {
+    "zone_code": "D39",
+    "fascia": "C",
+    "rmin": 14.0,
+    "rmax": 21.0
+  },
+  "borgogna - largo augusto": {
+    "zone_code": "B12",
+    "fascia": "A",
+    "rmin": 25.0,
+    "rmax": 35.0
+  },
+  "brera": {
+    "zone_code": "B15",
+    "fascia": "A",
+    "rmin": 26.0,
+    "rmax": 35.0
+  },
+  "cadorna - castello": {
+    "zone_code": "B17",
+    "fascia": "A",
+    "rmin": 17.5,
+    "rmax": 26.5
+  },
+  "centro": {
+    "zone_code": "B12",
+    "fascia": "A",
+    "rmin": 25.0,
+    "rmax": 35.0
+  },
+  "città studi": {
+    "zone_code": "D12",
+    "fascia": "B",
+    "rmin": 12.0,
+    "rmax": 15.5
+  },
+  "corso genova": {
+    "zone_code": "B21",
+    "fascia": "A",
+    "rmin": 15.0,
+    "rmax": 22.0
+  },
+  "duomo": {
+    "zone_code": "B12",
+    "fascia": "A",
+    "rmin": 25.0,
+    "rmax": 35.0
+  },
+  "garibaldi - corso como": {
+    "zone_code": "C14",
+    "fascia": "A",
+    "rmin": 16.0,
+    "rmax": 24.0
+  },
+  "guastalla": {
+    "zone_code": "B19",
+    "fascia": "A",
+    "rmin": 19.0,
+    "rmax": 27.0
+  },
+  "lodi - brenta": {
+    "zone_code": "B20",
+    "fascia": "A",
+    "rmin": 17.0,
+    "rmax": 22.0
+  },
+  "missori": {
+    "zone_code": "B12",
+    "fascia": "A",
+    "rmin": 25.0,
+    "rmax": 35.0
+  },
+  "montenero": {
+    "zone_code": "C20",
+    "fascia": "B",
+    "rmin": 11.5,
+    "rmax": 18.5
+  },
+  "moscova": {
+    "zone_code": "B16",
+    "fascia": "A",
+    "rmin": 22.0,
+    "rmax": 28.5
+  },
+  "navigli - darsena": {
+    "zone_code": "C18",
+    "fascia": "A",
+    "rmin": 15.0,
+    "rmax": 20.0
+  }
+}

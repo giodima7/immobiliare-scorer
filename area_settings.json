@@ -1,0 +1,280 @@
+{
+  "areas": [
+    {
+      "active": true,
+      "id": "amendola-buonarroti",
+      "name": "Amendola - Buonarroti"
+    },
+    {
+      "active": true,
+      "id": "arco-della-pace",
+      "name": "Arco della Pace"
+    },
+    {
+      "active": true,
+      "id": "brera",
+      "name": "Brera"
+    },
+    {
+      "active": true,
+      "id": "buenos-aires",
+      "name": "Buenos Aires"
+    },
+    {
+      "active": true,
+      "id": "centrale",
+      "name": "Centrale"
+    },
+    {
+      "active": true,
+      "id": "corso-genova",
+      "name": "Corso Genova"
+    },
+    {
+      "active": true,
+      "id": "duomo",
+      "name": "Duomo"
+    },
+    {
+      "active": true,
+      "id": "garibaldi-corso-como",
+      "name": "Garibaldi - Corso Como"
+    },
+    {
+      "active": true,
+      "id": "guastalla",
+      "name": "Guastalla"
+    },
+    {
+      "active": true,
+      "id": "indipendenza",
+      "name": "Indipendenza"
+    },
+    {
+      "active": true,
+      "id": "isola",
+      "name": "Isola"
+    },
+    {
+      "active": true,
+      "id": "melchiorre-gioia",
+      "name": "Melchiorre Gioia"
+    },
+    {
+      "active": true,
+      "id": "moscova",
+      "name": "Moscova"
+    },
+    {
+      "active": true,
+      "id": "navigli-darsena",
+      "name": "Navigli - Darsena"
+    },
+    {
+      "active": true,
+      "id": "paolo-sarpi",
+      "name": "Paolo Sarpi"
+    },
+    {
+      "active": true,
+      "id": "piave-tricolore",
+      "name": "Piave - Tricolore"
+    },
+    {
+      "active": true,
+      "id": "porta-romana-medaglie-d-oro",
+      "name": "Porta Romana - Medaglie d'Oro"
+    },
+    {
+      "active": true,
+      "id": "porta-venezia",
+      "name": "Porta Venezia"
+    },
+    {
+      "active": true,
+      "id": "solari",
+      "name": "Solari"
+    },
+    {
+      "active": true,
+      "id": "ticinese",
+      "name": "Ticinese"
+    },
+    {
+      "active": true,
+      "id": "vincenzo-monti",
+      "name": "Vincenzo Monti"
+    },
+    {
+      "active": true,
+      "id": "washington",
+      "name": "Washington"
+    },
+    {
+      "id": "cadorna-castello",
+      "name": "Cadorna - Castello",
+      "active": true
+    },
+    {
+      "id": "carrobbio",
+      "name": "Carrobbio",
+      "active": true
+    },
+    {
+      "id": "porta-nuova",
+      "name": "Porta Nuova",
+      "active": true
+    },
+    {
+      "id": "sempione",
+      "name": "Sempione",
+      "active": true
+    },
+    {
+      "id": "arena",
+      "name": "Arena",
+      "active": true
+    },
+    {
+      "id": "ascanio-sforza",
+      "name": "Ascanio Sforza",
+      "active": true
+    },
+    {
+      "id": "bocconi",
+      "name": "Bocconi",
+      "active": true
+    },
+    {
+      "id": "borgogna-largo-augusto",
+      "name": "Borgogna - Largo Augusto",
+      "active": true
+    },
+    {
+      "id": "cadore",
+      "name": "Cadore",
+      "active": true
+    },
+    {
+      "id": "cenisio",
+      "name": "Cenisio",
+      "active": true
+    },
+    {
+      "id": "citta-studi",
+      "name": "Città Studi",
+      "active": true
+    },
+    {
+      "id": "corso-san-gottardo",
+      "name": "Corso San Gottardo",
+      "active": true
+    },
+    {
+      "id": "de-angeli",
+      "name": "De Angeli",
+      "active": true
+    },
+    {
+      "id": "dezza",
+      "name": "Dezza",
+      "active": true
+    },
+    {
+      "id": "farini",
+      "name": "Farini",
+      "active": true
+    },
+    {
+      "id": "lodi-brenta",
+      "name": "Lodi - Brenta",
+      "active": true
+    },
+    {
+      "id": "lanza",
+      "name": "Lanza",
+      "active": true
+    },
+    {
+      "id": "maggiolina",
+      "name": "Maggiolina",
+      "active": true
+    },
+    {
+      "id": "missori",
+      "name": "Missori",
+      "active": true
+    },
+    {
+      "id": "montenero",
+      "name": "Montenero",
+      "active": true
+    },
+    {
+      "id": "monte-rosa-lotto",
+      "name": "Monte Rosa - Lotto",
+      "active": true
+    },
+    {
+      "id": "morgagni",
+      "name": "Morgagni",
+      "active": true
+    },
+    {
+      "id": "palestro",
+      "name": "Palestro",
+      "active": true
+    },
+    {
+      "id": "plebisciti-susa",
+      "name": "Plebisciti - Susa",
+      "active": true
+    },
+    {
+      "id": "quadronno-crocetta",
+      "name": "Quadronno - Crocetta",
+      "active": true
+    },
+    {
+      "id": "repubblica",
+      "name": "Repubblica",
+      "active": true
+    },
+    {
+      "id": "san-babila",
+      "name": "San Babila",
+      "active": true
+    },
+    {
+      "id": "san-vittore",
+      "name": "San Vittore",
+      "active": true
+    },
+    {
+      "id": "sant-ambrogio",
+      "name": "Sant'Ambrogio",
+      "active": true
+    },
+    {
+      "id": "scala-manzoni",
+      "name": "Scala - Manzoni",
+      "active": true
+    },
+    {
+      "id": "turati",
+      "name": "Turati",
+      "active": true
+    },
+    {
+      "id": "vercelli-wagner",
+      "name": "Vercelli - Wagner",
+      "active": true
+    },
+    {
+      "id": "zara",
+      "name": "Zara",
+      "active": true
+    }
+  ],
+  "last_saved": "2026-04-21T19:07:46"
+}

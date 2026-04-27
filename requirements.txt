@@ -1,3 +1,9 @@
-flask
+# Web scraping (Immobiliare.it fetchers)
 nodriver
+
+# Geospatial — OMI polygon lookup
 shapely
+
+# Local dev server
+flask
+

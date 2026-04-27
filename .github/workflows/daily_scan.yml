@@ -1,0 +1,79 @@
+name: Daily Rental Scan
+
+on:
+  schedule:
+    - cron: '0 12 * * *'   # 12:00 UTC daily
+  workflow_dispatch:         # allows manual trigger from GitHub UI
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90     # scan can take up to 90 min with enrichment
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Chromium
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq chromium-browser
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run rentals scanner
+        env:
+          IDEALISTA_KEY: ${{ secrets.IDEALISTA_KEY }}
+          IDEALISTA_SECRET: ${{ secrets.IDEALISTA_SECRET }}
+        run: python fetch_rentals.py --pages 5
+
+      - name: Run Idealista scanner
+        env:
+          IDEALISTA_KEY: ${{ secrets.IDEALISTA_KEY }}
+          IDEALISTA_SECRET: ${{ secrets.IDEALISTA_SECRET }}
+        run: python fetch_idealista.py --pages 5
+        continue-on-error: true   # Idealista failing should not block Immobiliare data
+
+      - name: Run sales scanner
+        run: python fetch_listings.py --pages 5
+        continue-on-error: true
+
+      - name: Trim old cache entries
+        run: python trim_cache.py --max-age-days 90
+
+      - name: Print scan summary
+        run: |
+          echo "=== Scan complete ==="
+          python -c "
+          import json
+          r = json.load(open('dashboard/rentals_latest.json'))
+          print(f'Rentals: {len(r)} listings')
+          s = json.load(open('dashboard/sales_latest.json'))
+          print(f'Sales: {len(s)} listings')
+          c = json.load(open('enriched_cache.json'))
+          print(f'Cache: {len(c)} enriched entries')
+          gems = [x for x in r if x.get('hidden_gem')]
+          print(f'Hidden gems: {len(gems)}')
+          "
+
+      - name: Commit updated data
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add dashboard/rentals_latest.json
+          git add dashboard/sales_latest.json
+          git add enriched_cache.json
+          git add seen_ids.json
+          # Only commit if something changed
+          git diff --staged --quiet || git commit -m "chore: daily scan $(date -u '+%Y-%m-%d %H:%M UTC')"
+          git push

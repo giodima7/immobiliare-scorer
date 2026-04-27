@@ -1,10 +1,22 @@
 [build]
   publish = "dashboard"
 
-# Map Flask API paths to the static JSON files in the publish dir
+# /api-ping must 404 on Netlify — dashboard JS uses this to detect static mode
+[[redirects]]
+  from   = "/api-ping"
+  to     = "/404"
+  status = 404
+  force  = true
+
+# Flask endpoint aliases so old bookmarks and the IS_LIVE codepath still work
 [[redirects]]
   from   = "/rentals"
   to     = "/rentals_latest.json"
+  status = 200
+
+[[redirects]]
+  from   = "/sales"
+  to     = "/sales_latest.json"
   status = 200
 
 [[redirects]]
@@ -13,25 +25,20 @@
   status = 200
 
 [[redirects]]
-  from   = "/scanner-status"
-  to     = "/scanner_status.json"
-  status = 200
-
-[[redirects]]
   from   = "/favourites"
   to     = "/favourites.html"
   status = 200
 
-# All other /api/* or unmatched calls → 404 JSON (signals "static mode" to JS)
-[[redirects]]
-  from   = "/api-ping"
-  to     = "/404"
-  status = 404
-  force  = true
-
-# Prevent caching of data files so fresh data shows immediately after a redeploy
+# JSON: 1-hour browser cache — fresh data arrives via daily GitHub Actions commit + Netlify redeploy
 [[headers]]
   for = "/*.json"
   [headers.values]
-    Cache-Control = "no-cache, no-store, must-revalidate"
-    Pragma        = "no-cache"
+    Cache-Control = "public, max-age=3600"
+    Access-Control-Allow-Origin = "*"
+
+# Security headers for all pages
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"

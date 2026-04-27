@@ -8,10 +8,13 @@ email_config.json
 netlify_config.json
 .env
 
-# Runtime state — local only, not needed on Netlify
-seen_ids.json
+# Local-only runtime files
 .digest_sent_date
 scanner.log
+scanner_idealista.log
+sale_fetch.log
+scanner_status.json
+seen_ids.backup.json
 
 # Bulky raw export files in project root
 listings_*.json
@@ -25,3 +28,25 @@ test_run_*.csv
 # Virtual environments
 venv/
 .venv/
+
+# Node (icon generation tooling)
+node_modules/
+package-lock.json
+package.json
+generate_icons.js
+
+# Generated PWA icons (build from source elsewhere)
+icon-192.png
+icon-512.png
+
+# Local POI cache (large, can be re-downloaded via dashboard Settings)
+milan_pois.json
+
+# AI workspace
+.claude/
+
+# Keep data files tracked (updated by GitHub Actions daily scan)
+!enriched_cache.json
+!seen_ids.json
+!dashboard/rentals_latest.json
+!dashboard/sales_latest.json
