@@ -28,6 +28,7 @@ import sys
 import unicodedata
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 from urllib.parse import urlencode
 
@@ -930,7 +931,7 @@ def parse_args():
 
 def _load_sale_prefs() -> dict:
     """Load sale_fetch_prefs.json written by the dashboard (localhost:8000)."""
-    path = BASE_DIR / "sale_fetch_prefs.json"
+    path = Path(__file__).parent / "sale_fetch_prefs.json"
     if path.exists():
         try:
             return json.load(open(path))
