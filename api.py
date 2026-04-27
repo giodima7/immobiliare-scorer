@@ -418,7 +418,8 @@ def sales():
     return send_file(path, mimetype="application/json")
 
 
-SCAN_PREFS_PATH = BASE_DIR / "scan_prefs.json"
+SCAN_PREFS_PATH      = BASE_DIR / "scan_prefs.json"
+SALE_PREFS_PATH      = BASE_DIR / "sale_fetch_prefs.json"
 
 def _build_scanner_cmd(body: dict) -> list:
     """Build the fetch_rentals.py --daemon command from a prefs dict.
@@ -466,6 +467,20 @@ def get_scan_prefs():
 def save_scan_prefs():
     body = request.get_json(silent=True) or {}
     SCAN_PREFS_PATH.write_text(_json.dumps(body, indent=2))
+    return jsonify({"saved": True})
+
+
+@app.route("/sale-fetch-prefs", methods=["GET"])
+def get_sale_fetch_prefs():
+    if SALE_PREFS_PATH.exists():
+        return send_file(SALE_PREFS_PATH, mimetype="application/json")
+    return jsonify({})
+
+
+@app.route("/sale-fetch-prefs", methods=["POST"])
+def save_sale_fetch_prefs():
+    body = request.get_json(silent=True) or {}
+    SALE_PREFS_PATH.write_text(_json.dumps(body, indent=2))
     return jsonify({"saved": True})
 
 

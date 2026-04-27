@@ -928,8 +928,22 @@ def parse_args():
     return p.parse_args()
 
 
+def _load_sale_prefs() -> dict:
+    """Load sale_fetch_prefs.json written by the dashboard (localhost:8000)."""
+    path = BASE_DIR / "sale_fetch_prefs.json"
+    if path.exists():
+        try:
+            return json.load(open(path))
+        except Exception:
+            pass
+    return {}
+
+
 def main():
     args = parse_args()
+
+    # Fall back to dashboard-persisted prefs when no CLI city flags are given
+    _prefs = _load_sale_prefs() if not (args.all_cities or args.cities or args.city) else {}
 
     # Determine which cities to fetch
     if args.all_cities:
@@ -938,22 +952,31 @@ def main():
         cities = args.cities
     elif args.city:
         cities = [args.city]
+    elif _prefs.get("cities"):
+        cities = _prefs["cities"]
     else:
-        cities = ["napoli", "milano"]   # default
+        cities = ["milano"]   # last-resort default
 
     # Build client-side filter dict (applied after parsing each listing)
     extra = {}
-    if args.max_price: extra["max_price"] = args.max_price
-    if args.min_price: extra["min_price"] = args.min_price
-    if args.min_sqm:   extra["min_sqm"]   = args.min_sqm
-    if args.max_sqm:   extra["max_sqm"]   = args.max_sqm
-    if args.min_rooms: extra["min_rooms"] = args.min_rooms
+    if args.max_price:          extra["max_price"] = args.max_price
+    elif _prefs.get("maxPrice"): extra["max_price"] = int(_prefs["maxPrice"])
+    if args.min_price:          extra["min_price"] = args.min_price
+    elif _prefs.get("minPrice"): extra["min_price"] = int(_prefs["minPrice"])
+    if args.min_sqm:            extra["min_sqm"]   = args.min_sqm
+    elif _prefs.get("minSqm"):   extra["min_sqm"]   = int(_prefs["minSqm"])
+    if args.max_sqm:            extra["max_sqm"]   = args.max_sqm
+    elif _prefs.get("maxSqm"):   extra["max_sqm"]   = int(_prefs["maxSqm"])
+    if args.min_rooms:          extra["min_rooms"] = args.min_rooms
+    elif _prefs.get("minRooms"): extra["min_rooms"] = int(_prefs["minRooms"])
 
-    # Parse --areas into URL slugs
+    # Parse --areas into URL slugs (CLI overrides prefs)
     area_slugs = None
     if args.areas:
         raw_areas = [a.strip() for a in args.areas.split(",") if a.strip()]
         area_slugs = [to_url_slug(a) for a in raw_areas]
+    elif _prefs.get("areas"):
+        area_slugs = [to_url_slug(a) for a in _prefs["areas"] if a.strip()]
 
     print(f"\n{'─'*52}")
     print(f"  Immobiliare Scorer — fetch run")

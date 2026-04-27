@@ -1,0 +1,10 @@
+{
+  "cities": ["milano", "napoli"],
+  "pages": "5",
+  "maxPrice": "",
+  "minPrice": "",
+  "minSqm": "",
+  "maxSqm": "",
+  "minRooms": "",
+  "areas": []
+}

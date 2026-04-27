@@ -3637,21 +3637,43 @@ function saveSaleFetchPrefs() {
     areas:    saleAreaFetchMsd.getSelected(),
   };
   localStorage.setItem(SALE_FETCH_PREFS_KEY, JSON.stringify(prefs));
+  // Persist to disk so the daily CI workflow picks up the same settings
+  if (IS_LIVE) {
+    fetch('/sale-fetch-prefs', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(prefs),
+    }).catch(() => {});
+  }
+}
+
+function _applySaleFetchPrefs(prefs) {
+  if (!prefs) return;
+  if (prefs.pages)    document.getElementById('sSaleFetchPages').value    = prefs.pages;
+  if (prefs.maxPrice) document.getElementById('sSaleFetchMaxPrice').value = prefs.maxPrice;
+  if (prefs.minPrice) document.getElementById('sSaleFetchMinPrice').value = prefs.minPrice;
+  if (prefs.minSqm)   document.getElementById('sSaleFetchMinSqm').value   = prefs.minSqm;
+  if (prefs.maxSqm)   document.getElementById('sSaleFetchMaxSqm').value   = prefs.maxSqm;
+  if (prefs.minRooms) document.getElementById('sSaleFetchMinRooms').value = prefs.minRooms;
+  if (prefs.cities?.length) saleCityMsd.setSelected(prefs.cities);
+  if (prefs.areas?.length)  saleAreaFetchMsd.setSelected(prefs.areas);
 }
 
 function restoreSaleFetchPrefs() {
-  try {
-    const prefs = JSON.parse(localStorage.getItem(SALE_FETCH_PREFS_KEY));
-    if (!prefs) return;
-    if (prefs.pages)    document.getElementById('sSaleFetchPages').value    = prefs.pages;
-    if (prefs.maxPrice) document.getElementById('sSaleFetchMaxPrice').value = prefs.maxPrice;
-    if (prefs.minPrice) document.getElementById('sSaleFetchMinPrice').value = prefs.minPrice;
-    if (prefs.minSqm)   document.getElementById('sSaleFetchMinSqm').value   = prefs.minSqm;
-    if (prefs.maxSqm)   document.getElementById('sSaleFetchMaxSqm').value   = prefs.maxSqm;
-    if (prefs.minRooms) document.getElementById('sSaleFetchMinRooms').value = prefs.minRooms;
-    if (prefs.cities?.length) saleCityMsd.setSelected(prefs.cities);
-    if (prefs.areas?.length)  saleAreaFetchMsd.setSelected(prefs.areas);
-  } catch { /* corrupt prefs — ignore */ }
+  // Prefer server-persisted prefs (source of truth for CI); fall back to localStorage
+  if (IS_LIVE) {
+    fetch('/sale-fetch-prefs').then(r => r.ok ? r.json() : null).then(prefs => {
+      if (prefs && Object.keys(prefs).length) {
+        _applySaleFetchPrefs(prefs);
+        localStorage.setItem(SALE_FETCH_PREFS_KEY, JSON.stringify(prefs));
+      } else {
+        try { _applySaleFetchPrefs(JSON.parse(localStorage.getItem(SALE_FETCH_PREFS_KEY))); } catch {}
+      }
+    }).catch(() => {
+      try { _applySaleFetchPrefs(JSON.parse(localStorage.getItem(SALE_FETCH_PREFS_KEY))); } catch {}
+    });
+  } else {
+    try { _applySaleFetchPrefs(JSON.parse(localStorage.getItem(SALE_FETCH_PREFS_KEY))); } catch {}
+  }
 }
 
 ['sSaleFetchPages','sSaleFetchMaxPrice','sSaleFetchMinPrice',
