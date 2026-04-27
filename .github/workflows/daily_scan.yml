@@ -8,17 +8,17 @@ on:
 jobs:
   scan:
     # Runs on your local Mac via the GitHub Actions self-hosted runner.
-    # Immobiliare.it blocks datacenter IPs (Azure/GH-hosted), so the scan
-    # must use a real residential IP + real browser profile.
+    # Works directly in the project folder so scan_prefs.json and
+    # area_settings.json always reflect whatever you configured in the dashboard.
     runs-on: self-hosted
     timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: /Users/giovannidimartino/Downloads/immobiliare-scorer
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 1
+      - name: Pull latest code
+        run: git pull origin main
 
       - name: Install dependencies
         run: pip3 install -r requirements.txt
@@ -45,7 +45,6 @@ jobs:
 
       - name: Print scan summary
         run: |
-          echo "=== Scan complete ==="
           python3 -c "
           import json
           r = json.load(open('dashboard/rentals_latest.json'))
@@ -58,7 +57,7 @@ jobs:
           print(f'Hidden gems: {len(gems)}')
           "
 
-      - name: Commit updated data
+      - name: Commit and push updated data
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
