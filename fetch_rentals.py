@@ -19,6 +19,7 @@ Daemon mode (loops every 60 min, tracks new listings only):
 import argparse
 import asyncio
 import json
+import os
 import re as _re
 import sys
 import time
@@ -40,7 +41,10 @@ OUTPUT_PATH          = DASHBOARD_DIR / "rentals_latest.json"
 CUSTOM_MAPPINGS_PATH = BASE_DIR / "custom_omi_mappings.json"
 AREA_SETTINGS_PATH   = BASE_DIR / "area_settings.json"
 
-EDGE_PATH = "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"
+EDGE_PATH = os.environ.get(
+    "BROWSER_EXECUTABLE_PATH",
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+)
 
 # ── Floor parsing ──────────────────────────────────────────────────────────────
 

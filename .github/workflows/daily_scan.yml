@@ -23,16 +23,12 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
-      - name: Install Chromium
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq chromium-browser
-
       - name: Install dependencies
         run: pip install -r requirements.txt
 
       - name: Run rentals scanner
         env:
+          BROWSER_EXECUTABLE_PATH: /usr/bin/google-chrome
           IDEALISTA_KEY: ${{ secrets.IDEALISTA_KEY }}
           IDEALISTA_SECRET: ${{ secrets.IDEALISTA_SECRET }}
         run: python fetch_rentals.py --pages 5
@@ -45,6 +41,8 @@ jobs:
         continue-on-error: true   # Idealista failing should not block Immobiliare data
 
       - name: Run sales scanner
+        env:
+          BROWSER_EXECUTABLE_PATH: /usr/bin/google-chrome
         run: python fetch_listings.py --pages 5
         continue-on-error: true
 

@@ -22,6 +22,7 @@ import argparse
 import asyncio
 import csv
 import json
+import os
 import re as _re
 import sys
 import unicodedata
@@ -32,7 +33,10 @@ from urllib.parse import urlencode
 
 import nodriver as uc
 
-EDGE_PATH = "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"
+EDGE_PATH = os.environ.get(
+    "BROWSER_EXECUTABLE_PATH",
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+)
 
 # ── Floor parsing ──────────────────────────────────────────────────────────────
 

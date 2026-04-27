@@ -1161,6 +1161,30 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--accent); }
 .status-pill.is-live .status-dot { background: var(--green); }
 .status-pill.is-live { color: var(--green); }
 
+/* ── GitHub Actions CI status pill ── */
+.ci-pill {
+  display: none;   /* shown by JS in static mode */
+  align-items: center; gap: 5px;
+  font-size: 10px; font-weight: 600; color: var(--muted);
+  white-space: nowrap; cursor: default;
+  text-decoration: none;
+}
+.ci-pill:hover { opacity: 0.75; }
+.ci-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--muted); flex-shrink: 0;
+}
+.ci-pill.ci-ok     .ci-dot { background: var(--green); }
+.ci-pill.ci-ok              { color: var(--green); }
+.ci-pill.ci-fail   .ci-dot { background: #E76F51; }
+.ci-pill.ci-fail            { color: #E76F51; }
+.ci-pill.ci-running .ci-dot {
+  background: #F4A261;
+  animation: ci-pulse 1s ease-in-out infinite alternate;
+}
+.ci-pill.ci-running { color: #F4A261; }
+@keyframes ci-pulse { to { opacity: 0.4; } }
+
 /* ── Mobile layout ── */
 @media (max-width: 768px) {
   /* Fixed mobile header */
@@ -1826,6 +1850,13 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--accent); }
     <span class="status-dot"></span>
     <span id="statusPillLabel">Snapshot</span>
   </span>
+  <!-- GitHub Actions CI status — shown only in static/Netlify mode -->
+  <a class="ci-pill" id="ciPill" target="_blank" rel="noopener"
+     href="https://github.com/giodima7/immobiliare-scorer/actions/workflows/daily_scan.yml"
+     title="Last GitHub Actions scan run">
+    <span class="ci-dot"></span>
+    <span id="ciPillLabel">CI –</span>
+  </a>
   <div class="meta" id="meta">Loading…</div>
   <button class="btn-fetch-toggle" id="btnFetchToggle">▶ Fetch new data</button>
   <a class="fav-link" href="/zone-mappings" id="zonesLink" title="Fix unmatched OMI zones">🗺 Zones <span class="fav-badge" id="unmatchedBadge" style="display:none"></span></a>
@@ -3280,7 +3311,7 @@ function toggleRentFav(id) {
 // ── Live-API vs static-mode detection ────────────────────────────────────────
 let IS_LIVE = false;   // true when running via api.py locally
 
-function applyStaticMode() {
+async function applyStaticMode() {
   // ── Hide all data-pulling / server-only controls ──────────────────────────
   const hide = (...ids) => ids.forEach(id => {
     const el = typeof id === 'string' ? document.getElementById(id) : id;
@@ -3329,6 +3360,66 @@ function applyStaticMode() {
       if (meta) meta.textContent = 'Last updated: ' + fmt;
     }
   } catch { /* ignore — HEAD may not be available in file:// dev */ }
+
+  // Show CI status pill and start polling the GitHub Actions API
+  _startCiPoll();
+}
+
+// ── GitHub Actions CI status ──────────────────────────────────────────────────
+const _CI_API = 'https://api.github.com/repos/giodima7/immobiliare-scorer/actions/workflows/daily_scan.yml/runs?per_page=1';
+let _ciPollTimer = null;
+
+async function _updateCiStatus() {
+  const pill  = document.getElementById('ciPill');
+  const label = document.getElementById('ciPillLabel');
+  if (!pill || !label) return;
+  try {
+    const r    = await fetch(_CI_API, { headers: { Accept: 'application/vnd.github+json' } });
+    if (!r.ok) return;
+    const data = await r.json();
+    const run  = data.workflow_runs?.[0];
+    if (!run) return;
+
+    const status     = run.status;      // queued | in_progress | completed
+    const conclusion = run.conclusion;  // success | failure | cancelled | null
+    const when       = new Date(run.updated_at);
+    const ago        = _ciAgo(when);
+
+    pill.classList.remove('ci-ok', 'ci-fail', 'ci-running');
+
+    if (status === 'completed') {
+      const ok = conclusion === 'success';
+      pill.classList.add(ok ? 'ci-ok' : 'ci-fail');
+      label.textContent = (ok ? 'CI ✓' : 'CI ✗') + ' ' + ago;
+      pill.title = `Last scan: ${conclusion} · ${when.toLocaleString('en-GB')}`;
+      // Once completed, slow-poll (5 min) — result won't change until next run
+      if (_ciPollTimer) { clearInterval(_ciPollTimer); _ciPollTimer = null; }
+      _ciPollTimer = setInterval(_updateCiStatus, 300_000);
+    } else {
+      // queued or in_progress — fast-poll every 30s
+      pill.classList.add('ci-running');
+      label.textContent = status === 'queued' ? 'CI queued' : 'CI running…';
+      pill.title = `Scan started ${ago} — check GitHub Actions for live logs`;
+      if (_ciPollTimer) { clearInterval(_ciPollTimer); _ciPollTimer = null; }
+      _ciPollTimer = setInterval(_updateCiStatus, 30_000);
+    }
+  } catch { /* network error — leave pill as-is */ }
+}
+
+function _ciAgo(date) {
+  const s = Math.round((Date.now() - date) / 1000);
+  if (s < 90)   return s + 's ago';
+  if (s < 3600) return Math.round(s / 60) + 'm ago';
+  if (s < 86400) return Math.round(s / 3600) + 'h ago';
+  return Math.round(s / 86400) + 'd ago';
+}
+
+function _startCiPoll() {
+  const pill = document.getElementById('ciPill');
+  if (pill) pill.style.display = 'inline-flex';
+  _updateCiStatus();
+  // Initial interval — tightened or loosened by _updateCiStatus once run status is known
+  if (!_ciPollTimer) _ciPollTimer = setInterval(_updateCiStatus, 60_000);
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -3377,6 +3468,13 @@ async function init() {
       if (lbl) lbl.textContent = 'Live';
     }
   }
+
+  // Load initial data now that IS_LIVE is settled — avoids race where the
+  // standalone loadRentals() call at the bottom of the script fires before
+  // this async init completes and picks the wrong URL (./rentals_latest.json
+  // instead of /rentals), getting a Flask 404 and showing an empty grid.
+  await loadRentals();
+  loadCacheStats();
 }
 
 // Set sticky top offsets once the DOM is painted
@@ -5909,10 +6007,8 @@ document.getElementById('btnCacheClear')?.addEventListener('click', async () => 
   }
 })();
 
-// Start polling and load data — rentals is the default tab
+// Start polling — data load happens inside init() once IS_LIVE is resolved
 startScannerPoll();
-loadRentals();
-loadCacheStats();
 
 // ── Map tab (item 9) ──────────────────────────────────────────────────────────
 // PERF targets (DevTools mobile emulation, iPhone 14, 4× CPU throttle):
