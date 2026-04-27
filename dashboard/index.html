@@ -1304,8 +1304,7 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--accent); }
 }
 #mobileFilterBackdrop.is-open { display: block; opacity: 1; }
 
-#mobileFilterDrawer,
-#mobileSaleFilterDrawer {
+#mobileFilterDrawer {
   position: fixed;
   left: 0; right: 0; bottom: 0;
   background: var(--surface);
@@ -1318,12 +1317,10 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--accent); }
   transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   padding-bottom: env(safe-area-inset-bottom);
 }
-#mobileFilterDrawer.is-open,
-#mobileSaleFilterDrawer.is-open {
+#mobileFilterDrawer.is-open {
   transform: translateY(0);
 }
-#mobileFilterDrawer.is-closing,
-#mobileSaleFilterDrawer.is-closing {
+#mobileFilterDrawer.is-closing {
   transition: transform 0.25s ease-in;
 }
 
@@ -1390,20 +1387,90 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--accent); }
 }
 .drawer-show-btn:hover { opacity: 0.9; }
 
-/* ── Area chips (multi-select inside drawer) ── */
-.area-chip {
-  display: inline-block;
-  padding: 6px 11px; border-radius: 16px;
-  background: var(--surf2); border: 1px solid var(--border);
-  font-size: 12px; font-family: inherit;
-  cursor: pointer; color: var(--text);
-  white-space: nowrap;
-  transition: background 0.12s, border-color 0.12s, color 0.12s;
+/* ── Area searchable multiselect (inside drawer) ── */
+.area-msearch {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px 8px;
+  cursor: text;
+  background: var(--surf2);
 }
-.area-chip.selected {
-  background: var(--accent); border-color: var(--accent); color: #fff;
+.area-msearch-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+.area-msearch-tags:empty { margin-bottom: 0; }
+.area-msearch-tag {
+  background: var(--accent); color: #fff;
+  border-radius: 6px;
+  padding: 3px 6px 3px 8px;
+  font-size: 12px; font-weight: 500;
+  display: flex; align-items: center; gap: 4px;
 }
-#dAreaChips, #sdAreaChips { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 2px; }
+.area-msearch-tag button {
+  background: none; border: none; color: #fff; cursor: pointer;
+  padding: 0; font-size: 14px; line-height: 1;
+  display: inline-flex; align-items: center;
+}
+.area-msearch-input {
+  border: none; background: none; color: var(--text);
+  font-size: 15px; outline: none; width: 100%; min-width: 80px;
+  font-family: inherit;
+  padding: 4px 2px;
+}
+.area-msearch-input::placeholder { color: var(--muted); }
+.area-msearch-dropdown {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 600;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  max-height: 220px; overflow-y: auto;
+  margin-top: 4px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+}
+.area-msearch-option {
+  padding: 8px 12px; font-size: 14px; cursor: pointer;
+  color: var(--text);
+  display: flex; align-items: center; gap: 8px;
+}
+.area-msearch-option:hover,
+.area-msearch-option.focused { background: rgba(45,106,79,0.08); }
+.area-msearch-option.selected { color: var(--accent); font-weight: 600; }
+.area-msearch-option .opt-check {
+  width: 14px; height: 14px;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+  pointer-events: none;
+}
+.area-msearch-empty {
+  padding: 10px 12px; font-size: 12px; color: var(--muted);
+}
+
+/* ── Drawer mode tabs (Rentals / Sales) ── */
+.drawer-mode-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--surf2);
+  border-radius: 10px;
+  padding: 3px;
+  margin: 0 20px 16px;
+}
+.drawer-tab {
+  flex: 1;
+  padding: 9px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, color 0.15s;
+}
+.drawer-tab.active {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
 
 /* Mobile map filter button — hidden on desktop */
 #mapFilterBtn { display: none; }
@@ -1917,126 +1984,160 @@ function saveFilters() {
 <!-- ── Mobile filter backdrop ── -->
 <div id="mobileFilterBackdrop"></div>
 
-<!-- ── Mobile filter drawer ── -->
+<!-- ── Mobile filter drawer (unified Rentals + Sales) ── -->
 <div id="mobileFilterDrawer" role="dialog" aria-label="Filters">
   <div class="drawer-handle"></div>
   <div class="drawer-title-row">
     <span class="drawer-title">Filters</span>
     <button class="drawer-reset-btn" id="drawerReset">Reset</button>
   </div>
+
+  <!-- Mode toggle: Rentals vs Sales -->
+  <div class="drawer-mode-tabs" role="tablist">
+    <button type="button" class="drawer-tab active" id="drawerTabRent" role="tab">Rentals</button>
+    <button type="button" class="drawer-tab" id="drawerTabSale" role="tab">Sales</button>
+  </div>
+
   <div class="drawer-body">
-    <div class="drawer-field">
-      <label>Areas</label>
-      <div id="dAreaChips"></div>
-    </div>
-    <div class="drawer-field">
-      <label>Max rent €/mo</label>
-      <input type="number" id="dMaxRent" placeholder="any" min="0" step="100">
-    </div>
-    <div class="drawer-field">
-      <label>Min m²</label>
-      <input type="number" id="dMinSqm" placeholder="any" min="0" step="5">
-    </div>
-    <div class="drawer-field">
-      <label>Min rooms</label>
-      <input type="number" id="dMinRooms" placeholder="any" min="1" max="10">
-    </div>
-    <div class="drawer-field">
-      <label>Fascia</label>
-      <select id="dFascia">
-        <option value="">All</option>
-        <option value="B">B — Centrale</option>
-        <option value="C">C — Semicentrale</option>
-        <option value="D">D — Periferica</option>
-        <option value="E">E — Periferica outer</option>
-      </select>
-    </div>
-    <div class="drawer-field">
-      <label>Min metro distance filter</label>
-      <select id="dMaxMetro">
-        <option value="">Any</option>
-        <option value="500">≤500m</option>
-        <option value="800">≤800m</option>
-        <option value="1200">≤1200m</option>
-      </select>
-    </div>
-    <div class="drawer-field">
-      <label>Min score: <span id="dScoreVal" style="color:var(--accent);font-weight:700">0</span></label>
-      <div class="drawer-range-wrap">
-        <input type="range" id="dScore" min="0" max="100" value="0" step="5">
+    <!-- ── Rentals inputs ── -->
+    <div id="drawerRentInputs">
+      <div class="drawer-field">
+        <label>Areas</label>
+        <div class="area-msearch" id="dAreaMsearch">
+          <div class="area-msearch-tags" id="dAreaTags"></div>
+          <input class="area-msearch-input" id="dAreaInput" type="text" placeholder="Search areas…" autocomplete="off">
+          <div class="area-msearch-dropdown" id="dAreaDropdown" hidden></div>
+        </div>
+      </div>
+      <div class="drawer-field">
+        <label>Max rent €/mo</label>
+        <input type="number" id="dMaxRent" placeholder="any" min="0" step="100">
+      </div>
+      <div class="drawer-field">
+        <label>Min m²</label>
+        <input type="number" id="dMinSqm" placeholder="any" min="0" step="5">
+      </div>
+      <div class="drawer-field">
+        <label>Min rooms</label>
+        <input type="number" id="dMinRooms" placeholder="any" min="1" max="10">
+      </div>
+      <div class="drawer-field">
+        <label>Fascia</label>
+        <select id="dFascia">
+          <option value="">All</option>
+          <option value="B">B — Centrale</option>
+          <option value="C">C — Semicentrale</option>
+          <option value="D">D — Periferica</option>
+          <option value="E">E — Periferica outer</option>
+        </select>
+      </div>
+      <div class="drawer-field">
+        <label>Max metro distance</label>
+        <select id="dMaxMetro">
+          <option value="">Any</option>
+          <option value="500">≤500m</option>
+          <option value="800">≤800m</option>
+          <option value="1200">≤1200m</option>
+        </select>
+      </div>
+      <div class="drawer-field">
+        <label>Min score: <span id="dScoreVal" style="color:var(--accent);font-weight:700">0</span></label>
+        <div class="drawer-range-wrap">
+          <input type="range" id="dScore" min="0" max="100" value="0" step="5">
+        </div>
+      </div>
+      <div class="drawer-field">
+        <label>Gems</label>
+        <div class="drawer-gem-row" id="dGemFilter">
+          <button class="gem-tab active" data-gem="">All</button>
+          <button class="gem-tab" data-gem="hidden">✦ Hidden</button>
+          <button class="gem-tab" data-gem="good">↑ Great Value!</button>
+        </div>
       </div>
     </div>
-    <div class="drawer-field">
-      <label>Gems</label>
-      <div class="drawer-gem-row" id="dGemFilter">
-        <button class="gem-tab active" data-gem="">All</button>
-        <button class="gem-tab" data-gem="hidden">✦ Hidden</button>
-        <button class="gem-tab" data-gem="good">↑ Great Value!</button>
+
+    <!-- ── Sales inputs ── -->
+    <div id="drawerSaleInputs" hidden>
+      <div class="drawer-field">
+        <label>Areas</label>
+        <div class="area-msearch" id="sdAreaMsearch">
+          <div class="area-msearch-tags" id="sdAreaTags"></div>
+          <input class="area-msearch-input" id="sdAreaInput" type="text" placeholder="Search areas…" autocomplete="off">
+          <div class="area-msearch-dropdown" id="sdAreaDropdown" hidden></div>
+        </div>
+      </div>
+      <div class="drawer-field">
+        <label>Max price €</label>
+        <input type="number" id="sdMaxPrice" placeholder="any" min="0" step="10000">
+      </div>
+      <div class="drawer-field">
+        <label>Min m²</label>
+        <input type="number" id="sdMinSqm" placeholder="any" min="0" step="5">
+      </div>
+      <div class="drawer-field">
+        <label>Min rooms</label>
+        <input type="number" id="sdMinRooms" placeholder="any" min="1" max="10">
+      </div>
+      <div class="drawer-field">
+        <label>Fascia</label>
+        <select id="sdFascia">
+          <option value="">All</option>
+          <option value="B">B — Centrale</option>
+          <option value="C">C — Semicentrale</option>
+          <option value="D">D — Periferica</option>
+          <option value="E">E — Periferica outer</option>
+        </select>
+      </div>
+      <div class="drawer-field">
+        <label>Max price/m² €</label>
+        <input type="number" id="sdMaxPsqm" placeholder="any" min="0" step="500">
+      </div>
+      <div class="drawer-field">
+        <label>Max metro distance</label>
+        <select id="sdMaxMetro">
+          <option value="">Any</option>
+          <option value="500">≤500m</option>
+          <option value="800">≤800m</option>
+          <option value="1200">≤1200m</option>
+        </select>
+      </div>
+      <div class="drawer-field">
+        <label>Min score: <span id="sdScoreVal" style="color:var(--accent);font-weight:700">0</span></label>
+        <div class="drawer-range-wrap">
+          <input type="range" id="sdScore" min="0" max="100" value="0" step="5">
+        </div>
+      </div>
+      <div class="drawer-field">
+        <label>Condition</label>
+        <select id="sdCondition">
+          <option value="">All</option>
+          <option value="ristrutturato">Renovated</option>
+          <option value="ottimo">Excellent</option>
+          <option value="buono">Good</option>
+          <option value="abitabile">Habitable</option>
+          <option value="da_ristrutturare">To renovate</option>
+        </select>
+      </div>
+      <div class="drawer-field">
+        <label>Energy class (min)</label>
+        <select id="sdEnergy">
+          <option value="">All</option>
+          <option value="A">A+</option>
+          <option value="B">B+</option>
+          <option value="C">C+</option>
+        </select>
+      </div>
+      <div class="drawer-field">
+        <label>Gems</label>
+        <div class="drawer-gem-row" id="sdGemFilter">
+          <button class="gem-tab active" data-sdgem="">All</button>
+          <button class="gem-tab" data-sdgem="hidden">✦ Hidden</button>
+          <button class="gem-tab" data-sdgem="good">↑ Great Value!</button>
+        </div>
       </div>
     </div>
   </div>
   <button class="drawer-show-btn" id="drawerShowBtn">Show results</button>
-</div>
-
-<!-- ── Mobile SALES filter drawer ── -->
-<div id="mobileSaleFilterDrawer" role="dialog" aria-label="Sale Filters">
-  <div class="drawer-handle"></div>
-  <div class="drawer-title-row">
-    <span class="drawer-title">Sale Filters</span>
-    <button class="drawer-reset-btn" id="sdReset">Reset</button>
-  </div>
-  <div class="drawer-body">
-    <div class="drawer-field">
-      <label>Areas</label>
-      <div id="sdAreaChips"></div>
-    </div>
-    <div class="drawer-field">
-      <label>Max price €</label>
-      <input type="number" id="sdMaxPrice" placeholder="any" min="0" step="50000">
-    </div>
-    <div class="drawer-field">
-      <label>Min m²</label>
-      <input type="number" id="sdMinSqm" placeholder="any" min="0" step="5">
-    </div>
-    <div class="drawer-field">
-      <label>Min rooms</label>
-      <input type="number" id="sdMinRooms" placeholder="any" min="1" max="10">
-    </div>
-    <div class="drawer-field">
-      <label>Fascia</label>
-      <select id="sdFascia">
-        <option value="">All</option>
-        <option value="B">B — Centrale</option>
-        <option value="C">C — Semicentrale</option>
-        <option value="D">D — Periferica</option>
-        <option value="E">E — Periferica outer</option>
-      </select>
-    </div>
-    <div class="drawer-field">
-      <label>Max metro distance</label>
-      <select id="sdMaxMetro">
-        <option value="">Any</option>
-        <option value="500">≤500m</option>
-        <option value="800">≤800m</option>
-        <option value="1200">≤1200m</option>
-      </select>
-    </div>
-    <div class="drawer-field">
-      <label>Min score: <span id="sdScoreVal" style="color:var(--accent);font-weight:700">0</span></label>
-      <div class="drawer-range-wrap">
-        <input type="range" id="sdScore" min="0" max="100" value="0" step="5">
-      </div>
-    </div>
-    <div class="drawer-field">
-      <label>Gems</label>
-      <div class="drawer-gem-row" id="sdGemFilter">
-        <button class="gem-tab active" data-sdgem="">All</button>
-        <button class="gem-tab" data-sdgem="hidden">✦ Hidden</button>
-        <button class="gem-tab" data-sdgem="good">↑ Great Value!</button>
-      </div>
-    </div>
-  </div>
-  <button class="drawer-show-btn" id="sdShowBtn">Show results</button>
 </div>
 
 <!-- ── Header ── -->
@@ -4022,32 +4123,180 @@ const MILAN_AREAS = {
 };
 const FASCIA_LABEL = { A: 'Fascia A — prime', B: 'Fascia B — semi-central', C: 'Fascia C — peripheral' };
 
-// Populate the mobile drawer area chips.
-// Uses active scan areas when the local server is available, otherwise falls
-// back to all MILAN_AREAS so chips always appear in static (Netlify) mode.
+// Populate the mobile drawer area searchable multiselects with the available
+// area list. Uses active scan areas when the local server is available,
+// otherwise falls back to all MILAN_AREAS so options always appear in static
+// (Netlify) mode.
 function _populateDrawerAreaFromActive() {
   // Active areas from server, or every known Milan area as fallback
   const activeNames = (_settingsCurrentAreas || []).filter(a => a.active).length
     ? (_settingsCurrentAreas || []).filter(a => a.active).map(a => a.name).sort((a, b) => a.localeCompare(b))
     : Object.values(MILAN_AREAS).flat().sort((a, b) => a.localeCompare(b));
 
-  for (const containerId of ['dAreaChips', 'sdAreaChips']) {
-    const container = document.getElementById(containerId);
-    if (!container) continue;
-    const prevSelected = new Set(
-      [...container.querySelectorAll('.area-chip.selected')].map(b => b.textContent)
-    );
-    container.innerHTML = '';
-    for (const name of activeNames) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'area-chip' + (prevSelected.has(name) ? ' selected' : '');
-      btn.textContent = name;
-      btn.addEventListener('click', () => btn.classList.toggle('selected'));
-      container.appendChild(btn);
-    }
+  if (typeof dRentAreaMsearch !== 'undefined' && dRentAreaMsearch) {
+    dRentAreaMsearch.setAllAreas(activeNames);
+  }
+  if (typeof dSaleAreaMsearch !== 'undefined' && dSaleAreaMsearch) {
+    dSaleAreaMsearch.setAllAreas(activeNames);
   }
 }
+
+// ── Searchable multiselect for drawer area pickers ──
+// Builds a tag-style multiselect with a typeahead dropdown. Returns an API
+// matching the old chip helpers: getSelected / setSelected / setAllAreas.
+function AreaMSearch(inputId, tagsId, dropdownId, allAreas, onChange) {
+  const input    = document.getElementById(inputId);
+  const tagsEl   = document.getElementById(tagsId);
+  const dropdown = document.getElementById(dropdownId);
+  if (!input || !tagsEl || !dropdown) return null;
+
+  const wrap = input.closest('.area-msearch');
+  let options = [...(allAreas || [])];
+  const selected = new Set();
+  let focusedIdx = -1;
+  let lastFiltered = [];
+
+  function _emit() { if (typeof onChange === 'function') onChange([...selected]); }
+
+  function _renderTags() {
+    tagsEl.innerHTML = '';
+    [...selected].forEach(name => {
+      const tag = document.createElement('span');
+      tag.className = 'area-msearch-tag';
+      tag.textContent = name;
+      const x = document.createElement('button');
+      x.type = 'button';
+      x.setAttribute('aria-label', `Remove ${name}`);
+      x.textContent = '×';
+      x.addEventListener('mousedown', e => {
+        e.preventDefault(); e.stopPropagation();
+        selected.delete(name);
+        _renderTags();
+        _renderDropdown(input.value);
+        _emit();
+      });
+      tag.appendChild(x);
+      tagsEl.appendChild(tag);
+    });
+  }
+
+  function _renderDropdown(q = '') {
+    dropdown.innerHTML = '';
+    const ql = (q || '').toLowerCase();
+    const list = options.filter(n => !ql || n.toLowerCase().includes(ql));
+    lastFiltered = list;
+    focusedIdx = -1;
+    if (!list.length) {
+      const empty = document.createElement('div');
+      empty.className = 'area-msearch-empty';
+      empty.textContent = options.length ? 'No matches' : 'No areas available';
+      dropdown.appendChild(empty);
+      return;
+    }
+    list.forEach((name, i) => {
+      const opt = document.createElement('div');
+      opt.className = 'area-msearch-option' + (selected.has(name) ? ' selected' : '');
+      opt.dataset.idx = String(i);
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.className = 'opt-check';
+      cb.checked = selected.has(name);
+      cb.tabIndex = -1;
+      const label = document.createElement('span');
+      label.textContent = name;
+      opt.appendChild(cb);
+      opt.appendChild(label);
+      // Use mousedown to fire before input loses focus
+      opt.addEventListener('mousedown', e => {
+        e.preventDefault();
+        if (selected.has(name)) selected.delete(name);
+        else                    selected.add(name);
+        _renderTags();
+        _renderDropdown(input.value);
+        _emit();
+        input.focus();
+      });
+      dropdown.appendChild(opt);
+    });
+  }
+
+  function open() {
+    dropdown.hidden = false;
+    _renderDropdown(input.value);
+  }
+  function close() {
+    dropdown.hidden = true;
+    focusedIdx = -1;
+  }
+
+  // Clicking the wrap focuses the input
+  wrap.addEventListener('click', e => {
+    if (e.target === wrap || e.target === tagsEl) input.focus();
+  });
+
+  input.addEventListener('focus', open);
+  input.addEventListener('input', () => _renderDropdown(input.value));
+  input.addEventListener('blur', () => {
+    // Delay close to allow option mousedown to fire on touch devices
+    setTimeout(close, 120);
+  });
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Backspace' && !input.value && selected.size) {
+      const last = [...selected].pop();
+      selected.delete(last);
+      _renderTags(); _renderDropdown(input.value); _emit();
+      return;
+    }
+    if (e.key === 'Escape') { close(); input.blur(); return; }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (dropdown.hidden) open();
+      const opts = dropdown.querySelectorAll('.area-msearch-option');
+      if (!opts.length) return;
+      focusedIdx = e.key === 'ArrowDown'
+        ? Math.min(focusedIdx + 1, opts.length - 1)
+        : Math.max(focusedIdx - 1, 0);
+      opts.forEach((o, i) => o.classList.toggle('focused', i === focusedIdx));
+      opts[focusedIdx].scrollIntoView({ block: 'nearest' });
+      return;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (focusedIdx >= 0 && lastFiltered[focusedIdx]) {
+        const name = lastFiltered[focusedIdx];
+        if (selected.has(name)) selected.delete(name);
+        else                    selected.add(name);
+        _renderTags(); _renderDropdown(input.value); _emit();
+      }
+    }
+  });
+
+  _renderTags();
+
+  return {
+    getSelected: () => [...selected],
+    setSelected: (arr) => {
+      selected.clear();
+      (arr || []).forEach(v => selected.add(v));
+      _renderTags();
+      if (!dropdown.hidden) _renderDropdown(input.value);
+    },
+    setAllAreas: (arr) => {
+      options = [...(arr || [])];
+      // Drop any currently-selected items that aren't in the new list
+      [...selected].forEach(v => { if (!options.includes(v)) selected.delete(v); });
+      _renderTags();
+      if (!dropdown.hidden) _renderDropdown(input.value);
+    },
+    clear: () => { selected.clear(); _renderTags(); if (!dropdown.hidden) _renderDropdown(input.value); },
+  };
+}
+
+// Instances are created lazily after the drawer DOM exists. They're
+// referenced by name in _populateDrawerAreaFromActive and the drawer
+// sync/apply helpers below.
+let dRentAreaMsearch = null;
+let dSaleAreaMsearch = null;
 
 // ── Multi-select component ────────────────────────────────────────────────────
 function buildMultiSelect({ wrapId, triggerId, panelId, searchId, listId,
@@ -4860,6 +5109,10 @@ function getSaleFilters() {
     minEnergy:document.getElementById('sMinEnergy').value,
     minScore: parseInt(document.getElementById('sScore').value) || 0,
     gem:      sSaleGemFilter,
+    // Drawer-only filters (no desktop equivalent yet — stashed on window
+    // by _applyDrawerToMain so they persist across renderSales() calls)
+    condition: window._sCondition || '',
+    maxPsqm:   parseInt(window._sMaxPsqm) || 0,
   };
 }
 
@@ -4876,6 +5129,11 @@ function applySaleFilters(data, f) {
     if (f.elevator && l.elevator !== true)                                return false;
     if (f.minEnergy && (ENERGY_RANK[l.energy_class] || 0) < (ENERGY_MIN_RANK[f.minEnergy] || 0)) return false;
     if (f.minScore && (l.score_total ?? 0) < f.minScore)                 return false;
+    if (f.maxPsqm  && (l.ask_psqm == null || l.ask_psqm > f.maxPsqm))    return false;
+    if (f.condition) {
+      const c = (l.condition || '').toLowerCase();
+      if (!c.includes(f.condition.replace('_', ' ')) && !c.includes(f.condition)) return false;
+    }
     if (f.gem === 'hidden' && !l.hidden_gem)                              return false;
     if (f.gem === 'good'   && !l.good_value && !l.hidden_gem)            return false;
     return true;
@@ -5828,7 +6086,22 @@ document.getElementById('btnCacheClear')?.addEventListener('click', async () => 
   });
 })();
 
-// ── Mobile filter drawer ────────────────────────────────────────────────────
+// ── Mobile filter drawer (unified Rentals + Sales) ──────────────────────────
+let _drawerMode = 'rent';            // 'rent' | 'sale'
+let _drawerIsMap = false;            // true when the drawer was opened from the map view (rent mode only)
+
+function setDrawerMode(mode) {
+  _drawerMode = (mode === 'sale') ? 'sale' : 'rent';
+  const tabRent = document.getElementById('drawerTabRent');
+  const tabSale = document.getElementById('drawerTabSale');
+  const rentBox = document.getElementById('drawerRentInputs');
+  const saleBox = document.getElementById('drawerSaleInputs');
+  if (tabRent) tabRent.classList.toggle('active', _drawerMode === 'rent');
+  if (tabSale) tabSale.classList.toggle('active', _drawerMode === 'sale');
+  if (rentBox) rentBox.hidden = (_drawerMode === 'sale');
+  if (saleBox) saleBox.hidden = (_drawerMode !== 'sale');
+}
+
 (function () {
   const backdrop     = document.getElementById('mobileFilterBackdrop');
   const drawer       = document.getElementById('mobileFilterDrawer');
@@ -5836,40 +6109,41 @@ document.getElementById('btnCacheClear')?.addEventListener('click', async () => 
   const mapFilterBtn = document.getElementById('mapFilterBtn');
   const showBtn      = document.getElementById('drawerShowBtn');
   const resetBtn     = document.getElementById('drawerReset');
+  const tabRent      = document.getElementById('drawerTabRent');
+  const tabSale      = document.getElementById('drawerTabSale');
   if (!drawer) return;
 
-  // Track whether the drawer was opened from the map view
-  let _drawerIsMap = false;
-
-  // Read selected area names from chip buttons
-  function _getDrawerAreas() {
-    return [...document.querySelectorAll('#dAreaChips .area-chip.selected')]
-      .map(b => b.textContent);
-  }
-  // Mark chip buttons as selected/deselected from an array of names
-  function _setDrawerAreas(arr) {
-    const set = new Set(arr || []);
-    document.querySelectorAll('#dAreaChips .area-chip').forEach(b => {
-      b.classList.toggle('selected', set.has(b.textContent));
-    });
-  }
+  // Instantiate the searchable area multiselects once the drawer DOM exists
+  dRentAreaMsearch = AreaMSearch('dAreaInput',  'dAreaTags',  'dAreaDropdown',  [], () => _updateShowBtn());
+  dSaleAreaMsearch = AreaMSearch('sdAreaInput', 'sdAreaTags', 'sdAreaDropdown', [], () => _updateShowBtn());
+  // Populate options from whatever area data is already loaded
+  if (typeof _populateDrawerAreaFromActive === 'function') _populateDrawerAreaFromActive();
 
   // Update "Show X results" label
   function _updateShowBtn() {
+    if (_drawerMode === 'sale') {
+      const n = (typeof _saleFilteredData !== 'undefined') ? _saleFilteredData.length : null;
+      showBtn.textContent = (n == null) ? 'Show results' : `Show ${n} results`;
+      return;
+    }
     if (_drawerIsMap) {
       const countEl = document.getElementById('mapListingCount');
       const n = countEl ? countEl.textContent : '–';
-      showBtn.textContent = n === '–' ? 'Show results' : `Show ${n} results`;
-    } else if (typeof _rentFilteredData !== 'undefined') {
+      showBtn.textContent = (n === '–' || n == null) ? 'Show results' : `Show ${n} results`;
+      return;
+    }
+    if (typeof _rentFilteredData !== 'undefined') {
       showBtn.textContent = `Show ${_rentFilteredData.length} results`;
     }
   }
 
-  function openDrawer(isMap) {
-    _drawerIsMap = !!isMap;
-    // Gem filter only applies to the rentals list
+  function openDrawer(opts = {}) {
+    const mode = opts.mode || 'rent';
+    _drawerIsMap = (mode === 'rent') && !!opts.isMap;
+    setDrawerMode(mode);
+    // Gem filter only applies to the rentals list (not map)
     const gemField = document.getElementById('dGemFilter')?.closest('.drawer-field');
-    if (gemField) gemField.style.display = isMap ? 'none' : '';
+    if (gemField) gemField.style.display = _drawerIsMap ? 'none' : '';
     backdrop.classList.add('is-open');
     drawer.classList.remove('is-closing');
     drawer.classList.add('is-open');
@@ -5887,45 +6161,56 @@ document.getElementById('btnCacheClear')?.addEventListener('click', async () => 
 
   // Sync drawer controls from the appropriate main filter source
   function _syncDrawerFromMain() {
-    if (_drawerIsMap) {
-      // Map mode: mirror mRent* controls
-      const fMaxRent  = document.getElementById('mRentMaxRent');
-      const fMinSqm   = document.getElementById('mRentMinSqm');
-      const fMinRooms = document.getElementById('mRentMinRooms');
-      const fFascia   = document.getElementById('mRentFascia');
-      const fMaxMetro = document.getElementById('mRentMaxMetro');
-      const fScore    = document.getElementById('mRentScore');
-      _setDrawerAreas(mapSelectedAreas);
-      if (fMaxRent)  document.getElementById('dMaxRent').value  = fMaxRent.value;
-      if (fMinSqm)   document.getElementById('dMinSqm').value   = fMinSqm.value;
-      if (fMinRooms) document.getElementById('dMinRooms').value = fMinRooms.value;
-      if (fFascia)   document.getElementById('dFascia').value   = fFascia.value;
-      if (fMaxMetro) document.getElementById('dMaxMetro').value = fMaxMetro.value;
-      if (fScore) {
-        const sv = fScore.value;
-        document.getElementById('dScore').value = sv;
-        document.getElementById('dScoreVal').textContent = sv;
+    const get = id => document.getElementById(id);
+
+    if (_drawerMode === 'sale') {
+      if (dSaleAreaMsearch) dSaleAreaMsearch.setSelected(saleSelectedAreas);
+      const mp = get('sMaxPrice');  if (mp)  get('sdMaxPrice').value  = mp.value;
+      const ms = get('sMinSqm');    if (ms)  get('sdMinSqm').value    = ms.value;
+      const mr = get('sMinRooms');  if (mr)  get('sdMinRooms').value  = mr.value;
+      const mf = get('sFascia');    if (mf)  get('sdFascia').value    = mf.value;
+      const mm = get('sMaxMetro');  if (mm)  get('sdMaxMetro').value  = mm.value;
+      const me = get('sMinEnergy'); if (me)  get('sdEnergy').value    = me.value;
+      // Condition + maxPsqm are drawer-only; restore any previously saved value
+      const cond = window._sCondition || '';
+      get('sdCondition').value = cond;
+      const psq = window._sMaxPsqm || '';
+      get('sdMaxPsqm').value = psq;
+      const sc = get('sScore');
+      if (sc) {
+        get('sdScore').value = sc.value;
+        get('sdScoreVal').textContent = sc.value;
       }
-    } else {
-      // Rentals mode: mirror r* controls
-      const fMaxRent   = document.getElementById('rMaxRent');
-      const fMinSqm    = document.getElementById('rMinSqm');
-      const fMinRooms  = document.getElementById('rMinRooms');
-      const fFascia    = document.getElementById('rFascia');
-      const fMaxMetro  = document.getElementById('rMaxMetro');
-      const fScore     = document.getElementById('rScore');
+      const gemActive = document.querySelector('#sGemFilterBar .gem-tab.active');
+      const gemVal = gemActive ? (gemActive.dataset.sgem || '') : '';
+      document.querySelectorAll('#sdGemFilter .gem-tab').forEach(b => {
+        b.classList.toggle('active', b.dataset.sdgem === gemVal);
+      });
+      return;
+    }
+
+    // Rentals (and rentals-on-map) mode
+    const idPrefix = _drawerIsMap ? 'mRent' : 'r';
+    const fMaxRent  = get(idPrefix + 'MaxRent');
+    const fMinSqm   = get(idPrefix + 'MinSqm');
+    const fMinRooms = get(idPrefix + 'MinRooms');
+    const fFascia   = get(idPrefix + 'Fascia');
+    const fMaxMetro = get(idPrefix + 'MaxMetro');
+    const fScore    = get(idPrefix + 'Score');
+    const sourceAreas = _drawerIsMap ? mapSelectedAreas : rentSelectedAreas;
+    if (dRentAreaMsearch) dRentAreaMsearch.setSelected(sourceAreas);
+    if (fMaxRent)  get('dMaxRent').value  = fMaxRent.value;
+    if (fMinSqm)   get('dMinSqm').value   = fMinSqm.value;
+    if (fMinRooms) get('dMinRooms').value = fMinRooms.value;
+    if (fFascia)   get('dFascia').value   = fFascia.value;
+    if (fMaxMetro) get('dMaxMetro').value = fMaxMetro.value;
+    if (fScore) {
+      const sv = fScore.value;
+      get('dScore').value = sv;
+      get('dScoreVal').textContent = sv;
+    }
+    if (!_drawerIsMap) {
       const fGemActive = document.querySelector('#rGemFilter .gem-tab.active');
-      _setDrawerAreas(rentSelectedAreas);
-      if (fMaxRent)  document.getElementById('dMaxRent').value  = fMaxRent.value;
-      if (fMinSqm)   document.getElementById('dMinSqm').value   = fMinSqm.value;
-      if (fMinRooms) document.getElementById('dMinRooms').value = fMinRooms.value;
-      if (fFascia)   document.getElementById('dFascia').value   = fFascia.value;
-      if (fMaxMetro) document.getElementById('dMaxMetro').value = fMaxMetro.value;
-      if (fScore) {
-        const sv = fScore.value;
-        document.getElementById('dScore').value = sv;
-        document.getElementById('dScoreVal').textContent = sv;
-      }
       const gem = fGemActive ? (fGemActive.dataset.gem || '') : '';
       document.querySelectorAll('#dGemFilter .gem-tab').forEach(b => {
         b.classList.toggle('active', b.dataset.gem === gem);
@@ -5936,83 +6221,156 @@ document.getElementById('btnCacheClear')?.addEventListener('click', async () => 
   // Apply drawer values back to the appropriate main filters and re-render
   function _applyDrawerToMain() {
     const get = id => document.getElementById(id);
-    const drawerAreas = _getDrawerAreas();
-    if (_drawerIsMap) {
-      // Map mode: push into mRent* controls and mapSelectedAreas
-      mapSelectedAreas = drawerAreas;
-      if (typeof mapAreaMsd !== 'undefined') mapAreaMsd.setSelected(drawerAreas);
-      if (get('mRentMaxRent'))  get('mRentMaxRent').value  = get('dMaxRent').value;
-      if (get('mRentMinSqm'))   get('mRentMinSqm').value   = get('dMinSqm').value;
-      if (get('mRentMinRooms')) get('mRentMinRooms').value = get('dMinRooms').value;
-      if (get('mRentFascia'))   get('mRentFascia').value   = get('dFascia').value;
-      if (get('mRentMaxMetro')) get('mRentMaxMetro').value = get('dMaxMetro').value;
-      if (get('mRentScore')) {
-        const sv = get('dScore').value;
-        get('mRentScore').value = sv;
-        const lb = document.getElementById('mRentScoreVal');
-        if (lb) lb.textContent = sv;
+
+    if (_drawerMode === 'sale') {
+      const areas = dSaleAreaMsearch ? dSaleAreaMsearch.getSelected() : [];
+      saleSelectedAreas = areas;
+      if (typeof saleAreaMsd !== 'undefined' && saleAreaMsd) {
+        areas.length ? saleAreaMsd.setSelected(areas) : saleAreaMsd.clear();
       }
-      if (typeof _mapRender === 'function') _mapRender();
-    } else {
-      // Rentals mode: push into r* controls and rentSelectedAreas
-      rentSelectedAreas = drawerAreas;
-      if (typeof filterAreaMsd !== 'undefined') {
-        drawerAreas.length ? filterAreaMsd.setSelected(drawerAreas) : filterAreaMsd.clear();
-      }
-      if (get('rMaxRent'))  get('rMaxRent').value  = get('dMaxRent').value;
-      if (get('rMinSqm'))   get('rMinSqm').value   = get('dMinSqm').value;
-      if (get('rMinRooms')) get('rMinRooms').value  = get('dMinRooms').value;
-      if (get('rFascia'))   get('rFascia').value    = get('dFascia').value;
-      if (get('rMaxMetro')) get('rMaxMetro').value  = get('dMaxMetro').value;
-      if (get('rScore')) {
-        const sv = get('dScore').value;
-        get('rScore').value = sv;
-        const rvEl = document.getElementById('rScoreVal');
+      if (get('sMaxPrice'))  get('sMaxPrice').value  = get('sdMaxPrice').value;
+      if (get('sMinSqm'))    get('sMinSqm').value    = get('sdMinSqm').value;
+      if (get('sMinRooms'))  get('sMinRooms').value  = get('sdMinRooms').value;
+      if (get('sFascia'))    get('sFascia').value    = get('sdFascia').value;
+      if (get('sMaxMetro'))  get('sMaxMetro').value  = get('sdMaxMetro').value;
+      if (get('sMinEnergy')) get('sMinEnergy').value = get('sdEnergy').value;
+      // Condition and maxPsqm are drawer-only — stash on window for getSaleFilters()
+      window._sCondition = get('sdCondition').value || '';
+      window._sMaxPsqm   = parseInt(get('sdMaxPsqm').value) || 0;
+      if (get('sScore')) {
+        const sv = get('sdScore').value;
+        get('sScore').value = sv;
+        const rvEl = get('sScoreVal');
         if (rvEl) rvEl.textContent = sv;
       }
-      const dGemActive = document.querySelector('#dGemFilter .gem-tab.active');
-      const gem = dGemActive ? (dGemActive.dataset.gem || '') : '';
-      document.querySelectorAll('#rGemFilter .gem-tab').forEach(b => {
-        b.classList.toggle('active', b.dataset.gem === gem);
+      const sdGemActive = document.querySelector('#sdGemFilter .gem-tab.active');
+      const sdGemVal = sdGemActive ? (sdGemActive.dataset.sdgem || '') : '';
+      sSaleGemFilter = sdGemVal;
+      document.querySelectorAll('#sGemFilterBar .gem-tab').forEach(b => {
+        b.classList.toggle('active', b.dataset.sgem === sdGemVal);
       });
-      if (typeof renderRentals === 'function') renderRentals();
+      if (typeof renderSales === 'function') renderSales();
+      return;
     }
+
+    // Rentals mode — apply to BOTH the rentals list AND the map
+    const areas = dRentAreaMsearch ? dRentAreaMsearch.getSelected() : [];
+
+    // List state
+    rentSelectedAreas = areas;
+    if (typeof filterAreaMsd !== 'undefined') {
+      areas.length ? filterAreaMsd.setSelected(areas) : filterAreaMsd.clear();
+    }
+    if (get('rMaxRent'))  get('rMaxRent').value  = get('dMaxRent').value;
+    if (get('rMinSqm'))   get('rMinSqm').value   = get('dMinSqm').value;
+    if (get('rMinRooms')) get('rMinRooms').value = get('dMinRooms').value;
+    if (get('rFascia'))   get('rFascia').value   = get('dFascia').value;
+    if (get('rMaxMetro')) get('rMaxMetro').value = get('dMaxMetro').value;
+    if (get('rScore')) {
+      const sv = get('dScore').value;
+      get('rScore').value = sv;
+      const rvEl = get('rScoreVal');
+      if (rvEl) rvEl.textContent = sv;
+    }
+    const dGemActive = document.querySelector('#dGemFilter .gem-tab.active');
+    const gem = dGemActive ? (dGemActive.dataset.gem || '') : '';
+    document.querySelectorAll('#rGemFilter .gem-tab').forEach(b => {
+      b.classList.toggle('active', b.dataset.gem === gem);
+    });
+
+    // Map state — mirror rental filters into mRent* and mapSelectedAreas
+    mapSelectedAreas = areas;
+    if (typeof mapAreaMsd !== 'undefined') mapAreaMsd.setSelected(areas);
+    if (get('mRentMaxRent'))  get('mRentMaxRent').value  = get('dMaxRent').value;
+    if (get('mRentMinSqm'))   get('mRentMinSqm').value   = get('dMinSqm').value;
+    if (get('mRentMinRooms')) get('mRentMinRooms').value = get('dMinRooms').value;
+    if (get('mRentFascia'))   get('mRentFascia').value   = get('dFascia').value;
+    if (get('mRentMaxMetro')) get('mRentMaxMetro').value = get('dMaxMetro').value;
+    if (get('mRentScore')) {
+      const sv = get('dScore').value;
+      get('mRentScore').value = sv;
+      const lb = document.getElementById('mRentScoreVal');
+      if (lb) lb.textContent = sv;
+    }
+
+    if (typeof renderRentals === 'function') renderRentals();
+    if (typeof _mapRender === 'function')    _mapRender();
   }
 
+  // Header filter button — choose mode based on active tab
   if (openBtn) openBtn.addEventListener('click', () => {
     const activeTab = document.querySelector('.tab-btn.active')?.dataset.tab;
-    if (activeTab === 'sales' && typeof window._openSaleDrawer === 'function') {
-      window._openSaleDrawer();
+    if (activeTab === 'sales') {
+      openDrawer({ mode: 'sale' });
+    } else if (activeTab === 'map') {
+      openDrawer({ mode: 'rent', isMap: true });
     } else {
-      openDrawer(false);
+      openDrawer({ mode: 'rent' });
     }
   });
-  if (mapFilterBtn) mapFilterBtn.addEventListener('click', () => openDrawer(true));
+  if (mapFilterBtn) mapFilterBtn.addEventListener('click', () => openDrawer({ mode: 'rent', isMap: true }));
   backdrop.addEventListener('click', () => closeDrawer(false));
   showBtn.addEventListener('click',  () => closeDrawer(true));
 
-  // Drawer range sync
+  // Mode tab clicks (re-sync from the appropriate source)
+  if (tabRent) tabRent.addEventListener('click', () => {
+    setDrawerMode('rent');
+    _syncDrawerFromMain();
+    _updateShowBtn();
+  });
+  if (tabSale) tabSale.addEventListener('click', () => {
+    setDrawerMode('sale');
+    _syncDrawerFromMain();
+    _updateShowBtn();
+  });
+
+  // Drawer range sync (rent)
   const dScore = document.getElementById('dScore');
   if (dScore) dScore.addEventListener('input', () => {
     document.getElementById('dScoreVal').textContent = dScore.value;
   });
+  // Drawer range sync (sale)
+  const sdScore = document.getElementById('sdScore');
+  if (sdScore) sdScore.addEventListener('input', () => {
+    document.getElementById('sdScoreVal').textContent = sdScore.value;
+  });
 
-  // Drawer gem tabs
+  // Drawer gem tabs (rent)
   document.querySelectorAll('#dGemFilter .gem-tab').forEach(btn =>
     btn.addEventListener('click', () => {
       document.querySelectorAll('#dGemFilter .gem-tab').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
     }));
+  // Drawer gem tabs (sale)
+  document.querySelectorAll('#sdGemFilter .gem-tab').forEach(btn =>
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#sdGemFilter .gem-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }));
 
-  // Drawer reset
+  // Drawer reset — clears whichever mode is active
   if (resetBtn) resetBtn.addEventListener('click', () => {
-    ['dMaxRent','dMinSqm','dMinRooms'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-    ['dFascia','dMaxMetro'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-    document.querySelectorAll('#dAreaChips .area-chip').forEach(b => b.classList.remove('selected'));
-    const dsc = document.getElementById('dScore'); if (dsc) dsc.value = 0;
-    document.getElementById('dScoreVal').textContent = '0';
-    document.querySelectorAll('#dGemFilter .gem-tab').forEach(b =>
-      b.classList.toggle('active', b.dataset.gem === ''));
+    if (_drawerMode === 'sale') {
+      ['sdMaxPrice','sdMinSqm','sdMinRooms','sdMaxPsqm'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.value = '';
+      });
+      ['sdFascia','sdMaxMetro','sdCondition','sdEnergy'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.value = '';
+      });
+      if (dSaleAreaMsearch) dSaleAreaMsearch.clear();
+      const sc = document.getElementById('sdScore'); if (sc) sc.value = 0;
+      document.getElementById('sdScoreVal').textContent = '0';
+      document.querySelectorAll('#sdGemFilter .gem-tab').forEach(b =>
+        b.classList.toggle('active', b.dataset.sdgem === ''));
+    } else {
+      ['dMaxRent','dMinSqm','dMinRooms'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+      ['dFascia','dMaxMetro'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+      if (dRentAreaMsearch) dRentAreaMsearch.clear();
+      const dsc = document.getElementById('dScore'); if (dsc) dsc.value = 0;
+      document.getElementById('dScoreVal').textContent = '0';
+      document.querySelectorAll('#dGemFilter .gem-tab').forEach(b =>
+        b.classList.toggle('active', b.dataset.gem === ''));
+    }
   });
 
   // Swipe-down to close
@@ -6021,145 +6379,6 @@ document.getElementById('btnCacheClear')?.addEventListener('click', async () => 
   drawer.addEventListener('touchend', e => {
     const dy = e.changedTouches[0].clientY - _touchStartY;
     if (dy > 80) closeDrawer(false);
-  }, { passive: true });
-})();
-
-// ── Mobile SALES filter drawer ───────────────────────────────────────────────
-(function () {
-  const backdrop = document.getElementById('mobileFilterBackdrop');
-  const drawer   = document.getElementById('mobileSaleFilterDrawer');
-  const showBtn  = document.getElementById('sdShowBtn');
-  const resetBtn = document.getElementById('sdReset');
-  if (!drawer) return;
-
-  function _getSdAreas() {
-    return [...document.querySelectorAll('#sdAreaChips .area-chip.selected')]
-      .map(b => b.textContent);
-  }
-  function _setSdAreas(arr) {
-    const set = new Set(arr || []);
-    document.querySelectorAll('#sdAreaChips .area-chip').forEach(b => {
-      b.classList.toggle('selected', set.has(b.textContent));
-    });
-  }
-
-  function _updateShowBtn() {
-    showBtn.textContent = `Show ${_saleFilteredData.length} results`;
-  }
-
-  function openDrawer() {
-    backdrop.classList.add('is-open');
-    drawer.classList.remove('is-closing');
-    drawer.classList.add('is-open');
-    document.body.style.overflow = 'hidden';
-    _syncFromMain();
-    _updateShowBtn();
-  }
-  function closeDrawer(apply) {
-    drawer.classList.add('is-closing');
-    drawer.classList.remove('is-open');
-    backdrop.classList.remove('is-open');
-    document.body.style.overflow = '';
-    if (apply) _applyToMain();
-  }
-
-  function _syncFromMain() {
-    const get = id => document.getElementById(id);
-    _setSdAreas(saleSelectedAreas);
-    const mp = get('sMaxPrice');  if (mp)  get('sdMaxPrice').value  = mp.value;
-    const ms = get('sMinSqm');    if (ms)  get('sdMinSqm').value    = ms.value;
-    const mr = get('sMinRooms');  if (mr)  get('sdMinRooms').value  = mr.value;
-    const mf = get('sFascia');    if (mf)  get('sdFascia').value    = mf.value;
-    const mm = get('sMaxMetro');  if (mm)  get('sdMaxMetro').value  = mm.value;
-    const sc = get('sScore');
-    if (sc) {
-      get('sdScore').value = sc.value;
-      get('sdScoreVal').textContent = sc.value;
-    }
-    const gemActive = document.querySelector('#sGemFilterBar .gem-tab.active');
-    const gemVal = gemActive ? (gemActive.dataset.sgem || '') : '';
-    document.querySelectorAll('#sdGemFilter .gem-tab').forEach(b => {
-      b.classList.toggle('active', b.dataset.sdgem === gemVal);
-    });
-  }
-
-  function _applyToMain() {
-    const get = id => document.getElementById(id);
-    saleSelectedAreas = _getSdAreas();
-    if (typeof saleAreaMsd !== 'undefined' && saleAreaMsd) {
-      saleSelectedAreas.length ? saleAreaMsd.setSelected(saleSelectedAreas) : saleAreaMsd.clear();
-    }
-    if (get('sMaxPrice'))  get('sMaxPrice').value  = get('sdMaxPrice').value;
-    if (get('sMinSqm'))    get('sMinSqm').value    = get('sdMinSqm').value;
-    if (get('sMinRooms'))  get('sMinRooms').value  = get('sdMinRooms').value;
-    if (get('sFascia'))    get('sFascia').value     = get('sdFascia').value;
-    if (get('sMaxMetro'))  get('sMaxMetro').value   = get('sdMaxMetro').value;
-    if (get('sScore')) {
-      const sv = get('sdScore').value;
-      get('sScore').value = sv;
-      const rvEl = get('sScoreVal');
-      if (rvEl) rvEl.textContent = sv;
-    }
-    const sdGemActive = document.querySelector('#sdGemFilter .gem-tab.active');
-    const sdGemVal = sdGemActive ? (sdGemActive.dataset.sdgem || '') : '';
-    sSaleGemFilter = sdGemVal;
-    document.querySelectorAll('#sGemFilterBar .gem-tab').forEach(b => {
-      b.classList.toggle('active', b.dataset.sgem === sdGemVal);
-    });
-    if (typeof renderSales === 'function') renderSales();
-  }
-
-  // Expose opener for the header filter button
-  window._openSaleDrawer = openDrawer;
-
-  backdrop.addEventListener('click', () => closeDrawer(false));
-  showBtn.addEventListener('click',  () => closeDrawer(true));
-
-  // Range sync
-  const sdScore = document.getElementById('sdScore');
-  if (sdScore) sdScore.addEventListener('input', () => {
-    document.getElementById('sdScoreVal').textContent = sdScore.value;
-    _updateShowBtn();
-  });
-
-  // Live count on input/change
-  ['sdMaxPrice','sdMinSqm','sdMinRooms'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener('input', _updateShowBtn);
-  });
-  ['sdFascia','sdMaxMetro'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener('change', _updateShowBtn);
-  });
-
-  // Gem tabs
-  document.querySelectorAll('#sdGemFilter .gem-tab').forEach(btn =>
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('#sdGemFilter .gem-tab').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      _updateShowBtn();
-    }));
-
-  // Reset
-  resetBtn.addEventListener('click', () => {
-    ['sdMaxPrice','sdMinSqm','sdMinRooms'].forEach(id => {
-      const el = document.getElementById(id); if (el) el.value = '';
-    });
-    ['sdFascia','sdMaxMetro'].forEach(id => {
-      const el = document.getElementById(id); if (el) el.value = '';
-    });
-    document.querySelectorAll('#sdAreaChips .area-chip').forEach(b => b.classList.remove('selected'));
-    const sc = document.getElementById('sdScore'); if (sc) sc.value = 0;
-    document.getElementById('sdScoreVal').textContent = '0';
-    document.querySelectorAll('#sdGemFilter .gem-tab').forEach(b =>
-      b.classList.toggle('active', b.dataset.sdgem === ''));
-  });
-
-  // Swipe-down to close
-  let _touchStartY = 0;
-  drawer.addEventListener('touchstart', e => { _touchStartY = e.touches[0].clientY; }, { passive: true });
-  drawer.addEventListener('touchend', e => {
-    if (e.changedTouches[0].clientY - _touchStartY > 80) closeDrawer(false);
   }, { passive: true });
 })();
 
