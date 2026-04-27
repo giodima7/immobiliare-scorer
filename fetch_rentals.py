@@ -1127,6 +1127,18 @@ def mark_digest_sent():
 # ── Netlify deploy helper ──────────────────────────────────────────────────────
 
 NETLIFY_CONFIG_PATH = BASE_DIR / "netlify_config.json"
+SCAN_PREFS_PATH     = BASE_DIR / "scan_prefs.json"
+
+
+def _load_scan_prefs() -> dict:
+    """Load scan preferences from scan_prefs.json (written by the dashboard)."""
+    if SCAN_PREFS_PATH.exists():
+        try:
+            return json.load(open(SCAN_PREFS_PATH))
+        except Exception:
+            pass
+    return {}
+
 
 def _netlify_deploy():
     """
@@ -1329,6 +1341,20 @@ def parse_args():
 
 def main():
     args = parse_args()
+
+    # Apply dashboard prefs as defaults when CLI args are at their zero/default values.
+    # Explicit CLI overrides (e.g. --pages 10 --max-rent 2500) always win.
+    _prefs = _load_scan_prefs()
+    if args.pages == 3:       # 3 is parse_args default → not explicitly overridden
+        args.pages = int(_prefs.get("pages", 3))
+    if not args.max_rent:
+        args.max_rent = int(_prefs.get("max_rent", 0))
+    if not args.min_rooms:
+        args.min_rooms = int(_prefs.get("min_rooms", 0))
+    if not args.min_sqm:
+        args.min_sqm = int(_prefs.get("min_sqm", 0))
+    if not args.max_sqm:
+        args.max_sqm = int(_prefs.get("max_sqm", 0))
 
     print(f"\n{'─'*52}")
     print(f"  Immobiliare Scorer — rental fetch (Milano)")

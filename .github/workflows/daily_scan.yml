@@ -27,17 +27,17 @@ jobs:
         env:
           IDEALISTA_KEY: ${{ secrets.IDEALISTA_KEY }}
           IDEALISTA_SECRET: ${{ secrets.IDEALISTA_SECRET }}
-        run: python3 fetch_rentals.py --pages 5
+        run: python3 fetch_rentals.py
 
       - name: Run Idealista scanner
         env:
           IDEALISTA_KEY: ${{ secrets.IDEALISTA_KEY }}
           IDEALISTA_SECRET: ${{ secrets.IDEALISTA_SECRET }}
-        run: python3 fetch_idealista.py --pages 5
+        run: python3 fetch_idealista.py
         continue-on-error: true
 
       - name: Run sales scanner
-        run: python3 fetch_listings.py --pages 5
+        run: python3 fetch_listings.py
         continue-on-error: true
 
       - name: Trim old cache entries
