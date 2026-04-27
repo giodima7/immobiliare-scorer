@@ -1692,15 +1692,29 @@ const Storage = {
 
   remove(name) { localStorage.removeItem(this.key(name)); },
 
-  // On first login, migrate any data saved under 'guest' key to real user key
+  // On first login, migrate any data saved under 'guest' key to real user key.
+  // Also lifts pre-auth raw keys (immo_favourites etc.) into the scoped namespace.
   migrate(userId) {
-    ['favourites', 'filters', 'onboarded'].forEach(name => {
+    // guest-scoped → user-scoped
+    ['favourites', 'rentFavourites', 'filters', 'onboarded', 'saleFetchPrefs'].forEach(name => {
       const guestKey = `scorer_${name}_guest`;
       const userKey  = `scorer_${name}_${userId}`;
       const guestVal = localStorage.getItem(guestKey);
       if (guestVal && !localStorage.getItem(userKey)) {
         localStorage.setItem(userKey, guestVal);
         localStorage.removeItem(guestKey);
+      }
+    });
+    // legacy raw keys → scoped user keys (one-time lift on first login)
+    const legacyMap = {
+      'immo_favourites':      `scorer_favourites_${userId}`,
+      'immo_rent_favourites': `scorer_rentFavourites_${userId}`,
+    };
+    Object.entries(legacyMap).forEach(([oldKey, newKey]) => {
+      const val = localStorage.getItem(oldKey);
+      if (val && !localStorage.getItem(newKey)) {
+        localStorage.setItem(newKey, val);
+        localStorage.removeItem(oldKey);
       }
     });
   }
@@ -3488,9 +3502,8 @@ async function startFetch() {
 }
 
 // ── Favourites ────────────────────────────────────────────────────────────────
-const FAV_KEY = 'immo_favourites';
-function getFavourites()     { try { return JSON.parse(localStorage.getItem(FAV_KEY)) || []; } catch { return []; } }
-function saveFavourites(ids) { localStorage.setItem(FAV_KEY, JSON.stringify(ids)); }
+function getFavourites()     { return Storage.get('favourites', []); }
+function saveFavourites(ids) { Storage.set('favourites', ids); }
 function isFavourite(id)     { return getFavourites().includes(String(id)); }
 
 function toggleFavourite(id) {
@@ -3511,9 +3524,8 @@ function updateFavBadge() {
 }
 
 // ── Rental favourites (separate key from sales) ───────────────────────────────
-const RENT_FAV_KEY = 'immo_rent_favourites';
-function getRentFavs()       { try { return JSON.parse(localStorage.getItem(RENT_FAV_KEY)) || []; } catch { return []; } }
-function saveRentFavs(ids)   { localStorage.setItem(RENT_FAV_KEY, JSON.stringify(ids)); }
+function getRentFavs()       { return Storage.get('rentFavourites', []); }
+function saveRentFavs(ids)   { Storage.set('rentFavourites', ids); }
 function isRentFav(id)       { return getRentFavs().includes(String(id)); }
 
 function toggleRentFav(id) {
