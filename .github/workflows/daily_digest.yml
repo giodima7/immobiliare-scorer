@@ -1,0 +1,48 @@
+name: Daily Email Digest
+
+on:
+  schedule:
+    - cron: '0 7 * * *'   # 7:00 UTC = 9:00 CEST / 8:00 CET
+  workflow_dispatch:         # allows manual trigger for testing
+
+jobs:
+  digest:
+    # GitHub-hosted — Mac does not need to be on for this job.
+    # Reads rentals_latest.json that was last pushed by the scan workflow.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Send digest
+        env:
+          EMAIL_CONFIG: ${{ secrets.EMAIL_CONFIG }}
+        run: |
+          python3 - <<'EOF'
+          import json, os, sys
+          from pathlib import Path
+
+          # Write EMAIL_CONFIG secret to disk so email_digest.load_config() can find it
+          raw = os.environ.get("EMAIL_CONFIG", "").strip()
+          if not raw:
+              print("EMAIL_CONFIG secret is not set — skipping digest")
+              sys.exit(0)
+          Path("email_config.json").write_text(raw)
+
+          from email_digest import send_digest, load_config
+          from pathlib import Path as _Path
+
+          rentals_path = _Path("dashboard/rentals_latest.json")
+          if not rentals_path.exists():
+              print("rentals_latest.json not found — skipping digest")
+              sys.exit(0)
+
+          listings = json.loads(rentals_path.read_text())
+          config   = load_config()
+          config["enabled"] = True   # always send in CI regardless of local flag
+
+          print(f"Loaded {len(listings)} listings — sending digest...")
+          send_digest(listings, config)
+          EOF

@@ -1,9 +1,15 @@
-name: Daily Rental Scan
+name: Scan Listings (daily)
 
 on:
   schedule:
-    - cron: '0 12 * * *'   # 12:00 UTC daily (2pm Milan time)
+    - cron: '0 10 * * *'   # 10:00 UTC = 12:00 CEST / 11:00 CET
   workflow_dispatch:         # allows manual trigger from GitHub UI
+    inputs:
+      pages:
+        description: 'Pages per area (overrides scan_prefs.json)'
+        required: false
+        default: ''
+        type: string
 
 jobs:
   scan:
@@ -11,7 +17,7 @@ jobs:
     # Works directly in the project folder so scan_prefs.json and
     # area_settings.json always reflect whatever you configured in the dashboard.
     runs-on: self-hosted
-    timeout-minutes: 90
+    timeout-minutes: 120
     defaults:
       run:
         working-directory: /Users/giovannidimartino/Downloads/immobiliare-scorer
