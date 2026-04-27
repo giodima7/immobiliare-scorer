@@ -848,7 +848,7 @@ def fetch_city(city_key: str, pages: int = 3, extra_filters: dict = None,
             browser_executable_path=EDGE_PATH,
             headless=True,
             lang="it-IT",
-            no_sandbox=bool(os.environ.get("NO_SANDBOX")),
+            sandbox=not bool(os.environ.get("NO_SANDBOX")),
         )
         try:
             items = await _fetch_city_async(

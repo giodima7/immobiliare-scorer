@@ -844,7 +844,7 @@ def fetch_rentals(pages: int = 3, area_names: list = None, max_rent: int = 0,
             browser_executable_path=EDGE_PATH,
             headless=True,
             lang="it-IT",
-            no_sandbox=bool(os.environ.get("NO_SANDBOX")),
+            sandbox=not bool(os.environ.get("NO_SANDBOX")),
         )
         try:
             items, skipped = await _fetch_async(
