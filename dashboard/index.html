@@ -11,10 +11,11 @@
 <meta name="theme-color" content="#2D6A4F">
 <title>Immobiliare Scorer</title>
 <script>
-  // Only load Netlify Identity on the real site — not on localhost.
-  // document.write in <head> is synchronous so window.netlifyIdentity is
-  // populated before any other script runs (same as a plain <script src>).
-  if (!['localhost','127.0.0.1'].includes(location.hostname)) {
+  if (['localhost','127.0.0.1'].includes(location.hostname)) {
+    // Local dev: no auth gate, show app immediately so nothing can hide it.
+    document.write('<style>#login-screen{display:none!important}#app-root{display:block!important}</style>');
+  } else {
+    // Netlify: load Identity widget synchronously (same as a plain script tag).
     document.write('<scr'+'ipt src="https://identity.netlify.com/v1/netlify-identity-widget.js"><\/scr'+'ipt>');
   }
 </script>
@@ -1718,17 +1719,19 @@ const Auth = (() => {
     user: null,
 
     init() {
+      // On localhost the CSS already forces app-root visible; nothing to do.
+      if (['localhost','127.0.0.1'].includes(location.hostname)) {
+        if (typeof _checkOnboarding === 'function') _checkOnboarding();
+        return;
+      }
       if (_ni) ni.init();
       this.user = ni.currentUser();
       ni.on('login',  user => { this.user = user;  this._onLogin(user); });
       ni.on('logout', ()   => { this.user = null;  this._onLogout(); });
-
       if (this.user) {
         this._onLogin(this.user);
-      } else if (_ni) {
-        showLoginScreen();  // only gate on Netlify, not local
       } else {
-        showApp();           // local dev: skip auth
+        showLoginScreen();
       }
     },
 
