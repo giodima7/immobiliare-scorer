@@ -1864,6 +1864,19 @@ function saveFilters() {
 
 <div id="app-root" style="display:none">
 
+<!-- DEBUG: shows in top-left corner; remove once localhost works -->
+<div id="_dbg" style="position:fixed;top:4px;left:4px;z-index:99999;background:#fbbf24;color:#000;font:11px monospace;padding:4px 8px;border-radius:4px;max-width:400px;word-break:break-all"></div>
+<script>
+  (function(){
+    const d = document.getElementById('_dbg');
+    if (!d) return;
+    let log = [];
+    function dbg(msg){ log.push(msg); d.textContent = log.join(' | '); }
+    dbg('script-start');
+    window._dbg = dbg;
+  })();
+</script>
+
 <!-- Global fixed tooltip — avoids overflow:hidden clipping inside cards -->
 <div id="globalTooltip"></div>
 
@@ -4069,7 +4082,8 @@ document.getElementById('btnStopSaleFetch')?.addEventListener('click', async () 
 });
 
 updateFavBadge();
-init();
+window._dbg && window._dbg('pre-init');
+init().then(() => window._dbg && window._dbg('init-done')).catch(e => window._dbg && window._dbg('init-ERR:'+e.message));
 
 // ── Tab switching ─────────────────────────────────────────────────────────────
 let activeTab = 'rentals';
@@ -5070,17 +5084,21 @@ function renderRentals() {
 
 // ── Rentals — data loading ────────────────────────────────────────────────────
 async function loadRentals() {
+  window._dbg && window._dbg('loadRentals IS_LIVE='+IS_LIVE);
   try {
     const url  = IS_LIVE ? '/rentals' : './rentals_latest.json';
     const resp = await fetch(url);
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     ALL_RENT = await resp.json();
-  } catch {
+    window._dbg && window._dbg('rentals='+ALL_RENT.length);
+  } catch(e) {
+    window._dbg && window._dbg('rentals-ERR:'+e.message);
     ALL_RENT = [];
   }
   rentFasciaRanges = computeRentFasciaRanges(ALL_RENT);
   _populateOmiZoneFilter(ALL_RENT);
   renderRentals();
+  window._dbg && window._dbg('rendered');
   _updateUnmatchedBadge();
 }
 
@@ -7623,7 +7641,9 @@ document.getElementById('btnDqExport')?.addEventListener('click', () => {
 });
 
 // ── Boot Auth ─────────────────────────────────────────────────────────────────
-Auth.init();
+window._dbg && window._dbg('pre-auth');
+try { Auth.init(); window._dbg && window._dbg('auth-ok'); }
+catch(e) { window._dbg && window._dbg('auth-ERR:'+e.message); }
 </script>
 
 </div><!-- /app-root -->
