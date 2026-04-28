@@ -296,7 +296,25 @@ def _geo_enrich_sales_worker():
 
         # Fast OMI polygon pass
         n_omi = _apply_omi_polygon(data, _ecache)
-        if n_omi > 0:
+
+        # Backfill from cache: apply any cached geo fields that aren't yet in the
+        # file (e.g. from a previous enrichment run whose flush was incomplete).
+        GEO_FIELDS = ("geo_score", "metro_nearest_dist_m", "metro_nearest_name",
+                      "pois", "walk_score", "park_nearest_dist_m",
+                      "supermarket_nearest_dist_m")
+        n_backfill = 0
+        for l in data:
+            if l.get("geo_score") is not None:
+                continue
+            cached = _ecache.get(l.get("source", "sale"), l["id"])
+            if cached and cached.get("geo_score") is not None:
+                for f in GEO_FIELDS:
+                    if f in cached:
+                        l[f] = cached[f]
+                n_backfill += 1
+
+        if n_omi > 0 or n_backfill > 0:
+            print(f"  [geo-sale] backfill: {n_backfill} from cache, {n_omi} OMI polygon")
             _flush_sale_geo(data, sale_path)
 
         def _needs_overpass(l):
