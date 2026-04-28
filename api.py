@@ -546,7 +546,8 @@ def scanner_status():
         "total_seen":  immo_st.get("total_seen", 0),
         "immobiliare": immo_st,
         "idealista":   ideal_st,
-        "geo_enrich":  dict(_geo_status),   # live geo enrichment progress
+        "geo_enrich":       dict(_geo_status),       # live rentals enrichment progress
+        "geo_sale_enrich":  dict(_geo_sale_status),  # live sales enrichment progress
     }
     return jsonify(result)
 

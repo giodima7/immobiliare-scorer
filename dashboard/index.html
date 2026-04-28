@@ -3890,18 +3890,22 @@ document.querySelectorAll('#sGemFilterBar .gem-tab').forEach(btn => {
   });
 });
 
-// Sales geo-enrich button
+// Sales geo-enrich button (toggle start / stop)
 const _sBtnEnrich = document.getElementById('btnEnrichGeoSales');
 if (_sBtnEnrich) _sBtnEnrich.addEventListener('click', async () => {
+  if (_sBtnEnrich._sGeoRunning) {
+    // Stop
+    try { await fetch('/geo-enrich-sales', { method: 'DELETE' }); } catch { /* ok */ }
+    return;
+  }
   _sBtnEnrich.disabled = true;
   _sBtnEnrich.textContent = '⏳';
   try {
     const r = await fetch('/geo-enrich-sales', { method: 'POST' });
     const d = await r.json();
-    document.getElementById('sSaleGeoEnrichStatus').textContent = d.ok ? 'running…' : d.error || 'error';
+    if (!d.ok) document.getElementById('sSaleGeoEnrichStatus').textContent = d.error || 'error';
   } catch (e) {
     document.getElementById('sSaleGeoEnrichStatus').textContent = e.message;
-  } finally {
     _sBtnEnrich.disabled = false;
     _sBtnEnrich.textContent = 'Enrich';
   }
@@ -5630,7 +5634,7 @@ async function updateScannerStatus() {
       }
     }
 
-    // Geo enrichment progress
+    // Geo enrichment progress — rentals
     if (st.geo_enrich !== undefined) {
       const ge        = st.geo_enrich;
       const gBtn      = document.getElementById('btnEnrichGeo');
@@ -5659,6 +5663,36 @@ async function updateScannerStatus() {
             gBtn._geoWasRunning = false;
             loadCacheStats();
           }
+        }
+      }
+    }
+
+    // Geo enrichment progress — sales
+    if (st.geo_sale_enrich !== undefined) {
+      const ge      = st.geo_sale_enrich;
+      const gBtn    = document.getElementById('btnEnrichGeoSales');
+      const gBar    = document.getElementById('sSaleGeoProgressBar');
+      const gFill   = document.getElementById('sSaleGeoProgressFill');
+      const gStatus = document.getElementById('sSaleGeoEnrichStatus');
+      if (gBtn) {
+        const wasRunning = gBtn._sGeoRunning || false;
+        gBtn._sGeoRunning = ge.running;
+        if (ge.running) {
+          gBtn.textContent = '■ Stop';
+          gBtn.disabled    = false;
+          if (gBar)  gBar.style.display = 'block';
+          if (gFill && ge.total > 0)
+            gFill.style.width = Math.round(ge.done / ge.total * 100) + '%';
+          if (gStatus) gStatus.textContent = ge.total > 0 ? ge.done + ' / ' + ge.total : '…';
+        } else {
+          gBtn.textContent = ge.done > 0 ? 'Enrich more' : 'Enrich';
+          gBtn.disabled    = false;
+          if (gBar)    gBar.style.display  = 'none';
+          if (gStatus) gStatus.textContent = ge.error
+            ? '✗ ' + ge.error
+            : (wasRunning && ge.done > 0 ? '✓ done' : '');
+          // Reload sales data when enrichment just finished
+          if (wasRunning && !ge.running && ge.done > 0) loadSales();
         }
       }
     }
