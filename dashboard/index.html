@@ -1702,7 +1702,8 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--accent); }
 // ── Auth ─────────────────────────────────────────────────────────────────────
 const Auth = (() => {
   // Graceful fallback when running locally without the CDN
-  const _ni = window.netlifyIdentity;
+  const _isLocal = ['localhost', '127.0.0.1'].includes(location.hostname);
+  const _ni = _isLocal ? null : window.netlifyIdentity;  // never use widget on localhost
   const _fake = { init(){}, currentUser(){ return null; },
                   on(){}, logout(){}, open(){} };
   const ni = _ni || _fake;
@@ -1711,7 +1712,7 @@ const Auth = (() => {
     user: null,
 
     init() {
-      ni.init();
+      if (_ni) ni.init();
       this.user = ni.currentUser();
       ni.on('login',  user => { this.user = user;  this._onLogin(user); });
       ni.on('logout', ()   => { this.user = null;  this._onLogout(); });
