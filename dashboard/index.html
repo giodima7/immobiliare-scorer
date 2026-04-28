@@ -3110,6 +3110,7 @@ function saveFilters() {
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
 <script>
+window._dbg && window._dbg('A');
 // ── Global state ──────────────────────────────────────────────────────────────
 let ALL          = [];
 let fasciaRanges = {};   // { A: {min, max}, B: {min, max}, C: {min, max} }
@@ -3844,6 +3845,7 @@ async function init() {
 
 // Set sticky top offsets once the DOM is painted
 requestAnimationFrame(_updateStickyTops);
+window._dbg && window._dbg('B');
 
 // ── Sales event listeners ─────────────────────────────────────────────────────
 document.getElementById('sScore').addEventListener('input', function () {
@@ -3894,6 +3896,7 @@ document.querySelectorAll('#sSortTabs .sort-tab').forEach(btn => {
   });
 });
 
+window._dbg && window._dbg('C');
 document.querySelectorAll('#sGemFilterBar .gem-tab').forEach(btn => {
   btn.addEventListener('click', () => {
     sSaleGemFilter = btn.dataset.sgem;
