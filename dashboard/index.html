@@ -1719,9 +1719,8 @@ const Auth = (() => {
     user: null,
 
     init() {
-      // On localhost the CSS already forces app-root visible; nothing to do.
       if (['localhost','127.0.0.1'].includes(location.hostname)) {
-        if (typeof _checkOnboarding === 'function') _checkOnboarding();
+        showApp();   // CSS shows app-root; showApp() restores filters + runs onboarding check
         return;
       }
       if (_ni) ni.init();
@@ -1815,7 +1814,6 @@ function showApp() {
   const r = document.getElementById('app-root');
   if (r) r.style.display = 'block';
   restoreFilters();
-  if (typeof applyFilters === 'function') applyFilters();
   // Deferred until here so Auth.userId() is the real user ID, not 'guest'
   if (typeof _checkOnboarding === 'function') _checkOnboarding();
 }
@@ -6408,8 +6406,9 @@ function setDrawerMode(mode) {
 function _checkOnboarding() {
   const overlay = document.getElementById('onboardingOverlay');
   if (!overlay) return;
-  if (Storage.get('onboarded')) {
-    overlay.remove();
+  const isLocal = ['localhost','127.0.0.1'].includes(location.hostname);
+  if (isLocal || Storage.get('onboarded')) {
+    overlay.remove();   // Dev mode: always skip; production: skip if already seen
   } else {
     overlay.classList.add('is-visible');
   }
