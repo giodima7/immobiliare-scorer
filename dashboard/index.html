@@ -10,7 +10,14 @@
 <meta name="apple-mobile-web-app-title" content="Scorer">
 <meta name="theme-color" content="#2D6A4F">
 <title>Immobiliare Scorer</title>
-<script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+<script>
+  // Only load Netlify Identity on the real site — not on localhost.
+  // document.write in <head> is synchronous so window.netlifyIdentity is
+  // populated before any other script runs (same as a plain <script src>).
+  if (!['localhost','127.0.0.1'].includes(location.hostname)) {
+    document.write('<scr'+'ipt src="https://identity.netlify.com/v1/netlify-identity-widget.js"><\/scr'+'ipt>');
+  }
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
@@ -1702,8 +1709,7 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--accent); }
 // ── Auth ─────────────────────────────────────────────────────────────────────
 const Auth = (() => {
   // Graceful fallback when running locally without the CDN
-  const _isLocal = ['localhost', '127.0.0.1'].includes(location.hostname);
-  const _ni = _isLocal ? null : window.netlifyIdentity;  // never use widget on localhost
+  const _ni = window.netlifyIdentity || null;  // null on localhost (script not loaded)
   const _fake = { init(){}, currentUser(){ return null; },
                   on(){}, logout(){}, open(){} };
   const ni = _ni || _fake;
