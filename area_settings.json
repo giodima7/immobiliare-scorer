@@ -21,7 +21,7 @@
       "name": "Buenos Aires"
     },
     {
-      "active": true,
+      "active": false,
       "id": "centrale",
       "name": "Centrale"
     },
@@ -31,7 +31,7 @@
       "name": "Corso Genova"
     },
     {
-      "active": true,
+      "active": false,
       "id": "duomo",
       "name": "Duomo"
     },
@@ -46,37 +46,37 @@
       "name": "Guastalla"
     },
     {
-      "active": true,
+      "active": false,
       "id": "indipendenza",
       "name": "Indipendenza"
     },
     {
-      "active": true,
+      "active": false,
       "id": "isola",
       "name": "Isola"
     },
     {
-      "active": true,
+      "active": false,
       "id": "melchiorre-gioia",
       "name": "Melchiorre Gioia"
     },
     {
-      "active": true,
+      "active": false,
       "id": "moscova",
       "name": "Moscova"
     },
     {
-      "active": true,
+      "active": false,
       "id": "navigli-darsena",
       "name": "Navigli - Darsena"
     },
     {
-      "active": true,
+      "active": false,
       "id": "paolo-sarpi",
       "name": "Paolo Sarpi"
     },
     {
-      "active": true,
+      "active": false,
       "id": "piave-tricolore",
       "name": "Piave - Tricolore"
     },
@@ -86,7 +86,7 @@
       "name": "Porta Romana - Medaglie d'Oro"
     },
     {
-      "active": true,
+      "active": false,
       "id": "porta-venezia",
       "name": "Porta Venezia"
     },
@@ -101,180 +101,180 @@
       "name": "Ticinese"
     },
     {
-      "active": true,
+      "active": false,
       "id": "vincenzo-monti",
       "name": "Vincenzo Monti"
     },
     {
-      "active": true,
+      "active": false,
       "id": "washington",
       "name": "Washington"
     },
     {
+      "active": true,
       "id": "cadorna-castello",
-      "name": "Cadorna - Castello",
-      "active": true
+      "name": "Cadorna - Castello"
     },
     {
+      "active": true,
       "id": "carrobbio",
-      "name": "Carrobbio",
-      "active": true
+      "name": "Carrobbio"
     },
     {
+      "active": false,
       "id": "porta-nuova",
-      "name": "Porta Nuova",
-      "active": true
+      "name": "Porta Nuova"
     },
     {
+      "active": false,
       "id": "sempione",
-      "name": "Sempione",
-      "active": true
+      "name": "Sempione"
     },
     {
+      "active": false,
       "id": "arena",
-      "name": "Arena",
-      "active": true
+      "name": "Arena"
     },
     {
+      "active": false,
       "id": "ascanio-sforza",
-      "name": "Ascanio Sforza",
-      "active": true
+      "name": "Ascanio Sforza"
     },
     {
+      "active": false,
       "id": "bocconi",
-      "name": "Bocconi",
-      "active": true
+      "name": "Bocconi"
     },
     {
+      "active": false,
       "id": "borgogna-largo-augusto",
-      "name": "Borgogna - Largo Augusto",
-      "active": true
+      "name": "Borgogna - Largo Augusto"
     },
     {
+      "active": false,
       "id": "cadore",
-      "name": "Cadore",
-      "active": true
+      "name": "Cadore"
     },
     {
+      "active": false,
       "id": "cenisio",
-      "name": "Cenisio",
-      "active": true
+      "name": "Cenisio"
     },
     {
+      "active": false,
       "id": "citta-studi",
-      "name": "Città Studi",
-      "active": true
+      "name": "Città Studi"
     },
     {
+      "active": false,
       "id": "corso-san-gottardo",
-      "name": "Corso San Gottardo",
-      "active": true
+      "name": "Corso San Gottardo"
     },
     {
+      "active": false,
       "id": "de-angeli",
-      "name": "De Angeli",
-      "active": true
+      "name": "De Angeli"
     },
     {
+      "active": false,
       "id": "dezza",
-      "name": "Dezza",
-      "active": true
+      "name": "Dezza"
     },
     {
+      "active": false,
       "id": "farini",
-      "name": "Farini",
-      "active": true
+      "name": "Farini"
     },
     {
+      "active": false,
       "id": "lodi-brenta",
-      "name": "Lodi - Brenta",
-      "active": true
+      "name": "Lodi - Brenta"
     },
     {
+      "active": true,
       "id": "lanza",
-      "name": "Lanza",
-      "active": true
+      "name": "Lanza"
     },
     {
+      "active": false,
       "id": "maggiolina",
-      "name": "Maggiolina",
-      "active": true
+      "name": "Maggiolina"
     },
     {
+      "active": true,
       "id": "missori",
-      "name": "Missori",
-      "active": true
+      "name": "Missori"
     },
     {
+      "active": true,
       "id": "montenero",
-      "name": "Montenero",
-      "active": true
+      "name": "Montenero"
     },
     {
+      "active": false,
       "id": "monte-rosa-lotto",
-      "name": "Monte Rosa - Lotto",
-      "active": true
+      "name": "Monte Rosa - Lotto"
     },
     {
+      "active": false,
       "id": "morgagni",
-      "name": "Morgagni",
-      "active": true
+      "name": "Morgagni"
     },
     {
+      "active": false,
       "id": "palestro",
-      "name": "Palestro",
-      "active": true
+      "name": "Palestro"
     },
     {
+      "active": false,
       "id": "plebisciti-susa",
-      "name": "Plebisciti - Susa",
-      "active": true
+      "name": "Plebisciti - Susa"
     },
     {
+      "active": true,
       "id": "quadronno-crocetta",
-      "name": "Quadronno - Crocetta",
-      "active": true
+      "name": "Quadronno - Crocetta"
     },
     {
+      "active": false,
       "id": "repubblica",
-      "name": "Repubblica",
-      "active": true
+      "name": "Repubblica"
     },
     {
+      "active": false,
       "id": "san-babila",
-      "name": "San Babila",
-      "active": true
+      "name": "San Babila"
     },
     {
+      "active": true,
       "id": "san-vittore",
-      "name": "San Vittore",
-      "active": true
+      "name": "San Vittore"
     },
     {
+      "active": true,
       "id": "sant-ambrogio",
-      "name": "Sant'Ambrogio",
-      "active": true
+      "name": "Sant'Ambrogio"
     },
     {
+      "active": false,
       "id": "scala-manzoni",
-      "name": "Scala - Manzoni",
-      "active": true
+      "name": "Scala - Manzoni"
     },
     {
+      "active": false,
       "id": "turati",
-      "name": "Turati",
-      "active": true
+      "name": "Turati"
     },
     {
+      "active": false,
       "id": "vercelli-wagner",
-      "name": "Vercelli - Wagner",
-      "active": true
+      "name": "Vercelli - Wagner"
     },
     {
+      "active": false,
       "id": "zara",
-      "name": "Zara",
-      "active": true
+      "name": "Zara"
     }
   ],
-  "last_saved": "2026-04-21T19:07:46"
+  "last_saved": "2026-04-28T21:40:36"
 }
