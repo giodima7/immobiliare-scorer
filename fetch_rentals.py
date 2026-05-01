@@ -16,6 +16,8 @@ Daemon mode (loops every 60 min, tracks new listings only):
     python3 fetch_rentals.py --daemon --email
 """
 
+from __future__ import annotations
+
 import argparse
 import asyncio
 import json
@@ -43,7 +45,7 @@ AREA_SETTINGS_PATH   = BASE_DIR / "area_settings.json"
 
 EDGE_PATH = os.environ.get(
     "BROWSER_EXECUTABLE_PATH",
-    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
 )
 
 # ── Floor parsing ──────────────────────────────────────────────────────────────
@@ -393,6 +395,29 @@ def score_rental(listing: dict, all_listings: list) -> dict:
     }
 
 
+# ── Advertiser parser ──────────────────────────────────────────────────────────
+
+_advertiser_warn_logged = False
+
+def parse_advertiser(re_data: dict) -> dict:
+    global _advertiser_warn_logged
+    wrapper = re_data.get("advertiser") or {}
+    adv = wrapper.get("agency") or wrapper.get("private") or wrapper.get("supervisor") or {}
+    agency_id   = str(adv.get("id") or "")
+    agency_name = (adv.get("displayName") or adv.get("name") or "")
+    agency_type = (adv.get("type") or adv.get("label") or "")
+    agency_url  = (adv.get("url") or adv.get("profileUrl") or "")
+    if not (agency_id or agency_name) and not _advertiser_warn_logged:
+        print("  [warn] advertiser fields missing — agency_id/name will be blank")
+        _advertiser_warn_logged = True
+    return {
+        "agency_id":   agency_id,
+        "agency_name": agency_name,
+        "agency_type": agency_type,
+        "agency_url":  agency_url,
+    }
+
+
 # ── Parser ─────────────────────────────────────────────────────────────────────
 
 def parse_rental(item: dict) -> Optional[dict]:
@@ -620,16 +645,19 @@ def parse_rental(item: dict) -> Optional[dict]:
     # photo_count — count photos; fall back to 1 if thumbnail was resolved but list missing
     photo_count = len(photos)
 
-    # days_on_market (from first_seen or publication date if available)
+    # published_date + days_on_market
+    published_date = None
     days_on_market = None
-    for date_field in ("firstSeenDate", "publicationDate", "insertionDate", "created_at",
-                       "createdAt", "insertDate", "datePublished"):
+    for date_field in ("dataModifica", "pubblicazione", "dataInserimento",
+                       "publicationDate", "insertionDate", "created_at",
+                       "createdAt", "insertDate", "datePublished", "firstSeenDate"):
         raw_date = re_data.get(date_field) or prop.get(date_field)
         if raw_date:
             try:
-                from datetime import date as _date
-                pub = datetime.fromisoformat(str(raw_date)[:10]).date()
-                days_on_market = (_date.today() - pub).days
+                pub_str = str(raw_date)[:10]
+                pub = datetime.fromisoformat(pub_str).date()
+                published_date = pub_str
+                days_on_market = (date.today() - pub).days
                 break
             except Exception:
                 pass
@@ -665,11 +693,13 @@ def parse_rental(item: dict) -> Optional[dict]:
         "furnished":          furnished,
         "photo_count":        photo_count,
         "days_on_market":     days_on_market,
+        "published_date":     published_date,
         "condition":          condition_raw,
         "thumbnail":          thumbnail,    # first listing photo URL (or None)
         "url":                url,
         "omi":                omi,           # dropped before JSON export
         "fetched_at":         datetime.now().isoformat(timespec="seconds"),
+        **parse_advertiser(re_data),
     }
 
 
@@ -973,17 +1003,23 @@ def score_all(raw: list) -> list:
 
 # ── Persistence helpers ────────────────────────────────────────────────────────
 
-def load_seen_ids() -> set:
+def load_seen_ids() -> dict:
     if SEEN_IDS_PATH.exists():
         try:
-            return set(json.loads(SEEN_IDS_PATH.read_text()))
+            raw = json.loads(SEEN_IDS_PATH.read_text())
+            if isinstance(raw, list):
+                today = str(date.today())
+                migrated = {str(id_): {"first_seen_date": today} for id_ in raw}
+                print(f"  [migrate] seen_ids.json: migrated {len(migrated)} IDs to dict format")
+                return migrated
+            return raw
         except Exception:
             pass
-    return set()
+    return {}
 
 
-def save_seen_ids(ids: set):
-    SEEN_IDS_PATH.write_text(json.dumps(sorted(ids)))
+def save_seen_ids(ids: dict):
+    SEEN_IDS_PATH.write_text(json.dumps(ids, ensure_ascii=False))
 
 
 def write_output(listings: list, source: str = "immobiliare",
@@ -1019,7 +1055,7 @@ def write_output(listings: list, source: str = "immobiliare",
 
     merged = kept + listings
 
-    # Defensive dedup — new listings (appended last) win over any stale duplicates
+    # Dedup by ID — new listings (appended last) win
     seen_dedup: set = set()
     deduped = []
     for l in reversed(merged):
@@ -1027,6 +1063,23 @@ def write_output(listings: list, source: str = "immobiliare",
             seen_dedup.add(l["id"])
             deduped.append(l)
     merged = list(reversed(deduped))
+
+    # Dedup real-world duplicates: same property listed by multiple agencies
+    # Keep earliest first_seen_date within each (lat,lon@3dp, rooms, sqm, rent_mo) group
+    from collections import defaultdict as _dd
+    geo_groups: dict = _dd(list)
+    for i, l in enumerate(merged):
+        lat, lon = l.get("latitude"), l.get("longitude")
+        if lat is not None and lon is not None and l.get("rooms") and l.get("sqm") and l.get("rent_mo"):
+            geo_groups[(round(lat, 3), round(lon, 3), l["rooms"], l["sqm"], l["rent_mo"])].append(i)
+    remove_geo: set = set()
+    for idxs in geo_groups.values():
+        if len(idxs) > 1:
+            idxs.sort(key=lambda i: (merged[i].get("first_seen_date") or "9999", str(merged[i].get("id", ""))))
+            remove_geo.update(idxs[1:])
+    if remove_geo:
+        print(f"  [dedup]  Removed {len(remove_geo)} real-world duplicate listing(s)")
+        merged = [l for i, l in enumerate(merged) if i not in remove_geo]
 
     merged.sort(key=lambda x: x.get("score_total", 0), reverse=True)
     clean = [{k: v for k, v in l.items() if k != "omi"} for l in merged]
@@ -1092,11 +1145,18 @@ def run_once(args) -> list:
     # (canonical slugs set on each listing during _fetch_async after redirect resolution).
     # Pass None for full-city scans (area slug = None) to skip stale removal.
     fetched_slugs = {l.get("_fetched_area") for l in scored if l.get("_fetched_area")}
+
+    seen = load_seen_ids()
+    today_str = str(date.today())
+    for l in scored:
+        lid = l["id"]
+        l["first_seen_date"] = seen[lid]["first_seen_date"] if lid in seen else today_str
+
     write_output(scored, scanned_area_slugs=fetched_slugs or None)
 
-    seen         = load_seen_ids()
     new_listings = [l for l in scored if l["id"] not in seen]
-    seen.update(l["id"] for l in scored)
+    for l in scored:
+        seen[l["id"]] = {"first_seen_date": l["first_seen_date"]}
     save_seen_ids(seen)
 
     write_status(len(new_listings), len(seen), skipped_areas=skipped_areas)

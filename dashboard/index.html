@@ -750,6 +750,13 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--accent); }
 }
 .scanner-new-badge.visible { display: inline-block; }
 
+.new-badge {
+  display: inline-block; font-size: 10px; font-weight: 700;
+  background: #DBEAFE; color: #1D4ED8;
+  border-radius: 4px; padding: 1px 6px;
+  vertical-align: middle; letter-spacing: 0.2px;
+}
+
 .btn-scanner {
   border: none; border-radius: 8px;
   padding: 7px 16px; cursor: pointer;
@@ -1842,6 +1849,7 @@ function restoreFilters() {
   set('rMaxMetro', filters.maxMetro);
   set('rMinFloor', filters.minFloor);
   set('rScore',    filters.minScore);
+  set('rListed',   filters.fListed);
   const elev = document.getElementById('rElevator');
   if (elev && filters.elevator != null) elev.checked = filters.elevator;
 }
@@ -1857,6 +1865,7 @@ function saveFilters() {
     minFloor: document.getElementById('rMinFloor')?.value,
     elevator: document.getElementById('rElevator')?.checked,
     minScore: document.getElementById('rScore')?.value,
+    fListed:  document.getElementById('rListed')?.value,
   };
   Storage.set('filters', filters);
 }
@@ -2212,6 +2221,7 @@ function saveFilters() {
   <button class="tab-btn" id="tabSales" data-tab="sales" onclick="switchTab('sales')">🏡 Sales</button>
   <button class="tab-btn active" id="tabRentals" data-tab="rentals" onclick="switchTab('rentals')">🔑 Rentals</button>
   <button class="tab-btn" id="tabMap" data-tab="map" onclick="switchTab('map')">🗺 Map</button>
+  <button class="tab-btn" id="tabInsights" data-tab="insights" onclick="switchTab('insights')">📊 Insights</button>
   <button class="tab-btn" id="tabSettings" data-tab="settings" onclick="switchTab('settings')">⚙ Settings</button>
 </nav>
 
@@ -2685,6 +2695,16 @@ function saveFilters() {
     </div>
     <div class="filter-sep"></div>
     <div class="filter-group">
+      <label>Listed</label>
+      <select id="rListed">
+        <option value="">Any</option>
+        <option value="7">Last 7 days</option>
+        <option value="14">Last 14 days</option>
+        <option value="30">Last 30 days</option>
+      </select>
+    </div>
+    <div class="filter-sep"></div>
+    <div class="filter-group">
       <label>Gems</label>
       <div id="rGemFilter" style="display:flex;gap:4px">
         <button class="gem-tab active" data-gem="">All</button>
@@ -2700,6 +2720,7 @@ function saveFilters() {
     <span>Showing <strong id="rShowCount">–</strong> rentals</span>
     <span>Avg score <strong id="rAvgScore">–</strong> / 100</span>
     <span>Avg rent <strong id="rAvgRent">–</strong> /mo</span>
+    <span id="rNewStat" style="display:none">🆕 <strong id="rNewCount">–</strong> new this week</span>
     <span title="Listings using keyword-based OMI fallback instead of polygon match">Keyword fallback <strong id="rFallbackCount">–</strong>
       <button class="btn-enrich-geo" id="btnApplyOmi" title="Apply polygon OMI zones to all listings (fast, no network needed)" style="margin-left:6px">Apply OMI</button>
       <span id="applyOmiStatus" style="font-size:10px;color:var(--muted);margin-left:4px"></span>
@@ -2817,6 +2838,16 @@ function saveFilters() {
     </div>
     <div class="filter-sep"></div>
     <div class="filter-group">
+      <label>Listed</label>
+      <select id="mRentListed">
+        <option value="">Any</option>
+        <option value="7">Last 7 days</option>
+        <option value="14">Last 14 days</option>
+        <option value="30">Last 30 days</option>
+      </select>
+    </div>
+    <div class="filter-sep"></div>
+    <div class="filter-group">
       <label>Min score</label>
       <input type="range" id="mRentScore" min="0" max="100" value="0" step="5">
       <span class="range-val" id="mRentScoreVal">0</span>
@@ -2872,6 +2903,90 @@ function saveFilters() {
   <div id="mapContainer"></div>
   <div id="mapCapNotice" style="display:none;text-align:center;padding:6px 12px;font-size:11px;color:#6B7280;background:rgba(255,255,255,0.9);border-top:1px solid #e5e7eb">
     Showing top 400 listings in view — zoom in to see more.
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     INSIGHTS VIEW
+═══════════════════════════════════════════════════════════════ -->
+<div id="insightsView" hidden>
+  <div style="max-width:900px;margin:0 auto;padding:24px 20px">
+
+    <div style="display:flex;gap:8px;margin-bottom:20px;align-items:center">
+      <strong style="font-size:15px">📊 Insights</strong>
+      <div style="margin-left:auto;display:flex;gap:4px">
+        <button class="sort-tab active" id="insightsModeRent">🔑 Rentals</button>
+        <button class="sort-tab" id="insightsModeSale">🏡 Sales</button>
+      </div>
+    </div>
+
+    <!-- Market Overview -->
+    <details open>
+      <summary class="settings-section-title" style="cursor:pointer;list-style:none">
+        Market Overview
+      </summary>
+      <div style="margin-top:12px">
+        <div id="insightsMetricCards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px"></div>
+        <canvas id="insightsScoreChart" height="110" style="max-height:160px"></canvas>
+      </div>
+    </details>
+
+    <!-- Agency Leaderboard -->
+    <details open>
+      <summary class="settings-section-title" style="cursor:pointer;list-style:none;margin-top:24px">
+        Agency Leaderboard
+      </summary>
+      <div style="margin-top:12px">
+        <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
+          <input type="text" id="insightsAgencySearch" placeholder="Search agency…"
+            style="flex:1;min-width:160px;max-width:220px;padding:5px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface);color:var(--text)">
+        </div>
+        <div style="overflow-x:auto">
+          <table class="area-table">
+            <thead><tr id="insightsAgencyHead">
+              <th onclick="_sortAgency('name')" style="cursor:pointer;user-select:none">Agency <span id="ah-name">↕</span></th>
+              <th onclick="_sortAgency('type')" style="cursor:pointer;user-select:none">Type <span id="ah-type">↕</span></th>
+              <th onclick="_sortAgency('count')" style="cursor:pointer;user-select:none">Listings <span id="ah-count">▼</span></th>
+              <th onclick="_sortAgency('avg_score')" style="cursor:pointer;user-select:none">Avg score <span id="ah-avg_score">↕</span></th>
+              <th onclick="_sortAgency('avg_price')" style="cursor:pointer;user-select:none">Avg price <span id="ah-avg_price">↕</span></th>
+            </tr></thead>
+            <tbody id="insightsAgencyBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </details>
+
+    <!-- New Listings Activity -->
+    <details open>
+      <summary class="settings-section-title" style="cursor:pointer;list-style:none;margin-top:24px">
+        New Listings Activity
+      </summary>
+      <div style="margin-top:12px">
+        <div id="insightsNewCounters" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;margin-bottom:16px"></div>
+        <canvas id="insightsNewChart" height="90" style="max-height:130px"></canvas>
+      </div>
+    </details>
+
+    <!-- Zone Breakdown -->
+    <details open>
+      <summary class="settings-section-title" style="cursor:pointer;list-style:none;margin-top:24px">
+        Zone Breakdown
+      </summary>
+      <div style="margin-top:12px;overflow-x:auto">
+        <table class="area-table">
+          <thead><tr id="insightsZoneHead">
+            <th onclick="_sortZone('name')" style="cursor:pointer;user-select:none">Neighbourhood <span id="zh-name">↕</span></th>
+            <th onclick="_sortZone('count')" style="cursor:pointer;user-select:none">Count <span id="zh-count">▼</span></th>
+            <th onclick="_sortZone('avg_score')" style="cursor:pointer;user-select:none">Avg score <span id="zh-avg_score">↕</span></th>
+            <th onclick="_sortZone('avg_price')" style="cursor:pointer;user-select:none">Avg price <span id="zh-avg_price">↕</span></th>
+            <th onclick="_sortZone('gems')" style="cursor:pointer;user-select:none">Gems <span id="zh-gems">↕</span></th>
+            <th onclick="_sortZone('good')" style="cursor:pointer;user-select:none">Good Value <span id="zh-good">↕</span></th>
+          </tr></thead>
+          <tbody id="insightsZoneBody"></tbody>
+        </table>
+      </div>
+    </details>
+
   </div>
 </div>
 
@@ -4082,7 +4197,7 @@ let activeTab = 'rentals';
 
 function switchTab(tab) {
   activeTab = tab;
-  ['salesView','rentalsView','mapView','settingsView'].forEach(id => {
+  ['salesView','rentalsView','mapView','insightsView','settingsView'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     const show = id === tab + 'View';
@@ -4108,6 +4223,10 @@ function switchTab(tab) {
     if (_mapDataType === 'rentals' && !ALL_RENT.length) loadRentals().then(() => _mapRender());
     else if (_mapDataType === 'sales' && !ALL_SALE.length) loadSales().then(() => _mapRender());
     else _mapRender();
+  } else if (tab === 'insights') {
+    stopScannerPoll();
+    stopSaleFetchPoll();
+    showInsightsTab();
   } else if (tab === 'settings') {
     stopScannerPoll();
     stopSaleFetchPoll();
@@ -4528,6 +4647,17 @@ function getRentBarPct(l) {
 const ENERGY_RANK = { G:1, F:2, E:3, D:4, C:5, B:6, A1:7, A2:8, A3:9, A4:10, A:7 };
 const ENERGY_MIN_RANK = { C: 5, B: 6, A: 7 };
 
+// ── New listing badge helpers ──────────────────────────────────────────────────
+function isNew(l) {
+  if (!l.first_seen_date) return false;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 7);
+  return new Date(l.first_seen_date) >= cutoff;
+}
+function newBadgeHtml(l) {
+  return isNew(l) ? '<span class="new-badge">New</span>' : '';
+}
+
 // ── Rentals — card renderer ───────────────────────────────────────────────────
 function renderRentalCard(l) {
   const sc       = scoreClass(l.score_total);
@@ -4844,6 +4974,7 @@ function renderRentalCard(l) {
       <div class="card-title-a">
         <div class="card-neigh-a">
           ${formatAddress(l.neighbourhood) || '–'}
+          ${newBadgeHtml(l)}
           <span class="fascia-badge fascia-${l.omi_fascia}">Fascia ${l.omi_fascia || '?'}</span>
           ${l.omi_fallback ? '<span style="font-size:10px;color:var(--red)" title="keyword OMI fallback">⚠</span>' : ''}
         </div>
@@ -4925,6 +5056,7 @@ function getRentFilters() {
     elevator:  document.getElementById('rElevator').checked,
     minEnergy: document.getElementById('rMinEnergy').value,
     gemFilter: document.querySelector('#rGemFilter .gem-tab.active')?.dataset.gem || '',
+    fListed:   document.getElementById('rListed')?.value || '',
   };
 }
 
@@ -4953,7 +5085,16 @@ function applyRentFilters(data, f) {
     }
     if (f.elevator && l.elevator !== true) return false;
     if (f.gemFilter === 'hidden' && !l.hidden_gem) return false;
-    if (f.gemFilter === 'good'   && !l.good_value && !l.hidden_gem) return false;
+    if (f.gemFilter === 'good'   && !(l.good_value === true && l.hidden_gem !== true)) return false;
+    if (f.fListed) {
+      const days = parseInt(f.fListed);
+      if (l.first_seen_date) {
+        const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - days);
+        if (new Date(l.first_seen_date) < cutoff) return false;
+      } else {
+        return false;
+      }
+    }
     if (f.minEnergy) {
       const rank    = ENERGY_RANK[l.energy_class] || 0;
       const minRank = ENERGY_MIN_RANK[f.minEnergy] || 0;
@@ -5041,7 +5182,7 @@ function renderRentals() {
   // Update gem filter button counts (based on full ALL_RENT, independent of other filters)
   if (ALL_RENT.length > 0) {
     const nHidden = ALL_RENT.filter(l => l.hidden_gem).length;
-    const nGood   = ALL_RENT.filter(l => l.good_value || l.hidden_gem).length;
+    const nGood   = ALL_RENT.filter(l => l.good_value && !l.hidden_gem).length;
     document.querySelectorAll('#rGemFilter .gem-tab').forEach(btn => {
       const gem = btn.dataset.gem;
       const n = gem === 'hidden' ? nHidden : gem === 'good' ? nGood : ALL_RENT.length;
@@ -5049,6 +5190,13 @@ function renderRentals() {
       const label = gem === 'hidden' ? '✦ Hidden' : gem === 'good' ? '↑ Great Value!' : 'All';
       btn.textContent = `${label} (${n})`;
     });
+    const nNew = ALL_RENT.filter(isNew).length;
+    const newStatEl  = document.getElementById('rNewStat');
+    const newCountEl = document.getElementById('rNewCount');
+    if (newStatEl && newCountEl) {
+      newStatEl.style.display = nNew > 0 ? '' : 'none';
+      newCountEl.textContent  = nNew;
+    }
   }
 
   // Stats always reflect the full filtered set, not just rendered cards
@@ -5160,7 +5308,7 @@ function applySaleFilters(data, f) {
       if (!c.includes(f.condition.replace('_', ' ')) && !c.includes(f.condition)) return false;
     }
     if (f.gem === 'hidden' && !l.hidden_gem)                              return false;
-    if (f.gem === 'good'   && !l.good_value && !l.hidden_gem)            return false;
+    if (f.gem === 'good'   && !(l.good_value === true && l.hidden_gem !== true)) return false;
     return true;
   });
 }
@@ -5404,6 +5552,7 @@ function renderSaleCard(l) {
       <div class="card-title-a">
         <div class="card-neigh-a">
           ${formatAddress(l.neighbourhood) || '–'}
+          ${newBadgeHtml(l)}
           <span class="fascia-badge fascia-${l.omi_fascia}" title="${omiBenchTitle}">
             ${l.omi_zona || ('Fascia ' + (l.omi_fascia || '?'))}
           </span>
@@ -5730,7 +5879,7 @@ document.getElementById('btnStopScanner').addEventListener('click', async () => 
 });
 
 // ── Rentals filter event listeners ───────────────────────────────────────────
-['rFascia','rMaxMetro','rMinFloor','rMinEnergy'].forEach(id =>
+['rFascia','rMaxMetro','rMinFloor','rMinEnergy','rListed'].forEach(id =>
   document.getElementById(id).addEventListener('change', () => { renderRentals(); saveFilters(); }));
 const _debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
 const _renderRentalsDebounced = _debounce(() => { renderRentals(); saveFilters(); }, 350);
@@ -5781,6 +5930,7 @@ document.getElementById('rBtnReset').addEventListener('click', () => {
   document.getElementById('rMinFloor').value  = '';
   document.getElementById('rElevator').checked = false;
   document.getElementById('rMinEnergy').value = '';
+  document.getElementById('rListed').value    = '';
   document.querySelectorAll('#rGemFilter .gem-tab').forEach(t =>
     t.classList.toggle('active', t.dataset.gem === ''));
   rentSortKey = 'score_total';
@@ -6722,6 +6872,7 @@ function _getMapRentFilters() {
     minFloor:  parseInt(document.getElementById('mRentMinFloor')?.value)  || -999,
     elevator:  document.getElementById('mRentElevator')?.checked || false,
     minEnergy: document.getElementById('mRentMinEnergy')?.value || '',
+    fListed:   document.getElementById('mRentListed')?.value || '',
   };
 }
 
@@ -6827,7 +6978,7 @@ function _mapInit() {
 
     // Rental filter bindings
     ['mRentFascia','mRentMaxRent','mRentMinSqm','mRentMinRooms',
-     'mRentMaxMetro','mRentMinFloor','mRentElevator','mRentMinEnergy'].forEach(id => {
+     'mRentMaxMetro','mRentMinFloor','mRentElevator','mRentMinEnergy','mRentListed'].forEach(id => {
       document.getElementById(id)?.addEventListener('change', _mr);
     });
     [['mRentScore', 'mRentScoreVal']].forEach(([sid, vid]) => {
@@ -6837,7 +6988,7 @@ function _mapInit() {
     });
     document.getElementById('mRentReset')?.addEventListener('click', () => {
       ['mRentFascia','mRentMaxRent','mRentMinSqm','mRentMinRooms',
-       'mRentMaxMetro','mRentMinFloor','mRentMinEnergy'].forEach(id => {
+       'mRentMaxMetro','mRentMinFloor','mRentMinEnergy','mRentListed'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
       });
@@ -6902,6 +7053,270 @@ function _mapRender() {
     }
   }, 50);
 }
+
+// ── Insights tab ─────────────────────────────────────────────────────────────
+let insightsLoaded = false;
+let insightsMode   = 'rentals';
+const _insightsCharts = {};
+let _insightsAgencyData = [];
+let _insightsZoneData   = [];
+let _zoneSortKey = 'count', _zoneSortAsc = false;
+let _agencySortKey = 'count', _agencySortAsc = false;
+
+function _destroyChart(id) {
+  if (_insightsCharts[id]) { _insightsCharts[id].destroy(); delete _insightsCharts[id]; }
+}
+
+function _metricCard(label, value, accent) {
+  const border = accent ? `border-left:3px solid ${accent};padding-left:13px` : '';
+  const valColor = accent ? `color:${accent}` : 'color:var(--text)';
+  return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;${border}">
+    <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">${label}</div>
+    <div style="font-size:22px;font-weight:800;margin-top:4px;${valColor}">${value}</div>
+  </div>`;
+}
+
+function setInsightsMode(mode) {
+  insightsMode = mode;
+  document.getElementById('insightsModeRent').classList.toggle('active', mode === 'rentals');
+  document.getElementById('insightsModeSale').classList.toggle('active', mode === 'sales');
+  insightsLoaded = false;
+  computeInsights();
+  insightsLoaded = true;
+}
+
+function showInsightsTab() {
+  if (insightsLoaded) return;
+  const listings = insightsMode === 'rentals' ? ALL_RENT : ALL_SALE;
+  if (!listings.length) {
+    const load = insightsMode === 'rentals' ? loadRentals : loadSales;
+    load().then(() => { computeInsights(); insightsLoaded = true; });
+  } else {
+    computeInsights();
+    insightsLoaded = true;
+  }
+}
+
+function computeInsights() {
+  const listings = insightsMode === 'rentals' ? ALL_RENT : ALL_SALE;
+  _renderMarketOverview(listings);
+  _renderNewActivity(listings);
+  _renderZoneBreakdown(listings);
+  _renderAgencyLeaderboard(listings);
+}
+
+function _renderMarketOverview(listings) {
+  const priceKey = insightsMode === 'rentals' ? 'rent_mo' : 'price';
+  const scores   = listings.map(l => l.score_total).filter(v => v != null);
+  const prices   = listings.map(l => l[priceKey]).filter(v => v != null);
+  const avgScore = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length) : null;
+  const avgPrice = prices.length ? Math.round(prices.reduce((a,b)=>a+b,0)/prices.length) : null;
+  const hidden   = listings.filter(l => l.hidden_gem).length;
+
+  const el = document.getElementById('insightsMetricCards');
+  const scoreAccent = avgScore == null ? null : avgScore >= 70 ? '#16a34a' : avgScore >= 50 ? '#d97706' : '#dc2626';
+  if (el) el.innerHTML = [
+    _metricCard('Total listings', fmt(listings.length), '#3B82F6'),
+    _metricCard('Avg score', avgScore != null ? avgScore + '/100' : '–', scoreAccent),
+    _metricCard(insightsMode === 'rentals' ? 'Avg rent /mo' : 'Avg price', avgPrice != null ? '€' + fmt(avgPrice) : '–', '#6366F1'),
+    _metricCard('Hidden gems', fmt(hidden), '#7C3AED'),
+  ].join('');
+
+  _destroyChart('scoreChart');
+  const scoreCtx = document.getElementById('insightsScoreChart');
+  if (!scoreCtx || !scores.length) return;
+  const buckets = Array(10).fill(0);
+  scores.forEach(s => { const b = Math.min(9, Math.floor(s / 10)); buckets[b]++; });
+  _insightsCharts['scoreChart'] = new Chart(scoreCtx, {
+    type: 'bar',
+    data: {
+      labels: ['0–9','10–19','20–29','30–39','40–49','50–59','60–69','70–79','80–89','90–100'],
+      datasets: [{ data: buckets, backgroundColor: 'rgba(45,106,79,0.7)', borderRadius: 4 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => { const pct = scores.length ? (c.parsed.y / scores.length * 100).toFixed(1) : 0; return `${c.parsed.y} listings (${pct}%)`; } } } },
+      scales: { x: { ticks: { font: { size: 11 } } }, y: { beginAtZero: true, ticks: { font: { size: 11 } } } }
+    }
+  });
+}
+
+function _renderNewActivity(listings) {
+  const now   = new Date();
+  const mkAgo = d => { const t = new Date(now); t.setDate(t.getDate() - d); return t; };
+  const ago7 = mkAgo(7), ago14 = mkAgo(14), ago30 = mkAgo(30);
+  const n7  = listings.filter(l => l.first_seen_date && new Date(l.first_seen_date) >= ago7).length;
+  const n14 = listings.filter(l => l.first_seen_date && new Date(l.first_seen_date) >= ago14).length;
+  const n30 = listings.filter(l => l.first_seen_date && new Date(l.first_seen_date) >= ago30).length;
+
+  const el = document.getElementById('insightsNewCounters');
+  if (el) el.innerHTML = [
+    _metricCard('Last 7 days', fmt(n7)),
+    _metricCard('Last 14 days', fmt(n14)),
+    _metricCard('Last 30 days', fmt(n30)),
+  ].join('');
+
+  _destroyChart('newChart');
+  const newCtx = document.getElementById('insightsNewChart');
+  if (!newCtx) return;
+  const days30 = [], dayCounts = {};
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(now); d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    days30.push(key); dayCounts[key] = 0;
+  }
+  listings.forEach(l => { if (l.first_seen_date && dayCounts.hasOwnProperty(l.first_seen_date)) dayCounts[l.first_seen_date]++; });
+  _insightsCharts['newChart'] = new Chart(newCtx, {
+    type: 'bar',
+    data: {
+      labels: days30.map(d => d.slice(5)),
+      datasets: [{ data: days30.map(d => dayCounts[d]), backgroundColor: 'rgba(59,130,246,0.7)', borderRadius: 3 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.parsed.y + ' new' } } },
+      scales: { x: { ticks: { font: { size: 10 }, maxRotation: 45 } }, y: { beginAtZero: true, ticks: { font: { size: 11 } } } }
+    }
+  });
+}
+
+function _scoreColor(s) {
+  if (s == null) return '';
+  return s >= 70 ? 'color:#16a34a;font-weight:600' : s >= 50 ? 'color:#d97706;font-weight:600' : 'color:#dc2626;font-weight:600';
+}
+function _agencyTypeBadge(type) {
+  if (!type || type === '–') return '<span style="color:var(--muted)">–</span>';
+  const t = type.toLowerCase();
+  const s = t.includes('agenc') ? 'background:#DBEAFE;color:#1E40AF' : t.includes('privat') ? 'background:#D1FAE5;color:#065F46' : 'background:#F3F4F6;color:#6B7280';
+  return `<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;${s}">${type}</span>`;
+}
+function _updateSortIndicators(headerId, sortKey, sortAsc, colKeys) {
+  const tr = document.getElementById(headerId);
+  if (!tr) return;
+  tr.querySelectorAll('th span').forEach((span, i) => {
+    span.textContent = colKeys[i] === sortKey ? (sortAsc ? ' ▲' : ' ▼') : ' ↕';
+  });
+}
+
+function _renderZoneBreakdown(listings) {
+  const zones = {};
+  listings.forEach(l => {
+    const key = l.neighbourhood || '_unknown';
+    if (!zones[key]) zones[key] = { name: key, count: 0, scores: [], prices: [], gems: 0, good: 0 };
+    zones[key].count++;
+    if (l.score_total != null) zones[key].scores.push(l.score_total);
+    const price = l.rent_mo ?? l.price;
+    if (price != null) zones[key].prices.push(price);
+    if (l.hidden_gem) zones[key].gems++;
+    if (l.good_value && !l.hidden_gem) zones[key].good++;
+  });
+  _insightsZoneData = Object.values(zones).map(z => ({
+    ...z,
+    avg_score: z.scores.length ? Math.round(z.scores.reduce((a,b)=>a+b,0)/z.scores.length) : null,
+    avg_price: z.prices.length ? Math.round(z.prices.reduce((a,b)=>a+b,0)/z.prices.length) : null,
+  }));
+  _renderZoneTable();
+}
+
+function _renderZoneTable() {
+  const colKeys = ['name','count','avg_score','avg_price','gems','good'];
+  _updateSortIndicators('insightsZoneHead', _zoneSortKey, _zoneSortAsc, colKeys);
+  const data = [..._insightsZoneData].sort((a, b) => {
+    const av = a[_zoneSortKey] ?? (_zoneSortKey === 'name' ? '' : -Infinity);
+    const bv = b[_zoneSortKey] ?? (_zoneSortKey === 'name' ? '' : -Infinity);
+    if (typeof av === 'string') return _zoneSortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
+    return _zoneSortAsc ? av - bv : bv - av;
+  });
+  const rows = data.map(z => {
+    const gemStyle  = z.gems > 0 ? 'color:#7C3AED;font-weight:700' : 'color:var(--muted)';
+    const goodStyle = z.good > 0 ? 'color:#2563EB;font-weight:700' : 'color:var(--muted)';
+    return `<tr>
+      <td>${z.name === '_unknown' ? '–' : z.name}</td>
+      <td>${fmt(z.count)}</td>
+      <td style="${_scoreColor(z.avg_score)}">${z.avg_score != null ? z.avg_score : '–'}</td>
+      <td>${z.avg_price != null ? '€' + fmt(z.avg_price) : '–'}</td>
+      <td style="${gemStyle}">${z.gems || 0}</td>
+      <td style="${goodStyle}">${z.good || 0}</td>
+    </tr>`;
+  });
+  const tbody = document.getElementById('insightsZoneBody');
+  if (tbody) tbody.innerHTML = rows.join('') || '<tr><td colspan="6" style="color:var(--muted);text-align:center;padding:16px">No zone data yet</td></tr>';
+}
+
+function _sortZone(key) {
+  if (_zoneSortKey === key) _zoneSortAsc = !_zoneSortAsc;
+  else { _zoneSortKey = key; _zoneSortAsc = false; }
+  _renderZoneTable();
+}
+
+function computeAgencyStats(listings) {
+  const map = {};
+  for (const l of listings) {
+    if (!l.agency_id && !l.agency_name) continue;   // skip listings with no agency data yet
+    const key = (l.agency_name || '').trim().toLowerCase() || l.agency_id || '_unknown';
+    if (!map[key]) map[key] = { id: l.agency_id || '', name: l.agency_name || '', type: l.agency_type || '', url: l.agency_url || '', count: 0, scores: [], prices: [] };
+    map[key].count++;
+    if (l.score_total != null) map[key].scores.push(l.score_total);
+    const price = l.rent_mo ?? l.price;
+    if (price != null) map[key].prices.push(price);
+  }
+  return Object.values(map)
+    .filter(a => a.count >= 2)
+    .map(a => ({
+      ...a,
+      avg_score: a.scores.length ? Math.round(a.scores.reduce((x,y)=>x+y,0)/a.scores.length) : null,
+      avg_price: a.prices.length ? Math.round(a.prices.reduce((x,y)=>x+y,0)/a.prices.length) : null,
+    }));
+}
+
+function _renderAgencyLeaderboard(listings) {
+  const hasAgencyData = listings.some(l => l.agency_id || l.agency_name);
+  _insightsAgencyData = hasAgencyData ? computeAgencyStats(listings) : [];
+  _insightsAgencyMissingData = !hasAgencyData;
+  _renderAgencyTable();
+}
+
+let _insightsAgencyMissingData = false;
+function _renderAgencyTable() {
+  const tbody = document.getElementById('insightsAgencyBody');
+  if (!tbody) return;
+  if (_insightsAgencyMissingData) {
+    tbody.innerHTML = `<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px;line-height:1.6">
+      Agency data not yet available.<br>
+      <span style="font-size:11px">It will populate automatically after the next scan.</span>
+    </td></tr>`;
+    return;
+  }
+  const colKeys = ['name','type','count','avg_score','avg_price'];
+  _updateSortIndicators('insightsAgencyHead', _agencySortKey, _agencySortAsc, colKeys);
+  const q = (document.getElementById('insightsAgencySearch')?.value || '').toLowerCase();
+  let data = _insightsAgencyData.filter(a => !q || (a.name || a.id).toLowerCase().includes(q));
+  data = [...data].sort((a, b) => {
+    const isStr = _agencySortKey === 'name' || _agencySortKey === 'type';
+    const av = a[_agencySortKey] ?? (isStr ? '' : -Infinity);
+    const bv = b[_agencySortKey] ?? (isStr ? '' : -Infinity);
+    if (isStr) return _agencySortAsc ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
+    return _agencySortAsc ? av - bv : bv - av;
+  });
+  const rows = data.map(a => `<tr>
+    <td>${a.url ? `<a href="${a.url}" target="_blank" rel="noopener" style="color:var(--accent)">${a.name || a.id}</a>` : (a.name || a.id || '–')}</td>
+    <td>${_agencyTypeBadge(a.type || '')}</td>
+    <td>${fmt(a.count)}</td>
+    <td style="${_scoreColor(a.avg_score)}">${a.avg_score != null ? a.avg_score : '–'}</td>
+    <td>${a.avg_price != null ? '€' + fmt(a.avg_price) : '–'}</td>
+  </tr>`);
+  tbody.innerHTML = rows.join('') || '<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:16px">No agencies with 2+ listings</td></tr>';
+}
+
+function _sortAgency(key) {
+  if (_agencySortKey === key) _agencySortAsc = !_agencySortAsc;
+  else { _agencySortKey = key; _agencySortAsc = false; }
+  _renderAgencyTable();
+}
+
+document.getElementById('insightsModeRent')?.addEventListener('click', () => setInsightsMode('rentals'));
+document.getElementById('insightsModeSale')?.addEventListener('click', () => setInsightsMode('sales'));
+document.getElementById('insightsAgencySearch')?.addEventListener('input', _renderAgencyTable);
 
 // ── Settings tab ─────────────────────────────────────────────────────────────
 let _settingsLoaded = false;

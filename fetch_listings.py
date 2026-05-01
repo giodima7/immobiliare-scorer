@@ -18,6 +18,8 @@ Output files:
     listings_YYYYMMDD_HHMMSS.json   → feed into the HTML scorer tool
 """
 
+from __future__ import annotations
+
 import argparse
 import asyncio
 import csv
@@ -481,6 +483,29 @@ def score_listing(listing: dict, all_listings: list) -> dict:
     }
 
 
+# ── Advertiser parser ──────────────────────────────────────────────────────────
+
+_advertiser_warn_logged = False
+
+def parse_advertiser(re_data: dict) -> dict:
+    global _advertiser_warn_logged
+    wrapper = re_data.get("advertiser") or {}
+    adv = wrapper.get("agency") or wrapper.get("private") or wrapper.get("supervisor") or {}
+    agency_id   = str(adv.get("id") or "")
+    agency_name = (adv.get("displayName") or adv.get("name") or "")
+    agency_type = (adv.get("type") or adv.get("label") or "")
+    agency_url  = (adv.get("url") or adv.get("profileUrl") or "")
+    if not (agency_id or agency_name) and not _advertiser_warn_logged:
+        print("  [warn] advertiser fields missing — agency_id/name will be blank")
+        _advertiser_warn_logged = True
+    return {
+        "agency_id":   agency_id,
+        "agency_name": agency_name,
+        "agency_type": agency_type,
+        "agency_url":  agency_url,
+    }
+
+
 # ── Immobiliare.it API fetch ───────────────────────────────────────────────────
 
 def parse_listing(item: dict, city_key: str, city_label: str) -> Optional[dict]:
@@ -665,16 +690,19 @@ def parse_listing(item: dict, city_key: str, city_label: str) -> Optional[dict]:
         )
     photo_count = len(photos)
 
-    # days_on_market
+    # published_date + days_on_market
+    published_date = None
     days_on_market = None
-    for date_field in ("firstSeenDate", "publicationDate", "insertionDate",
-                       "created_at", "createdAt", "insertDate", "datePublished"):
+    for date_field in ("dataModifica", "pubblicazione", "dataInserimento",
+                       "publicationDate", "insertionDate", "created_at",
+                       "createdAt", "insertDate", "datePublished", "firstSeenDate"):
         raw_date = re_data.get(date_field) or prop.get(date_field)
         if raw_date:
             try:
-                from datetime import date as _date
-                pub = datetime.fromisoformat(str(raw_date)[:10]).date()
-                days_on_market = (_date.today() - pub).days
+                pub_str = str(raw_date)[:10]
+                pub = datetime.fromisoformat(pub_str).date()
+                published_date = pub_str
+                days_on_market = (date.today() - pub).days
                 break
             except Exception:
                 pass
@@ -730,11 +758,13 @@ def parse_listing(item: dict, city_key: str, city_label: str) -> Optional[dict]:
         "furnished":       furnished,
         "photo_count":     photo_count,
         "days_on_market":  days_on_market,
+        "published_date":  published_date,
         "condition":       condition,
         "thumbnail":       thumbnail,
         "url":             url,
         "fetched_at":      datetime.now().isoformat(timespec="seconds"),
         "omi":             omi,   # temporary – removed before CSV export
+        **parse_advertiser(re_data),
     }
 
 
@@ -891,6 +921,22 @@ def export(listings: list, prefix: str):
         writer = csv.DictWriter(f, fieldnames=CSV_FIELDS, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(listings)
+
+    # Dedup real-world duplicates: same property listed by multiple agencies
+    from collections import defaultdict as _dd
+    geo_groups: dict = _dd(list)
+    for i, l in enumerate(listings):
+        lat, lon = l.get("latitude"), l.get("longitude")
+        if lat is not None and lon is not None and l.get("rooms") and l.get("sqm") and l.get("price"):
+            geo_groups[(round(lat, 3), round(lon, 3), l["rooms"], l["sqm"], l["price"])].append(i)
+    remove_geo: set = set()
+    for idxs in geo_groups.values():
+        if len(idxs) > 1:
+            idxs.sort(key=lambda i: (listings[i].get("first_seen_date") or "9999", str(listings[i].get("id", ""))))
+            remove_geo.update(idxs[1:])
+    if remove_geo:
+        print(f"  [dedup]  Removed {len(remove_geo)} real-world duplicate listing(s)")
+        listings = [l for i, l in enumerate(listings) if i not in remove_geo]
 
     # JSON (clean: drop internal `omi` dict, keep flat scored fields)
     json_listings = [{k: v for k, v in l.items() if k != "omi"} for l in listings]
