@@ -40,12 +40,12 @@ _OVERPASS_ENDPOINTS = [
 
 SEARCH_RADIUS = 2000   # metres
 
-# ── Nominatim global rate limiter ─────────────────────────────────────────────
-# Nominatim's usage policy requires ≤ 1 request/sec per IP.  enrich_batch()
-# submits work to a thread pool so multiple threads can call _nominatim_geocode()
-# simultaneously.  This lock serialises all Nominatim requests across threads:
-# a thread acquires it, makes the HTTP call, sleeps 1 s, then releases it, so
-# the *next* thread can start its request only after the full 1-second gap.
+# ── Geocoding rate limiter (Nominatim fallback only) ─────────────────────────
+# Primary geocoder is Photon (photon.komoot.io) — same OSM data, no strict
+# rate limit, handles 8+ concurrent requests fine.
+# Nominatim (nominatim.openstreetmap.org) is kept as a fallback: its policy
+# allows ≤ 1 request/sec per IP, so all Nominatim calls are serialised through
+# this lock (HTTP call + 1 s sleep happen under the lock).
 _NOMINATIM_LOCK = threading.Lock()
 
 # ── Local POI dataset (bulk download once, then offline) ──────────────────────
@@ -524,28 +524,115 @@ def _combined_query(lat: float, lng: float) -> str:
     )
 
 
-# ── Nominatim geocoding (fallback when coordinates are missing) ─────────────────
+# ── Geocoding — Photon (primary) + Nominatim (fallback) ──────────────────────
+#
+# Photon (photon.komoot.io) is backed by the same OSM data as Nominatim but
+# is designed for high-throughput search and can handle 8+ concurrent requests
+# without special treatment.  It typically resolves a Milan street address in
+# < 200 ms, so a batch of 3 000 addresses takes ~2–3 minutes with 8 threads.
+#
+# Nominatim is kept as a fallback for addresses Photon can't resolve.  Because
+# its policy is 1 req/sec per IP, all Nominatim calls are serialised through
+# _NOMINATIM_LOCK (HTTP call + 1 s sleep run under the lock).
+
+import re as _re_geo
+
+
+def _parse_street(address: str) -> tuple[str, str]:
+    """
+    Split an Idealista/Immobiliare address into (street_with_number, city).
+
+    Input examples:
+      "Via Carlo Perini, 18, Quarto Oggiaro, Milano"
+      "Corso Italia, Carrobbio - Cinque Vie, Milano"
+      "Via Negroli, 28, Argonne - Corsica, Milano"
+
+    Returns:
+      street  — first 1–2 comma-parts that look like a street/number
+      city    — "Milano" (always, for this project)
+    """
+    _CITY_TOKENS = {"milano", "italy", "italia", "milan", "mi"}
+    parts = [p.strip() for p in address.split(",")]
+    street_parts = [
+        p for p in parts
+        if p.lower() not in _CITY_TOKENS
+        and not _re_geo.match(r'^(s\.n\.c\.?|snc)$', p, _re_geo.I)
+    ]
+    return ", ".join(street_parts[:2]).strip(", "), "Milano"
+
+
+def _photon_geocode(address: str) -> Optional[tuple[float, float]]:
+    """
+    Geocode via Photon (photon.komoot.io).  No enforced rate limit —
+    runs fully in parallel with other threads.  Returns (lat, lng) or None.
+
+    Always appends Milano to the query so results are city-scoped.
+    The returned coordinate is validated against the Milan bounding box
+    (lat 45.38–45.56, lon 9.02–9.32) so out-of-city results are rejected.
+    """
+    if not address:
+        return None
+
+    street, city = _parse_street(address)
+    if not street:
+        return None
+
+    # Milan bounding box for result validation
+    _LAT_MIN, _LAT_MAX = 45.38, 45.56
+    _LON_MIN, _LON_MAX =  9.02,  9.32
+
+    def _photon_req(q: str) -> Optional[tuple[float, float]]:
+        # Photon: commas in q cause 400; lang=it is unsupported — strip both
+        q_clean = q.replace(",", " ")
+        params = urllib.parse.urlencode({"q": q_clean, "limit": "1"})
+        url = f"https://photon.komoot.io/api/?{params}"
+        req = urllib.request.Request(url,
+                                     headers={"User-Agent": "immobiliare-scorer/1.0"})
+        try:
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                data = json.loads(resp.read())
+            features = data.get("features") or []
+            if features:
+                lon, lat = features[0]["geometry"]["coordinates"]
+                lat, lon = float(lat), float(lon)
+                # Reject results outside Milan
+                if _LAT_MIN <= lat <= _LAT_MAX and _LON_MIN <= lon <= _LON_MAX:
+                    return lat, lon
+        except Exception as exc:
+            print(f"  [geo] Photon error: {exc}", file=sys.stderr)
+        return None
+
+    # Attempt 1: "Via Foo 12, Milano"
+    result = _photon_req(f"{street}, {city}")
+    if result:
+        return result
+
+    # Attempt 2: just first part (strip house number / neighbourhood tokens)
+    first_part = street.split(",")[0].strip()
+    if first_part and first_part != street:
+        result = _photon_req(f"{first_part}, {city}")
+        if result:
+            return result
+
+    return None
+
 
 def _nominatim_geocode(address: str) -> Optional[tuple[float, float]]:
     """
-    Geocode an address via Nominatim.  Returns (lat, lng) or None.
-    Sleeps 1.0 s after each attempt to respect Nominatim's usage policy.
-
-    Strategy:
-      1. Structured query: extract street+number and query with city=Milano
-         (avoids doubling the city name that happens with raw free-text search)
-      2. Free-text fallback: strip neighbourhood tokens and try q= with city appended
+    Geocode via Nominatim (fallback).  Serialised to 1 req/sec globally.
+    Returns (lat, lng) or None.
     """
-    import re as _re_geo
+    if not address:
+        return None
 
-    def _do_request(params: dict) -> Optional[tuple[float, float]]:
+    street, city = _parse_street(address)
+
+    def _nom_req(params: dict) -> Optional[tuple[float, float]]:
         q = urllib.parse.urlencode({"format": "json", "limit": "1",
                                     "countrycodes": "it", **params})
         url = f"https://nominatim.openstreetmap.org/search?{q}"
         req = urllib.request.Request(url,
                                      headers={"User-Agent": "immobiliare-scorer/1.0"})
-        # Serialise all Nominatim calls: one request per second globally
-        # (Nominatim usage policy), regardless of how many threads are running.
         with _NOMINATIM_LOCK:
             try:
                 with urllib.request.urlopen(req, timeout=10) as resp:
@@ -558,47 +645,33 @@ def _nominatim_geocode(address: str) -> Optional[tuple[float, float]]:
                 time.sleep(1.0)
         return None
 
-    if not address:
-        return None
-
-    # ── Attempt 1: structured query ──────────────────────────────────────────
-    # Split on commas, keep only the first two meaningful parts (street + number),
-    # strip Italian neighbourhood suffixes and city names that appear mid-address.
-    raw_parts = [p.strip() for p in address.split(",")]
-    # Drop obvious city/country tokens from the end
-    city_tokens = {"milano", "italy", "italia", "milan"}
-    street_parts = [p for p in raw_parts
-                    if p.lower() not in city_tokens
-                    and not _re_geo.match(r'^(s\.n\.c\.?|snc)$', p, _re_geo.I)]
-    # First 1–2 parts are street [+ number]; the rest are neighbourhood/city
-    street_str = ", ".join(street_parts[:2]).strip(", ")
-    if street_str:
-        result = _do_request({"street": street_str, "city": "Milano"})
+    if street:
+        result = _nom_req({"street": street, "city": city})
         if result:
             return result
 
-    # ── Attempt 2: free-text with just street, Milano, Italia ───────────────
-    # Drop everything after the house number (neighbourhood tokens) to avoid
-    # confusing Nominatim with micro-neighbourhood names it doesn't know.
-    clean = ", ".join(street_parts[:2]).strip(", ")
-    if clean and clean != street_str:
-        result = _do_request({"q": f"{clean}, Milano, Italia"})
-        if result:
-            return result
-
-    # ── Attempt 3: original free-text (legacy fallback) ──────────────────────
-    # Strip duplicate "Milano"/"Italia" suffixes already present in the address.
     stripped = _re_geo.sub(
         r',?\s*(Milano|Italy|Italia)\s*$', '', address,
         flags=_re_geo.IGNORECASE,
     ).strip(", ")
     if stripped:
-        result = _do_request({"q": f"{stripped}, Milano, Italia"})
+        result = _nom_req({"q": f"{stripped}, Milano, Italia"})
         if result:
             return result
 
-    print(f"  [geo] Nominatim: no result for '{address}'", file=sys.stderr)
+    print(f"  [geo] geocode failed for '{address}'", file=sys.stderr)
     return None
+
+
+def _geocode(address: str) -> Optional[tuple[float, float]]:
+    """
+    Geocode an address.  Tries Photon first (fast, parallel-safe), then
+    falls back to Nominatim (rate-limited to 1 req/sec).
+    """
+    result = _photon_geocode(address)
+    if result:
+        return result
+    return _nominatim_geocode(address)
 
 
 # ── Public enrichment API ──────────────────────────────────────────────────────
@@ -635,11 +708,11 @@ def enrich(listing: dict, _skip_osrm: bool = False) -> dict:
             except (TypeError, ValueError):
                 pass
 
-    # Priority 3: Nominatim geocoding
+    # Priority 3: geocoding (Photon → Nominatim fallback)
     if lat is None:
         address = listing.get("address", "").strip()
         if address:
-            result = _nominatim_geocode(address)
+            result = _geocode(address)
             if result:
                 lat, lng = result
                 geocoded = True
