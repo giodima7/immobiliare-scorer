@@ -1,0 +1,76 @@
+{
+  "_comment": "Maps Idealista sub-zone names → Immobiliare canonical area names (MILAN_AREAS keys). Used by fetch_idealista.py so neighbourhood values are consistent across both sources and the dashboard filter works correctly.",
+
+  "Brera - Montenapoleone":                  "Brera",
+  "Cadorna - Castello":                      "Cadorna - Castello",
+  "Carrobbio - Cinque Vie":                  "Carrobbio",
+  "Duomo - San Babila":                      "Duomo",
+  "Missori - Augusto":                       "Missori",
+  "Zona Sant'Ambrogio - Università Cattolica": "Sant'Ambrogio",
+  "Quadrilatero della Moda":                 "Scala - Manzoni",
+
+  "Navigli - Porta Genova":                  "Navigli - Darsena",
+  "Mercalli - Quadronno":                    "Quadronno - Crocetta",
+  "Gottardo":                                "Corso San Gottardo",
+  "Solari - Savona":                         "Solari",
+  "Bocconi":                                 "Bocconi",
+  "Corso Genova":                            "Corso Genova",
+
+  "Cinque Giornate - Cadore":                "Cadore",
+  "Porta Romana":                            "Porta Romana - Medaglie d'Oro",
+  "Tribunale - Guastalla":                   "Guastalla",
+  "Porta Vittoria - Calvairate":             "Piave - Tricolore",
+  "Lodi - Brenta":                           "Lodi - Brenta",
+
+  "Indipendenza - Regina Giovanna":          "Indipendenza",
+  "Morgagni - Bacone":                       "Morgagni",
+  "Palestro - Monforte":                     "Palestro",
+  "Porta Nuova - Turati":                    "Porta Nuova",
+  "Porta Venezia - Repubblica":              "Porta Venezia",
+  "Garibaldi - Corso Como":                  "Garibaldi - Corso Como",
+  "Isola":                                   "Isola",
+  "Moscova":                                 "Moscova",
+  "Buenos Aires":                            "Buenos Aires",
+  "Centrale":                                "Centrale",
+
+  "Cenisio - Sarpi":                         "Paolo Sarpi",
+  "Sempione":                                "Sempione",
+  "Ariosto - Magenta":                       "Vincenzo Monti",
+  "San Vittore - Washington":                "Washington",
+
+  "Lorenteggio - Giambellino":               "Giambellino",
+  "Soderini":                                "Tripoli - Soderini",
+  "Bisceglie":                               "Bisceglie",
+
+  "Naviglio Grande - San Cristoforo":        "Ascanio Sforza",
+  "Famagosta":                               "Famagosta",
+
+  "Bicocca - Bignami":                       "Bicocca",
+  "Bovisa":                                  "Bovisa",
+  "Dergano":                                 "Dergano",
+  "Bruzzano":                                "Bruzzano",
+  "Niguarda":                                "Niguarda",
+  "Comasina":                                "Comasina",
+  "NoLo - Brianza - Pasteur":               "Pasteur",
+  "Maggiolina - Villaggio dei Giornalisti":  "Maggiolina",
+
+  "Corvetto":                                "Corvetto",
+  "Rogoredo - Santa Giulia":                 "Rogoredo",
+
+  "Parco Forlanini":                         "Forlanini",
+  "Mecenate":                                "Mecenate",
+
+  "Città Studi":                             "Città Studi",
+  "Lambrate":                                "Lambrate",
+
+  "Quarto Oggiaro":                          "Quarto Oggiaro",
+  "Cascina Merlata":                         "Cascina Merlata",
+  "Musocco":                                 "Musocco",
+
+  "San Siro":                                "San Siro",
+  "Gratosoglio":                             "Gratosoglio",
+
+  "Vigentino":                               "Vigentino",
+
+  "Qt8":                                     "QT8"
+}

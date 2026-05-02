@@ -72,6 +72,26 @@ IDEALISTA_BASE = "https://www.idealista.it/affitto-case/milano-milano/"
 # Path to the Idealista-specific area settings file (separate from Immobiliare's)
 IDEALISTA_AREAS_PATH = BASE_DIR / "idealista_area_settings.json"
 
+# Path to the neighbourhood synonym map: Idealista sub-zone name → Immobiliare canonical name
+_SYNONYMS_PATH = BASE_DIR / "neighbourhood_synonyms.json"
+
+
+def _load_synonyms() -> dict:
+    """
+    Load Idealista → Immobiliare neighbourhood synonym map from JSON.
+    Returns an empty dict if the file is missing or malformed.
+    """
+    if _SYNONYMS_PATH.exists():
+        try:
+            return json.loads(_SYNONYMS_PATH.read_text())
+        except Exception:
+            pass
+    return {}
+
+
+# Loaded once at module import time so every listing parse uses it.
+_NEIGHBOURHOOD_SYNONYMS: dict = _load_synonyms()
+
 
 def _load_idealista_areas() -> list:
     """
@@ -289,8 +309,17 @@ JSON.stringify((() => {
                        .map(t => (t.innerText || t.textContent || '').trim())
                        .filter(Boolean),
             img: (() => {
-                // Idealista lazy-loads images: src may be a placeholder while
-                // the real URL lives in data-src / data-lazy / srcset.
+                // picture source srcset is ALWAYS present in the HTML (not
+                // lazy-loaded), so check it FIRST before falling back to img.src
+                // which may still point to a placeholder at extraction time.
+                const srcEl = a.querySelector('picture source');
+                if (srcEl) {
+                    const raw = srcEl.getAttribute('srcset') || srcEl.srcset || '';
+                    // srcset may be comma-separated; take the first URL token
+                    const url = raw.split(',')[0].split(' ')[0].trim();
+                    if (url && url.startsWith('http')) return url;
+                }
+                // Fallback: img element data attributes / resolved src
                 const imgEl = a.querySelector('img.item-multimedia__image')
                            || a.querySelector('img[data-src]')
                            || a.querySelector('img');
@@ -299,7 +328,6 @@ JSON.stringify((() => {
                     || imgEl.getAttribute('data-lazy')
                     || imgEl.getAttribute('data-original')
                     || imgEl.src
-                    || (a.querySelector('picture source') || {}).srcset?.split(' ')[0]
                     || '';
             })(),
             latitude:    a.getAttribute('data-latitude')  || '',
@@ -531,9 +559,14 @@ def parse_idealista_listing(raw: dict) -> Optional[dict]:
     if url and not url.startswith("http"):
         url = "https://www.idealista.it" + url
 
-    # Neighbourhood
+    # Neighbourhood — extract from address then normalise to Immobiliare canonical names
     address       = raw.get("address", "").strip()
     neighbourhood = _extract_neighbourhood(address)
+
+    # Normalise Idealista sub-zone names to Immobiliare canonical area names so
+    # they match MILAN_AREAS and the dashboard filter works bidirectionally.
+    # The synonym map is loaded once at import from neighbourhood_synonyms.json.
+    neighbourhood = _NEIGHBOURHOOD_SYNONYMS.get(neighbourhood, neighbourhood)
 
     # Coordinates
     lat = _safe_float(raw.get("latitude"))

@@ -4246,24 +4246,34 @@ document.querySelectorAll('.tab-btn').forEach(btn =>
 // Names match the macrozone/microzone values returned by the Immobiliare.it API
 // so the URL slug derived from each name lands on a valid search page.
 const MILAN_AREAS = {
+  // ── Fascia A — prime ─────────────────────────────────────────────────────────
+  // Includes both Immobiliare.it macrozone names and Idealista sub-zone names
+  // that have been normalised to a canonical equivalent (see neighbourhood_synonyms.json).
   A: ['Amendola - Buonarroti','Arco della Pace','Brera','Buenos Aires',
       'Cadorna - Castello','Carrobbio','Centrale','Corso Genova','Duomo',
       'Garibaldi - Corso Como','Guastalla','Indipendenza','Isola',
       'Melchiorre Gioia','Moscova','Navigli - Darsena','Paolo Sarpi',
       'Piave - Tricolore','Porta Nuova',"Porta Romana - Medaglie d'Oro",
       'Porta Venezia','Sempione','Solari','Ticinese','Vincenzo Monti','Washington'],
+  // ── Fascia B — semi-central ──────────────────────────────────────────────────
   B: ['Arena','Ascanio Sforza','Bocconi','Borgogna - Largo Augusto','Cadore',
       'Cenisio','Città Studi','Corso San Gottardo','De Angeli','Dezza','Farini',
-      'Lanza','Lodi - Brenta','Maggiolina','Missori','Montenero',
+      'Fiera','Lanza','Lodi - Brenta','Maggiolina','Missori','Montenero',
       'Monte Rosa - Lotto','Morgagni','Palestro','Plebisciti - Susa',
-      'Quadronno - Crocetta','Repubblica','San Babila','San Vittore',
-      "Sant'Ambrogio",'Scala - Manzoni','Turati','Vercelli - Wagner','Zara'],
-  C: ['Adriano','Bicocca','Bisceglie','Bonola','Bovisa','Bruzzano',
-      'Cascina dei Pomi','Cascina Merlata','Certosa','Comasina','Corvetto',
-      'Dergano','Famagosta','Forlanini','Frua','Giambellino','Gratosoglio',
-      'Lambrate','Lorenteggio','Loreto','Martini - Insubria','Mecenate',
-      'Musocco','Niguarda','Pasteur','Quarto Oggiaro','Ripamonti',
-      'Rogoredo','Romolo','San Siro','Tripoli - Soderini','Via Padova','Vigentino'],
+      'Portello - Tre Torri','Quadronno - Crocetta','Repubblica','San Babila',
+      "Sant'Ambrogio",'Scala - Manzoni','Turati','Vercelli - Wagner',
+      'San Vittore','Zara'],
+  // ── Fascia C — peripheral ────────────────────────────────────────────────────
+  // Also includes Idealista-specific sub-zones that don't map to any Immobiliare area.
+  C: ['Adriano','Affori','Argonne - Corsica','Bande Nere - Gambara','Bicocca',
+      'Bisceglie','Bonola','Bovisa','Bruzzano','Cascina dei Pomi','Cascina Merlata',
+      'Certosa','Cimiano','Comasina','Corvetto','Crescenzago','Dergano',
+      'Famagosta','Fondazione Prada - Scalo Romana','Forlanini','Frua',
+      'Giambellino','Govone','Gratosoglio','Lambrate','Lorenteggio','Loreto',
+      'Martini - Insubria','Mecenate','Musocco','Niguarda','Pasteur',
+      'QT8','Quarto Oggiaro','Ripamonti','Rogoredo','Romagna','Romolo',
+      'San Siro','Teodosio - Porpora','Tibaldi - Pezzotti','Tripoli - Soderini',
+      'Ungheria','Via Padova','Vigentino'],
 };
 const FASCIA_LABEL = { A: 'Fascia A — prime', B: 'Fascia B — semi-central', C: 'Fascia C — peripheral' };
 
@@ -5064,7 +5074,10 @@ function applyRentFilters(data, f) {
   return data.filter(l => {
     if (f.areas.length) {
       const nb = (l.neighbourhood || '').toLowerCase();
-      if (!f.areas.some(a => nb.includes(a.toLowerCase()))) return false;
+      // Bidirectional substring match so both sources work:
+      //   • nb.includes(al): "navigli - darsena" matches filter "navigli" ✓
+      //   • al.includes(nb): "porta romana" matches filter "porta romana - medaglie d'oro" ✓
+      if (!f.areas.some(a => { const al = a.toLowerCase(); return nb.includes(al) || al.includes(nb); })) return false;
     }
     if (f.fascia   && l.omi_fascia !== f.fascia)               return false;
     if (f.omiZone  && l.omi_zona  !== f.omiZone)              return false;
