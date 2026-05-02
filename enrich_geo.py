@@ -40,6 +40,14 @@ _OVERPASS_ENDPOINTS = [
 
 SEARCH_RADIUS = 2000   # metres
 
+# ── Nominatim global rate limiter ─────────────────────────────────────────────
+# Nominatim's usage policy requires ≤ 1 request/sec per IP.  enrich_batch()
+# submits work to a thread pool so multiple threads can call _nominatim_geocode()
+# simultaneously.  This lock serialises all Nominatim requests across threads:
+# a thread acquires it, makes the HTTP call, sleeps 1 s, then releases it, so
+# the *next* thread can start its request only after the full 1-second gap.
+_NOMINATIM_LOCK = threading.Lock()
+
 # ── Local POI dataset (bulk download once, then offline) ──────────────────────
 # Milan bounding box (lat_min, lon_min, lat_max, lon_max)
 _MILAN_BBOX   = (45.38, 9.02, 45.56, 9.32)
@@ -536,15 +544,18 @@ def _nominatim_geocode(address: str) -> Optional[tuple[float, float]]:
         url = f"https://nominatim.openstreetmap.org/search?{q}"
         req = urllib.request.Request(url,
                                      headers={"User-Agent": "immobiliare-scorer/1.0"})
-        try:
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                results = json.loads(resp.read())
-            time.sleep(1.0)
-            if results:
-                return float(results[0]["lat"]), float(results[0]["lon"])
-        except Exception as exc:
-            print(f"  [geo] Nominatim error: {exc}", file=sys.stderr)
-            time.sleep(1.0)
+        # Serialise all Nominatim calls: one request per second globally
+        # (Nominatim usage policy), regardless of how many threads are running.
+        with _NOMINATIM_LOCK:
+            try:
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    results = json.loads(resp.read())
+                time.sleep(1.0)
+                if results:
+                    return float(results[0]["lat"]), float(results[0]["lon"])
+            except Exception as exc:
+                print(f"  [geo] Nominatim error: {exc}", file=sys.stderr)
+                time.sleep(1.0)
         return None
 
     if not address:

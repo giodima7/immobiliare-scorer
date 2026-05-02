@@ -185,13 +185,25 @@ def _geo_enrich_worker():
             # walk times are always haversine-derived in batch mode.
             return cached.get("geo_score") is None
 
+        # Include both:
+        #  • listings that already have coordinates (fast: OMI polygon + POI lookup)
+        #  • listings without coordinates but with an address (Nominatim geocoding,
+        #    then OMI + POI) — this is the common case for Idealista listings
         need_idx = [
             i for i, l in enumerate(data)
-            if _needs_overpass(l) and l.get("latitude") and l.get("longitude")
+            if _needs_overpass(l) and (
+                (l.get("latitude") and l.get("longitude"))
+                or l.get("address", "").strip()
+            )
         ]
+        n_needs_geocoding = sum(
+            1 for i in need_idx
+            if not (data[i].get("latitude") and data[i].get("longitude"))
+        )
         _geo_status["total"] = len(need_idx) + n_omi
         _geo_status["done"]  = n_omi   # polygon pass already counted
-        print(f"  [geo] background enrichment: {len(need_idx)} listings to process")
+        print(f"  [geo] background enrichment: {len(need_idx)} listings to process "
+              f"({n_needs_geocoding} need Nominatim geocoding)")
 
         from enrich_geo import enrich_batch as _enrich_batch
 
@@ -327,7 +339,10 @@ def _geo_enrich_sales_worker():
 
         need_idx = [
             i for i, l in enumerate(data)
-            if _needs_overpass(l) and l.get("latitude") and l.get("longitude")
+            if _needs_overpass(l) and (
+                (l.get("latitude") and l.get("longitude"))
+                or l.get("address", "").strip()
+            )
         ]
         _geo_sale_status["total"] = len(need_idx) + n_omi
         _geo_sale_status["done"]  = n_omi
