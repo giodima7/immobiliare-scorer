@@ -66,8 +66,11 @@ from fetch_rentals import (
     mark_digest_sent,
 )
 
-SOURCE         = "idealista"
-IDEALISTA_BASE = "https://www.idealista.it/affitto-case/milano-milano/"
+SOURCE             = "idealista"
+IDEALISTA_CITY_BASE = "https://www.idealista.it/affitto-case/milano-milano/"  # city-wide
+IDEALISTA_ZONE_BASE = "https://www.idealista.it/affitto-case/milano/"          # per-zone
+# Keep IDEALISTA_BASE as an alias so any external references still work
+IDEALISTA_BASE = IDEALISTA_CITY_BASE
 
 # Path to the Idealista-specific area settings file (separate from Immobiliare's)
 IDEALISTA_AREAS_PATH = BASE_DIR / "idealista_area_settings.json"
@@ -143,20 +146,24 @@ def build_idealista_url(page: int, area_slug: str = None,
     Build a fully parameterised Idealista.it rental search URL using the
     correct path-segment filter syntax.
 
+    Idealista uses TWO different URL bases:
+      • City-wide (no area): /affitto-case/milano-milano/
+      • Per-zone  (area):    /affitto-case/milano/{zone_slug}/
+
     Examples
     --------
-    No filters:
-      https://www.idealista.it/affitto-case/milano-milano/
-      con-affitto-lungo-termine/
+    No filters (city-wide):
+      https://www.idealista.it/affitto-case/milano-milano/con-affitto-lungo-termine/
 
-    With area + filters:
-      https://www.idealista.it/affitto-case/milano-milano/navigli/
+    With zone + filters:
+      https://www.idealista.it/affitto-case/milano/navigli-bocconi/
       con-prezzo_3000,bilocali-2,trilocali-3,quadrilocali-4,5-locali-o-piu,
       affitto-lungo-termine/
     """
-    base = IDEALISTA_BASE
     if area_slug:
-        base += f"{area_slug}/"
+        base = IDEALISTA_ZONE_BASE + f"{area_slug}/"
+    else:
+        base = IDEALISTA_CITY_BASE
 
     # Assemble filter tokens
     tokens: list = []
@@ -731,9 +738,11 @@ async def _fetch_async(pages: int, area_slugs: list, max_rent: int,
                     try:
                         actual_href = await tab.evaluate("window.location.href")
                         if actual_href:
-                            # Match slug segment that precedes /con- or end of path
-                            m = (_re.search(r"/milano-milano/([^/?#]+)/con-", actual_href)
-                                 or _re.search(r"/milano-milano/([^/?#]+?)/?$", actual_href))
+                            # Match slug segment that precedes /con- or end of path.
+                            # Handles both zone URLs (/milano/{slug}/con-) and
+                            # city-wide URLs (/milano-milano/{slug}/con-).
+                            m = (_re.search(r"/milano(?:-milano)?/([^/?#]+)/con-", actual_href)
+                                 or _re.search(r"/milano(?:-milano)?/([^/?#]+?)/?$", actual_href))
                             if m:
                                 resolved = m.group(1)
                                 if resolved != canonical_slug:
@@ -964,11 +973,17 @@ def run_once(args) -> list:
     if args.areas:
         area_names = [a.strip() for a in args.areas.split(",") if a.strip()]
     else:
-        # Default: city-level scan (no area slug).
-        # Idealista's zone-level pages use a different URL mechanism than simple
-        # path slugs, so the most reliable approach is to scan all of Milano at
-        # once and let the per-listing neighbourhood field do the filtering.
-        area_names = []
+        # Default: load active zones from idealista_area_settings.json,
+        # mirroring how fetch_rentals.py reads from area_settings.json.
+        # This scans each active Idealista zone separately so we get paginated
+        # results per zone rather than hitting the city-wide listing cap.
+        area_names = _load_idealista_areas()
+        if area_names:
+            print(f"  [scan] Using {len(area_names)} active Idealista zone(s) "
+                  f"from idealista_area_settings.json", flush=True)
+        else:
+            # No zones configured → fall back to city-wide scan
+            print("  [scan] No active zones found — scanning all Milano", flush=True)
 
     raw, skipped_areas = fetch_idealista(
         pages=args.pages,

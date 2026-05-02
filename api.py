@@ -13,6 +13,8 @@ Endpoints:
     GET  /status     — {"running": bool}
     POST /fetch      — start a fetch; streams stdout as Server-Sent Events
 """
+from __future__ import annotations   # makes X | None annotations lazy — works on Python 3.9
+
 import json as _json
 import subprocess
 import sys
@@ -995,6 +997,63 @@ def save_area_settings_v2():
     SCAN_PREFS_PATH.write_text(_json.dumps(prefs, indent=2))
 
     return jsonify({"saved": True, "active_count": len(active_names)})
+
+
+# ── Idealista area settings ────────────────────────────────────────────────────
+IDEALISTA_AREA_SETTINGS_PATH = BASE_DIR / "idealista_area_settings.json"
+
+
+def _load_idealista_area_settings() -> dict:
+    """Load idealista_area_settings.json, returning {areas: [...]}."""
+    if IDEALISTA_AREA_SETTINGS_PATH.exists():
+        try:
+            return _json.loads(IDEALISTA_AREA_SETTINGS_PATH.read_text())
+        except Exception:
+            pass
+    return {"areas": []}
+
+
+@app.route("/idealista-area-settings", methods=["GET"])
+def get_idealista_area_settings():
+    """Return Idealista zone settings (areas list with active flags)."""
+    return jsonify(_load_idealista_area_settings())
+
+
+@app.route("/idealista-area-settings", methods=["POST"])
+def save_idealista_area_settings():
+    """Save Idealista zone settings to idealista_area_settings.json."""
+    from datetime import datetime as _dt
+    body  = request.get_json(force=True, silent=True) or {}
+    areas = body.get("areas")
+    if not isinstance(areas, list):
+        return jsonify({"error": "areas must be a list"}), 400
+
+    existing = _load_idealista_area_settings()
+    # Preserve any extra fields (listings count, etc.) from the original file
+    existing_by_name = {a["name"]: a for a in existing.get("areas", []) if isinstance(a, dict)}
+    merged = []
+    for a in areas:
+        if not isinstance(a, dict):
+            continue
+        name = a.get("name", "")
+        base = {**existing_by_name.get(name, {}), **a}
+        merged.append(base)
+    # Also keep any zones that weren't sent (preserve their active=False state)
+    sent_names = {a["name"] for a in merged}
+    for name, orig in existing_by_name.items():
+        if name not in sent_names:
+            merged.append({**orig, "active": False})
+
+    settings = {
+        **{k: v for k, v in existing.items() if k not in ("areas", "last_saved")},
+        "areas": merged,
+        "last_saved": _dt.now().isoformat(timespec="seconds"),
+    }
+    IDEALISTA_AREA_SETTINGS_PATH.write_text(
+        _json.dumps(settings, ensure_ascii=False, indent=2)
+    )
+    active_count = sum(1 for a in merged if a.get("active"))
+    return jsonify({"saved": True, "active_count": active_count})
 
 
 def _normalize_settings_entry(zone_codes: list[str]) -> dict | None:

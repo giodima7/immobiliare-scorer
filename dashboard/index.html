@@ -3066,6 +3066,40 @@ function saveFilters() {
     <span class="settings-status" id="settingsStatus"></span>
   </div>
 
+  <!-- ── Idealista Scan Zones ──────────────────────────────────── -->
+  <div class="settings-section-title" style="margin-top:32px">Idealista Scan Zones</div>
+  <p style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6">
+    Choose which Milan zones to scan on Idealista.it.
+    Active zones are fetched every scan cycle and saved to <code>idealista_area_settings.json</code>.
+    Click a zone on the left to highlight it, then → to add. Use × to remove individual zones.
+  </p>
+  <div id="idealistaSettingsLoading" style="color:var(--muted);font-size:13px">Loading zones…</div>
+  <div id="idealistaPickerUI" style="display:none">
+    <div style="display:grid;grid-template-columns:1fr 44px 1fr;gap:8px;align-items:start">
+      <!-- Left: available zones -->
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">Available</div>
+        <input type="text" id="idealistaPickerSearch" placeholder="Search zones…" autocomplete="off"
+               style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px;background:var(--bg);color:var(--text);margin-bottom:4px;outline:none">
+        <div id="idealistaPickerAvail" style="border:1px solid var(--border);border-radius:6px;overflow-y:auto;height:240px;background:var(--bg)"></div>
+      </div>
+      <!-- Center: add / remove buttons -->
+      <div style="display:flex;flex-direction:column;gap:8px;padding-top:32px;align-items:center">
+        <button id="btnIdealistaAreaAdd"    title="Add selected (or all filtered)" style="width:36px;height:36px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:15px;color:var(--accent)">→</button>
+        <button id="btnIdealistaAreaRemove" title="Clear all active zones"         style="width:36px;height:36px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:15px;color:var(--muted)">←</button>
+      </div>
+      <!-- Right: active zones -->
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">Active <span id="idealistaActiveCount" style="font-weight:400;text-transform:none"></span></div>
+        <div id="idealistaPickerActive" style="border:1px solid var(--border);border-radius:6px;overflow-y:auto;height:240px;background:var(--bg)"></div>
+      </div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;margin-top:16px">
+    <button class="settings-save-btn" id="btnIdealistaSettingsSave">💾 Save zones</button>
+    <span class="settings-status" id="idealistaSettingsStatus"></span>
+  </div>
+
   <!-- ── Data Quality ────────────────────────────────────────── -->
   <div class="settings-section-title">Data Quality</div>
   <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
@@ -4231,6 +4265,7 @@ function switchTab(tab) {
     stopScannerPoll();
     stopSaleFetchPoll();
     _settingsLoad();
+    _idealistaSettingsLoad();
     _loadScoreSettings();
     _dqLoad();
   } else {
@@ -7453,6 +7488,139 @@ document.getElementById('btnAreaAdd')?.addEventListener('click', () => {
 document.getElementById('btnAreaRemove')?.addEventListener('click', () => {
   _settingsCurrentAreas.forEach(a => { a.active = false; });
   _renderAreaPicker();
+});
+
+// ── Idealista zone picker ─────────────────────────────────────────────────────
+let _idealistaCurrentZones = [];   // [{name, active, listings?}, ...]
+let _idealistaSettingsLoaded = false;
+
+async function _idealistaSettingsLoad() {
+  if (_idealistaSettingsLoaded) return;
+  const loadEl   = document.getElementById('idealistaSettingsLoading');
+  const pickerEl = document.getElementById('idealistaPickerUI');
+  if (!IS_LIVE) {
+    if (loadEl) {
+      loadEl.textContent = 'Settings require the local Flask API. Run python3 api.py and reopen the dashboard.';
+      loadEl.style.display = '';
+    }
+    if (pickerEl) pickerEl.style.display = 'none';
+    return;
+  }
+  try {
+    const resp = await fetch('/idealista-area-settings');
+    if (!resp.ok) throw new Error(`API error (${resp.status})`);
+    const data = await resp.json();
+    _idealistaCurrentZones = (data.areas || []).map(a => ({...a}));
+    _renderIdealistaPicker();
+    if (loadEl)   loadEl.style.display  = 'none';
+    if (pickerEl) pickerEl.style.display = '';
+    _idealistaSettingsLoaded = true;
+  } catch (e) {
+    if (loadEl) { loadEl.textContent = '✗ ' + e.message; loadEl.style.display = ''; }
+  }
+}
+
+function _renderIdealistaPicker() {
+  const availEl  = document.getElementById('idealistaPickerAvail');
+  const activeEl = document.getElementById('idealistaPickerActive');
+  const countEl  = document.getElementById('idealistaActiveCount');
+  if (!availEl || !activeEl) return;
+
+  const activeSet = new Set(_idealistaCurrentZones.filter(a => a.active).map(a => a.name));
+  const q         = (document.getElementById('idealistaPickerSearch')?.value || '').toLowerCase();
+
+  // Available panel — inactive zones, filtered by search query
+  availEl.innerHTML = '';
+  const inactiveZones = _idealistaCurrentZones.filter(
+    z => !activeSet.has(z.name) && (!q || z.name.toLowerCase().includes(q))
+  );
+  for (const zone of inactiveZones) {
+    const row = document.createElement('div');
+    row.style.cssText = 'padding:5px 10px;cursor:pointer;font-size:12px;color:var(--text);border-bottom:1px solid var(--border)';
+    row.textContent   = zone.name + (zone.listings ? ` (${zone.listings})` : '');
+    row.dataset.name  = zone.name;
+    row.addEventListener('mouseenter', () => { if (row.dataset.sel !== '1') row.style.background = 'var(--hover,rgba(0,0,0,.04))'; });
+    row.addEventListener('mouseleave', () => { if (row.dataset.sel !== '1') row.style.background = ''; });
+    row.addEventListener('click', () => {
+      availEl.querySelectorAll('[data-sel="1"]').forEach(r => { r.dataset.sel = ''; r.style.background = ''; });
+      row.dataset.sel = '1';
+      row.style.background = 'var(--accent-light,rgba(99,102,241,.1))';
+    });
+    row.addEventListener('dblclick', () => _idealistaAreaMove(zone.name, 'add'));
+    availEl.appendChild(row);
+  }
+
+  // Active panel
+  const activeOnes = _idealistaCurrentZones.filter(a => a.active);
+  activeEl.innerHTML = '';
+  for (const zone of activeOnes) {
+    const row = document.createElement('div');
+    row.style.cssText = 'padding:5px 10px;display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--text);border-bottom:1px solid var(--border)';
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = zone.name + (zone.listings ? ` (${zone.listings})` : '');
+    const rmBtn = document.createElement('button');
+    rmBtn.textContent = '×';
+    rmBtn.title = 'Remove';
+    rmBtn.style.cssText = 'border:none;background:none;cursor:pointer;color:var(--muted);font-size:14px;padding:0 4px;line-height:1;flex-shrink:0';
+    rmBtn.addEventListener('click', () => _idealistaAreaMove(zone.name, 'remove'));
+    row.addEventListener('mouseenter', () => row.style.background = 'var(--hover,rgba(0,0,0,.04))');
+    row.addEventListener('mouseleave', () => row.style.background = '');
+    row.appendChild(nameSpan);
+    row.appendChild(rmBtn);
+    activeEl.appendChild(row);
+  }
+
+  if (countEl) countEl.textContent = `(${activeOnes.length})`;
+}
+
+function _idealistaAreaMove(name, direction) {
+  const existing = _idealistaCurrentZones.find(a => a.name === name);
+  if (direction === 'add') {
+    if (existing) { existing.active = true; }
+    else { _idealistaCurrentZones.push({ name, active: true }); }
+  } else if (direction === 'remove') {
+    if (existing) existing.active = false;
+  }
+  _renderIdealistaPicker();
+}
+
+document.getElementById('idealistaPickerSearch')?.addEventListener('input', _renderIdealistaPicker);
+
+document.getElementById('btnIdealistaAreaAdd')?.addEventListener('click', () => {
+  const avail    = document.getElementById('idealistaPickerAvail');
+  const selected = avail?.querySelectorAll('[data-sel="1"]');
+  if (selected?.length) {
+    selected.forEach(el => _idealistaAreaMove(el.dataset.name, 'add'));
+  } else {
+    avail?.querySelectorAll('[data-name]').forEach(el => _idealistaAreaMove(el.dataset.name, 'add'));
+  }
+});
+
+document.getElementById('btnIdealistaAreaRemove')?.addEventListener('click', () => {
+  _idealistaCurrentZones.forEach(a => { a.active = false; });
+  _renderIdealistaPicker();
+});
+
+document.getElementById('btnIdealistaSettingsSave')?.addEventListener('click', async () => {
+  if (!IS_LIVE) return;
+  const statusEl = document.getElementById('idealistaSettingsStatus');
+  if (statusEl) statusEl.textContent = 'Saving…';
+  try {
+    const r = await fetch('/idealista-area-settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ areas: _idealistaCurrentZones }),
+    });
+    const j = await r.json();
+    if (r.ok) {
+      if (statusEl) statusEl.textContent = `✓ Saved (${j.active_count} active)`;
+      setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 3000);
+    } else {
+      if (statusEl) statusEl.textContent = '✗ ' + (j.error || 'Failed');
+    }
+  } catch (e) {
+    if (statusEl) statusEl.textContent = '✗ ' + e.message;
+  }
 });
 
 // ── Scoring settings panel ────────────────────────────────────────────────────
