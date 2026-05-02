@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import annotations  # X | Y syntax works on Python 3.9+
 """
 email_digest.py
 ───────────────
