@@ -868,7 +868,7 @@ def fetch_idealista(pages: int = 3, area_names: list = None, max_rent: int = 0,
         return items, skipped_areas
 
     # ── Cache-aware geo enrichment (identical to fetch_rentals pattern) ────────
-    INLINE_ENRICH_CAP = 50
+    INLINE_ENRICH_CAP = 200
 
     try:
         import enrichment_cache as _ecache

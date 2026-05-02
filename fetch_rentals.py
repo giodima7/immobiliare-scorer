@@ -896,7 +896,7 @@ def fetch_rentals(pages: int = 3, area_names: list = None, max_rent: int = 0,
     # inline would block write_output for hours and risk losing all fetched data
     # if the process is killed.  Only enrich inline for small incremental batches
     # (i.e. normal daemon cadence), and let the dashboard button handle the rest.
-    INLINE_ENRICH_CAP = 50
+    INLINE_ENRICH_CAP = 200
 
     try:
         import enrichment_cache as _ecache
