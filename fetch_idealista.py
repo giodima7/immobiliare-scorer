@@ -288,13 +288,26 @@ JSON.stringify((() => {
             tags:  Array.from(a.querySelectorAll('.item-tag, [class*="tag"]'))
                        .map(t => (t.innerText || t.textContent || '').trim())
                        .filter(Boolean),
-            img:   (a.querySelector('img.item-multimedia__image')
-                    || a.querySelector('picture source')
-                    || a.querySelector('img'))?.src || '',
+            img: (() => {
+                // Idealista lazy-loads images: src may be a placeholder while
+                // the real URL lives in data-src / data-lazy / srcset.
+                const imgEl = a.querySelector('img.item-multimedia__image')
+                           || a.querySelector('img[data-src]')
+                           || a.querySelector('img');
+                if (!imgEl) return '';
+                return imgEl.getAttribute('data-src')
+                    || imgEl.getAttribute('data-lazy')
+                    || imgEl.getAttribute('data-original')
+                    || imgEl.src
+                    || (a.querySelector('picture source') || {}).srcset?.split(' ')[0]
+                    || '';
+            })(),
             latitude:    a.getAttribute('data-latitude')  || '',
             longitude:   a.getAttribute('data-longitude') || '',
             agency:      getText('.item-agency')
-                      || getText('[class*="agency-name"]')
+                      || getText('[class*="agency"]')
+                      || getText('.advertiser-name')
+                      || getText('[class*="advertiser"]')
                       || '',
         };
     });
@@ -501,8 +514,15 @@ def parse_idealista_listing(raw: dict) -> Optional[dict]:
     # Rooms
     rooms = _parse_rooms(raw.get("rooms_text", ""))
 
-    # Floor
-    floor_n, floor_label = parse_floor(raw.get("floor_text"))
+    # Floor — Idealista floor strings look like "Piano rialzato con ascensore"
+    # or "6º piano con ascensore". Strip the "con/senza ascensore" suffix before
+    # calling parse_floor() so the floor token is recognised.
+    floor_text_raw = (raw.get("floor_text") or "").strip()
+    floor_for_parse = _re.sub(
+        r'\s+(?:con|senza)\s+ascensore.*', '', floor_text_raw,
+        flags=_re.IGNORECASE
+    ).strip()
+    floor_n, floor_label = parse_floor(floor_for_parse)
     is_below_ground = floor_n is not None and floor_n < 0
     is_ground_floor  = floor_n == 0
 
@@ -519,10 +539,12 @@ def parse_idealista_listing(raw: dict) -> Optional[dict]:
     lat = _safe_float(raw.get("latitude"))
     lon = _safe_float(raw.get("longitude"))
 
-    # Feature flags — inferred from free-text tags + description
+    # Feature flags — inferred from free-text tags + description + floor text.
+    # Include floor_text_raw so "con ascensore" phrases are detected even when
+    # the description is empty (common on Idealista search-result cards).
     tags     = [t.lower() for t in (raw.get("tags") or [])]
     desc     = raw.get("description", "").lower()
-    all_text = " ".join(tags) + " " + desc
+    all_text = " ".join(tags) + " " + desc + " " + floor_text_raw.lower()
 
     # Use None (unknown) rather than False so the dashboard can distinguish
     # "definitely no balcony" from "we don't know" — use True only when confirmed.

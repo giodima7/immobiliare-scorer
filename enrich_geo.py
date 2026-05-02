@@ -520,28 +520,72 @@ def _combined_query(lat: float, lng: float) -> str:
 def _nominatim_geocode(address: str) -> Optional[tuple[float, float]]:
     """
     Geocode an address via Nominatim.  Returns (lat, lng) or None.
-    Sleeps 1.0 s after the call to respect Nominatim's usage policy.
+    Sleeps 1.0 s after each attempt to respect Nominatim's usage policy.
+
+    Strategy:
+      1. Structured query: extract street+number and query with city=Milano
+         (avoids doubling the city name that happens with raw free-text search)
+      2. Free-text fallback: strip neighbourhood tokens and try q= with city appended
     """
-    try:
-        q = urllib.parse.urlencode({
-            "q":            f"{address}, Milano, Italia",
-            "format":       "json",
-            "limit":        "1",
-            "countrycodes": "it",
-        })
+    import re as _re_geo
+
+    def _do_request(params: dict) -> Optional[tuple[float, float]]:
+        q = urllib.parse.urlencode({"format": "json", "limit": "1",
+                                    "countrycodes": "it", **params})
         url = f"https://nominatim.openstreetmap.org/search?{q}"
-        req = urllib.request.Request(
-            url,
-            headers={"User-Agent": "immobiliare-scorer/1.0"},
-        )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            results = json.loads(resp.read())
-        time.sleep(1.0)   # Nominatim rate-limit: 1 req/s
-        if results:
-            return float(results[0]["lat"]), float(results[0]["lon"])
-    except Exception as exc:
-        print(f"  [geo] Nominatim error for '{address}': {exc}", file=sys.stderr)
-        time.sleep(1.0)
+        req = urllib.request.Request(url,
+                                     headers={"User-Agent": "immobiliare-scorer/1.0"})
+        try:
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                results = json.loads(resp.read())
+            time.sleep(1.0)
+            if results:
+                return float(results[0]["lat"]), float(results[0]["lon"])
+        except Exception as exc:
+            print(f"  [geo] Nominatim error: {exc}", file=sys.stderr)
+            time.sleep(1.0)
+        return None
+
+    if not address:
+        return None
+
+    # ── Attempt 1: structured query ──────────────────────────────────────────
+    # Split on commas, keep only the first two meaningful parts (street + number),
+    # strip Italian neighbourhood suffixes and city names that appear mid-address.
+    raw_parts = [p.strip() for p in address.split(",")]
+    # Drop obvious city/country tokens from the end
+    city_tokens = {"milano", "italy", "italia", "milan"}
+    street_parts = [p for p in raw_parts
+                    if p.lower() not in city_tokens
+                    and not _re_geo.match(r'^(s\.n\.c\.?|snc)$', p, _re_geo.I)]
+    # First 1–2 parts are street [+ number]; the rest are neighbourhood/city
+    street_str = ", ".join(street_parts[:2]).strip(", ")
+    if street_str:
+        result = _do_request({"street": street_str, "city": "Milano"})
+        if result:
+            return result
+
+    # ── Attempt 2: free-text with just street, Milano, Italia ───────────────
+    # Drop everything after the house number (neighbourhood tokens) to avoid
+    # confusing Nominatim with micro-neighbourhood names it doesn't know.
+    clean = ", ".join(street_parts[:2]).strip(", ")
+    if clean and clean != street_str:
+        result = _do_request({"q": f"{clean}, Milano, Italia"})
+        if result:
+            return result
+
+    # ── Attempt 3: original free-text (legacy fallback) ──────────────────────
+    # Strip duplicate "Milano"/"Italia" suffixes already present in the address.
+    stripped = _re_geo.sub(
+        r',?\s*(Milano|Italy|Italia)\s*$', '', address,
+        flags=_re_geo.IGNORECASE,
+    ).strip(", ")
+    if stripped:
+        result = _do_request({"q": f"{stripped}, Milano, Italia"})
+        if result:
+            return result
+
+    print(f"  [geo] Nominatim: no result for '{address}'", file=sys.stderr)
     return None
 
 
@@ -694,6 +738,12 @@ def enrich(listing: dict, _skip_osrm: bool = False) -> dict:
 
     return {
         **omi_fields,
+        # Always include resolved coordinates so they are stored in the enrichment
+        # cache and merged back into the listing record. Without this, Nominatim-
+        # geocoded coordinates are set on the listing object in-place but never
+        # persisted to the cache, causing them to be lost on the next run.
+        "latitude":                   lat,
+        "longitude":                  lng,
         "metro_nearest_name":         metro_name,
         "metro_nearest_line":         metro_line,
         "metro_nearest_dist_m":       metro_m,
