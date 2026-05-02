@@ -2,7 +2,7 @@
 """
 fetch_idealista.py
 ──────────────────
-Fetches Milano rental listings from Idealista.it via nodriver (same Edge
+Fetches Milano rental listings from Idealista.it via nodriver (same Chrome
 approach as fetch_rentals.py), scores each one against OMI rent benchmarks,
 and merges the results into dashboard/rentals_latest.json alongside
 Immobiliare.it data.
@@ -17,13 +17,13 @@ Daemon mode (loops every 60 min):
 
 First run — CAPTCHA:
     Idealista may show a DataDome CAPTCHA on first visit.  The scanner will
-    pause and wait up to 2 minutes for you to solve it manually in the Edge
+    pause and wait up to 2 minutes for you to solve it manually in the Chrome
     window.  After solving it once the session persists and subsequent runs
     complete automatically.
 
     Watch the terminal: if you see
         ⚠ CAPTCHA detected — please solve it in the browser window.
-    switch to the Edge window, solve the puzzle, then return to the terminal.
+    switch to the Chrome window, solve the puzzle, then return to the terminal.
     After "✓ CAPTCHA solved" the scan continues automatically.
 """
 
@@ -51,7 +51,7 @@ from fetch_rentals import (
     BASE_DIR, DASHBOARD_DIR, SEEN_IDS_PATH, OUTPUT_PATH,
     NETLIFY_CONFIG_PATH, STATUS_PATH, DIGEST_SENT_PATH,
     # Constants
-    CITY_KEY, CITY_LABEL, EDGE_PATH, DAEMON_INTERVAL_SEC,
+    CITY_KEY, CITY_LABEL, CHROME_PATH, DAEMON_INTERVAL_SEC,
     # OMI + scoring
     match_omi, score_all,
     # Parsing helpers
@@ -845,7 +845,7 @@ def fetch_idealista(pages: int = 3, area_names: list = None, max_rent: int = 0,
 
     async def _run():
         browser = await uc.start(
-            browser_executable_path=EDGE_PATH,
+            browser_executable_path=CHROME_PATH,
             headless=False,
             lang="it-IT",
         )
@@ -1144,7 +1144,7 @@ def main():
         print(f"  Netlify  : enabled (→ direct deploy after each scan)")
     print(f"{'─'*52}")
     print(f"  NOTE: Idealista may show a CAPTCHA on first visit.")
-    print(f"        Solve it in the Edge window — the scan resumes automatically.")
+    print(f"        Solve it in the Chrome window — the scan resumes automatically.")
     print(f"{'─'*52}\n")
 
     if args.daemon:

@@ -349,13 +349,13 @@ def to_url_slug(name: str) -> str:
 
 
 async def main(headless: bool, all_zones: bool, debug: bool):
-    from fetch_rentals import EDGE_PATH
+    from fetch_rentals import CHROME_PATH
 
     # Load active-zone metadata for active/listings flags
     zone_meta = {z["name"]: z for z in _load_zones(all_zones=True)}
 
     browser = await uc.start(
-        browser_executable_path=EDGE_PATH,
+        browser_executable_path=CHROME_PATH,
         headless=headless,
         lang="it-IT",
     )

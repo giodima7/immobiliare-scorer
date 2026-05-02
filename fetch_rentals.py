@@ -43,7 +43,7 @@ OUTPUT_PATH          = DASHBOARD_DIR / "rentals_latest.json"
 CUSTOM_MAPPINGS_PATH = BASE_DIR / "custom_omi_mappings.json"
 AREA_SETTINGS_PATH   = BASE_DIR / "area_settings.json"
 
-EDGE_PATH = os.environ.get(
+CHROME_PATH = os.environ.get(
     "BROWSER_EXECUTABLE_PATH",
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
 )
@@ -835,7 +835,7 @@ def fetch_rentals(pages: int = 3, area_names: list = None, max_rent: int = 0,
                   min_sqm: int = 0, max_sqm: int = 0, min_rooms: int = 0,
                   delay: float = 2.5) -> tuple:
     """
-    One-shot fetch of Milano rental listings using Edge via nodriver.
+    One-shot fetch of Milano rental listings using Chrome via nodriver.
     area_names: list of display names, e.g. ["Navigli", "Brera"].
                 Each is converted to a URL slug and fetched as a separate URL series.
     Returns (listings, skipped_areas) — skipped_areas is a list of
@@ -871,7 +871,7 @@ def fetch_rentals(pages: int = 3, area_names: list = None, max_rent: int = 0,
 
     async def _run():
         browser = await uc.start(
-            browser_executable_path=EDGE_PATH,
+            browser_executable_path=CHROME_PATH,
             headless=False,
             lang="it-IT",
         )
