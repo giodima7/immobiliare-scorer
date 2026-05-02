@@ -1,0 +1,800 @@
+{
+  "source": "idealista.it",
+  "scraped_at": "2026-05-02T13:37:42",
+  "city_url": "https://www.idealista.it/affitto-case/milano-milano/",
+  "zone_base": "https://www.idealista.it/affitto-case/milano/",
+  "zones": [
+    {
+      "name": "Abbiategrasso - Chiesa Rossa",
+      "slug": "abbiategrasso-chiesa-rossa",
+      "url": "https://www.idealista.it/affitto-case/milano/abbiategrasso-chiesa-rossa/",
+      "active": true,
+      "listings": 55,
+      "subzones": [
+        {
+          "name": "Chiesa Rossa",
+          "slug": "chiesa-rossa",
+          "url": "https://www.idealista.it/affitto-case/milano/abbiategrasso-chiesa-rossa/chiesa-rossa/",
+          "listings": 52
+        },
+        {
+          "name": "Gratosoglio",
+          "slug": "gratosoglio",
+          "url": "https://www.idealista.it/affitto-case/milano/abbiategrasso-chiesa-rossa/gratosoglio/",
+          "listings": 33
+        },
+        {
+          "name": "Stadera - Abbiategrasso",
+          "slug": "stadera-abbiategrasso",
+          "url": "https://www.idealista.it/affitto-case/milano/abbiategrasso-chiesa-rossa/stadera-abbiategrasso/",
+          "listings": 113
+        },
+        {
+          "name": "Tibaldi - Pezzotti",
+          "slug": "tibaldi-pezzotti",
+          "url": "https://www.idealista.it/affitto-case/milano/abbiategrasso-chiesa-rossa/tibaldi-pezzotti/",
+          "listings": 184
+        }
+      ]
+    },
+    {
+      "name": "Baggio",
+      "slug": "baggio",
+      "url": "https://www.idealista.it/affitto-case/milano/baggio/",
+      "active": false,
+      "listings": 40,
+      "subzones": [
+        {
+          "name": "Baggio",
+          "slug": "baggio",
+          "url": "https://www.idealista.it/affitto-case/milano/baggio/baggio/",
+          "listings": 33
+        },
+        {
+          "name": "Muggiano",
+          "slug": "muggiano",
+          "url": "https://www.idealista.it/affitto-case/milano/baggio/muggiano/",
+          "listings": 2
+        },
+        {
+          "name": "Olmi",
+          "slug": "olmi",
+          "url": "https://www.idealista.it/affitto-case/milano/baggio/olmi/",
+          "listings": 1
+        },
+        {
+          "name": "Quinto Romano",
+          "slug": "quinto-romano",
+          "url": "https://www.idealista.it/affitto-case/milano/baggio/quinto-romano/",
+          "listings": 4
+        }
+      ]
+    },
+    {
+      "name": "Centro Storico",
+      "slug": "centro-storico",
+      "url": "https://www.idealista.it/affitto-case/milano/centro-storico/",
+      "active": false,
+      "listings": 910,
+      "subzones": [
+        {
+          "name": "Brera - Montenapoleone",
+          "slug": "brera-montenapoleone",
+          "url": "https://www.idealista.it/affitto-case/milano/centro-storico/brera-montenapoleone/",
+          "listings": 162
+        },
+        {
+          "name": "Cadorna - Castello",
+          "slug": "cadorna-castello",
+          "url": "https://www.idealista.it/affitto-case/milano/centro-storico/cadorna-castello/",
+          "listings": 71
+        },
+        {
+          "name": "Carrobbio - Cinque Vie",
+          "slug": "carrobbio-cinque-vie",
+          "url": "https://www.idealista.it/affitto-case/milano/centro-storico/carrobbio-cinque-vie/",
+          "listings": 276
+        },
+        {
+          "name": "Duomo - San Babila",
+          "slug": "duomo-san-babila",
+          "url": "https://www.idealista.it/affitto-case/milano/centro-storico/duomo-san-babila/",
+          "listings": 155
+        },
+        {
+          "name": "Missori - Augusto",
+          "slug": "missori-augusto",
+          "url": "https://www.idealista.it/affitto-case/milano/centro-storico/missori-augusto/",
+          "listings": 133
+        },
+        {
+          "name": "Quadrilatero della Moda",
+          "slug": "quadrilatero-della-moda",
+          "url": "https://www.idealista.it/affitto-case/milano/centro-storico/quadrilatero-della-moda/",
+          "listings": 56
+        },
+        {
+          "name": "Zona Sant'Ambrogio - Università Cattolica",
+          "slug": "zona-sant-ambrogio-universita-cattolica",
+          "url": "https://www.idealista.it/affitto-case/milano/centro-storico/zona-sant-ambrogio-universita-cattolica/",
+          "listings": 57
+        }
+      ]
+    },
+    {
+      "name": "Certosa",
+      "slug": "certosa",
+      "url": "https://www.idealista.it/affitto-case/milano/certosa/",
+      "active": true,
+      "listings": 293,
+      "subzones": [
+        {
+          "name": "Accursio",
+          "slug": "accursio",
+          "url": "https://www.idealista.it/affitto-case/milano/certosa/accursio/",
+          "listings": 117
+        },
+        {
+          "name": "Garegnano",
+          "slug": "garegnano",
+          "url": "https://www.idealista.it/affitto-case/milano/certosa/garegnano/",
+          "listings": 84
+        },
+        {
+          "name": "Prealpi - Testori",
+          "slug": "prealpi-testori",
+          "url": "https://www.idealista.it/affitto-case/milano/certosa/prealpi-testori/",
+          "listings": 6
+        },
+        {
+          "name": "Villapizzone - Varesina",
+          "slug": "villapizzone-varesina",
+          "url": "https://www.idealista.it/affitto-case/milano/certosa/villapizzone-varesina/",
+          "listings": 86
+        }
+      ]
+    },
+    {
+      "name": "Città Studi - Lambrate",
+      "slug": "citta-studi-lambrate",
+      "url": "https://www.idealista.it/affitto-case/milano/citta-studi-lambrate/",
+      "active": true,
+      "listings": 934,
+      "subzones": [
+        {
+          "name": "Argonne - Corsica",
+          "slug": "argonne-corsica",
+          "url": "https://www.idealista.it/affitto-case/milano/citta-studi-lambrate/argonne-corsica/",
+          "listings": 219
+        },
+        {
+          "name": "Città Studi",
+          "slug": "citta-studi",
+          "url": "https://www.idealista.it/affitto-case/milano/citta-studi-lambrate/citta-studi/",
+          "listings": 155
+        },
+        {
+          "name": "Feltre - Parco Lambro",
+          "slug": "feltre-parco-lambro",
+          "url": "https://www.idealista.it/affitto-case/milano/citta-studi-lambrate/feltre-parco-lambro/",
+          "listings": 9
+        },
+        {
+          "name": "Lambrate",
+          "slug": "lambrate",
+          "url": "https://www.idealista.it/affitto-case/milano/citta-studi-lambrate/lambrate/",
+          "listings": 72
+        },
+        {
+          "name": "Romagna",
+          "slug": "romagna",
+          "url": "https://www.idealista.it/affitto-case/milano/citta-studi-lambrate/romagna/",
+          "listings": 157
+        },
+        {
+          "name": "Teodosio - Porpora",
+          "slug": "teodosio-porpora",
+          "url": "https://www.idealista.it/affitto-case/milano/citta-studi-lambrate/teodosio-porpora/",
+          "listings": 264
+        },
+        {
+          "name": "Udine",
+          "slug": "udine",
+          "url": "https://www.idealista.it/affitto-case/milano/citta-studi-lambrate/udine/",
+          "listings": 58
+        }
+      ]
+    },
+    {
+      "name": "Comasina - Bicocca",
+      "slug": "comasina-bicocca",
+      "url": "https://www.idealista.it/affitto-case/milano/comasina-bicocca/",
+      "active": true,
+      "listings": 905,
+      "subzones": [
+        {
+          "name": "Affori",
+          "slug": "affori",
+          "url": "https://www.idealista.it/affitto-case/milano/comasina-bicocca/affori/",
+          "listings": 115
+        },
+        {
+          "name": "Bicocca - Bignami",
+          "slug": "bicocca-bignami",
+          "url": "https://www.idealista.it/affitto-case/milano/comasina-bicocca/bicocca-bignami/",
+          "listings": 84
+        },
+        {
+          "name": "Bovisa",
+          "slug": "bovisa",
+          "url": "https://www.idealista.it/affitto-case/milano/comasina-bicocca/bovisa/",
+          "listings": 159
+        },
+        {
+          "name": "Bovisasca",
+          "slug": "bovisasca",
+          "url": "https://www.idealista.it/affitto-case/milano/comasina-bicocca/bovisasca/",
+          "listings": 17
+        },
+        {
+          "name": "Bruzzano",
+          "slug": "bruzzano",
+          "url": "https://www.idealista.it/affitto-case/milano/comasina-bicocca/bruzzano/",
+          "listings": 21
+        },
+        {
+          "name": "Comasina",
+          "slug": "comasina",
+          "url": "https://www.idealista.it/affitto-case/milano/comasina-bicocca/comasina/",
+          "listings": 18
+        },
+        {
+          "name": "Cà Granda - Pratocentenaro",
+          "slug": "ca-granda-pratocentenaro",
+          "url": "https://www.idealista.it/affitto-case/milano/comasina-bicocca/ca-granda-pratocentenaro/",
+          "listings": 103
+        },
+        {
+          "name": "Dergano",
+          "slug": "dergano",
+          "url": "https://www.idealista.it/affitto-case/milano/comasina-bicocca/dergano/",
+          "listings": 220
+        },
+        {
+          "name": "Istria",
+          "slug": "istria",
+          "url": "https://www.idealista.it/affitto-case/milano/comasina-bicocca/istria/",
+          "listings": 96
+        },
+        {
+          "name": "Niguarda",
+          "slug": "niguarda",
+          "url": "https://www.idealista.it/affitto-case/milano/comasina-bicocca/niguarda/",
+          "listings": 72
+        }
+      ]
+    },
+    {
+      "name": "Corvetto - Rogoredo",
+      "slug": "corvetto-rogoredo",
+      "url": "https://www.idealista.it/affitto-case/milano/corvetto-rogoredo/",
+      "active": true,
+      "listings": 255,
+      "subzones": [
+        {
+          "name": "Corvetto",
+          "slug": "corvetto",
+          "url": "https://www.idealista.it/affitto-case/milano/corvetto-rogoredo/corvetto/",
+          "listings": 115
+        },
+        {
+          "name": "Rogoredo - Santa Giulia",
+          "slug": "rogoredo-santa-giulia",
+          "url": "https://www.idealista.it/affitto-case/milano/corvetto-rogoredo/rogoredo-santa-giulia/",
+          "listings": 97
+        },
+        {
+          "name": "Sulmona",
+          "slug": "sulmona",
+          "url": "https://www.idealista.it/affitto-case/milano/corvetto-rogoredo/sulmona/",
+          "listings": 43
+        }
+      ]
+    },
+    {
+      "name": "Famagosta - Naviglio Grande",
+      "slug": "famagosta-naviglio-grande",
+      "url": "https://www.idealista.it/affitto-case/milano/famagosta-naviglio-grande/",
+      "active": true,
+      "listings": 340,
+      "subzones": [
+        {
+          "name": "Barona - San Paolo",
+          "slug": "barona-san-paolo",
+          "url": "https://www.idealista.it/affitto-case/milano/famagosta-naviglio-grande/barona-san-paolo/",
+          "listings": 14
+        },
+        {
+          "name": "Faenza - Ronchetto sul Naviglio",
+          "slug": "faenza-ronchetto-sul-naviglio",
+          "url": "https://www.idealista.it/affitto-case/milano/famagosta-naviglio-grande/faenza-ronchetto-sul-naviglio/",
+          "listings": 38
+        },
+        {
+          "name": "Famagosta",
+          "slug": "famagosta",
+          "url": "https://www.idealista.it/affitto-case/milano/famagosta-naviglio-grande/famagosta/",
+          "listings": 120
+        },
+        {
+          "name": "Naviglio Grande - San Cristoforo",
+          "slug": "naviglio-grande-san-cristoforo",
+          "url": "https://www.idealista.it/affitto-case/milano/famagosta-naviglio-grande/naviglio-grande-san-cristoforo/",
+          "listings": 168
+        }
+      ]
+    },
+    {
+      "name": "Fiera - De Angeli",
+      "slug": "fiera-de-angeli",
+      "url": "https://www.idealista.it/affitto-case/milano/fiera-de-angeli/",
+      "active": true,
+      "listings": 2,
+      "subzones": [
+        {
+          "name": "Ariosto - Magenta",
+          "slug": "ariosto-magenta",
+          "url": "https://www.idealista.it/affitto-case/milano/fiera-de-angeli/ariosto-magenta/",
+          "listings": 280
+        },
+        {
+          "name": "Cenisio - Sarpi",
+          "slug": "cenisio-sarpi",
+          "url": "https://www.idealista.it/affitto-case/milano/fiera-de-angeli/cenisio-sarpi/",
+          "listings": 199
+        },
+        {
+          "name": "City Life",
+          "slug": "city-life",
+          "url": "https://www.idealista.it/affitto-case/milano/fiera-de-angeli/city-life/",
+          "listings": 24
+        },
+        {
+          "name": "Fiera",
+          "slug": "fiera",
+          "url": "https://www.idealista.it/affitto-case/milano/fiera-de-angeli/fiera/",
+          "listings": 309
+        },
+        {
+          "name": "Govone",
+          "slug": "govone",
+          "url": "https://www.idealista.it/affitto-case/milano/fiera-de-angeli/govone/",
+          "listings": 199
+        },
+        {
+          "name": "Portello - Tre Torri",
+          "slug": "portello-tre-torri",
+          "url": "https://www.idealista.it/affitto-case/milano/fiera-de-angeli/portello-tre-torri/",
+          "listings": 227
+        },
+        {
+          "name": "San Vittore - Washington",
+          "slug": "san-vittore-washington",
+          "url": "https://www.idealista.it/affitto-case/milano/fiera-de-angeli/san-vittore-washington/",
+          "listings": 514
+        },
+        {
+          "name": "Sempione",
+          "slug": "sempione",
+          "url": "https://www.idealista.it/affitto-case/milano/fiera-de-angeli/sempione/",
+          "listings": 420
+        }
+      ]
+    },
+    {
+      "name": "Forlanini",
+      "slug": "forlanini",
+      "url": "https://www.idealista.it/affitto-case/milano/forlanini/",
+      "active": true,
+      "listings": 93,
+      "subzones": [
+        {
+          "name": "Mecenate",
+          "slug": "mecenate",
+          "url": "https://www.idealista.it/affitto-case/milano/forlanini/mecenate/",
+          "listings": 53
+        },
+        {
+          "name": "Parco Forlanini",
+          "slug": "parco-forlanini",
+          "url": "https://www.idealista.it/affitto-case/milano/forlanini/parco-forlanini/",
+          "listings": 13
+        },
+        {
+          "name": "Ponte Lambro",
+          "slug": "ponte-lambro",
+          "url": "https://www.idealista.it/affitto-case/milano/forlanini/ponte-lambro/",
+          "listings": 9
+        },
+        {
+          "name": "Ungheria",
+          "slug": "ungheria",
+          "url": "https://www.idealista.it/affitto-case/milano/forlanini/ungheria/",
+          "listings": 18
+        }
+      ]
+    },
+    {
+      "name": "Garibaldi - Porta Venezia",
+      "slug": "garibaldi-porta-venezia",
+      "url": "https://www.idealista.it/affitto-case/milano/garibaldi-porta-venezia/",
+      "active": true,
+      "listings": 2,
+      "subzones": [
+        {
+          "name": "Buenos Aires",
+          "slug": "buenos-aires",
+          "url": "https://www.idealista.it/affitto-case/milano/garibaldi-porta-venezia/buenos-aires/",
+          "listings": 232
+        },
+        {
+          "name": "Centrale",
+          "slug": "centrale",
+          "url": "https://www.idealista.it/affitto-case/milano/garibaldi-porta-venezia/centrale/",
+          "listings": 331
+        },
+        {
+          "name": "Garibaldi - Corso Como",
+          "slug": "garibaldi-corso-como",
+          "url": "https://www.idealista.it/affitto-case/milano/garibaldi-porta-venezia/garibaldi-corso-como/",
+          "listings": 124
+        },
+        {
+          "name": "Indipendenza - Regina Giovanna",
+          "slug": "indipendenza-regina-giovanna",
+          "url": "https://www.idealista.it/affitto-case/milano/garibaldi-porta-venezia/indipendenza-regina-giovanna/",
+          "listings": 395
+        },
+        {
+          "name": "Isola",
+          "slug": "isola",
+          "url": "https://www.idealista.it/affitto-case/milano/garibaldi-porta-venezia/isola/",
+          "listings": 444
+        },
+        {
+          "name": "Morgagni - Bacone",
+          "slug": "morgagni-bacone",
+          "url": "https://www.idealista.it/affitto-case/milano/garibaldi-porta-venezia/morgagni-bacone/",
+          "listings": 174
+        },
+        {
+          "name": "Moscova",
+          "slug": "moscova",
+          "url": "https://www.idealista.it/affitto-case/milano/garibaldi-porta-venezia/moscova/",
+          "listings": 273
+        },
+        {
+          "name": "Palestro - Monforte",
+          "slug": "palestro-monforte",
+          "url": "https://www.idealista.it/affitto-case/milano/garibaldi-porta-venezia/palestro-monforte/",
+          "listings": 167
+        },
+        {
+          "name": "Porta Nuova - Turati",
+          "slug": "porta-nuova-turati",
+          "url": "https://www.idealista.it/affitto-case/milano/garibaldi-porta-venezia/porta-nuova-turati/",
+          "listings": 133
+        },
+        {
+          "name": "Porta Venezia - Repubblica",
+          "slug": "porta-venezia-repubblica",
+          "url": "https://www.idealista.it/affitto-case/milano/garibaldi-porta-venezia/porta-venezia-repubblica/",
+          "listings": 322
+        }
+      ]
+    },
+    {
+      "name": "Greco - Turro",
+      "slug": "greco-turro",
+      "url": "https://www.idealista.it/affitto-case/milano/greco-turro/",
+      "active": true,
+      "listings": 1,
+      "subzones": [
+        {
+          "name": "Cimiano",
+          "slug": "cimiano",
+          "url": "https://www.idealista.it/affitto-case/milano/greco-turro/cimiano/",
+          "listings": 86
+        },
+        {
+          "name": "Crescenzago",
+          "slug": "crescenzago",
+          "url": "https://www.idealista.it/affitto-case/milano/greco-turro/crescenzago/",
+          "listings": 94
+        },
+        {
+          "name": "Gorla",
+          "slug": "gorla",
+          "url": "https://www.idealista.it/affitto-case/milano/greco-turro/gorla/",
+          "listings": 64
+        },
+        {
+          "name": "Greco",
+          "slug": "greco",
+          "url": "https://www.idealista.it/affitto-case/milano/greco-turro/greco/",
+          "listings": 20
+        },
+        {
+          "name": "Maggiolina - Villaggio dei Giornalisti",
+          "slug": "maggiolina-villaggio-dei-giornalisti",
+          "url": "https://www.idealista.it/affitto-case/milano/greco-turro/maggiolina-villaggio-dei-giornalisti/",
+          "listings": 181
+        },
+        {
+          "name": "NoLo - Brianza - Pasteur",
+          "slug": "nolo-brianza-pasteur",
+          "url": "https://www.idealista.it/affitto-case/milano/greco-turro/nolo-brianza-pasteur/",
+          "listings": 386
+        },
+        {
+          "name": "Precotto",
+          "slug": "precotto",
+          "url": "https://www.idealista.it/affitto-case/milano/greco-turro/precotto/",
+          "listings": 71
+        },
+        {
+          "name": "Turro",
+          "slug": "turro",
+          "url": "https://www.idealista.it/affitto-case/milano/greco-turro/turro/",
+          "listings": 144
+        },
+        {
+          "name": "Villa San Giovanni",
+          "slug": "villa-san-giovanni",
+          "url": "https://www.idealista.it/affitto-case/milano/greco-turro/villa-san-giovanni/",
+          "listings": 30
+        }
+      ]
+    },
+    {
+      "name": "Lorenteggio - Bande Nere",
+      "slug": "lorenteggio-bande-nere",
+      "url": "https://www.idealista.it/affitto-case/milano/lorenteggio-bande-nere/",
+      "active": true,
+      "listings": 675,
+      "subzones": [
+        {
+          "name": "Bande Nere - Gambara",
+          "slug": "bande-nere-gambara",
+          "url": "https://www.idealista.it/affitto-case/milano/lorenteggio-bande-nere/bande-nere-gambara/",
+          "listings": 240
+        },
+        {
+          "name": "Bisceglie",
+          "slug": "bisceglie",
+          "url": "https://www.idealista.it/affitto-case/milano/lorenteggio-bande-nere/bisceglie/",
+          "listings": 20
+        },
+        {
+          "name": "Inganni",
+          "slug": "inganni",
+          "url": "https://www.idealista.it/affitto-case/milano/lorenteggio-bande-nere/inganni/",
+          "listings": 71
+        },
+        {
+          "name": "Lorenteggio - Giambellino",
+          "slug": "lorenteggio-giambellino",
+          "url": "https://www.idealista.it/affitto-case/milano/lorenteggio-bande-nere/lorenteggio-giambellino/",
+          "listings": 225
+        },
+        {
+          "name": "Soderini",
+          "slug": "soderini",
+          "url": "https://www.idealista.it/affitto-case/milano/lorenteggio-bande-nere/soderini/",
+          "listings": 119
+        }
+      ]
+    },
+    {
+      "name": "Navigli - Bocconi",
+      "slug": "navigli-bocconi",
+      "url": "https://www.idealista.it/affitto-case/milano/navigli-bocconi/",
+      "active": true,
+      "listings": 1,
+      "subzones": [
+        {
+          "name": "Bocconi",
+          "slug": "bocconi",
+          "url": "https://www.idealista.it/affitto-case/milano/navigli-bocconi/bocconi/",
+          "listings": 232
+        },
+        {
+          "name": "Corso Genova",
+          "slug": "corso-genova",
+          "url": "https://www.idealista.it/affitto-case/milano/navigli-bocconi/corso-genova/",
+          "listings": 229
+        },
+        {
+          "name": "Gottardo",
+          "slug": "gottardo",
+          "url": "https://www.idealista.it/affitto-case/milano/navigli-bocconi/gottardo/",
+          "listings": 365
+        },
+        {
+          "name": "Mercalli - Quadronno",
+          "slug": "mercalli-quadronno",
+          "url": "https://www.idealista.it/affitto-case/milano/navigli-bocconi/mercalli-quadronno/",
+          "listings": 189
+        },
+        {
+          "name": "Navigli - Porta Genova",
+          "slug": "navigli-porta-genova",
+          "url": "https://www.idealista.it/affitto-case/milano/navigli-bocconi/navigli-porta-genova/",
+          "listings": 402
+        },
+        {
+          "name": "Solari - Savona",
+          "slug": "solari-savona",
+          "url": "https://www.idealista.it/affitto-case/milano/navigli-bocconi/solari-savona/",
+          "listings": 292
+        }
+      ]
+    },
+    {
+      "name": "Porta Vittoria",
+      "slug": "porta-vittoria",
+      "url": "https://www.idealista.it/affitto-case/milano/porta-vittoria/",
+      "active": true,
+      "listings": 1,
+      "subzones": [
+        {
+          "name": "Cinque Giornate - Cadore",
+          "slug": "cinque-giornate-cadore",
+          "url": "https://www.idealista.it/affitto-case/milano/porta-vittoria/cinque-giornate-cadore/",
+          "listings": 607
+        },
+        {
+          "name": "Lodi - Brenta",
+          "slug": "lodi-brenta",
+          "url": "https://www.idealista.it/affitto-case/milano/porta-vittoria/lodi-brenta/",
+          "listings": 233
+        },
+        {
+          "name": "Porta Romana",
+          "slug": "porta-romana",
+          "url": "https://www.idealista.it/affitto-case/milano/porta-vittoria/porta-romana/",
+          "listings": 391
+        },
+        {
+          "name": "Porta Vittoria - Calvairate",
+          "slug": "porta-vittoria-calvairate",
+          "url": "https://www.idealista.it/affitto-case/milano/porta-vittoria/porta-vittoria-calvairate/",
+          "listings": 221
+        },
+        {
+          "name": "Tribunale - Guastalla",
+          "slug": "tribunale-guastalla",
+          "url": "https://www.idealista.it/affitto-case/milano/porta-vittoria/tribunale-guastalla/",
+          "listings": 213
+        }
+      ]
+    },
+    {
+      "name": "Quarto Oggiaro - Vialba - Cascina Merlata",
+      "slug": "quarto-oggiaro-vialba-cascina-merlata",
+      "url": "https://www.idealista.it/affitto-case/milano/quarto-oggiaro-vialba-cascina-merlata/",
+      "active": false,
+      "listings": 92,
+      "subzones": [
+        {
+          "name": "Cascina Merlata",
+          "slug": "cascina-merlata",
+          "url": "https://www.idealista.it/affitto-case/milano/quarto-oggiaro-vialba-cascina-merlata/cascina-merlata/",
+          "listings": 39
+        },
+        {
+          "name": "Musocco",
+          "slug": "musocco",
+          "url": "https://www.idealista.it/affitto-case/milano/quarto-oggiaro-vialba-cascina-merlata/musocco/",
+          "listings": 1
+        },
+        {
+          "name": "Quarto Oggiaro",
+          "slug": "quarto-oggiaro",
+          "url": "https://www.idealista.it/affitto-case/milano/quarto-oggiaro-vialba-cascina-merlata/quarto-oggiaro/",
+          "listings": 39
+        },
+        {
+          "name": "Vialba",
+          "slug": "vialba",
+          "url": "https://www.idealista.it/affitto-case/milano/quarto-oggiaro-vialba-cascina-merlata/vialba/",
+          "listings": 13
+        }
+      ]
+    },
+    {
+      "name": "San Siro - Trenno",
+      "slug": "san-siro-trenno",
+      "url": "https://www.idealista.it/affitto-case/milano/san-siro-trenno/",
+      "active": true,
+      "listings": 357,
+      "subzones": [
+        {
+          "name": "Figino",
+          "slug": "figino",
+          "url": "https://www.idealista.it/affitto-case/milano/san-siro-trenno/figino/",
+          "listings": 1
+        },
+        {
+          "name": "Gallaratese",
+          "slug": "gallaratese",
+          "url": "https://www.idealista.it/affitto-case/milano/san-siro-trenno/gallaratese/",
+          "listings": 33
+        },
+        {
+          "name": "Morgantini - Segesta",
+          "slug": "morgantini-segesta",
+          "url": "https://www.idealista.it/affitto-case/milano/san-siro-trenno/morgantini-segesta/",
+          "listings": 133
+        },
+        {
+          "name": "QT8",
+          "slug": "qt8",
+          "url": "https://www.idealista.it/affitto-case/milano/san-siro-trenno/qt8/",
+          "listings": 17
+        },
+        {
+          "name": "Quarto Cagnino - San Carlo",
+          "slug": "quarto-cagnino-san-carlo",
+          "url": "https://www.idealista.it/affitto-case/milano/san-siro-trenno/quarto-cagnino-san-carlo/",
+          "listings": 40
+        },
+        {
+          "name": "San Siro",
+          "slug": "san-siro",
+          "url": "https://www.idealista.it/affitto-case/milano/san-siro-trenno/san-siro/",
+          "listings": 128
+        },
+        {
+          "name": "Trenno",
+          "slug": "trenno",
+          "url": "https://www.idealista.it/affitto-case/milano/san-siro-trenno/trenno/",
+          "listings": 5
+        }
+      ]
+    },
+    {
+      "name": "Vigentino - Ripamonti",
+      "slug": "vigentino-ripamonti",
+      "url": "https://www.idealista.it/affitto-case/milano/vigentino-ripamonti/",
+      "active": true,
+      "listings": 411,
+      "subzones": [
+        {
+          "name": "Chiaravalle - Quintosole",
+          "slug": "chiaravalle-quintosole",
+          "url": "https://www.idealista.it/affitto-case/milano/vigentino-ripamonti/chiaravalle-quintosole/",
+          "listings": 6
+        },
+        {
+          "name": "Fondazione Prada - Scalo Romana",
+          "slug": "fondazione-prada-scalo-romana",
+          "url": "https://www.idealista.it/affitto-case/milano/vigentino-ripamonti/fondazione-prada-scalo-romana/",
+          "listings": 178
+        },
+        {
+          "name": "Val di Sole - Fatima",
+          "slug": "val-di-sole-fatima",
+          "url": "https://www.idealista.it/affitto-case/milano/vigentino-ripamonti/val-di-sole-fatima/",
+          "listings": 49
+        },
+        {
+          "name": "Vigentino",
+          "slug": "vigentino",
+          "url": "https://www.idealista.it/affitto-case/milano/vigentino-ripamonti/vigentino/",
+          "listings": 178
+        }
+      ]
+    }
+  ]
+}
