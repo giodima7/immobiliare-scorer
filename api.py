@@ -207,15 +207,21 @@ def _geo_enrich_worker():
 
         from enrich_geo import enrich_batch as _enrich_batch
 
-        WORKERS         = 8    # parallel threads inside each enrich_batch() call
-        CHUNK_SIZE      = 500  # listings per batch — large = far fewer OSRM round-trips
+        WORKERS    = 8
+        # Chunk size trades off progress-bar granularity vs. I/O overhead.
+        # When geocoding is needed (Photon: ~3 req/sec) a 500-listing chunk
+        # takes ~2-3 minutes before the counter updates — looks frozen.
+        # Use small chunks (24) so the counter ticks every ~8 seconds.
+        # When all listings already have coordinates, use large chunks (500)
+        # since the work is pure in-memory and each chunk completes in < 1 s.
+        CHUNK_SIZE      = 24 if n_needs_geocoding > 50 else 500
         MAX_NULL_STREAK = 10   # stop if a whole chunk returns no geo data
         done_count      = 0
         null_streak     = 0
 
-        # Large chunks: all OMI polygon lookups and haversine POI distances run
-        # in parallel (pure in-memory, ~0.6s per 500 listings).  No OSRM table
-        # calls are made — the public server only exposes foot-profile routing,
+        # Chunks: all OMI polygon lookups and haversine POI distances run
+        # in parallel (pure in-memory).  No OSRM table calls are made —
+        # the public server only exposes foot-profile routing,
         # not the table service, so walk times are haversine-derived.
         for chunk_start in range(0, len(need_idx), CHUNK_SIZE):
             if _geo_stop.is_set():
@@ -351,7 +357,11 @@ def _geo_enrich_sales_worker():
         from enrich_geo import enrich_batch as _enrich_batch
 
         WORKERS    = 8
-        CHUNK_SIZE = 500
+        n_needs_geocoding_sale = sum(
+            1 for i in need_idx
+            if not (data[i].get("latitude") and data[i].get("longitude"))
+        )
+        CHUNK_SIZE = 24 if n_needs_geocoding_sale > 50 else 500
         done_count = 0
 
         for chunk_start in range(0, len(need_idx), CHUNK_SIZE):
