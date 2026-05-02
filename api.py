@@ -514,10 +514,11 @@ def start_scanner():
         SCAN_PREFS_PATH.write_text(_json.dumps(prefs_to_save, indent=2))
         _scanner_proc = _start_scanner_proc(body)
         result = {"started": True, "pid": _scanner_proc.pid}
-        if _has_idealista_creds():
-            global _idealista_proc
-            _idealista_proc = _start_idealista_proc(body)
-            result["idealista_pid"] = _idealista_proc.pid
+        # Always start the Idealista daemon alongside Immobiliare.
+        # (fetch_idealista.py uses browser automation — no API credentials needed)
+        global _idealista_proc
+        _idealista_proc = _start_idealista_proc(body)
+        result["idealista_pid"] = _idealista_proc.pid
         return jsonify(result)
 
 
