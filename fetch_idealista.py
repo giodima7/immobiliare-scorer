@@ -10,7 +10,12 @@ Immobiliare.it data.
 Usage (one-shot):
     python3 fetch_idealista.py
     python3 fetch_idealista.py --pages 5
-    python3 fetch_idealista.py --areas navigli,brera --max-rent 2000
+    python3 fetch_idealista.py --areas navigli-bocconi,porto-vittoria --max-rent 2000
+
+By default the scanner derives which Idealista zones to scan from the active
+Immobiliare areas in area_settings.json (single source of truth).  Each active
+Immobiliare neighbourhood is matched to the Idealista macro-zone that contains
+it via idealista_neighbourhood_map.json + neighbourhood_synonyms.json.
 
 Daemon mode (loops every 60 min):
     python3 fetch_idealista.py --daemon
@@ -72,11 +77,10 @@ IDEALISTA_ZONE_BASE = "https://www.idealista.it/affitto-case/milano/"          #
 # Keep IDEALISTA_BASE as an alias so any external references still work
 IDEALISTA_BASE = IDEALISTA_CITY_BASE
 
-# Path to the Idealista-specific area settings file (separate from Immobiliare's)
-IDEALISTA_AREAS_PATH = BASE_DIR / "idealista_area_settings.json"
-
 # Path to the neighbourhood synonym map: Idealista sub-zone name → Immobiliare canonical name
-_SYNONYMS_PATH = BASE_DIR / "neighbourhood_synonyms.json"
+_SYNONYMS_PATH          = BASE_DIR / "neighbourhood_synonyms.json"
+# Path to the full Idealista zone→subzone map (used for reverse-matching)
+_ZONE_MAP_PATH          = BASE_DIR / "idealista_neighbourhood_map.json"
 
 
 def _load_synonyms() -> dict:
@@ -96,21 +100,75 @@ def _load_synonyms() -> dict:
 _NEIGHBOURHOOD_SYNONYMS: dict = _load_synonyms()
 
 
+def _match_zones_for_immo_areas(immo_areas: list) -> list:
+    """
+    Given a list of active Immobiliare area names, return the Idealista zone
+    names whose subzones overlap with those areas.
+
+    Matching uses three passes (any one hit is enough to include the zone):
+      1. Exact match:   canonical name == Immobiliare area name
+      2. Immo contains zone:  "Porta Romana - Medaglie d'Oro" ⊇ "Porta Romana"
+      3. Zone contains Immo:  "San Vittore - Washington"    ⊇ "San Vittore"
+
+    "Canonical names" for a zone = zone name itself + all subzone names +
+    all synonym-mapped subzone names (i.e. the Immobiliare-facing names).
+    """
+    if not _ZONE_MAP_PATH.exists():
+        return []
+    try:
+        nmap = json.loads(_ZONE_MAP_PATH.read_text())
+    except Exception:
+        return []
+
+    synonyms  = _load_synonyms()
+    targets   = [a.lower() for a in immo_areas]   # active Immobiliare area names, lower-cased
+    matched   = []
+
+    for zone in nmap.get("zones", []):
+        zone_name = zone.get("name", "")
+        subzones  = zone.get("subzones", [])
+
+        # Collect all names this zone is known by (canonical + raw + mapped)
+        candidates = {zone_name.lower()}
+        for sub in subzones:
+            raw = sub.get("name", "")
+            candidates.add(raw.lower())
+            candidates.add(synonyms.get(raw, raw).lower())
+
+        # Check for any overlap with the active Immobiliare areas
+        for cand in candidates:
+            for target in targets:
+                if cand == target or target.startswith(cand) or cand.startswith(target):
+                    matched.append(zone_name)
+                    break
+            else:
+                continue
+            break   # zone already matched — move on
+
+    return matched
+
+
 def _load_idealista_areas() -> list:
     """
-    Load active Idealista zone names from idealista_area_settings.json.
-    Falls back to _load_active_areas() (Immobiliare areas) if the file is absent.
+    Derive the Idealista zones to scan from the active Immobiliare areas.
+    Single source of truth: area_settings.json — no separate Idealista picker needed.
+
+    Returns the Idealista zone names that cover at least one active Immobiliare
+    neighbourhood, using _match_zones_for_immo_areas().  Falls back to the
+    city-wide scan (empty list) when no match is found.
     """
-    if IDEALISTA_AREAS_PATH.exists():
-        try:
-            data = json.loads(IDEALISTA_AREAS_PATH.read_text())
-            active = [a["name"] for a in data.get("areas", []) if a.get("active")]
-            if active:
-                return active
-        except Exception:
-            pass
-    # Fallback: use Immobiliare area names (likely have same neighbourhood names)
-    return _load_active_areas()
+    immo_areas = _load_active_areas()
+    if not immo_areas:
+        return []
+    zones = _match_zones_for_immo_areas(immo_areas)
+    if zones:
+        print(f"  [zones] Matched {len(immo_areas)} Immobiliare area(s) "
+              f"→ {len(zones)} Idealista zone(s): "
+              + ", ".join(zones), flush=True)
+    else:
+        print("  [zones] No Idealista zones matched active Immobiliare areas "
+              "— falling back to city-wide scan", flush=True)
+    return zones
 
 
 # ── URL construction ──────────────────────────────────────────────────────────
@@ -973,17 +1031,13 @@ def run_once(args) -> list:
     if args.areas:
         area_names = [a.strip() for a in args.areas.split(",") if a.strip()]
     else:
-        # Default: load active zones from idealista_area_settings.json,
-        # mirroring how fetch_rentals.py reads from area_settings.json.
-        # This scans each active Idealista zone separately so we get paginated
-        # results per zone rather than hitting the city-wide listing cap.
+        # Default: derive Idealista zones from the active Immobiliare areas
+        # (area_settings.json — single source of truth, no separate Idealista picker).
+        # _load_idealista_areas() maps each active Immobiliare neighbourhood to the
+        # Idealista macro-zone that covers it, then returns the zone names to scan.
         area_names = _load_idealista_areas()
-        if area_names:
-            print(f"  [scan] Using {len(area_names)} active Idealista zone(s) "
-                  f"from idealista_area_settings.json", flush=True)
-        else:
-            # No zones configured → fall back to city-wide scan
-            print("  [scan] No active zones found — scanning all Milano", flush=True)
+        if not area_names:
+            print("  [scan] No Idealista zones matched — scanning all Milano", flush=True)
 
     raw, skipped_areas = fetch_idealista(
         pages=args.pages,
