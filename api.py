@@ -63,6 +63,11 @@ _sale_fetch_lock   = threading.Lock()
 _sale_proc: subprocess.Popen | None = None
 _sale_fetch_status: dict = {"running": False, "last_run": None, "count": 0, "error": None}
 
+# ── Idealista sale fetch (fetch_idealista.py --mode sale) ─────────────────────
+_ideal_sale_proc: subprocess.Popen | None = None
+_ideal_sale_lock   = threading.Lock()
+_ideal_sale_status: dict = {"running": False, "last_run": None, "count": 0, "error": None}
+
 # ── Data-quality cache ────────────────────────────────────────────────────────
 _dq_cache: dict | None = None
 _dq_cache_ts: float = 0.0
@@ -176,25 +181,70 @@ def _geo_enrich_worker():
         # Overpass enrichment — this happens when the scan's inline enrich_batch
         # timed out but the OMI polygon pass ran and partially populated the cache.
         def _needs_overpass(l):
+            # Fast path: if the listing JSON already carries geo_score the listing
+            # was enriched in a previous run.  The cache may have been cleared since
+            # then (e.g. file deleted) but there's nothing to gain by re-enriching.
+            if l.get("geo_score") is not None:
+                return False
+
             cached = _ecache.get(l.get("source", "immobiliare"), l["id"])
             if cached is None:
                 return True
+
             # Re-enrich only if geo_score is missing entirely.
+            # NOTE: do NOT add a terminal-state check for omi_source="no_coordinates"
+            # here.  Whether a listing CAN be enriched is determined by
+            # _has_geocodable_data() below.  A past "no_coordinates" result may have
+            # been caused by an older code version that lacked title-based address
+            # extraction — _has_geocodable_data() will correctly re-admit those
+            # listings for another attempt with the improved enrich_geo.enrich().
             # metro_walk_routed is no longer used as a trigger: the table API
             # (/table/v1/foot/) is unavailable on the public OSRM server, so
             # walk times are always haversine-derived in batch mode.
             return cached.get("geo_score") is None
 
-        # Include both:
-        #  • listings that already have coordinates (fast: OMI polygon + POI lookup)
-        #  • listings without coordinates but with an address (Nominatim geocoding,
-        #    then OMI + POI) — this is the common case for Idealista listings
+        import re as _re_addr
+
+        def _has_geocodable_data(l: dict) -> bool:
+            """
+            Return True if enrich_geo.enrich() has a chance of resolving coordinates.
+
+            Four routes (checked in priority order):
+              1. Stored coordinates                    → fastest path, always works
+              2. Non-placeholder address string        → Photon / Nominatim geocoding
+              3. Title embeds "in [Location]" or
+                 "a [UppercaseLocation]" (Idealista)   → enrich() extracts & geocodes
+              4. Non-empty neighbourhood name          → neighbourhood-centroid fallback
+            """
+            # 1. Stored coordinates
+            if l.get("latitude") and l.get("longitude"):
+                return True
+            # 2. Real address string (not Idealista's "Posizione approssimativa." placeholder)
+            addr = (l.get("address") or "").strip()
+            if addr and not _re_addr.search(r'posizione approssimativa', addr, _re_addr.I):
+                return True
+            # 3. Title with embedded location — two Italian preposition patterns:
+            #    "Bilocale in Via Roma, Milano"    (preposition "in", case-insensitive)
+            #    "Trilocale a Lodi - Brenta, Milano"  ("a" + uppercase = proper noun only)
+            title = (l.get("title") or "").strip()
+            if title and (
+                _re_addr.search(r'\s+in\s+', title, _re_addr.I)
+                or _re_addr.search(r'\s+a\s+(?=[A-ZÀ-ɏ])', title)   # NO re.I — uppercase only
+            ):
+                return True
+            # 4. Neighbourhood centroid fallback
+            nbhd = (l.get("neighbourhood") or "").strip()
+            if (nbhd
+                    and nbhd.lower() not in {"—", "-", ""}
+                    and not _re_addr.search(r'posizione approssimativa', nbhd, _re_addr.I)):
+                return True
+            return False
+
+        # Include any listing that still needs Overpass data AND for which
+        # enrich_geo.enrich() can reasonably resolve coordinates (see above).
         need_idx = [
             i for i, l in enumerate(data)
-            if _needs_overpass(l) and (
-                (l.get("latitude") and l.get("longitude"))
-                or l.get("address", "").strip()
-            )
+            if _needs_overpass(l) and _has_geocodable_data(l)
         ]
         n_needs_geocoding = sum(
             1 for i in need_idx
@@ -643,6 +693,70 @@ def _sale_fetch_monitor(proc: subprocess.Popen) -> None:
                 _sale_fetch_status["error"] = str(exc)
         else:
             _sale_fetch_status["error"] = f"exited with code {proc.returncode} — check sale_fetch.log"
+
+
+def _start_ideal_sale_proc(prefs: dict) -> subprocess.Popen:
+    cmd = [sys.executable, "-u", str(BASE_DIR / "fetch_idealista.py"), "--mode", "sale"]
+    if prefs.get("pages"):      cmd += ["--pages",     str(int(prefs["pages"]))]
+    if prefs.get("max_price"):  cmd += ["--max-rent",  str(int(prefs["max_price"]))]
+    if prefs.get("min_sqm"):    cmd += ["--min-sqm",   str(int(prefs["min_sqm"]))]
+    if prefs.get("min_rooms"):  cmd += ["--min-rooms", str(int(prefs["min_rooms"]))]
+    log_fh = open(BASE_DIR / "idealista_sale_fetch.log", "a")
+    return subprocess.Popen(cmd, cwd=str(BASE_DIR), stdout=log_fh, stderr=log_fh)
+
+
+def _ideal_sale_monitor(proc: subprocess.Popen) -> None:
+    proc.wait()
+    with _ideal_sale_lock:
+        _ideal_sale_status["running"] = False
+        if proc.returncode == 0:
+            _ideal_sale_status["last_run"] = _time.strftime("%Y-%m-%dT%H:%M:%S")
+            _ideal_sale_status["error"] = None
+            try:
+                _rescore_existing_sales_json()
+                sale_path = DASHBOARD_DIR / "sales_latest.json"
+                if sale_path.exists():
+                    data = _json.loads(sale_path.read_text())
+                    _ideal_sale_status["count"] = len(
+                        [l for l in data if l.get("source") == "idealista_sale"]
+                    )
+            except Exception as exc:
+                _ideal_sale_status["error"] = str(exc)
+        else:
+            _ideal_sale_status["error"] = (
+                f"exited with code {proc.returncode} — check idealista_sale_fetch.log"
+            )
+
+
+@app.route("/start-ideal-sale-fetch", methods=["POST"])
+def start_ideal_sale_fetch():
+    global _ideal_sale_proc
+    with _ideal_sale_lock:
+        if _ideal_sale_proc and _ideal_sale_proc.poll() is None:
+            return jsonify({"ok": False, "error": "already running"}), 409
+        body = request.get_json(silent=True) or {}
+        prefs = _json.loads(SALE_PREFS_PATH.read_text()) if SALE_PREFS_PATH.exists() else {}
+        prefs.update({k: v for k, v in body.items() if v})
+        _ideal_sale_proc = _start_ideal_sale_proc(prefs)
+        _ideal_sale_status.update({"running": True, "error": None})
+        threading.Thread(target=_ideal_sale_monitor, args=(_ideal_sale_proc,),
+                         daemon=True).start()
+    return jsonify({"ok": True})
+
+
+@app.route("/stop-ideal-sale-fetch", methods=["POST"])
+def stop_ideal_sale_fetch():
+    with _ideal_sale_lock:
+        if _ideal_sale_proc and _ideal_sale_proc.poll() is None:
+            _ideal_sale_proc.terminate()
+            _ideal_sale_status["running"] = False
+    return jsonify({"ok": True})
+
+
+@app.route("/ideal-sale-fetch-status")
+def get_ideal_sale_fetch_status():
+    running = bool(_ideal_sale_proc and _ideal_sale_proc.poll() is None)
+    return jsonify({**_ideal_sale_status, "running": running})
 
 
 @app.route("/start-sale-fetch", methods=["POST"])

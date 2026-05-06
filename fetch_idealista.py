@@ -71,11 +71,23 @@ from fetch_rentals import (
     mark_digest_sent,
 )
 
+try:
+    from scoring import score_all_sales as _score_all_sales
+    from explain import explain_all_sales as _explain_all_sales
+except ImportError:
+    _score_all_sales = None
+    _explain_all_sales = None
+
 SOURCE             = "idealista"
 IDEALISTA_CITY_BASE = "https://www.idealista.it/affitto-case/milano-milano/"  # city-wide
 IDEALISTA_ZONE_BASE = "https://www.idealista.it/affitto-case/milano/"          # per-zone
 # Keep IDEALISTA_BASE as an alias so any external references still work
 IDEALISTA_BASE = IDEALISTA_CITY_BASE
+
+SOURCE_SALE              = "idealista_sale"
+IDEALISTA_SALE_CITY_BASE = "https://www.idealista.it/vendita-case/milano-milano/"
+IDEALISTA_SALE_ZONE_BASE = "https://www.idealista.it/vendita-case/milano/"
+SALE_OUTPUT_PATH         = DASHBOARD_DIR / "sales_latest.json"
 
 # Path to the neighbourhood synonym map: Idealista sub-zone name → Immobiliare canonical name
 _SYNONYMS_PATH          = BASE_DIR / "neighbourhood_synonyms.json"
@@ -199,29 +211,40 @@ _ROOM_PATH_TOKENS = {
 
 def build_idealista_url(page: int, area_slug: str = None,
                         max_rent: int = 0, min_sqm: int = 0,
-                        min_rooms: int = 0) -> str:
+                        min_rooms: int = 0, mode: str = "rental") -> str:
     """
-    Build a fully parameterised Idealista.it rental search URL using the
+    Build a fully parameterised Idealista.it search URL using the
     correct path-segment filter syntax.
 
-    Idealista uses TWO different URL bases:
-      • City-wide (no area): /affitto-case/milano-milano/
-      • Per-zone  (area):    /affitto-case/milano/{zone_slug}/
+    Idealista uses TWO different URL bases depending on mode:
+      Rental city-wide: /affitto-case/milano-milano/
+      Rental per-zone:  /affitto-case/milano/{zone_slug}/
+      Sale city-wide:   /vendita-case/milano-milano/
+      Sale per-zone:    /vendita-case/milano/{zone_slug}/
 
     Examples
     --------
-    No filters (city-wide):
+    No filters (city-wide rental):
       https://www.idealista.it/affitto-case/milano-milano/con-affitto-lungo-termine/
 
-    With zone + filters:
+    With zone + filters (rental):
       https://www.idealista.it/affitto-case/milano/navigli-bocconi/
       con-prezzo_3000,bilocali-2,trilocali-3,quadrilocali-4,5-locali-o-piu,
       affitto-lungo-termine/
+
+    Sale (city-wide):
+      https://www.idealista.it/vendita-case/milano-milano/con-prezzo_500000/
     """
-    if area_slug:
-        base = IDEALISTA_ZONE_BASE + f"{area_slug}/"
+    if mode == "sale":
+        if area_slug:
+            base = IDEALISTA_SALE_ZONE_BASE + f"{area_slug}/"
+        else:
+            base = IDEALISTA_SALE_CITY_BASE
     else:
-        base = IDEALISTA_CITY_BASE
+        if area_slug:
+            base = IDEALISTA_ZONE_BASE + f"{area_slug}/"
+        else:
+            base = IDEALISTA_CITY_BASE
 
     # Assemble filter tokens
     tokens: list = []
@@ -234,10 +257,14 @@ def build_idealista_url(page: int, area_slug: str = None,
         for n in range(min_rooms, max(min_rooms, 5) + 1):
             if n in _ROOM_PATH_TOKENS:
                 tokens.append(_ROOM_PATH_TOKENS[n])
-    # Always request long-term rentals (excludes holiday lets)
-    tokens.append("affitto-lungo-termine")
+    # For rentals only: always request long-term (excludes holiday lets)
+    if mode != "sale":
+        tokens.append("affitto-lungo-termine")
 
-    url = base + "con-" + ",".join(tokens) + "/"
+    if tokens:
+        url = base + "con-" + ",".join(tokens) + "/"
+    else:
+        url = base
     if page > 1:
         # Idealista uses path-based pagination: .../con-.../lista-N.htm
         # (NOT ?pag=N query params — those are ignored)
@@ -341,14 +368,27 @@ JSON.stringify((() => {
              || url.match(/\/(\d{7,})(?:\/|$)/) || [])[1]
             || '';
 
-        // Idealista encodes the full address in the listing title:
-        //   "Bilocale in Via Roma, 10, Navigli, Milano"
-        //   "Appartamento in Piazza Duomo, Centro, Milano"
-        // We extract everything after " in " as the address string.
+        // Idealista encodes the full address in the listing title in two forms:
+        //   "Bilocale in Via Roma, 10, Navigli, Milano"   ← preposition "in"
+        //   "Trilocale a Lodi - Brenta, Milano"           ← preposition "a" (at)
+        //
+        // We extract everything after the preposition as the address string.
+        // "a" is only treated as a location marker when followed by an uppercase
+        // letter (proper noun), so "appartamento a due piani" does NOT match.
         const titleText = getText('a.item-link') || getText('.item-title');
-        const inIdx     = titleText.search(/\s+in\s+/i);
-        const addressFromTitle = inIdx >= 0
-            ? titleText.slice(inIdx).replace(/^\s+in\s+/i, '').trim()
+
+        let _addrStart  = titleText.search(/\s+in\s+/i);
+        let _addrPrefix = /^\s+in\s+/i;
+        if (_addrStart < 0) {
+            // Try Italian "a [Location]" — uppercase lookahead prevents false matches
+            const _mA = titleText.match(/\s+a\s+(?=[A-ZÀ-ɏ])/);
+            if (_mA) {
+                _addrStart  = _mA.index;
+                _addrPrefix = /^\s+a\s+/;
+            }
+        }
+        const addressFromTitle = _addrStart >= 0
+            ? titleText.slice(_addrStart).replace(_addrPrefix, '').trim()
             : '';
 
         return {
@@ -364,11 +404,20 @@ JSON.stringify((() => {
                          ) || '',
             // Pick the chip describing floor
             floor_text:  details.find(d => /piano|floor|\bp\.?\s*\d/i.test(d)) || '',
-            // Address: prefer explicit element; fall back to title-extracted version
-            address:     getText('.item-address')
-                      || getText('[class*="address"]')
-                      || getText('.item-location')
-                      || addressFromTitle,
+            // Address: prefer explicit DOM element; but treat Idealista's
+            // "Posizione approssimativa." placeholder as equivalent to no address
+            // and fall back to the title-extracted address instead (the title
+            // always reveals the real street even when the card hides it).
+            address:     (() => {
+                const domAddr = getText('.item-address')
+                             || getText('[class*="address"]')
+                             || getText('.item-location')
+                             || '';
+                if (!domAddr || /posizione approssimativa/i.test(domAddr)) {
+                    return addressFromTitle;
+                }
+                return domAddr;
+            })(),
             description: getText('.item-description') || getText('[class*="description"]') || '',
             tags:  Array.from(a.querySelectorAll('.item-tag, [class*="tag"]'))
                        .map(t => (t.innerText || t.textContent || '').trim())
@@ -397,11 +446,47 @@ JSON.stringify((() => {
             })(),
             latitude:    a.getAttribute('data-latitude')  || '',
             longitude:   a.getAttribute('data-longitude') || '',
-            agency:      getText('.item-agency')
-                      || getText('[class*="agency"]')
-                      || getText('.advertiser-name')
-                      || getText('[class*="advertiser"]')
-                      || '',
+            agency:      (() => {
+                // Try a broad spread of selectors — Idealista's class names
+                // shift over time and they vary between branded
+                // (corporate) listings and individual ads.
+                const SELECTORS = [
+                    '.item-agency',
+                    '[class*="item-agency"]',
+                    '.advertiser-name',
+                    '[class*="advertiser-name"]',
+                    '.about-advertiser-name',
+                    '.user-logged-data .name',
+                    '[data-test-id="advertiser-name"]',
+                    'picture[class*="logo"] img',
+                    'img[class*="advertiser-logo"]',
+                    'img[class*="logo-advertiser"]',
+                    '[class*="logo"][alt]',
+                ];
+                for (const sel of SELECTORS) {
+                    const el = a.querySelector(sel);
+                    if (!el) continue;
+                    // Prefer alt text on logo images (e.g. "Spacest.com")
+                    const alt = (el.getAttribute && el.getAttribute('alt')) || '';
+                    if (alt.trim()) return alt.trim();
+                    const txt = (el.innerText || el.textContent || '').trim();
+                    if (txt) return txt;
+                }
+                // Last-ditch: scan all <img> alt attributes for likely
+                // agency/branding strings.
+                const imgs = a.querySelectorAll('img[alt]');
+                for (const img of imgs) {
+                    const alt = (img.getAttribute('alt') || '').trim();
+                    // Heuristic: alt text that looks like an agency/brand name
+                    // (not the listing title, not a generic photo description).
+                    if (alt && alt.length < 80
+                        && !/foto|image|imagen|trilocale|bilocale|monolocale|m²|mq/i.test(alt)
+                        && /[A-Z]/.test(alt)) {
+                        return alt;
+                    }
+                }
+                return '';
+            })(),
         };
     });
 })())
@@ -530,6 +615,15 @@ def _parse_price(text: str) -> Optional[int]:
     return v if 100 <= v <= 50_000 else None   # guard against noise
 
 
+def _parse_sale_price(text: str) -> Optional[int]:
+    """Extract integer purchase price from strings like '€ 350.000' or '350000'."""
+    digits = _re.sub(r"[^\d]", "", str(text))
+    if not digits:
+        return None
+    v = int(digits)
+    return v if 10_000 <= v <= 15_000_000 else None
+
+
 def _parse_sqm(text: str) -> Optional[int]:
     """Extract integer sqm from strings like '80 m²' or '80mq'."""
     m = _re.search(r"(\d+)", str(text))
@@ -553,6 +647,151 @@ def _parse_rooms(text: str) -> Optional[int]:
             return n
     m = _re.search(r"(\d+)\s*local", tl)
     return int(m.group(1)) if m else None
+
+
+# ── Auction / nuda proprietà detection ─────────────────────────────────────
+#
+# Idealista mixes judicial-auction sales and "nuda proprietà" (bare ownership)
+# into the regular search results. They appear cheap-per-m² but are not
+# comparable to a standard purchase. We flag them at parse time so the
+# scorer + the dashboard can hide them by default.
+#
+# Detection works against title + description + tags. Word boundaries are
+# important — naïve `'asta' in text` matches "Guastalla" and "ascensore".
+
+_AUCTION_RX = _re.compile(
+    r"\basta\b|\baste\b|"                        # standalone "asta" / "aste"
+    r"all['’]?\s*asta|in\s+asta|"                # "all'asta" / "in asta"
+    r"asta\s+giudiziar|vendita\s+giudiziar|"     # "asta giudiziaria" / "vendita giudiziaria"
+    r"procedura\s+esecutiv|fallimentar|"
+    r"concordato\s+preventiv|pignoramento",
+    _re.IGNORECASE,
+)
+_NUDA_RX = _re.compile(
+    r"nuda\s*propriet|usufrutto",
+    _re.IGNORECASE,
+)
+
+
+def detect_auction_or_nuda(raw: dict) -> tuple[bool, bool]:
+    """
+    (is_auction, is_nuda_proprieta) from the raw scraped fields.
+    `raw` is the dict produced by the JS extractor — has `title`, `description`,
+    `tags`, etc.
+    """
+    text = " ".join(filter(None, [
+        raw.get("title", ""),
+        raw.get("description", ""),
+        " ".join(raw.get("tags") or []),
+    ]))
+    return (
+        bool(text and _AUCTION_RX.search(text)),
+        bool(text and _NUDA_RX.search(text)),
+    )
+
+
+def parse_idealista_rooms(raw: dict) -> tuple[Optional[int], Optional[int], Optional[int]]:
+    """
+    Returns (total_rooms, bedrooms, bathrooms) from Idealista detail chips.
+    Italian: locali (total habitable rooms incl. living), camere (bedrooms),
+    bagni (bathrooms). Searches across rooms_text, floor_text, size_text,
+    description preview, and tag list — anywhere Idealista exposes the data.
+    """
+    parts = [
+        raw.get("rooms_text", ""),
+        raw.get("floor_text", ""),
+        raw.get("size_text",  ""),
+        (raw.get("description", "") or "")[:300],
+        " ".join(raw.get("tags") or []),
+    ]
+    text = " ".join(p for p in parts if p).lower()
+
+    # Total rooms (locali) — try named monolocale/bilocale first, then "N locali"
+    total_rooms = None
+    for word, n in _ROOM_NAMES.items():
+        if word in text:
+            total_rooms = n
+            break
+    if total_rooms is None:
+        m = _re.search(r"(\d+)\s*local", text)
+        if m:
+            total_rooms = int(m.group(1))
+
+    # Bedrooms (camere) — "1 camera" / "2 camere"
+    bedrooms = None
+    m = _re.search(r"(\d+)\s*camer[ae]", text)
+    if m:
+        bedrooms = int(m.group(1))
+
+    # Bathrooms (bagni) — "1 bagno" / "2 bagni"
+    bathrooms = None
+    m = _re.search(r"(\d+)\s*bagn[oi]", text)
+    if m:
+        bathrooms = int(m.group(1))
+
+    # Sanity: bedrooms cannot exceed total rooms
+    if bedrooms is not None and total_rooms is not None and bedrooms > total_rooms:
+        bedrooms = None
+
+    return total_rooms, bedrooms, bathrooms
+
+
+# Italian ordinal words for floor levels — both `primo`/`prima` forms and
+# the abbreviated `1°` / `1º` glyphs.
+_FLOOR_WORDS = {
+    "primo": 1, "prima": 1,
+    "secondo": 2, "seconda": 2,
+    "terzo": 3, "terza": 3,
+    "quarto": 4, "quarta": 4,
+    "quinto": 5, "quinta": 5,
+    "sesto": 6, "sesta": 6,
+    "settimo": 7, "settima": 7,
+    "ottavo": 8, "ottava": 8,
+    "nono": 9, "nona": 9,
+    "decimo": 10, "decima": 10,
+}
+
+
+def _parse_floor_from_text(text: str) -> tuple[Optional[int], Optional[str]]:
+    """
+    Parse an Italian listing title/description for a floor reference.
+    Returns (floor_n, floor_label) — both None when nothing recognised.
+    Recognises:
+      "piano terra" / "rialzato" / "interrato" / "seminterrato"
+      "primo piano" / "secondo piano" ... up to "decimo piano"
+      "al 3 piano" / "al 4° piano" / "3° piano" / "5º piano"
+      "P.T." / "P.1" abbreviations
+    """
+    if not text or not isinstance(text, str):
+        return None, None
+    t = text.lower()
+
+    # Below-ground / ground variants. NB Italian: "seminterrato" is one
+    # word with a single 'i' between 'semi' and 'nterrato'.
+    if _re.search(r"\bsemi[-\s]?nterrato\b", t):
+        return -1, "Seminterrato"
+    if _re.search(r"\binterrato\b", t):
+        return -2, "Interrato"
+    if _re.search(r"\bpiano\s+terra\b|\bp\.?\s*t\.?\b", t):
+        return 0, "Piano terra"
+    if _re.search(r"\b(?:piano\s+)?rialzato\b", t):
+        return 0, "Piano rialzato"
+
+    # Numeric floor: "3° piano", "al 4 piano", "5º piano", "P.7"
+    m = _re.search(r"(?:al\s+)?(\d{1,2})\s*[°ºo]?\s*piano\b", t)
+    if not m:
+        m = _re.search(r"\bp\.\s*(\d{1,2})\b", t)
+    if m:
+        n = int(m.group(1))
+        if 0 < n < 25:
+            return n, f"{n}° piano"
+
+    # Italian ordinal-word forms: "primo piano", "secondo piano"…
+    for word, n in _FLOOR_WORDS.items():
+        if _re.search(rf"\b{word}\s+piano\b", t):
+            return n, f"{n}° piano"
+
+    return None, None
 
 
 def _extract_neighbourhood(address: str) -> str:
@@ -605,7 +844,7 @@ def parse_idealista_listing(raw: dict) -> Optional[dict]:
     ask_psqm = round(price / sqm, 2)   # €/m²/month
 
     # Rooms
-    rooms = _parse_rooms(raw.get("rooms_text", ""))
+    rooms, bedrooms, bathrooms = parse_idealista_rooms(raw)
 
     # Floor — Idealista floor strings look like "Piano rialzato con ascensore"
     # or "6º piano con ascensore". Strip the "con/senza ascensore" suffix before
@@ -616,6 +855,14 @@ def parse_idealista_listing(raw: dict) -> Optional[dict]:
         flags=_re.IGNORECASE
     ).strip()
     floor_n, floor_label = parse_floor(floor_for_parse)
+
+    # Fallback: if the chip didn't surface a floor, look in the title and
+    # description for Italian phrasings like "primo piano", "al 3 piano",
+    # "6° piano", "piano terra", "rialzato", "interrato".
+    if floor_n is None and floor_label is None:
+        title_desc = (raw.get("title") or "") + " " + (raw.get("description") or "")
+        floor_n, floor_label = _parse_floor_from_text(title_desc)
+
     is_below_ground = floor_n is not None and floor_n < 0
     is_ground_floor  = floor_n == 0
 
@@ -653,6 +900,8 @@ def parse_idealista_listing(raw: dict) -> Optional[dict]:
 
     omi = match_omi(neighbourhood)
 
+    is_auction, is_nuda = detect_auction_or_nuda(raw)
+
     return {
         # ── Identity ──────────────────────────────────────────────────────────
         "id":                 f"id_{listing_id}",   # "id_" prefix prevents collisions
@@ -666,6 +915,9 @@ def parse_idealista_listing(raw: dict) -> Optional[dict]:
         "longitude":          lon,
         "url":                url,
         "thumbnail":          raw.get("img") or None,
+        # ── Listing-type flags (rentals — usually False, kept for symmetry) ──
+        "is_auction":         is_auction,
+        "is_nuda_proprieta":  is_nuda,
         # ── Price ─────────────────────────────────────────────────────────────
         "rent_mo":            price,        # monthly rent € — same field name as fetch_rentals
         "sqm":                sqm,
@@ -673,6 +925,7 @@ def parse_idealista_listing(raw: dict) -> Optional[dict]:
         "spese_condominiali": None,         # not available on search results page
         # ── Physical ──────────────────────────────────────────────────────────
         "rooms":              rooms,
+        "bedrooms":           bedrooms,        # camere da letto
         "floor":              raw.get("floor_text") or None,
         "floor_n":            floor_n,
         "floor_label":        floor_label,
@@ -682,7 +935,7 @@ def parse_idealista_listing(raw: dict) -> Optional[dict]:
         "is_external":        None,
         "energy_class":       None,
         "year_built":         None,
-        "bathrooms":          None,
+        "bathrooms":          bathrooms,
         "has_balcony":        has_balcony,
         "has_parking":        has_parking,
         "heating_type":       None,
@@ -704,6 +957,449 @@ def parse_idealista_listing(raw: dict) -> Optional[dict]:
         "fetched_at":         datetime.now().isoformat(timespec="seconds"),
         "first_seen_date":    None,         # stamped by run_once()
     }
+
+
+# ── Sale listing parser ───────────────────────────────────────────────────────
+
+def parse_idealista_sale_listing(raw: dict) -> Optional[dict]:
+    """
+    Convert raw DOM-extracted fields into the standard sale listing dict.
+    Field names match fetch_listings.parse_sale() so both sources merge
+    transparently into sales_latest.json.
+    Returns None when price or sqm cannot be reliably parsed.
+    """
+    listing_id = str(raw.get("id", "")).strip()
+    if not listing_id:
+        return None
+
+    # Total purchase price €
+    price = _parse_sale_price(raw.get("price_text", ""))
+    if not price:
+        return None
+
+    # Surface m²
+    sqm = _parse_sqm(raw.get("size_text", ""))
+    if not sqm:
+        return None
+
+    ask_psqm = round(price / sqm)   # €/m²  (purchase, not monthly)
+
+    # Rooms
+    rooms, bedrooms, bathrooms = parse_idealista_rooms(raw)
+
+    # Floor
+    floor_text_raw = (raw.get("floor_text") or "").strip()
+    floor_for_parse = _re.sub(
+        r'\s+(?:con|senza)\s+ascensore.*', '', floor_text_raw,
+        flags=_re.IGNORECASE
+    ).strip()
+    floor_n, floor_label = parse_floor(floor_for_parse)
+
+    # Fallback: parse Italian floor phrasings from title + description when the
+    # listing's chip didn't expose a floor (≈6 % of Idealista sales).
+    if floor_n is None and floor_label is None:
+        title_desc = (raw.get("title") or "") + " " + (raw.get("description") or "")
+        floor_n, floor_label = _parse_floor_from_text(title_desc)
+
+    is_below_ground = floor_n is not None and floor_n < 0
+    is_ground_floor  = floor_n == 0
+
+    # URL — ensure absolute
+    url = raw.get("url", "")
+    if url and not url.startswith("http"):
+        url = "https://www.idealista.it" + url
+
+    # Neighbourhood + address
+    address       = raw.get("address", "").strip()
+    neighbourhood = _extract_neighbourhood(address)
+    neighbourhood = _NEIGHBOURHOOD_SYNONYMS.get(neighbourhood, neighbourhood)
+
+    # Coordinates
+    lat = _safe_float(raw.get("latitude"))
+    lon = _safe_float(raw.get("longitude"))
+
+    # Feature flags
+    tags     = [t.lower() for t in (raw.get("tags") or [])]
+    desc     = raw.get("description", "").lower()
+    all_text = " ".join(tags) + " " + desc + " " + floor_text_raw.lower()
+
+    has_balcony = True if any(k in all_text for k in ("balcon", "terrazza", "giardino")) else None
+    has_parking = True if any(k in all_text for k in ("box", "garage", "parcheggio", "posto auto")) else None
+    elev        = True if any(k in all_text for k in ("ascensor", "lift", "elevator")) else None
+    furnished   = True if any(k in all_text for k in ("arredato", "arredat", "furnished")) else None
+
+    omi = match_omi(neighbourhood)
+
+    is_auction, is_nuda = detect_auction_or_nuda(raw)
+
+    return {
+        "id":              f"id_{listing_id}",
+        "source":          SOURCE_SALE,          # "idealista_sale"
+        "city":            CITY_LABEL,
+        "city_key":        CITY_KEY,
+        "title":           raw.get("title", "").strip(),
+        "neighbourhood":   neighbourhood,
+        "address":         address,
+        "latitude":        lat,
+        "longitude":       lon,
+        "url":             url,
+        "thumbnail":       raw.get("img") or None,
+        # Listing-type flags — used by dashboard filter to hide auctions /
+        # nuda proprietà by default (see applySaleFilters in index.html).
+        "is_auction":      is_auction,
+        "is_nuda_proprieta": is_nuda,
+        "price":           price,                # total purchase price €
+        "sqm":             sqm,
+        "ask_psqm":        ask_psqm,             # €/m²  (purchase, not monthly)
+        "rooms":           rooms,
+        "bedrooms":        bedrooms,           # camere da letto
+        "floor":           raw.get("floor_text") or None,
+        "floor_n":         floor_n,
+        "floor_label":     floor_label,
+        "is_below_ground": is_below_ground,
+        "is_ground_floor": is_ground_floor,
+        "elevator":        elev,
+        "is_external":     None,
+        "energy_class":    None,
+        "year_built":      None,
+        "bathrooms":       bathrooms,
+        "has_balcony":     has_balcony,
+        "has_parking":     has_parking,
+        "heating_type":    None,
+        "furnished":       furnished,
+        "photo_count":     None,
+        "days_on_market":  None,
+        "condition":       None,
+        "description":     (raw.get("description") or "")[:400],
+        # OMI — neighbourhood-based fields (polygon fields filled by geo enrichment)
+        "omi_fascia":      omi.get("fascia"),
+        "omi_zona":        None,
+        "omi_rmin":        omi.get("rmin"),
+        "omi_rmax":        omi.get("rmax"),
+        "omi_compr_min":   None,
+        "omi_compr_max":   None,
+        "omi_compr_mid":   None,
+        # Tracking
+        "fetched_at":      datetime.now().isoformat(timespec="seconds"),
+        "first_seen_date": None,
+    }
+
+
+# ── Sale fetch loop ───────────────────────────────────────────────────────────
+
+async def _fetch_sale_async(pages: int, area_slugs: list, max_price: int,
+                            min_sqm: int, min_rooms: int,
+                            delay: float, browser) -> tuple:
+    """
+    Navigate Idealista vendita-case pages and return (listings, skipped_areas).
+    Mirrors _fetch_async() but uses sale URL bases and sale listing parser.
+    """
+    all_items: list  = []
+    seen_ids:  set   = set()
+    skipped_areas    = []
+
+    targets = area_slugs if area_slugs else [None]
+
+    first_url = build_idealista_url(1, targets[0], max_price, min_sqm, min_rooms, mode="sale")
+    print(f"\n    [debug] GET {first_url} (sale initial + CAPTCHA check)", flush=True)
+    tab = await browser.get(first_url)
+    await asyncio.sleep(2.0)
+
+    if not await _check_and_handle_captcha(tab):
+        return [], [{"name": "all", "reason": "CAPTCHA not solved in time"}]
+
+    for area_slug in targets:
+        label = area_slug or "all Milano (sale)"
+        print(f"\n    area: {label}", end="", flush=True)
+
+        try:
+            area_ids_seen: set = set()
+            canonical_slug     = area_slug
+            area_got_results   = False
+
+            for page in range(1, pages + 1):
+                url = build_idealista_url(page, canonical_slug, max_price, min_sqm, min_rooms,
+                                          mode="sale")
+                print(f"\n    [debug] GET {url}", flush=True)
+                tab = await browser.get(url)
+                await asyncio.sleep(2.0)
+
+                if not await _check_and_handle_captcha(tab, timeout=60):
+                    skipped_areas.append({"name": label,
+                                          "reason": "CAPTCHA timeout mid-scan"})
+                    print(f" [captcha-timeout — skipping area]", end="", flush=True)
+                    break
+
+                if page == 1 and area_slug:
+                    try:
+                        actual_href = await tab.evaluate("window.location.href")
+                        if actual_href:
+                            m = (_re.search(r"/milano(?:-milano)?/([^/?#]+)/con-", actual_href)
+                                 or _re.search(r"/milano(?:-milano)?/([^/?#]+?)/?$", actual_href))
+                            if m:
+                                resolved = m.group(1)
+                                if resolved != canonical_slug:
+                                    print(f" [→{resolved}]", end="", flush=True)
+                                    canonical_slug = resolved
+                    except Exception:
+                        pass
+
+                raw_listings = await _extract_listings_from_page(tab)
+                if not raw_listings:
+                    print(f" (empty, done)", end="", flush=True)
+                    break
+
+                area_got_results = True
+
+                page_ids = {r.get("id", "") for r in raw_listings if r.get("id")}
+                if page > 1 and page_ids and page_ids.issubset(area_ids_seen):
+                    print(f" (repeat page, done)", end="", flush=True)
+                    break
+                area_ids_seen.update(page_ids)
+
+                new_this_page = 0
+                for raw in raw_listings:
+                    parsed = parse_idealista_sale_listing(raw)
+                    if not parsed:
+                        continue
+                    lid = parsed["id"]
+                    if lid in seen_ids:
+                        continue
+                    parsed["_fetched_area"] = canonical_slug or "all"
+                    seen_ids.add(lid)
+                    all_items.append(parsed)
+                    new_this_page += 1
+
+                try:
+                    has_next = await tab.evaluate(
+                        "!!(document.querySelector('a.icon-arrow-right-after')"
+                        "|| document.querySelector('li.next a')"
+                        "|| document.querySelector('a[rel=\"next\"]')"
+                        "|| document.querySelector('.pagination-next a'))"
+                    )
+                except Exception:
+                    has_next = False
+
+                print(f" p{page}(+{new_this_page})", end="", flush=True)
+                if not has_next:
+                    break
+
+            if not area_got_results and area_slug:
+                reason = "no results — slug may be invalid or not found on Idealista.it"
+                skipped_areas.append({"name": area_slug, "reason": reason})
+                print(f"\n    [warn] No sale results for area '{label}'", flush=True)
+
+        except Exception as exc:
+            reason = f"{type(exc).__name__}: {exc}"
+            skipped_areas.append({"name": label, "reason": reason})
+            print(f"\n    [error] Sale area '{label}' failed: {reason} — skipping", flush=True)
+            try:
+                tab = await browser.get("about:blank")
+                await asyncio.sleep(1.5)
+            except Exception:
+                pass
+            continue
+
+    return all_items, skipped_areas
+
+
+def fetch_idealista_sales(pages: int = 3, area_names: list = None, max_price: int = 0,
+                          min_sqm: int = 0, min_rooms: int = 0,
+                          delay: float = 3.0) -> tuple:
+    """
+    One-shot fetch of Milano for-sale listings from Idealista.it via nodriver.
+    Returns (listings, skipped_areas).
+    """
+    pre_skipped: list = []
+    valid_slugs: list = []
+    for name in (area_names or []):
+        name = name.strip()
+        if not name:
+            continue
+        slug = to_url_slug(name)
+        if not slug:
+            pre_skipped.append({"name": name, "reason": "converts to empty URL slug"})
+            print(f"  [warn] Area '{name}' has no valid Idealista URL slug — skipped.")
+        else:
+            valid_slugs.append(slug)
+
+    if area_names and valid_slugs:
+        desc = ", ".join(valid_slugs)
+        print(f"  [scan] {len(area_names)} area(s) → {len(valid_slugs)} valid for sale scan")
+    else:
+        desc = "all Milano"
+
+    area_slugs = valid_slugs
+    print(f"  Fetching Idealista sale listings ({desc})…", end="", flush=True)
+
+    async def _run():
+        browser = await uc.start(
+            browser_executable_path=CHROME_PATH,
+            headless=False,
+            lang="it-IT",
+        )
+        try:
+            items, skipped = await _fetch_sale_async(
+                pages, area_slugs, max_price, min_sqm, min_rooms, delay, browser
+            )
+        finally:
+            browser.stop()
+        return items, skipped
+
+    t0 = time.time()
+    items, fetch_skipped = asyncio.run(_run())
+    skipped_areas = pre_skipped + fetch_skipped
+    n_fetched = len(items)
+    print(f"\n  [fetch]  Idealista sale: {n_fetched} listings fetched ({pages} pages)")
+
+    if not items:
+        print("  [warn]   No Idealista sale listings parsed — check selectors or CAPTCHA")
+        return items, skipped_areas
+
+    # Cache-aware geo enrichment (same pattern as rental fetch)
+    INLINE_ENRICH_CAP = 200
+    try:
+        import enrichment_cache as _ecache
+        from enrich_geo import enrich_batch as _enrich_batch
+
+        _ecache.load()
+
+        new_items = [l for l in items if _ecache.get(SOURCE_SALE, l["id"]) is None]
+        n_cached  = n_fetched - len(new_items)
+        print(f"  [cache]  {n_cached} already enriched, {len(new_items)} new")
+
+        if new_items:
+            if len(new_items) > INLINE_ENRICH_CAP:
+                print(f"  [enrich] {len(new_items)} new listings — skipping inline enrichment "
+                      f"(>{INLINE_ENRICH_CAP} cap). Use 'Enrich geo' in the dashboard.",
+                      flush=True)
+            else:
+                print(f"  [enrich] Enriching {len(new_items)} new sale listings…", flush=True)
+                t_enrich = time.time()
+                try:
+                    geo_results = _enrich_batch(new_items)
+                    print(f"  [enrich] Done in {time.time() - t_enrich:.1f}s")
+                    _ecache.bulk_save(
+                        [(SOURCE_SALE, l["id"], g) for l, g in zip(new_items, geo_results)]
+                    )
+                except Exception as _geo_exc:
+                    print(f"  [enrich] Geo enrichment failed "
+                          f"({type(_geo_exc).__name__}): {_geo_exc}"
+                          f" — saving without geo data", flush=True)
+
+        for listing in items:
+            cached = _ecache.get(SOURCE_SALE, listing["id"])
+            if cached:
+                listing.update({k: v for k, v in cached.items() if k != "enriched_at"})
+
+        try:
+            import omi_lookup as _omi_lookup
+            if _omi_lookup.ZONES:
+                _need_omi = [
+                    l for l in items
+                    if l.get("omi_loc_mid") is None
+                    and l.get("latitude") and l.get("longitude")
+                ]
+                _omi_updates = []
+                for _l in _need_omi:
+                    _zone, _src = _omi_lookup.lookup(float(_l["latitude"]),
+                                                      float(_l["longitude"]))
+                    if _zone:
+                        _omi_f = {
+                            "omi_zona":      _zone["zona"],
+                            "omi_fascia":    _zone["fascia"],
+                            "omi_descr":     _zone["descr"],
+                            "omi_loc_min":   _zone["loc_min"],
+                            "omi_loc_max":   _zone["loc_max"],
+                            "omi_loc_mid":   _zone["loc_mid"],
+                            "omi_compr_min": _zone["compr_min"],
+                            "omi_compr_max": _zone["compr_max"],
+                            "omi_compr_mid": _zone["compr_mid"],
+                            "omi_source":    _src,
+                        }
+                        _l.update(_omi_f)
+                        _omi_updates.append(
+                            (SOURCE_SALE, _l["id"],
+                             {**(_ecache.get(SOURCE_SALE, _l["id"]) or {}), **_omi_f})
+                        )
+                if _omi_updates:
+                    _ecache.bulk_save(_omi_updates)
+                    print(f"  [omi]    polygon fields applied to "
+                          f"{len(_omi_updates)} sale listings")
+        except Exception as _omi_exc:
+            print(f"  [omi]    polygon step skipped: {_omi_exc}", file=sys.stderr)
+
+    except ImportError:
+        pass
+
+    if skipped_areas:
+        print(f"  [scan]   {len(skipped_areas)} area(s) skipped: "
+              + ", ".join(s["name"] for s in skipped_areas))
+
+    print(f"  [done]   Sale run complete in {time.time() - t0:.1f}s total")
+    return items, skipped_areas
+
+
+# ── Sale run cycle ────────────────────────────────────────────────────────────
+
+def run_sale_once(args) -> list:
+    """Fetch-score-write cycle for Idealista sale listings."""
+    area_names = _load_idealista_areas()
+    if not area_names:
+        print("  [scan] No Idealista zones matched — scanning all Milano (sale)", flush=True)
+
+    raw, skipped_areas = fetch_idealista_sales(
+        pages=args.pages,
+        area_names=area_names,
+        max_price=args.max_rent or 0,
+        min_sqm=args.min_sqm    or 0,
+        min_rooms=args.min_rooms or 0,
+        delay=args.delay,
+    )
+
+    if not raw:
+        print("  ✗ No Idealista sale listings fetched.")
+        return []
+
+    # Load existing Immobiliare sale listings as comps pool
+    existing_sales = []
+    if SALE_OUTPUT_PATH.exists():
+        try:
+            all_sales = json.loads(SALE_OUTPUT_PATH.read_text())
+            existing_sales = [l for l in all_sales if l.get("source") != SOURCE_SALE]
+        except Exception:
+            pass
+
+    # Score using the full merged list as the comps pool
+    comps_pool = raw + existing_sales
+    if _score_all_sales:
+        # score_all_sales uses all listings passed as both the listings and pool
+        # We pass the full comps_pool so Idealista listings can compare against
+        # Immobiliare listings as neighbours
+        scored = _score_all_sales(comps_pool)
+        # Keep only the Idealista sale entries as "scored" (the merged comps_pool
+        # scoring is done in-place — existing_sales are already scored in the file)
+        ideal_ids = {l["id"] for l in raw}
+        scored = [l for l in scored if l["id"] in ideal_ids]
+        if _explain_all_sales:
+            _explain_all_sales(scored)
+    else:
+        scored = raw
+
+    # Merge: keep existing non-Idealista-sale entries, replace/add Idealista-sale entries
+    id_map = {l["id"]: l for l in existing_sales}
+    for l in scored:
+        id_map[l["id"]] = l
+    merged = sorted(id_map.values(), key=lambda x: x.get("score_total", 0) or 0, reverse=True)
+
+    # Write atomically
+    tmp = SALE_OUTPUT_PATH.with_suffix(".tmp")
+    tmp.write_text(json.dumps(merged, ensure_ascii=False, indent=2))
+    tmp.replace(SALE_OUTPUT_PATH)
+
+    new_listings = [l for l in scored if l["id"] not in {e["id"] for e in existing_sales}]
+    print(f"  ✓ {len(scored)} Idealista sale listings written · {len(new_listings)} new")
+    return new_listings
 
 
 # ── Idealista-specific status writer ─────────────────────────────────────────
@@ -1053,8 +1749,25 @@ def run_once(args) -> list:
         write_idealista_status(new_count=0, skipped_areas=skipped_areas)
         return []
 
-    # Score through the same pipeline as Immobiliare listings
-    scored = score_all(raw)
+    # Load existing Immobiliare listings so they can serve as comps for the
+    # newly-fetched Idealista batch.  Without this, score_all() would only see
+    # the Idealista batch as its comps pool — most of those lack coordinates at
+    # this point, so the comps benchmark falls back to "No local comps".
+    try:
+        existing_all = json.loads(OUTPUT_PATH.read_text()) if OUTPUT_PATH.exists() else []
+        immo_comps   = [l for l in existing_all if l.get("source") != SOURCE]
+        if immo_comps:
+            print(f"  [comps]  {len(immo_comps)} Immobiliare listing(s) loaded as comps pool",
+                  flush=True)
+    except Exception:
+        immo_comps = []
+
+    # Score through the same pipeline as Immobiliare listings.
+    # comps_pool = newly-fetched Idealista listings + existing Immobiliare data
+    # so radius-based comps finds neighbours even when Idealista coords are still
+    # pending geo enrichment (Immobiliare listings already have coordinates).
+    comps_pool = raw + immo_comps
+    scored = score_all(raw, comps_pool=comps_pool)
 
     # Stamp first_seen_date — shared seen_ids.json with fetch_rentals;
     # "id_" prefix ensures no collision with Immobiliare numeric IDs.
@@ -1175,6 +1888,8 @@ def parse_args():
     p.add_argument("--netlify",   action="store_true",
                    help="Deploy dashboard/ to Netlify after each scan "
                         "(requires netlify_config.json with site_id + token)")
+    p.add_argument("--mode",     choices=["rental", "sale"], default="rental",
+                   help="rental (default) or sale (vendita-case)")
     return p.parse_args()
 
 
@@ -1216,7 +1931,9 @@ def main():
     print(f"        Solve it in the Chrome window — the scan resumes automatically.")
     print(f"{'─'*52}\n")
 
-    if args.daemon:
+    if args.mode == "sale":
+        run_sale_once(args)
+    elif args.daemon:
         daemon_loop(args)
     else:
         run_once(args)

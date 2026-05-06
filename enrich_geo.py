@@ -711,7 +711,46 @@ def enrich(listing: dict, _skip_osrm: bool = False) -> dict:
     # Priority 3: geocoding (Photon → Nominatim fallback)
     if lat is None:
         address = listing.get("address", "").strip()
-        if address:
+
+        # For Idealista listings that are stored with "Posizione approssimativa."
+        # or with an empty address, try to extract the real address from the listing
+        # title.  This covers two Idealista title patterns:
+        #   "Bilocale in Via Roma, 10, Navigli, Milano"  ← preposition "in"
+        #   "Trilocale a Lodi - Brenta, Milano"          ← preposition "a" (at)
+        # The second form only matches when the word following "a" starts with an
+        # uppercase letter so we don't match "appartamento a due piani" etc.
+        _addr_hidden = (not address
+                        or _re_geo.search(r'posizione approssimativa', address, _re_geo.I))
+        if _addr_hidden and listing.get("title"):
+            _title = listing["title"].strip()
+            _m = (_re_geo.search(r'\s+in\s+', _title, _re_geo.I)
+                  or _re_geo.search(r'\s+a\s+(?=[A-ZÀ-ɏ])', _title))
+            if _m:
+                _extracted = _re_geo.sub(
+                    r'^\s+(?:in|a)\s+', '', _title[_m.start():], flags=_re_geo.I
+                ).strip()
+                if _extracted:
+                    address = _extracted
+                    listing["address"] = address   # persist so the cache stores it
+
+                    # Also backfill neighbourhood when it was left blank (or set
+                    # to the "Posizione approssimativa." placeholder) because the
+                    # DOM address was missing at parse time.
+                    # Extraction: last comma-segment that isn't a city/country name.
+                    _nbhd_now = (listing.get("neighbourhood") or "").strip()
+                    _nbhd_stale = (not _nbhd_now
+                                   or _re_geo.search(r'posizione approssimativa',
+                                                     _nbhd_now, _re_geo.I))
+                    if _nbhd_stale:
+                        _CITY_TOK = {"milano", "mi", "milan", "italy", "italia"}
+                        _parts = [p.strip() for p in address.split(",") if p.strip()]
+                        _parts = [p for p in _parts
+                                  if (p.split()[0].lower() if p.split() else "")
+                                  not in _CITY_TOK]
+                        if _parts:
+                            listing["neighbourhood"] = _parts[-1]
+
+        if address and not _re_geo.search(r'posizione approssimativa', address, _re_geo.I):
             result = _geocode(address)
             if result:
                 lat, lng = result
@@ -720,7 +759,27 @@ def enrich(listing: dict, _skip_osrm: bool = False) -> dict:
                 listing["latitude"]  = lat
                 listing["longitude"] = lng
 
-    # Priority 4: no coordinates at all
+    # Priority 4: neighbourhood-level centroid (rough fallback).
+    # Used when the listing has no street address but the neighbourhood is known
+    # (Idealista sometimes omits the address on search results cards).
+    # Geocoding the neighbourhood name gives a centroid-level coordinate that is
+    # accurate enough for OMI zone lookup and approximate POI distances.
+    if lat is None:
+        neighbourhood = listing.get("neighbourhood", "").strip()
+        # Skip obvious non-names (Idealista's own placeholder text)
+        if (neighbourhood
+                and not _re_geo.search(r'posizione approssimativa', neighbourhood, _re_geo.I)
+                and neighbourhood.lower() not in {"—", "-", ""}):
+            result = _geocode(f"{neighbourhood}, Milano")
+            if result:
+                lat, lng = result
+                geocoded = True
+                listing["latitude"]  = lat
+                listing["longitude"] = lng
+                print(f"  [geo] neighbourhood fallback geocode for {lid}: "
+                      f"'{neighbourhood}' → ({lat:.4f}, {lng:.4f})", file=sys.stderr)
+
+    # Priority 5: no coordinates at all
     if lat is None:
         print(f"  [geo] no coordinates for {lid} (address={listing.get('address')})",
               file=sys.stderr)

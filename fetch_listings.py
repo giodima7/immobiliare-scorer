@@ -38,7 +38,7 @@ import nodriver as uc
 
 EDGE_PATH = os.environ.get(
     "BROWSER_EXECUTABLE_PATH",
-    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
 )
 
 # ── Floor parsing ──────────────────────────────────────────────────────────────
@@ -607,7 +607,7 @@ def parse_listing(item: dict, city_key: str, city_label: str) -> Optional[dict]:
         except (TypeError, ValueError):
             year_built = None
 
-    # bathrooms
+    # bathrooms (= "bagni")
     baths_raw = prop.get("bathrooms") or prop.get("bathRooms")
     bathrooms = None
     if baths_raw is not None:
@@ -615,6 +615,17 @@ def parse_listing(item: dict, city_key: str, city_label: str) -> Optional[dict]:
             bathrooms = int(baths_raw)
         except (TypeError, ValueError):
             pass
+
+    # bedrooms (= "camere da letto" — bedrooms only, NOT total locali)
+    beds_raw = prop.get("bedRoomsNumber") or prop.get("bedrooms")
+    bedrooms = None
+    if beds_raw not in (None, '', '0', 0):
+        try:
+            bedrooms = int(beds_raw)
+        except (TypeError, ValueError):
+            pass
+    if bedrooms is not None and rooms is not None and bedrooms > rooms:
+        bedrooms = None
 
     # features[] array — collect type/label keywords for quick lookup
     _feature_types: set = set()
@@ -742,6 +753,7 @@ def parse_listing(item: dict, city_key: str, city_label: str) -> Optional[dict]:
         "sqm":             sqm,
         "ask_psqm":        ask_psqm,
         "rooms":           rooms,
+        "bedrooms":        bedrooms,        # camere da letto (bedrooms only)
         "floor":           floor,
         "floor_n":         floor_n,
         "floor_label":     floor_label,

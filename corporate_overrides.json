@@ -1,0 +1,6 @@
+{
+  "_comment": "Manual list of listing IDs that are known to be corporate / short-term rentals but whose agency_name was not captured by the scrapers. The scoring layer treats these as if is_corporate_rental() returned True. Add IDs here when you spot a corporate listing that isn't being flagged automatically.",
+  "ids": [
+    "id_35604324"
+  ]
+}

@@ -24,7 +24,7 @@ FIELDS = {
     ],
     "useful": [
         "has_balcony", "has_parking", "energy_class", "heating_type",
-        "furnished", "bathrooms", "spese_condominiali",
+        "furnished", "bathrooms", "bedrooms", "spese_condominiali",
         "days_on_market", "photo_count",
         "tram_nearest_dist_m", "supermarket_nearest_dist_m",
         "park_nearest_dist_m", "university_nearest_dist_m",
@@ -47,7 +47,7 @@ SALE_FIELDS = {
     ],
     "useful": [
         "has_balcony", "has_parking", "energy_class", "heating_type",
-        "furnished", "bathrooms",
+        "furnished", "bathrooms", "bedrooms",
         "days_on_market", "photo_count",
         "tram_nearest_dist_m", "supermarket_nearest_dist_m",
         "park_nearest_dist_m", "university_nearest_dist_m",

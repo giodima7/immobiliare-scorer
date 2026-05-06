@@ -1,0 +1,11 @@
+# Cloudflare Pages redirects — equivalent of the old netlify.toml [[redirects]].
+
+# /api-ping must 404 in static mode — dashboard JS uses this to detect that
+# the local Flask API isn't running and switch to snapshot mode.
+/api-ping  /404  404
+
+# Flask endpoint aliases so old bookmarks and the IS_LIVE codepath keep working.
+/rentals    /rentals_latest.json  200
+/sales      /sales_latest.json    200
+/listings   /latest.json          200
+/favourites /favourites.html      200

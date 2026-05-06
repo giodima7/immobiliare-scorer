@@ -13,6 +13,8 @@ netlify_config.json
 scanner.log
 scanner_idealista.log
 sale_fetch.log
+idealista_scanner.log
+idealista_sale_fetch.log
 scanner_status.json
 seen_ids.backup.json
 

@@ -418,6 +418,64 @@ def parse_advertiser(re_data: dict) -> dict:
     }
 
 
+# ── Parser helpers ─────────────────────────────────────────────────────────────
+
+# Immobiliare's search-page __NEXT_DATA__ payload does NOT carry condo fees as
+# a structured field — only `value/formattedValue/priceRange/visible` under
+# `price`. The fees, when stated, live in the free-text `description`. Parse
+# the most common Italian phrasings here.
+
+_CONDO_KEYWORD_RX = _re.compile(
+    r"\b(spese(?:\s*(?:condomin\w*|cond\.li|cond\b|annu\w+|mensil\w+))?|condominio)\b"
+    r"[\s:\-‐-―−]*"
+    r"(?:di\s+|pari\s+a\s+)?"
+    r"(?:€|eur\w*\s*)?"
+    r"\s*(\d[\d.,]*)\s*"
+    r"(?:€|eur\w*)?",
+    _re.IGNORECASE,
+)
+_PERIOD_ANNUAL_RX  = _re.compile(r"annu\w+|/\s*anno|all['’]?\s*anno", _re.IGNORECASE)
+_PERIOD_MONTHLY_RX = _re.compile(r"mensil\w+|/\s*mese|al\s+mese|/\s*mo\b", _re.IGNORECASE)
+_NEGATIVE_CONTEXT_RX = _re.compile(
+    r"da\s+definire|a\s+parte|esclus[aei]|incluse?",
+    _re.IGNORECASE,
+)
+def _parse_condo_from_description(desc):
+    """
+    Extract monthly condo fees from an Italian listing description.
+    Strategy: keyword-anchored regex (`spese`/`condominio`) finds candidate
+    matches; period (monthly vs annual) is decided from a 50-char window
+    around each match. Sanity range: 20-1000 EUR/month.
+    Returns int or None.
+    """
+    if not desc or not isinstance(desc, str):
+        return None
+    text = desc.replace("\xa0", " ")  # non-breaking space -> regular space
+    for m in _CONDO_KEYWORD_RX.finditer(text):
+        start, end = m.span()
+        ctx = text[max(0, start - 10): min(len(text), end + 40)]
+        # Skip "spese da definire", "spese a parte", "spese escluse/incluse"
+        if _NEGATIVE_CONTEXT_RX.search(ctx):
+            continue
+        num = m.group(2)
+        # Italian: ',' decimal, '.' thousand separator
+        if "," in num:
+            num = num.replace(".", "").replace(",", ".")
+        else:
+            num = num.replace(".", "")
+        try:
+            val = float(num)
+        except ValueError:
+            continue
+        # Default monthly; switch to annual when context says so explicitly
+        if (_PERIOD_ANNUAL_RX.search(ctx) and
+                not _PERIOD_MONTHLY_RX.search(ctx)):
+            val = val / 12
+        if 20 <= val <= 1000:
+            return int(round(val))
+    return None
+
+
 # ── Parser ─────────────────────────────────────────────────────────────────────
 
 def parse_rental(item: dict) -> Optional[dict]:
@@ -452,7 +510,11 @@ def parse_rental(item: dict) -> Optional[dict]:
 
     ask_psqm = round(rent / sqm, 2)   # €/m²/month
 
-    # Condominium fees (spese condominiali) — try several possible field names
+    # Condominium fees (spese condominiali).
+    # Step 1: try structured fields. Immobiliare's search payload does NOT
+    # currently expose them, but try anyway in case the API changes.
+    # Step 2: fall back to parsing the free-text description, which is where
+    # the fees actually live in practice (e.g. "Spese condominiali: € 200").
     spese = None
     for field in ("expenses", "condominiumFees", "monthlyCharges"):
         raw = prop.get(field) or price_data.get(field)
@@ -462,6 +524,9 @@ def parse_rental(item: dict) -> Optional[dict]:
                 break
             except (ValueError, AttributeError):
                 pass
+
+    if spese is None:
+        spese = _parse_condo_from_description(prop.get("description") or "")
 
     # Rooms — try numeric field first, then parse from Italian title
     rooms_raw = prop.get("rooms") or prop.get("roomsNumber") or prop.get("numRooms")
@@ -564,7 +629,7 @@ def parse_rental(item: dict) -> Optional[dict]:
         except (TypeError, ValueError):
             year_built = None
 
-    # bathrooms
+    # bathrooms (= "bagni")
     baths_raw = prop.get("bathrooms") or prop.get("bathRooms")
     bathrooms = None
     if baths_raw is not None:
@@ -572,6 +637,20 @@ def parse_rental(item: dict) -> Optional[dict]:
             bathrooms = int(baths_raw)
         except (TypeError, ValueError):
             pass
+
+    # bedrooms (= "camere da letto" — bedrooms only, NOT total locali)
+    # Italian distinction: rooms = locali (total habitable rooms incl. living)
+    #                     bedRoomsNumber = camere = bedrooms only
+    beds_raw = prop.get("bedRoomsNumber") or prop.get("bedrooms")
+    bedrooms = None
+    if beds_raw not in (None, '', '0', 0):
+        try:
+            bedrooms = int(beds_raw)
+        except (TypeError, ValueError):
+            pass
+    # Sanity: bedroom count cannot exceed total rooms
+    if bedrooms is not None and rooms is not None and bedrooms > rooms:
+        bedrooms = None
 
     # ── features[] array  ─────────────────────────────────────────────────────
     # Immobiliare.it sometimes returns a features list:
@@ -677,6 +756,7 @@ def parse_rental(item: dict) -> Optional[dict]:
         "ask_psqm":           ask_psqm,     # €/m²/month
         "spese_condominiali": spese,        # condominium fees €/mo (or None)
         "rooms":              rooms,
+        "bedrooms":           bedrooms,        # camere da letto (bedrooms only)
         "floor":              floor,
         "floor_n":            floor_n,
         "floor_label":        floor_label,
@@ -984,18 +1064,27 @@ def fetch_rentals(pages: int = 3, area_names: list = None, max_rent: int = 0,
 
 # ── Scoring pass ───────────────────────────────────────────────────────────────
 
-def score_all(raw: list) -> list:
+def score_all(raw: list, comps_pool: list | None = None) -> list:
+    """Score *raw* listings and return them sorted by total score.
+
+    comps_pool — optional larger pool used for the comps benchmark only.
+    When omitted, *raw* itself is used as the pool (normal single-source case).
+    Pass ``raw + existing_immo`` when scoring an Idealista batch so every
+    listing can find neighbourhood comps from the already-stored Immobiliare
+    data even before geo enrichment runs.
+    """
     try:
         from scoring import score_all as _score_all
         from explain import explain_all
-        scored = _score_all(raw)
+        scored = _score_all(raw, comps_pool=comps_pool)
         explain_all(scored)
         return scored
     except ImportError:
         pass
+    pool = comps_pool if comps_pool is not None else raw
     scored = []
     for l in raw:
-        s = score_rental(l, raw)
+        s = score_rental(l, pool)
         scored.append({**l, **s})
     scored.sort(key=lambda x: x.get("score_total", 0) or 0, reverse=True)
     return scored

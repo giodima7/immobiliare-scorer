@@ -443,6 +443,47 @@ def property_score(listing: dict, settings: dict | None = None) -> int:
         elif yr >= 1990:
             score += 3
 
+    # NOTE: bedrooms field is now captured but intentionally not used in scoring.
+    # Reasons:
+    #   1. Coverage starts at 0% — needs a few scans to stabilise
+    #   2. Italian agents fill it inconsistently (sometimes counts living room
+    #      as a bedroom, sometimes excludes it)
+    #   3. The existing rooms-vs-sqm penalty already catches mislabelled bilocali
+    # Revisit once coverage > 70% and a sample audit shows consistent fill.
+
+    # ── Room efficiency / monolocale size (penalty-only) ───────────────────
+    # rooms ≥ 2 → use sqm/rooms ratio (cramped multi-room flats)
+    # rooms ≤ 1 → use absolute sqm (small/micro studios)
+    _sqm   = listing.get("sqm")   or 0
+    _rooms = listing.get("rooms") or 0
+    if _sqm > 0:
+        n_known += 1
+        if _rooms >= 2:
+            _eff = _sqm / _rooms
+            if _eff < 10:
+                score -= 20
+                listing["_room_efficiency_flag"] = "severe"
+            elif _eff < 14:
+                score -= 10
+                listing["_room_efficiency_flag"] = "tight"
+            else:
+                listing["_room_efficiency_flag"] = None
+        else:
+            # monolocale / studio (rooms == 0 or 1) — penalise based on absolute sqm
+            if _sqm < 30:
+                score -= 25
+                listing["_room_efficiency_flag"] = "micro_studio"
+            elif _sqm < 38:
+                score -= 15
+                listing["_room_efficiency_flag"] = "small_studio"
+            elif _sqm < 45:
+                score -= 8
+                listing["_room_efficiency_flag"] = "compact_studio"
+            else:
+                listing["_room_efficiency_flag"] = None
+    else:
+        listing["_room_efficiency_flag"] = None
+
     if n_known == 0:
         return 50   # no data — neutral
 
@@ -573,6 +614,243 @@ def apply_price_ceiling(score_total: float, comps_delta_pct: float) -> int:
     return min(round(score_total), ceiling)
 
 
+def apply_absolute_value_gate(score_total: float, ask_psqm: float, sqm: float) -> tuple[int, bool]:
+    """
+    Hard score ceiling for small, very expensive listings.
+
+    Prevents overpriced micro-flats from scoring highly even when they look
+    attractive vs. local comps — comps in premium zones are themselves expensive.
+    Only activates for listings < 60 m².
+
+    Tiers (first match wins):
+      ask_psqm ≥ 7 000                  → ceiling 55  (any small flat at this price)
+      ask_psqm ≥ 5 800 AND sqm ≤ 58     → ceiling 65  (e.g. €6 154/m² at 52 m²)
+      ask_psqm ≥ 5 000 AND sqm ≤ 45     → ceiling 70  (tiny flat, still expensive)
+
+    Returns (final_score, gate_applied).
+    """
+    if ask_psqm <= 0 or sqm <= 0 or sqm >= 60:
+        return round(score_total), False
+
+    if ask_psqm >= 7000:
+        ceiling = 55
+    elif ask_psqm >= 5800 and sqm <= 58:
+        ceiling = 65
+    elif ask_psqm >= 5000 and sqm <= 45:
+        ceiling = 70
+    else:
+        return round(score_total), False
+
+    capped = min(round(score_total), ceiling)
+    applied = capped < round(score_total)
+    return capped, applied
+
+
+# ── Corporate / short-term rental detection ─────────────────────────────────
+#
+# Some agencies in Milan systematically charge a premium for furnished /
+# short-term / serviced apartments. The price is fair *for that product*
+# (flexible contracts, all-inclusive, business travelers) but it's NOT a
+# bargain for a standard long-term renter. We flag these so they don't sneak
+# into Hidden Gem / Good Value badges and we cap their composite score.
+
+CORPORATE_RENTAL_AGENCIES: set[str] = {
+    'spacest', 'spacest.com', 'roomless',
+    'milano monolocali',
+    'dovevivo',
+    'homy', 'homy.it',
+    'serviced apartment',
+    'corporate housing',
+    'short let',
+    'short stay',
+    'temporary milano',
+    'affitti brevi',
+    'milano short stay',
+    'urban campus',
+    'the social hub',
+    'aparto',
+    'camplus',
+    'collegium',
+    'milano studio rent',
+    'milano transfer',
+    'milano luxury',
+    'tempoaffitti',
+    'safestays',
+    'housinganywhere',
+    'the best rent',
+}
+
+
+_CORPORATE_OVERRIDE_IDS: set[str] | None = None
+
+def _load_corporate_overrides() -> set[str]:
+    """
+    Load `corporate_overrides.json` once. The file lets the user manually
+    flag listings as corporate when the scrapers fail to capture agency_name
+    (Idealista currently has 0 % agency-name coverage). Format:
+        { "ids": ["id_35604324", "id_xxxxxxxx", ...] }
+    Lookups are case-sensitive and match the listing's `id` field exactly.
+    """
+    global _CORPORATE_OVERRIDE_IDS
+    if _CORPORATE_OVERRIDE_IDS is not None:
+        return _CORPORATE_OVERRIDE_IDS
+    try:
+        from pathlib import Path
+        import json as _json
+        p = Path(__file__).parent / "corporate_overrides.json"
+        if p.exists():
+            data = _json.loads(p.read_text())
+            ids = data.get("ids") if isinstance(data, dict) else data
+            _CORPORATE_OVERRIDE_IDS = set(map(str, ids or []))
+        else:
+            _CORPORATE_OVERRIDE_IDS = set()
+    except Exception:
+        _CORPORATE_OVERRIDE_IDS = set()
+    return _CORPORATE_OVERRIDE_IDS
+
+
+def is_corporate_rental(listing: dict) -> bool:
+    """
+    True when:
+      - the listing's agency name matches a known corporate operator, OR
+      - the listing's id appears in `corporate_overrides.json` (manual list
+        for cases where the scraper missed the agency name).
+    """
+    lid = str(listing.get("id", ""))
+    if lid and lid in _load_corporate_overrides():
+        return True
+    agency = (listing.get('agency_name') or '').lower().strip()
+    if not agency:
+        return False
+    return any(corp in agency for corp in CORPORATE_RENTAL_AGENCIES)
+
+
+def has_corporate_rental_signals(listing: dict) -> bool:
+    """
+    Detect corporate rental from listing description / title text patterns.
+    Requires 2+ signals to fire (one alone is too noisy).
+    Operates on `description` and `title` if either is present — both fields
+    are optional in our scrape, so this is a no-op when text is missing.
+    """
+    desc  = (listing.get('description') or '').lower()
+    title = (listing.get('title')       or '').lower()
+    text  = desc + ' ' + title
+    if not text.strip():
+        return False
+    signals = (
+        'minimo mesi', 'massimo mesi',
+        'medium term', 'medium-term',
+        'short term',  'short-term',
+        'corporate',   'serviced',
+        'all inclusive', 'all-inclusive',
+        'utenze incluse', 'wifi incluso',
+        'mensile', 'monthly stay',
+        'business travelers', 'digital nomad',
+        'minimo 1 mese', 'da 1 mese',
+        'temporary',
+    )
+    hits = sum(1 for s in signals if s in text)
+    return hits >= 2
+
+
+def compute_effective_rent(listing: dict) -> dict:
+    """
+    Real monthly cost: base rent + condo fees + bundled utilities.
+    Field-name shims:
+      base_rent  ← `rent_mo` (preferred) or `price`
+      condo      ← `spese_condominiali` (Italian) or `condominium_fees`
+      utilities  ← `utilities_mo` (rare in our scrape)
+    Caps absurd condo values at 15 % of base rent (anything higher is
+    almost always a data-entry error in the scrape).
+    """
+    try:
+        base_rent = float(listing.get('rent_mo') or listing.get('price') or 0) or 0
+    except (TypeError, ValueError):
+        base_rent = 0
+    try:
+        condo = float(listing.get('spese_condominiali')
+                      or listing.get('condominium_fees') or 0) or 0
+    except (TypeError, ValueError):
+        condo = 0
+    try:
+        utilities = float(listing.get('utilities_mo') or 0) or 0
+    except (TypeError, ValueError):
+        utilities = 0
+
+    if base_rent > 0 and condo > base_rent * 0.30:
+        condo = base_rent * 0.15
+
+    effective = base_rent + condo + utilities
+    sqm = listing.get('sqm') or 0
+    try:
+        sqm = float(sqm)
+    except (TypeError, ValueError):
+        sqm = 0
+    return {
+        'effective_rent_mo':   round(effective, 2) if effective else None,
+        'effective_psqm_rent': round(effective / sqm, 2) if (effective and sqm) else None,
+        'condo_pct_of_rent':   round(condo / base_rent * 100, 1) if base_rent else 0,
+    }
+
+
+CORPORATE_CEILING = 75
+
+
+def compute_effective_psqm(listing: dict) -> float:
+    """
+    Real €/m²/month including mandatory condo fees. Caps condo at 20 % of
+    rent so a stray data error doesn't blow up the comps comparison.
+    Falls back to the listing's existing `ask_psqm` when rent or sqm are
+    unavailable.
+    """
+    try:
+        rent = float(listing.get("rent_mo") or listing.get("price") or 0) or 0
+    except (TypeError, ValueError):
+        rent = 0
+    try:
+        sqm = float(listing.get("sqm") or 0) or 0
+    except (TypeError, ValueError):
+        sqm = 0
+    if not rent or not sqm:
+        try:
+            return float(listing.get("ask_psqm") or 0) or 0
+        except (TypeError, ValueError):
+            return 0
+    try:
+        condo = float(listing.get("spese_condominiali")
+                      or listing.get("condominium_fees") or 0) or 0
+    except (TypeError, ValueError):
+        condo = 0
+    condo_capped = min(condo, rent * 0.20)
+    return round((rent + condo_capped) / sqm, 2)
+
+
+def get_condo_fee_flag(listing: dict) -> str | None:
+    """
+    Flag when condo fees significantly inflate the effective rent.
+      ≥ 20 % of rent  → 'high_condo_fees'
+      ≥ 12 % of rent  → 'elevated_condo_fees'
+      otherwise       → None
+    """
+    try:
+        rent = float(listing.get("rent_mo") or listing.get("price") or 0) or 0
+    except (TypeError, ValueError):
+        rent = 0
+    try:
+        condo = float(listing.get("spese_condominiali")
+                      or listing.get("condominium_fees") or 0) or 0
+    except (TypeError, ValueError):
+        condo = 0
+    if rent <= 0 or condo <= 0:
+        return None
+    pct = condo / rent
+    if pct >= 0.20:
+        return "high_condo_fees"
+    if pct >= 0.12:
+        return "elevated_condo_fees"
+    return None
+
+
 # ── Composite score ───────────────────────────────────────────────────────────
 
 def score_rental(listing: dict, all_listings: list, settings: dict | None = None) -> dict:
@@ -636,12 +914,15 @@ def score_rental(listing: dict, all_listings: list, settings: dict | None = None
         pvc_s = 50.0          # neutral when no benchmark
         delta_label_pct = None
 
-    # ── LDI boost (only for bargains — listings at or below comps median) ──────
+    # ── LDI boost (only for bargains in non-premium zones) ─────────────────────
     # A bargain in a prime area deserves a reward; an overpriced one does not.
-    if delta_pct is not None and delta_pct <= 0:
+    # Disabled in zones where omi_compr_mid > 5500 €/m² — comps themselves are
+    # expensive, so the LDI boost would inflate scores for high-cost micro-flats.
+    _omi_compr_r = listing.get("omi_compr_mid") or 0
+    if delta_pct is not None and delta_pct <= 0 and _omi_compr_r <= 5500:
         boosted_price_score = round(min(100.0, pvc_s * (1 + ldi_bonus)))
     else:
-        boosted_price_score = round(pvc_s)   # above comps or no comps: no boost
+        boosted_price_score = round(pvc_s)   # above comps, no comps, or premium zone: no boost
 
     # ── Composite ──────────────────────────────────────────────────────────────
     total_raw = round(
@@ -668,6 +949,25 @@ def score_rental(listing: dict, all_listings: list, settings: dict | None = None
     _fn = listing.get("floor_n")
     if _fn is not None and _fn < 0:
         total = min(total, 55)
+
+    # Absolute value gate: overpriced small flats in premium zones
+    total, _gate_applied = apply_absolute_value_gate(total, ask_psqm, sqm)
+    listing["_absolute_value_gate_applied"] = bool(_gate_applied)
+
+    # Corporate / short-term rental detection — cap at 75 and disqualify badges.
+    _is_corp = is_corporate_rental(listing) or has_corporate_rental_signals(listing)
+    listing["_is_corporate_rental"] = bool(_is_corp)
+    listing["_corporate_ceiling_applied"] = False
+    if _is_corp and total > CORPORATE_CEILING:
+        listing["_corporate_ceiling_applied"] = True
+        total = CORPORATE_CEILING
+
+    # Effective rent (base + condo + bundled utilities) — what the renter
+    # actually pays each month, useful when condo fees are non-trivial.
+    _eff = compute_effective_rent(listing)
+    listing["effective_rent_mo"]   = _eff["effective_rent_mo"]
+    listing["effective_psqm_rent"] = _eff["effective_psqm_rent"]
+    listing["condo_pct_of_rent"]   = _eff["condo_pct_of_rent"]
 
     score_was_capped = total < total_raw
 
@@ -712,9 +1012,13 @@ def score_rental(listing: dict, all_listings: list, settings: dict | None = None
         suggested_rent_mo = int(round(omi_mid * sqm / 25) * 25)
 
     # ── Hidden Gem / Great Value flags ────────────────────────────────────────
+    _gate_fired = listing.get("_absolute_value_gate_applied", False)
+    _is_corp_l  = listing.get("_is_corporate_rental", False)
     _loc_s_r = round(loc_s)
     _hidden_gem = (
-        total          >= settings.get("gem_total_min",      72)
+        not _gate_fired                                                        # gate = not a gem
+        and not _is_corp_l                                                     # corporate = not a gem
+        and total          >= settings.get("gem_total_min",      72)
         and ldi_score  >= settings.get("gem_ldi_min",         65)
         and delta_label_pct is not None
         and delta_label_pct            <= settings.get("gem_delta_max",       -8.0)
@@ -724,7 +1028,9 @@ def score_rental(listing: dict, all_listings: list, settings: dict | None = None
         and pen_s      >= settings.get("gem_penalty_min",     70)
     )
     _good_value = not _hidden_gem and (
-        total          >= settings.get("gv_total_min",        65)
+        not _gate_fired                                                        # gate = not good value
+        and not _is_corp_l                                                     # corporate = not good value
+        and total          >  settings.get("gv_total_min",        65)         # strictly > ceiling
         and ldi_score  >= settings.get("gv_ldi_min",          45)
         and delta_label_pct is not None
         and delta_label_pct            <= settings.get("gv_delta_max",        -5.0)
@@ -736,16 +1042,18 @@ def score_rental(listing: dict, all_listings: list, settings: dict | None = None
 
     return {
         # Comps fields
-        "comps_median":        comps.get("median"),
-        "comps_p40":           comps.get("p40"),
-        "comps_p60":           comps.get("p60"),
-        "comps_n":             comps.get("n_comps", 0),
-        "comps_radius_m":      comps.get("radius_used"),
-        "comps_source":        comps.get("benchmark_source"),
-        "comps_confidence":    confidence,
-        "comps_conf_label":    conf_label,
-        "comps_delta_pct":     delta_label_pct,
-        "comps_label":         comps_label,
+        "comps_median":          comps.get("median"),
+        "comps_p40":             comps.get("p40"),
+        "comps_p60":             comps.get("p60"),
+        "comps_n":               comps.get("n_comps", 0),
+        "comps_radius_m":        comps.get("radius_used"),
+        "comps_source":          comps.get("benchmark_source"),
+        "comps_confidence":      confidence,
+        "comps_conf_label":      conf_label,
+        "comps_delta_pct":       delta_label_pct,
+        "comps_label":           comps_label,
+        "comps_condition_group": comps.get("condition_group"),
+        "comps_adjusted":        bool(comps.get("adjusted")),
         # Sub-scores
         "score_price":         round(pvc_s),
         "score_property":      prop_s,
@@ -912,8 +1220,11 @@ def score_sale_listing(listing: dict, all_listings: list, settings: dict | None 
         pvc_s = 50.0
         delta_label_pct = None
 
-    # ── LDI boost (only for at-or-below-comps listings) ─────────────────────────
-    if delta_pct is not None and delta_pct <= 0:
+    # ── LDI boost (only for at-or-below-comps listings in non-premium zones) ────
+    # Disabled in zones where omi_compr_mid > 5500 €/m² — comps themselves are
+    # expensive, so the LDI boost would inflate scores for high-cost micro-flats.
+    _omi_compr_s = listing.get("omi_compr_mid") or 0
+    if delta_pct is not None and delta_pct <= 0 and _omi_compr_s <= 5500:
         boosted_price_score = round(min(100.0, pvc_s * (1 + ldi_bonus)))
     else:
         boosted_price_score = round(pvc_s)
@@ -939,6 +1250,10 @@ def score_sale_listing(listing: dict, all_listings: list, settings: dict | None 
     _fn = listing.get("floor_n")
     if _fn is not None and _fn < 0:
         total = min(total, 55)
+
+    # Absolute value gate: overpriced small flats in premium zones
+    total, _gate_applied = apply_absolute_value_gate(total, ask_psqm, sqm)
+    listing["_absolute_value_gate_applied"] = bool(_gate_applied)
 
     score_was_capped = total < total_raw
 
@@ -984,9 +1299,11 @@ def score_sale_listing(listing: dict, all_listings: list, settings: dict | None 
         estimated_yield_pct = round((est_rent_mo * 12 / price) * 100, 2)
 
     # ── Gem flags ────────────────────────────────────────────────────────────────
+    _gate_fired = listing.get("_absolute_value_gate_applied", False)
     _loc_s_r = round(loc_s)
     _hidden_gem = (
-        total          >= settings.get("gem_total_min",      72)
+        not _gate_fired                                                        # gate = not a gem
+        and total          >= settings.get("gem_total_min",      72)
         and ldi_score  >= settings.get("gem_ldi_min",         65)
         and delta_label_pct is not None
         and delta_label_pct            <= settings.get("gem_delta_max",       -8.0)
@@ -996,7 +1313,8 @@ def score_sale_listing(listing: dict, all_listings: list, settings: dict | None 
         and pen_s      >= settings.get("gem_penalty_min",     70)
     )
     _good_value = not _hidden_gem and (
-        total          >= settings.get("gv_total_min",        65)
+        not _gate_fired                                                        # gate = not good value
+        and total          >  settings.get("gv_total_min",        65)         # strictly > ceiling
         and ldi_score  >= settings.get("gv_ldi_min",          45)
         and delta_label_pct is not None
         and delta_label_pct            <= settings.get("gv_delta_max",        -5.0)
@@ -1012,12 +1330,14 @@ def score_sale_listing(listing: dict, all_listings: list, settings: dict | None 
         "comps_sale_p40":        comps.get("p40"),
         "comps_sale_p60":        comps.get("p60"),
         "comps_sale_n":          comps.get("n_comps", 0),
-        "comps_sale_radius_m":   comps.get("radius_used"),
-        "comps_sale_source":     comps.get("benchmark_source"),
-        "comps_sale_confidence": confidence,
-        "comps_sale_conf_label": conf_label,
-        "comps_sale_delta_pct":  delta_label_pct,
-        "comps_sale_label":      comps_label,
+        "comps_sale_radius_m":         comps.get("radius_used"),
+        "comps_sale_source":           comps.get("benchmark_source"),
+        "comps_sale_confidence":       confidence,
+        "comps_sale_conf_label":       conf_label,
+        "comps_sale_delta_pct":        delta_label_pct,
+        "comps_sale_label":            comps_label,
+        "comps_sale_condition_group":  comps.get("condition_group"),
+        "comps_sale_adjusted":         bool(comps.get("adjusted")),
         # Sub-scores
         "score_price":           round(pvc_s),
         "score_property":        prop_s,
@@ -1078,14 +1398,36 @@ def score_all_sales(listings: list, settings: dict | None = None) -> list:
     return scored
 
 
-def score_all(listings: list, settings: dict | None = None) -> list:
-    """Score all listings, log null-field coverage, return sorted list."""
+def score_all(listings: list, settings: dict | None = None,
+              comps_pool: list | None = None) -> list:
+    """Score all listings, log null-field coverage, return sorted list.
+
+    Parameters
+    ----------
+    listings    : the listings to score (written into returned dicts)
+    settings    : scoring weights / thresholds; loaded from disk when None
+    comps_pool  : pool used for the comps benchmark.  Defaults to *listings*
+                  when not supplied, which is the normal single-source case.
+                  Pass a larger merged pool (e.g. Idealista + Immobiliare) so
+                  every listing has neighbourhood comps available regardless
+                  of which source was fetched most recently.
+    """
     if settings is None:
         settings = _load_settings()
 
+    pool = comps_pool if comps_pool is not None else listings
+
+    # Pre-pass: stamp ask_psqm_effective + condo_fee_flag on every listing in
+    # the comps pool BEFORE scoring runs, so the comps engine reads a
+    # consistent "effective" €/m² across the whole pool (including condo
+    # fees where present). Cheap — pure arithmetic, no I/O.
+    for l in pool:
+        l["ask_psqm_effective"] = compute_effective_psqm(l)
+        l["condo_fee_flag"]     = get_condo_fee_flag(l)
+
     scored = []
     for l in listings:
-        s = score_rental(l, listings, settings)
+        s = score_rental(l, pool, settings)
         scored.append({**l, **s})
 
     scored.sort(key=lambda x: x.get("score_total", 0) or 0, reverse=True)

@@ -7,16 +7,31 @@
 <link rel="apple-touch-icon" href="/icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Scorer">
-<meta name="theme-color" content="#2D6A4F">
-<title>Immobiliare Scorer</title>
+<meta name="apple-mobile-web-app-title" content="Lume">
+<meta name="theme-color" content="#2A7A5A">
+<meta name="description" content="Lume scores every Milan rental and sale listing so you can see through the market.">
+<title>Lume — see through the listings</title>
+<!--
+  HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
+  AUTH:    Clerk (free tier, allowlist mode for invite-only).
+           Publishable key (window.__CLERK_PUBLISHABLE_KEY below) comes from
+           https://dashboard.clerk.com → API Keys. Swap pk_test_… for a
+           pk_live_… key when you point a custom domain at Cloudflare Pages.
+-->
 <script>
+  // Clerk publishable key — production (Cloudflare Pages) only. Local dev skips auth.
+  window.__CLERK_PUBLISHABLE_KEY = 'pk_test_aW5jbHVkZWQtY2hvdy0zMC5jbGVyay5hY2NvdW50cy5kZXYk';
   if (['localhost','127.0.0.1'].includes(location.hostname)) {
     // Local dev: no auth gate, show app immediately so nothing can hide it.
     document.write('<style>#login-screen{display:none!important}#app-root{display:block!important}</style>');
   } else {
-    // Netlify: load Identity widget synchronously (same as a plain script tag).
-    document.write('<scr'+'ipt src="https://identity.netlify.com/v1/netlify-identity-widget.js"><\/scr'+'ipt>');
+    // Production: load Clerk's browser SDK. Auth.init() waits for window.Clerk.
+    document.write(
+      '<scr'+'ipt async crossorigin="anonymous"' +
+      ' data-clerk-publishable-key="' + window.__CLERK_PUBLISHABLE_KEY + '"' +
+      ' src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@5/dist/clerk.browser.js"' +
+      '><\/scr'+'ipt>'
+    );
   }
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -29,26 +44,126 @@
 html { overflow-x: hidden; }   /* prevent mobile horizontal wobble */
 
 :root {
-  --bg:      #FAFAF9;
-  --surface: #FFFFFF;
-  --surf2:   #F5F5F3;
-  --border:  #E8E8E3;
-  --accent:  #2D6A4F;
-  --green:   #16A34A;
-  --yellow:  #D97706;
-  --red:     #DC2626;
-  --text:    #111827;
-  --muted:   #6B7280;
-  --radius:  16px;
-  --shadow:  0 1px 3px rgba(0,0,0,0.07), 0 4px 14px rgba(0,0,0,0.05);
+  /* ── New warm tokens ── */
+  --bg-page:        #F7F5F2;   /* warm off-white */
+  --bg-card:        #FFFFFF;
+  --bg-muted:       #F2EFE9;   /* warm grey */
+  --bg-pill:        #EDEAE4;   /* neutral pill */
+
+  --green-deep:     #2A7A5A;
+  --green-mid:      #4CAF80;
+  --green-light:    #E6F4ED;
+  --amber:          #E8922A;
+  --amber-light:    #FEF3E2;
+  --coral:          #E05C4B;
+  --coral-light:    #FDEEEC;
+  --blue-soft:      #4A90D9;
+  --blue-light:     #EBF4FF;
+
+  --text-primary:   #1A1A1A;
+  --text-secondary: #6B6560;
+  --text-muted:     #A09990;
+  --text-inverse:   #FFFFFF;
+
+  --border-light:   #E8E4DE;
+  --border-strong:  #D4CFC8;
+
+  --radius-sm:      8px;
+  --radius-md:      14px;
+  --radius-lg:      20px;
+  --radius-xl:      28px;
+  --radius-full:    999px;
+
+  --shadow-card:    0 2px 8px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.04);
+  --shadow-hover:   0 8px 24px rgba(0,0,0,0.10), 0 0 0 1px rgba(0,0,0,0.06);
+  --shadow-score:   0 4px 16px rgba(42,122,90,0.25);
+
+  /* Lume warm accent — used sparingly for the flame, gems, loading states */
+  --lume-glow:      #E8A23A;
+  --lume-glow-soft: #FCEDD3;
+
+  --font:           'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono:      'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+
+  /* ── Legacy aliases — every existing selector still works ── */
+  --bg:      var(--bg-page);
+  --surface: var(--bg-card);
+  --surf2:   var(--bg-muted);
+  --border:  var(--border-light);
+  --accent:  var(--green-deep);
+  --green:   var(--green-mid);
+  --yellow:  var(--amber);
+  --red:     var(--coral);
+  --text:    var(--text-primary);
+  --muted:   var(--text-secondary);
+  --radius:  var(--radius-lg);
+  --shadow:  var(--shadow-card);
 }
 
 body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-family: var(--font);
   font-size: 14px;
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Card entrance animation ───────────────────────────── */
+@keyframes cardEntrance {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.card { animation: cardEntrance 0.32s cubic-bezier(0.4, 0, 0.2, 1) both; }
+.card:nth-child(1)  { animation-delay: 0.00s; }
+.card:nth-child(2)  { animation-delay: 0.04s; }
+.card:nth-child(3)  { animation-delay: 0.08s; }
+.card:nth-child(4)  { animation-delay: 0.12s; }
+.card:nth-child(5)  { animation-delay: 0.16s; }
+.card:nth-child(6)  { animation-delay: 0.20s; }
+.card:nth-child(7)  { animation-delay: 0.24s; }
+.card:nth-child(8)  { animation-delay: 0.28s; }
+.card:nth-child(n+9){ animation-delay: 0.28s; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .card:hover { transform: none !important; }
+}
+
+/* Cards rendered after the initial batch skip the entrance animation —
+   the staggered fade-in only makes sense for the first wave the user sees. */
+.card.no-anim { animation: none !important; opacity: 1; transform: none; }
+
+/* ── Infinite-scroll status indicator ─────────────────────────────────── */
+.scroll-status {
+  text-align: center;
+  padding: 16px 24px 24px;
+  font-size: 13px;
+  color: var(--text-muted);
+  min-height: 24px;
+}
+.loading-dots::after {
+  content: '...';
+  display: inline-block;
+  width: 20px;
+  text-align: left;
+  animation: scrollLoadDots 1.4s steps(4, end) infinite;
+}
+@keyframes scrollLoadDots {
+  0%, 20%   { content: ''; }
+  40%       { content: '.'; }
+  60%       { content: '..'; }
+  80%, 100% { content: '...'; }
+}
+.scroll-meta { margin-left: 8px; color: var(--text-muted); font-weight: 500; }
+@media (prefers-reduced-motion: reduce) {
+  .loading-dots::after { animation: none; content: '...'; }
 }
 
 /* ── Header ── */
@@ -101,11 +216,12 @@ header h1 span { color: var(--accent); }
 }
 .fetch-section-title {
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.8px;
-  color: var(--muted);
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
   margin-bottom: 12px;
+  font-family: var(--font);
 }
 .fetch-row {
   display: flex;
@@ -115,7 +231,7 @@ header h1 span { color: var(--accent); }
   margin-bottom: 10px;
 }
 .fetch-group { display: flex; flex-direction: column; gap: 4px; }
-.fetch-lbl   { font-size: 11px; color: var(--muted); }
+.fetch-lbl   { font-size: 11px; color: var(--text-muted); font-weight: 500; margin-bottom: 2px; }
 
 .city-checks { display: flex; flex-wrap: wrap; gap: 5px 14px; }
 .city-checks label {
@@ -125,15 +241,24 @@ header h1 span { color: var(--accent); }
 .city-checks input[type=checkbox] { accent-color: var(--accent); }
 
 .fetch-input {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: 8px;
-  padding: 5px 8px;
+  background: var(--bg-muted);
+  border: 1px solid transparent;
+  color: var(--text-primary);
+  border-radius: var(--radius-md);
+  padding: 7px 12px;
   font-size: 13px;
+  font-weight: 500;
   outline: none;
+  font-family: var(--font);
+  transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
 }
-.fetch-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(45,106,79,0.1); }
+.fetch-input:hover { background: var(--border-strong); }
+.fetch-input:focus {
+  background: #fff;
+  border-color: var(--green-deep);
+  box-shadow: 0 0 0 3px rgba(42,122,90,0.15);
+}
+.fetch-input::placeholder { color: var(--text-muted); }
 
 .expected-pill {
   font-size: 12px;
@@ -160,9 +285,10 @@ header h1 span { color: var(--accent); }
 
 .fetch-warn {
   font-size: 11px;
-  color: var(--muted);
+  color: var(--text-muted);
   align-self: center;
   line-height: 1.5;
+  font-weight: 400;
 }
 
 /* Log panel */
@@ -186,103 +312,181 @@ header h1 span { color: var(--accent); }
 
 /* ── Filter bar ── */
 .filters {
-  background: #ffffff;
-  border-bottom: 1px solid var(--border);
-  padding: 10px 24px;
+  background: var(--bg-card);
+  border: none;
+  padding: 12px 18px;
+  margin: 14px 24px 0;
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
   align-items: center;
   position: sticky;
   top: 0;   /* adjusted by JS after measuring header + tab bar */
-  z-index: 80;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+  z-index: 90;   /* below header (100), above cards (1) */
+  box-shadow: var(--shadow-card);
+  border-radius: var(--radius-lg);
+  transition: box-shadow 180ms ease, border-radius 180ms ease, margin 180ms ease;
 }
+/* When the sentinel scrolls out, the bar is "stuck" — go edge-to-edge with a
+   stronger bottom shadow so it reads as a distinct layer above the content. */
+.filters.is-stuck {
+  margin-left: 0;
+  margin-right: 0;
+  border-radius: 0;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08), 0 1px 0 var(--border-light);
+}
+.filters-sentinel {
+  height: 1px;
+  margin-top: -1px;
+  pointer-events: none;
+}
+@media (max-width: 768px) {
+  .filters { margin: 12px 14px 0; border-radius: var(--radius-md); padding: 10px 14px; }
+  .filters.is-stuck { margin-left: 0; margin-right: 0; border-radius: 0; }
+}
+
+/* Listing cards must sit BELOW the sticky filter bar.
+   The cardEntrance animation leaves transform:translateY(0)/scale(1) on cards,
+   which creates a stacking context — make z-index explicit so .filters wins. */
+.card { position: relative; z-index: 1; }
 .filter-group { display: flex; align-items: center; gap: 6px; }
 .filter-group label { color: var(--muted); font-size: 12px; white-space: nowrap; font-weight: 500; }
 
 select,
 .filter-group input[type=number],
 .filter-group input[type=text] {
-  background: var(--surf2);
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: 8px;
-  padding: 5px 8px;
+  background: var(--bg-muted);
+  border: 1px solid transparent;
+  color: var(--text-primary);
+  border-radius: var(--radius-full);
+  padding: 7px 14px;
   font-size: 13px;
+  font-weight: 500;
   outline: none;
-  font-family: inherit;
-  max-width: min(220px, calc(100vw - 80px));  /* prevent overflow on mobile */
+  font-family: var(--font);
+  max-width: min(220px, calc(100vw - 80px));
+  transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
 }
+select:hover,
+.filter-group input[type=number]:hover,
+.filter-group input[type=text]:hover { background: var(--border-strong); }
 select:focus,
 .filter-group input[type=number]:focus,
-.filter-group input[type=text]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(45,106,79,0.1); }
-.filter-group input[type=number]::placeholder { color: var(--muted); }
-input[type=range] { padding: 0; width: 100px; accent-color: var(--accent); }
-.range-val { color: var(--accent); font-size: 12px; min-width: 26px; font-weight: 600; }
-.filter-sep { width: 1px; height: 28px; background: var(--border); flex-shrink: 0; }
+.filter-group input[type=text]:focus {
+  background: #fff;
+  border-color: var(--green-deep);
+  box-shadow: 0 0 0 3px rgba(42,122,90,0.15);
+}
+.filter-group input[type=number]::placeholder,
+.filter-group input[type=text]::placeholder { color: var(--text-muted); }
+input[type=range] { padding: 0; width: 100px; accent-color: var(--green-deep); }
+.range-val { color: var(--green-deep); font-size: 12px; min-width: 26px; font-weight: 600; }
+.filter-sep { width: 1px; height: 28px; background: var(--border-light); flex-shrink: 0; }
 
 .btn-reset {
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--muted);
-  border-radius: 8px;
-  padding: 5px 12px;
+  background: var(--bg-muted);
+  border: none;
+  color: var(--text-secondary);
+  border-radius: var(--radius-full);
+  padding: 7px 14px;
   cursor: pointer;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   margin-left: auto;
+  transition: background 140ms ease, color 140ms ease;
+  font-family: var(--font);
 }
-.btn-reset:hover { border-color: var(--accent); color: var(--accent); }
+.btn-reset:hover { background: var(--border-strong); color: var(--text-primary); }
 
-/* ── Sort tabs ── */
-.sort-tabs { display: flex; gap: 4px; }
+/* ── Sort tabs (pill style) ── */
+.sort-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
 .sort-tab {
-  background: var(--surf2);
-  border: 1px solid var(--border);
-  color: var(--muted);
-  border-radius: 7px;
-  padding: 5px 10px;
+  background: var(--bg-muted);
+  border: none;
+  color: var(--text-secondary);
+  border-radius: var(--radius-full);
+  padding: 6px 12px;
   cursor: pointer;
   font-size: 12px;
-  font-weight: 500;
-  font-family: inherit;
+  font-weight: 600;
+  font-family: var(--font);
+  transition: background 140ms ease, color 140ms ease;
 }
-.sort-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.sort-tab:hover:not(.active) { background: var(--border-strong); color: var(--text-primary); }
+.sort-tab.active { background: var(--green-deep); color: #fff; }
 
-/* ── Stats bar ── */
+/* ── Stats bar (warm pill strip) ── */
 .stats-bar {
-  padding: 8px 24px;
+  margin: 14px 24px 0;
+  padding: 10px 18px;
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
-  color: var(--muted);
+  gap: 18px;
+  color: var(--text-secondary);
   font-size: 12px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surf2);
+  font-weight: 500;
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
 }
-.stats-bar strong { color: var(--text); font-weight: 700; }
+.stats-bar strong {
+  color: var(--text-primary);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: -0.2px;
+}
 
-/* ── Grid ── */
+/* ── Grid ── 3 cards per row on desktop, 2 on tablet, 1 on mobile */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 18px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
   padding: 20px 24px;
+}
+@media (max-width: 1023px) {
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 639px) {
+  .grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 14px;
+  }
+}
+@media (max-width: 768px) {
+  .stats-bar { margin: 14px 14px 0; padding: 10px 14px; }
 }
 
 /* ── Card ── */
 .card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  background: var(--bg-card);
+  border: none;
+  border-radius: var(--radius-lg);
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
-  box-shadow: var(--shadow);
+  transition: box-shadow 220ms ease, transform 220ms ease;
+  box-shadow: var(--shadow-card);
+  position: relative;
 }
-.card:hover { border-color: var(--accent); box-shadow: 0 4px 20px rgba(45,106,79,0.10); transform: translateY(-2px); }
+.card:hover {
+  box-shadow: var(--shadow-hover);
+  transform: translateY(-2px);
+}
+/* Hover photo zoom — .card-thumb is the <img> itself; .card already clips */
+.card-photo-wrap { overflow: hidden; }
+.card-photo-wrap img, .card-thumb {
+  transition: transform 420ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.card:hover .card-photo-wrap img,
+.card:hover .card-thumb {
+  transform: scale(1.04);
+}
+/* Left accent stripes for gem / good-value cards */
+.card.is-gem        { box-shadow: var(--shadow-card), inset 3px 0 0 var(--green-deep); }
+.card.is-gem:hover  { box-shadow: var(--shadow-hover), inset 3px 0 0 var(--green-deep); }
+.card.is-goodvalue        { box-shadow: var(--shadow-card), inset 3px 0 0 var(--amber); }
+.card.is-goodvalue:hover  { box-shadow: var(--shadow-hover), inset 3px 0 0 var(--amber); }
 
 /* Card header */
 .card-header { padding: 14px 16px 8px; display: flex; align-items: flex-start; gap: 10px; }
@@ -291,14 +495,15 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--accent); }
   width: 52px; height: 52px;
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  font-size: 20px; font-weight: 800;
+  font-size: 22px; font-weight: 800;
   flex-shrink: 0;
   cursor: help;
   letter-spacing: -0.5px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.06);
 }
-.score-badge.high { background: rgba(22,163,74,0.10); color: #15803D; border: 2px solid #16A34A; }
-.score-badge.mid  { background: rgba(217,119,6,0.10); color: #B45309; border: 2px solid #D97706; }
-.score-badge.low  { background: rgba(220,38,38,0.10); color: #B91C1C; border: 2px solid #DC2626; }
+.score-badge.high { background: var(--green-light); color: var(--green-deep); border: 2px solid var(--green-deep); }
+.score-badge.mid  { background: var(--amber-light); color: #B85C00; border: 2px solid var(--amber); }
+.score-badge.low  { background: var(--coral-light); color: #A83C2D; border: 2px solid var(--coral); }
 
 .card-title { flex: 1; overflow: hidden; }
 .card-title .neigh { font-size: 15px; font-weight: 700; line-height: 1.3; color: var(--text); }
@@ -314,27 +519,39 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--accent); }
 .tag-other  { background: rgba(107,114,128,0.10); color: #374151; }
 
 .fascia-badge {
-  font-size: 10px; font-weight: 700;
-  padding: 2px 7px; border-radius: 5px; margin-left: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: var(--radius-full);
+  margin-left: 6px;
   cursor: default;
+  letter-spacing: 0;
 }
-.fascia-B { background: rgba(45,106,79,0.10); color: #1E5038; }     /* Centrale */
-.fascia-C { background: rgba(22,163,74,0.10); color: #15803D; }     /* Semicentrale */
-.fascia-D { background: rgba(217,119,6,0.10); color: #92400E; }     /* Periferica */
-.fascia-E { background: rgba(220,38,38,0.10); color: #991B1B; }     /* Periferica outer */
-.fascia-R { background: rgba(107,114,128,0.10); color: #6B7280; }   /* Rurale */
-/* Legacy single-letter labels kept for backward compat */
-.fascia-A { background: rgba(45,106,79,0.10); color: #1E5038; }
+.fascia-A { background: #FFF0E6; color: #B85C00; }
+.fascia-B { background: #E6F4ED; color: #1F6B45; }    /* Centrale */
+.fascia-C { background: #EBF4FF; color: #1A5FA8; }    /* Semicentrale */
+.fascia-D { background: #FEF3E2; color: #92400E; }    /* Periferica */
+.fascia-E { background: #FDEEEC; color: #B91C1C; }    /* Periferica outer */
+.fascia-R { background: #F2EFE9; color: #6B6560; }    /* Rurale */
 
 /* ── Gem badges ── */
 .card { position: relative; }
 
 /* Gem filter toggle group */
-.gem-tab { padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 600;
-           border: 1px solid var(--border); background: var(--surface); color: var(--muted);
-           cursor: pointer; transition: all 0.15s; }
-.gem-tab.active         { background: var(--accent); color: #fff; border-color: var(--accent); }
-.gem-tab:hover:not(.active) { border-color: var(--accent); color: var(--accent); }
+.gem-tab {
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  background: var(--bg-muted);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+  font-family: var(--font);
+}
+.gem-tab.active             { background: var(--green-deep); color: #fff; }
+.gem-tab:hover:not(.active) { background: var(--border-strong); color: var(--text-primary); }
 
 /* ── Variant A card layout ── */
 
@@ -352,10 +569,506 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--accent); }
 .gem-photo-chip.chip-hidden { color: #15803D; }
 .gem-photo-chip.chip-good   { color: #0E7490; }
 
+/* ── Card header (Fix 3) — clean two-line block ─────────────────────────── */
+.card-header-text { flex: 1; min-width: 0; }
+.card-neighbourhood-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.card-neighbourhood {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+  letter-spacing: -0.2px;
+}
+.card-address-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+.card-address {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+.source-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+  flex-shrink: 0;
+  letter-spacing: 0;
+}
+.source-badge.immobiliare { background: #EBF4FF; color: #1A5FA8; }
+.source-badge.idealista   { background: #FFF0E6; color: #B85C00; }
+
+/* Auction / nuda flag chip on card photo — top-right, bold warning style */
+.card-photo-flag {
+  position: absolute; top: 12px; right: 12px;
+  display: inline-flex; align-items: center;
+  background: rgba(224, 92, 75, 0.96);   /* coral */
+  color: #fff;
+  border-radius: var(--radius-full);
+  padding: 4px 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+.card-photo-flag.flag-nuda {
+  background: rgba(232, 162, 58, 0.96);  /* amber — distinct from auction red */
+}
+/* If both flag + new badge would collide, the flag wins (top-right slot). */
+
+/* New-badge as photo overlay (Fix 3) — top-right corner */
+.card-photo-wrap { position: relative; }
+.card-photo-new-badge {
+  position: absolute; top: 12px; right: 12px;
+  display: inline-flex; align-items: center;
+  background: rgba(255,255,255,0.92);
+  color: #1D4ED8;
+  border-radius: var(--radius-full);
+  padding: 4px 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.10);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+/* ── Toast (bottom-centre pill, 2.4 s auto-dismiss) ─────────────────────── */
+.lume-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%) translateY(8px);
+  background: #1A1A1A;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: var(--font);
+  padding: 10px 18px;
+  border-radius: var(--radius-full);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.20);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 4000;
+  transition: opacity 180ms ease, transform 180ms ease;
+  white-space: nowrap;
+  max-width: calc(100vw - 32px);
+}
+.lume-toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ── Share button (icon-only pill in card footer) ───────────────────────── */
+.btn-share, .btn-bookmark {
+  width: 34px; height: 34px; padding: 0;
+  border-radius: var(--radius-full);
+  background: var(--bg-pill); color: var(--text-secondary);
+  border: none; cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  font-family: var(--font);
+}
+.btn-share:hover     { background: var(--blue-light); color: var(--blue-soft); }
+.btn-bookmark:hover  { background: var(--green-light); color: var(--green-deep); }
+.btn-bookmark.active { background: var(--green-light); color: var(--green-deep); }
+.btn-bookmark.active svg { fill: currentColor; stroke-width: 2; }
+
+/* ── Shared-highlight pulse on deep-linked card (?l=) ───────────────────── */
+@keyframes sharedHighlight {
+  0%, 100% { box-shadow: var(--shadow-card); }
+  35%      { box-shadow: 0 0 0 4px rgba(232,162,58,0.55), var(--shadow-hover); }
+}
+.card.shared-highlight {
+  animation: sharedHighlight 1.5s ease-in-out 2;
+}
+@media (prefers-reduced-motion: reduce) {
+  .card.shared-highlight { animation: none; box-shadow: 0 0 0 4px rgba(232,162,58,0.55), var(--shadow-hover); }
+}
+
+/* ── Collection popover menu ────────────────────────────────────────────── */
+.collection-menu {
+  position: fixed;
+  width: 260px;
+  max-height: 320px;
+  overflow-y: auto;
+  background: white;
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.16), 0 0 0 1px rgba(0,0,0,0.06);
+  padding: 6px;
+  z-index: 3000;
+  animation: menuFadeIn 150ms ease-out;
+}
+@keyframes menuFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.collection-item {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  background: none; border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 13px;
+  font-family: var(--font);
+  text-align: left;
+  color: var(--text-primary);
+  transition: background 100ms ease;
+}
+.collection-item:hover  { background: var(--bg-muted); }
+.collection-item.checked { color: var(--green-deep); font-weight: 600; }
+.collection-check {
+  width: 18px; text-align: center; flex-shrink: 0;
+  color: var(--green-deep); font-weight: 700;
+}
+.collection-name {
+  flex: 1; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; font-weight: 500;
+}
+.collection-count {
+  font-size: 11px; color: var(--text-muted);
+  font-weight: 500; flex-shrink: 0;
+  background: var(--bg-pill); padding: 2px 7px;
+  border-radius: var(--radius-full);
+}
+.collection-create {
+  border-top: 1px solid var(--border-light);
+  margin-top: 4px; padding-top: 12px;
+  color: var(--green-deep); font-weight: 600;
+}
+.collection-empty {
+  padding: 16px 10px; text-align: center;
+  font-size: 12px; color: var(--text-muted);
+}
+
+/* ── Avatar dropdown menu ───────────────────────────────────────────────── */
+.avatar-menu {
+  position: fixed;
+  width: 240px;
+  background: white;
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.16), 0 0 0 1px rgba(0,0,0,0.06);
+  padding: 6px;
+  z-index: 3000;
+  animation: menuFadeIn 150ms ease-out;
+}
+.avatar-menu-header {
+  padding: 10px 12px 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+  border-bottom: 1px solid var(--border-light);
+  margin-bottom: 4px;
+}
+.avatar-menu-header strong { color: var(--text-primary); font-weight: 600; }
+.avatar-menu-item {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
+  background: none; border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 13px;
+  font-family: var(--font);
+  text-align: left;
+  color: var(--text-primary);
+  font-weight: 500;
+  transition: background 100ms ease;
+}
+.avatar-menu-item:hover { background: var(--bg-muted); }
+.avatar-menu-item .badge {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-pill);
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+}
+
+/* ── Collections drawer (slide in from right on desktop, bottom on mobile) ─ */
+.collections-drawer-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.32);
+  z-index: 2900;
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+.collections-drawer-backdrop.open { opacity: 1; }
+.collections-drawer {
+  position: fixed;
+  top: 0; right: 0; bottom: 0;
+  width: 380px;
+  max-width: 92vw;
+  background: white;
+  z-index: 2950;
+  box-shadow: -8px 0 32px rgba(0,0,0,0.10);
+  transform: translateX(100%);
+  transition: transform 260ms cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex; flex-direction: column;
+  font-family: var(--font);
+}
+.collections-drawer.open { transform: translateX(0); }
+@media (max-width: 768px) {
+  .collections-drawer {
+    top: auto; right: 0; bottom: 0; left: 0;
+    width: 100%;
+    max-width: 100%;
+    border-top-left-radius: 20px;
+    border-top-right-radius: 20px;
+    transform: translateY(100%);
+    max-height: 80vh;
+  }
+  .collections-drawer.open { transform: translateY(0); }
+}
+.collections-drawer .drawer-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border-light);
+}
+.collections-drawer .drawer-header h2 {
+  font-size: 16px; font-weight: 700; color: var(--text-primary);
+}
+.collections-drawer .drawer-close {
+  background: var(--bg-pill); border: none;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  font-size: 18px; line-height: 1;
+  cursor: pointer; color: var(--text-secondary);
+  transition: background 120ms ease;
+}
+.collections-drawer .drawer-close:hover { background: var(--border-strong); }
+.collections-drawer .drawer-body {
+  flex: 1; overflow-y: auto;
+  padding: 12px 16px;
+}
+.collections-drawer .drawer-footer {
+  padding: 14px 18px;
+  border-top: 1px solid var(--border-light);
+}
+.btn-create-collection {
+  width: 100%;
+  background: var(--green-deep); color: white;
+  border: none; border-radius: var(--radius-full);
+  padding: 11px 16px;
+  font-size: 14px; font-weight: 600;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.btn-create-collection:hover { background: #235F47; }
+.collection-card {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.collection-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-card);
+}
+.collection-card-main { flex: 1; min-width: 0; }
+.collection-card-name {
+  font-size: 14px; font-weight: 600; color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  cursor: pointer;
+}
+.collection-card-name:hover { color: var(--green-deep); }
+.collection-card-meta {
+  font-size: 11px; color: var(--text-muted);
+  margin-top: 3px;
+  font-weight: 500;
+}
+.collection-card-actions {
+  display: flex; gap: 4px; flex-shrink: 0;
+}
+.collection-card-actions button {
+  width: 30px; height: 30px;
+  background: var(--bg-pill); color: var(--text-secondary);
+  border: none; border-radius: var(--radius-full);
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background 120ms ease, color 120ms ease;
+}
+.collection-card-actions button:hover     { background: var(--border-strong); color: var(--text-primary); }
+.collection-card-actions button.danger:hover { background: var(--coral-light); color: var(--coral); }
+.collections-empty {
+  padding: 48px 20px;
+  text-align: center;
+}
+.collections-empty .empty-icon { font-size: 36px; margin-bottom: 10px; }
+.collections-empty .empty-title {
+  font-size: 14px; font-weight: 600; color: var(--text-primary);
+  margin-bottom: 6px;
+}
+.collections-empty .empty-text {
+  font-size: 12px; color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* ── Shared-collection banner ───────────────────────────────────────────── */
+.shared-collection-banner {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 18px;
+  background: var(--green-light);
+  border-radius: var(--radius-lg);
+  margin: 0 24px 0;
+  border: 1px solid #C8E6D6;
+}
+@media (max-width: 768px) { .shared-collection-banner { margin: 0 14px; } }
+.shared-collection-banner .banner-icon { font-size: 22px; flex-shrink: 0; }
+.shared-collection-banner .banner-text { flex: 1; min-width: 0; }
+.shared-collection-banner .banner-title {
+  font-size: 14px; font-weight: 600; color: var(--text-primary);
+}
+.shared-collection-banner .banner-sub {
+  font-size: 12px; color: var(--text-secondary); margin-top: 2px;
+}
+.shared-collection-banner .banner-sub a {
+  color: var(--green-deep); font-weight: 600; text-decoration: underline;
+}
+.shared-collection-banner .banner-clear {
+  background: white;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-full);
+  padding: 6px 14px;
+  font-size: 13px; font-weight: 500;
+  cursor: pointer; white-space: nowrap;
+  font-family: var(--font);
+  transition: background 120ms ease;
+}
+.shared-collection-banner .banner-clear:hover { background: var(--bg-muted); }
+
+/* Combined specs pill (rooms · baths · sqm) inside the price row */
+.specs-pill {
+  display: inline-flex;
+  align-items: center;
+  background: var(--bg-muted);
+  border-radius: var(--radius-full);
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+/* ── Stat pills row (Fix 2) — replaces 4-col facts-strip ─────────────────── */
+.stat-pills {
+  display: flex;
+  gap: 6px;
+  padding: 10px 16px 0;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.stat-pills::-webkit-scrollbar { display: none; }
+.stat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-muted);
+  border-radius: var(--radius-full);
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+  color: var(--text-primary);
+}
+
+/* ── Comps row (Fix 1 + Fix 4) — single-line context | slider | delta ────── */
+.comps-row {
+  padding: 8px 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.comps-context {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.comps-context-info { opacity: 0.55; cursor: help; }
+.comps-track-wrap {
+  flex: 1;
+  position: relative;
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: var(--bg-muted);
+  min-width: 40px;
+}
+.comps-track-gradient {
+  position: absolute; inset: 0;
+  border-radius: var(--radius-full);
+  background: linear-gradient(90deg, var(--green-mid) 0%, #F5C842 55%, var(--coral) 100%);
+  opacity: 0.85;
+}
+.comps-track-dot {
+  position: absolute;
+  top: 50%;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid currentColor;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.18);
+}
+.comps-delta-label {
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+  letter-spacing: -0.1px;
+}
+
 /* Score ring (SVG-based gauge) */
 .score-ring-wrap {
-  position: relative; flex-shrink: 0;
+  position: relative;
+  flex-shrink: 0;
   cursor: help;
+  width: 52px;
+  height: 52px;
+}
+.score-ring-fill {
+  transition: stroke-dashoffset 520ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+/* Hidden Gem — soft warm glow around the score circle */
+.card.is-gem .score-ring-wrap {
+  filter: drop-shadow(0 0 6px rgba(232, 162, 58, 0.5));
+}
+/* Great Value — softer green glow */
+.card.is-goodvalue .score-ring-wrap {
+  filter: drop-shadow(0 0 4px rgba(42, 122, 90, 0.3));
+}
+@media (prefers-reduced-motion: reduce) {
+  .score-ring-fill { transition: none; }
 }
 
 /* 4-up facts strip */
@@ -376,13 +1089,61 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--accent); }
 
 /* Why sentence */
 .why-sentence {
-  margin: 0 16px 4px;
+  margin: 12px 16px 4px;
   font-size: 11px; color: #15803D;
   background: #F0FDF4;
   padding: 8px 10px; border-radius: 8px;
   line-height: 1.5;
 }
 .why-sentence.why-neutral { color: var(--muted); background: var(--surf2); }
+
+/* ── Score reason bullets inside the callout ────────────────────────────── */
+.callout-reasons {
+  list-style: none;
+  margin: 8px 0 0 0;
+  padding: 8px 0 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-top: 1px solid rgba(0,0,0,0.08);
+}
+.callout-reason {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+.callout-reason .reason-icon {
+  width: 14px;
+  flex-shrink: 0;
+  font-weight: 700;
+  text-align: center;
+  line-height: 1.45;
+}
+.callout-reason .reason-component {
+  flex-shrink: 0;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: var(--radius-full);
+  line-height: 1.4;
+  align-self: center;
+}
+.reason-component-price    { background: rgba(74, 144, 217, 0.15);  color: #1A5FA8; }
+.reason-component-property { background: rgba(42, 122, 90, 0.12);   color: var(--green-deep); }
+.reason-component-location { background: rgba(232, 146, 42, 0.15);  color: #B85C00; }
+.reason-component-penalty  { background: rgba(224, 92, 75, 0.12);   color: var(--coral); }
+.callout-reason .reason-text {
+  flex: 1;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+.callout-reason-positive .reason-icon { color: var(--green-deep); }
+.callout-reason-negative .reason-icon { color: var(--coral); }
+.callout-reason-neutral  .reason-icon { color: var(--text-muted); font-size: 14px; line-height: 1; }
 
 /* Gradient comps bar */
 .comps-bar-wrap { padding: 10px 16px 14px; }
@@ -555,17 +1316,21 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--accent); }
 .detail-row { font-size: 11px; color: var(--muted); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .detail-row span { color: var(--text); font-weight: 500; }
 .link-btn {
-  display: inline-flex; align-items: center; gap: 4px;
+  display: inline-flex; align-items: center; gap: 5px;
   justify-content: center;
-  min-width: 82px;
-  font-size: 12px; font-weight: 700; color: var(--accent);
+  min-width: 78px;
+  font-size: 12px; font-weight: 600; color: #fff;
   text-decoration: none;
-  padding: 5px 12px;
-  border: 1.5px solid var(--accent);
-  border-radius: 8px; white-space: nowrap;
-  transition: background 0.15s, color 0.15s;
+  padding: 7px 14px;
+  border: none;
+  background: var(--green-deep);
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+  transition: background 140ms ease, transform 140ms ease;
+  font-family: var(--font);
 }
-.link-btn:hover { background: rgba(45,106,79,0.08); }
+.link-btn:hover { background: #235F47; transform: translateY(-1px); }
+.link-btn:active { transform: translateY(0); }
 
 /* Empty / error */
 .empty {
@@ -579,24 +1344,24 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--accent); }
 }
 .empty p { line-height: 1.7; }
 
-/* ── Favourite button (item 7: outlined, heart+Fav) ── */
+/* ── Favourite button (warm pill) ── */
 .btn-fav {
-  display: inline-flex; align-items: center; gap: 4px;
+  display: inline-flex; align-items: center; gap: 5px;
   justify-content: center;
-  background: none;
-  min-width: 82px;
-  border: 1.5px solid var(--accent);
-  color: var(--muted);
-  border-radius: 8px;
-  padding: 5px 10px;
+  background: var(--bg-pill);
+  min-width: 78px;
+  border: none;
+  color: var(--text-secondary);
+  border-radius: var(--radius-full);
+  padding: 7px 14px;
   font-size: 12px; font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 140ms ease, color 140ms ease;
   flex-shrink: 0;
-  font-family: inherit;
+  font-family: var(--font);
 }
-.btn-fav:hover  { border-color: var(--accent); color: var(--accent); background: rgba(45,106,79,0.08); }
-.btn-fav.is-fav { border-color: var(--accent); color: #fff; background: var(--accent); }
+.btn-fav:hover  { background: var(--coral-light); color: var(--coral); }
+.btn-fav.is-fav { background: var(--coral-light); color: var(--coral); }
 
 /* ── Favourites header link ── */
 .fav-link {
@@ -627,21 +1392,22 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--accent); }
 /* ── Multi-select dropdown ── */
 .msd-wrap { position: relative; }
 .msd-trigger {
-  background: var(--surf2);
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: 8px;
-  padding: 5px 10px;
+  background: var(--bg-muted);
+  border: 1px solid transparent;
+  color: var(--text-primary);
+  border-radius: var(--radius-md);
+  padding: 7px 12px;
   font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
   display: flex; align-items: center; gap: 6px;
   min-width: 140px;
   white-space: nowrap;
-  transition: border-color 0.15s;
-  font-family: inherit;
+  transition: background 140ms ease, border-color 140ms ease;
+  font-family: var(--font);
 }
-.msd-trigger:hover { border-color: var(--accent); }
-.msd-trigger.has-selection { border-color: var(--accent); color: var(--accent); }
+.msd-trigger:hover { background: var(--border-strong); }
+.msd-trigger.has-selection { background: var(--green-light); color: var(--green-deep); }
 .msd-caret { margin-left: auto; opacity: 0.6; font-size: 10px; }
 .msd-panel {
   display: none;   /* hidden by default — toggled via .is-open class, NOT the hidden attribute */
@@ -721,54 +1487,82 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--accent); }
 .tab-btn:hover { color: var(--text); }
 .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
 
-/* ── Scanner panel ── */
+/* ── Scanner panel — warm card ─────────────────────────────────────────── */
 .scanner-panel {
-  background: var(--surf2);
-  border-bottom: 2px solid var(--green);
-  padding: 12px 24px;
+  background: var(--bg-card);
+  border: none;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: 16px 20px;
+  margin: 14px 24px 0;
+}
+@media (max-width: 768px) {
+  .scanner-panel { margin: 12px 14px 0; padding: 14px 16px; border-radius: var(--radius-md); }
 }
 .scanner-row {
   display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
+.scanner-row:last-child { margin-bottom: 0; }
 .scanner-status-wrap {
   display: flex; align-items: center; gap: 8px;
 }
 .scanner-dot {
-  width: 10px; height: 10px; border-radius: 50%;
-  background: var(--muted); flex-shrink: 0;
-  transition: background 0.3s;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--border-strong); flex-shrink: 0;
+  transition: background 0.3s, box-shadow 0.3s;
 }
-.scanner-dot.running { background: var(--green); box-shadow: 0 0 6px var(--green); }
-.scanner-label { font-size: 13px; font-weight: 600; color: var(--muted); }
-.scanner-meta  { font-size: 11px; color: var(--muted); }
+.scanner-dot.running {
+  background: var(--green-mid);
+  box-shadow: 0 0 0 0 rgba(76,175,128,0.55);
+  animation: scannerDotPulse 1.6s ease-in-out infinite;
+}
+@keyframes scannerDotPulse {
+  0%   { box-shadow: 0 0 0 0   rgba(76,175,128,0.55); }
+  70%  { box-shadow: 0 0 0 7px rgba(76,175,128,0);    }
+  100% { box-shadow: 0 0 0 0   rgba(76,175,128,0);    }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scanner-dot.running { animation: none; }
+}
+.scanner-label { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.scanner-meta  { font-size: 12px; font-weight: 400; color: var(--text-muted); margin-left: 0; }
 .scanner-new-badge {
   display: none; font-size: 11px; font-weight: 700;
-  background: rgba(34,197,94,0.15); color: var(--green);
-  border: 1px solid rgba(34,197,94,0.3); border-radius: 20px;
-  padding: 2px 10px;
+  background: var(--green-light); color: var(--green-deep);
+  border: none; border-radius: var(--radius-full);
+  padding: 3px 10px;
 }
 .scanner-new-badge.visible { display: inline-block; }
 
+/* Idealista row inside the scanner card — subtle separator instead of new card */
+#idealistaStatusRow,
+#idealSaleStatusRow {
+  border-top: 1px solid var(--border-light);
+  padding-top: 12px;
+  margin-top: 4px;
+}
+
 .new-badge {
   display: inline-block; font-size: 10px; font-weight: 700;
-  background: #DBEAFE; color: #1D4ED8;
-  border-radius: 4px; padding: 1px 6px;
+  background: var(--blue-light); color: #1D4ED8;
+  border-radius: var(--radius-full); padding: 2px 8px;
   vertical-align: middle; letter-spacing: 0.2px;
 }
 
 .btn-scanner {
-  border: none; border-radius: 8px;
-  padding: 7px 16px; cursor: pointer;
+  border: none; border-radius: var(--radius-full);
+  padding: 8px 20px; cursor: pointer;
   font-size: 13px; font-weight: 600;
-  transition: opacity 0.15s;
-  font-family: inherit;
+  font-family: var(--font);
+  transition: background 140ms ease, transform 140ms ease;
 }
 .btn-scanner:disabled { opacity: 0.35; cursor: not-allowed; }
-.btn-start { background: var(--green); color: #fff; }
-.btn-start:hover:not(:disabled) { opacity: 0.85; }
-.btn-stop  { background: rgba(220,38,38,0.08); border: 1px solid rgba(220,38,38,0.3); color: var(--red); }
-.btn-stop:hover:not(:disabled)  { background: rgba(220,38,38,0.15); }
+.btn-start { background: var(--green-deep); color: #fff; }
+.btn-start:hover:not(:disabled) { background: #235F47; transform: translateY(-1px); }
+.btn-start:active { transform: translateY(0); }
+.btn-stop  { background: var(--coral-light); color: var(--coral); border: none; }
+.btn-stop:hover:not(:disabled)  { background: #FBDDD8; }
 
 /* ── Card thumbnail ── */
 .card-thumb {
@@ -792,8 +1586,16 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--accent); }
   margin-left: 6px;
   vertical-align: middle;
 }
-.source-pill.source-immobiliare { background: rgba(79,142,247,0.18); color: #7eb5ff; }
-.source-pill.source-idealista   { background: rgba(34,197,94,0.18);  color: #4ade80; }
+.source-pill.source-immobiliare {
+  background: rgba(37,99,235,0.14);
+  color: #1d4ed8;
+  border: 1px solid rgba(37,99,235,0.30);
+}
+.source-pill.source-idealista {
+  background: rgba(234,179,8,0.18);
+  color: #92400e;
+  border: 1px solid rgba(234,179,8,0.40);
+}
 
 /* ── Spese total row ── */
 .rent-total-row {
@@ -803,30 +1605,38 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--accent); }
 }
 .rent-total-row strong { color: var(--text); }
 
-/* ── Email digest panel ── */
+/* ── Email digest panel — warm card ───────────────────────────────────── */
 .email-panel {
-  background: var(--surf2);
-  border-bottom: 2px solid var(--accent);
-  padding: 0 24px;
-  overflow: hidden;
+  background: var(--bg-card);
+  border: none;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: 4px 20px;
+  margin: 14px 24px 0;
+}
+@media (max-width: 768px) {
+  .email-panel { margin: 12px 14px 0; padding: 4px 16px; border-radius: var(--radius-md); }
 }
 .email-panel-header {
   display: flex; align-items: center; gap: 12px;
-  padding: 10px 0;
+  padding: 12px 0;
   cursor: pointer;
   user-select: none;
 }
 .email-panel-header h3 {
-  font-size: 13px; font-weight: 700; color: var(--text);
-  text-transform: uppercase; letter-spacing: 0.6px;
+  font-size: 11px; font-weight: 600; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.06em;
+  font-family: var(--font);
 }
 .email-panel-body {
   display: none;
-  padding-bottom: 14px;
+  padding-bottom: 16px;
+  border-top: 1px solid var(--border-light);
+  padding-top: 14px;
 }
 .email-panel-body.is-open { display: block; }
 .email-panel-caret {
-  font-size: 11px; color: var(--muted);
+  font-size: 11px; color: var(--text-muted);
   transition: transform 0.2s;
 }
 .email-panel-caret.open { transform: rotate(180deg); }
@@ -836,21 +1646,36 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--accent); }
   align-items: flex-end; margin-bottom: 10px;
 }
 .email-group { display: flex; flex-direction: column; gap: 4px; }
-.email-lbl   { font-size: 11px; color: var(--muted); }
+.email-lbl   { font-size: 11px; color: var(--text-muted); font-weight: 500; margin-bottom: 2px; }
 .email-input {
-  background: var(--surf2); border: 1px solid var(--border);
-  color: var(--text); border-radius: 5px; padding: 5px 9px;
+  background: var(--bg-muted);
+  border: 1px solid transparent;
+  color: var(--text-primary);
+  border-radius: var(--radius-md);
+  padding: 7px 12px;
   font-size: 13px;
+  font-weight: 500;
+  font-family: var(--font);
+  transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+  outline: none;
 }
-.email-input:focus { outline: none; border-color: var(--accent); }
+.email-input:hover { background: var(--border-strong); }
+.email-input:focus {
+  background: #fff;
+  border-color: var(--green-deep);
+  box-shadow: 0 0 0 3px rgba(42,122,90,0.15);
+}
+.email-input::placeholder { color: var(--text-muted); }
 .email-input[type="password"] { letter-spacing: 2px; }
 
 .email-section-sep {
-  font-size: 10px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.8px; color: var(--muted); margin: 10px 0 8px;
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-muted);
+  margin: 14px 0 10px;
+  font-family: var(--font);
 }
 
-/* Toggle switch */
+/* Toggle switch — warm tokens */
 .email-toggle-wrap { display: flex; align-items: center; gap: 8px; }
 .email-toggle {
   position: relative; display: inline-block;
@@ -858,30 +1683,31 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--accent); }
 }
 .email-toggle input { opacity: 0; width: 0; height: 0; }
 .email-slider {
-  position: absolute; inset: 0; background: var(--surf2);
-  border: 1px solid var(--border); border-radius: 22px;
-  cursor: pointer; transition: background 0.2s;
+  position: absolute; inset: 0; background: var(--bg-muted);
+  border: 1px solid var(--border-light); border-radius: var(--radius-full);
+  cursor: pointer; transition: background 0.2s, border-color 0.2s;
 }
 .email-slider::before {
   content: ''; position: absolute;
   width: 14px; height: 14px; left: 3px; bottom: 3px;
-  background: var(--muted); border-radius: 50%;
+  background: var(--text-muted); border-radius: 50%;
   transition: transform 0.2s, background 0.2s;
 }
-.email-toggle input:checked + .email-slider { background: rgba(79,142,247,0.3); border-color: var(--accent); }
-.email-toggle input:checked + .email-slider::before { transform: translateX(16px); background: var(--accent); }
+.email-toggle input:checked + .email-slider { background: var(--green-light); border-color: var(--green-deep); }
+.email-toggle input:checked + .email-slider::before { transform: translateX(16px); background: var(--green-deep); }
 
 .btn-email {
-  border: none; border-radius: 6px;
-  padding: 7px 14px; cursor: pointer;
+  border: none; border-radius: var(--radius-full);
+  padding: 8px 16px; cursor: pointer;
   font-size: 13px; font-weight: 600;
-  transition: opacity 0.15s;
+  font-family: var(--font);
+  transition: background 140ms ease, transform 140ms ease;
 }
-.btn-email-save { background: var(--accent); color: #fff; }
-.btn-email-save:hover { opacity: 0.85; }
-.btn-email-send { background: var(--surf2); border: 1px solid var(--border); color: var(--text); }
-.btn-email-send:hover { border-color: var(--accent); color: var(--accent); }
-.email-status { font-size: 12px; color: var(--muted); }
+.btn-email-save { background: var(--green-deep); color: #fff; }
+.btn-email-save:hover { background: #235F47; transform: translateY(-1px); }
+.btn-email-send { background: var(--bg-pill); color: var(--text-secondary); border: none; }
+.btn-email-send:hover { background: var(--border-strong); color: var(--text-primary); }
+.email-status { font-size: 12px; color: var(--text-muted); }
 
 /* ── Geo info row ── */
 .geo-row {
@@ -1020,22 +1846,25 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--accent); }
 /* ── Cache indicator row ── */
 .cache-indicator {
   display: flex; align-items: center; gap: 10px;
-  font-size: 11px; color: var(--muted);
+  font-size: 12px; color: var(--text-muted);
   flex-wrap: wrap;
+  font-family: var(--font);
 }
-.cache-count { color: var(--text); font-weight: 600; }
+.cache-count { color: var(--text-secondary); font-weight: 600; }
 .btn-cache-clear {
   background: none;
-  border: 1px solid var(--border);
-  color: var(--muted);
-  border-radius: 5px;
-  padding: 2px 9px;
-  font-size: 11px;
+  border: none;
+  color: var(--coral);
+  padding: 0;
+  font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
-  font-family: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-family: var(--font);
+  transition: color 140ms ease;
 }
-.btn-cache-clear:hover { border-color: var(--red); color: var(--red); }
+.btn-cache-clear:hover { color: #C04638; }
 
 /* ── Card details panel ── */
 .card-details {
@@ -1681,82 +2510,149 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--accent); }
 <body>
 
 <!--
-  NETLIFY IDENTITY SETUP (one-time, in Netlify dashboard):
-  1. Site → Identity → Enable Identity
-  2. Registration: set to "Invite only"
-  3. External providers: enable Google (optional)
-  4. To invite a friend: Identity → Invite users → enter email
+  CLERK SETUP (one-time, in Clerk dashboard at https://dashboard.clerk.com):
+  1. Create a new application
+  2. User & Authentication → Restrictions → set "Sign-up mode" to Restricted (allowlist)
+  3. Allowlist: add the emails of people who can sign in
+  4. Email, Phone, Username → enable email + Google OAuth (optional)
+  5. API Keys → copy the publishable key into window.__CLERK_PUBLISHABLE_KEY (top of <head>)
 -->
 <div id="login-screen" style="display:none;flex-direction:column;align-items:center;
-  justify-content:center;min-height:100svh;background:#FAFAF9;
+  justify-content:center;min-height:100svh;background:#F7F5F2;
   padding:24px;box-sizing:border-box">
   <div style="margin-bottom:40px;text-align:center">
-    <div style="font-size:28px;font-weight:700;color:#1a1a1a">
-      Immobiliare <span style="color:#2D6A4F">Scorer</span>
-    </div>
-    <div style="font-size:14px;color:#6B7280;margin-top:8px">
-      Milan rental &amp; sales intelligence
+    <!-- Lume wordmark -->
+    <svg width="160" height="36" viewBox="0 0 130 28" xmlns="http://www.w3.org/2000/svg" aria-label="Lume" style="display:inline-block">
+      <defs>
+        <radialGradient id="lume-glow-login" cx="50%" cy="50%" r="50%">
+          <stop offset="40%" stop-color="#2A7A5A"/>
+          <stop offset="100%" stop-color="#2A7A5A" stop-opacity="0.15"/>
+        </radialGradient>
+      </defs>
+      <circle cx="14" cy="14" r="12" fill="url(#lume-glow-login)"/>
+      <circle cx="14" cy="14" r="6"  fill="#2A7A5A"/>
+      <text x="32" y="22" font-family="Inter, -apple-system, sans-serif" font-size="22" font-weight="700" fill="#1A1A1A" letter-spacing="-0.5">lume</text>
+    </svg>
+    <div style="font-size:14px;color:#6B6560;margin-top:10px">
+      See through Milan&rsquo;s listings.
     </div>
   </div>
   <div style="background:white;border-radius:20px;padding:32px;
     width:100%;max-width:360px;box-shadow:0 4px 24px rgba(0,0,0,0.08)">
-    <h2 style="font-size:20px;font-weight:700;color:#111827;margin:0 0 6px">Welcome back</h2>
-    <p style="font-size:13px;color:#6B7280;margin:0 0 24px">This app is invite-only.</p>
-    <button onclick="window.netlifyIdentity && window.netlifyIdentity.open('login')" style="
-      width:100%;padding:14px;border-radius:12px;background:#2D6A4F;color:white;
+    <h2 style="font-size:20px;font-weight:700;color:#1A1A1A;margin:0 0 6px">Welcome to Lume</h2>
+    <p style="font-size:13px;color:#6B6560;margin:0 0 24px">Lume is invite-only. Ask whoever sent you the link.</p>
+    <button onclick="Auth.openSignIn()" style="
+      width:100%;padding:14px;border-radius:12px;background:#2A7A5A;color:white;
       border:none;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:10px">
       Sign in
     </button>
-    <p style="font-size:12px;color:#9CA3AF;text-align:center;margin:0">
-      No account? Ask the owner for an invite.
+    <p style="font-size:12px;color:#A09990;text-align:center;margin:0">
+      No invite yet? Lume&rsquo;s a small thing — ask whoever shared it.
     </p>
   </div>
 </div>
 
 <script>
-// ── Auth ─────────────────────────────────────────────────────────────────────
+// ── Auth (Clerk) ─────────────────────────────────────────────────────────────
+// Public interface preserved from the previous Netlify Identity build:
+//   Auth.init()         → boot the auth flow (called from <body> on load)
+//   Auth.userId()       → stable per-user key for localStorage scoping
+//   Auth.userName()     → display name / email
+//   Auth.userInitial()  → first letter for the avatar circle
+//   Auth.signOut()      → sign out with confirm()
+//   Auth.openSignIn()   → open Clerk's hosted sign-in modal
 const Auth = (() => {
-  // Graceful fallback when running locally without the CDN
-  const _ni = window.netlifyIdentity || null;  // null on localhost (script not loaded)
-  const _fake = { init(){}, currentUser(){ return null; },
-                  on(){}, logout(){}, open(){} };
-  const ni = _ni || _fake;
+  const isLocal = ['localhost','127.0.0.1'].includes(location.hostname);
+
+  // Wait for the Clerk SDK to attach to window. The loader script is async,
+  // so init() may run before window.Clerk is defined.
+  const _waitForClerk = () => new Promise(resolve => {
+    if (window.Clerk) return resolve(window.Clerk);
+    const t0 = Date.now();
+    const iv = setInterval(() => {
+      if (window.Clerk) { clearInterval(iv); resolve(window.Clerk); }
+      else if (Date.now() - t0 > 8000) { clearInterval(iv); resolve(null); }
+    }, 50);
+  });
 
   const module = {
-    user: null,
+    user: null,         // Clerk user object (null while signed out)
+    _clerk: null,       // Clerk SDK instance (null on localhost)
 
-    init() {
-      if (['localhost','127.0.0.1'].includes(location.hostname)) {
+    async init() {
+      if (isLocal) {
         showApp();   // CSS shows app-root; showApp() restores filters + runs onboarding check
         return;
       }
-      if (_ni) ni.init();
-      this.user = ni.currentUser();
-      ni.on('login',  user => { this.user = user;  this._onLogin(user); });
-      ni.on('logout', ()   => { this.user = null;  this._onLogout(); });
+
+      // Shared-collection deep-links (`?c=…`) bypass the auth gate so anyone
+      // with the link can view the curated listings.
+      const isSharedView = (typeof handleSharedCollectionParam === 'function')
+                            && handleSharedCollectionParam();
+
+      const clerk = await _waitForClerk();
+      if (!clerk) {
+        // Clerk failed to load — fail open to login screen so the user isn't stuck on a blank page
+        if (isSharedView) showApp(); else showLoginScreen();
+        return;
+      }
+      this._clerk = clerk;
+      try { await clerk.load(); } catch (_) {}
+
+      this.user = clerk.user || null;
+      // Re-render whenever Clerk's auth state changes (sign-in / sign-out / token refresh)
+      clerk.addListener(({ user }) => {
+        const wasSignedIn = !!this.user;
+        this.user = user || null;
+        if (this.user && !wasSignedIn)        this._onLogin(this.user);
+        else if (!this.user && wasSignedIn)   this._onLogout();
+      });
+
       if (this.user) {
         this._onLogin(this.user);
+      } else if (isSharedView) {
+        showApp();
       } else {
         showLoginScreen();
       }
     },
 
-    userId()   { return this.user?.id || 'guest'; },
+    userId() { return this.user?.id || 'guest'; },
     userName() {
-      return this.user?.user_metadata?.full_name || this.user?.email || 'User';
+      const u = this.user;
+      if (!u) return 'User';
+      return u.fullName
+          || [u.firstName, u.lastName].filter(Boolean).join(' ')
+          || u.primaryEmailAddress?.emailAddress
+          || u.username
+          || 'User';
     },
-    userInitial() { return this.userName()[0].toUpperCase(); },
+    userInitial() { return (this.userName()[0] || 'U').toUpperCase(); },
+
+    openSignIn() {
+      if (this._clerk?.openSignIn) this._clerk.openSignIn();
+      else if (this._clerk?.redirectToSignIn) this._clerk.redirectToSignIn();
+    },
 
     _onLogin(user) {
       hideLoginScreen();
       Storage.migrate(user.id);
+      // Cache the Clerk user ID so other static pages (e.g. favourites.html)
+      // can scope their localStorage keys without re-loading the Clerk SDK.
+      try { localStorage.setItem('lume_clerk_user_id', user.id); } catch (_) {}
       showApp();
       updateUserAvatar();
     },
-    _onLogout() { showLoginScreen(); hideApp(); },
+    _onLogout() {
+      try { localStorage.removeItem('lume_clerk_user_id'); } catch (_) {}
+      showLoginScreen();
+      hideApp();
+    },
 
     signOut() {
-      if (confirm(`Signed in as ${this.userName()}\n\nSign out?`)) ni.logout();
+      if (confirm(`Signed in as ${this.userName()}\n\nSign out?`)) {
+        this._clerk?.signOut?.();
+      }
     }
   };
   return module;
@@ -1917,40 +2813,40 @@ function saveFilters() {
         <!-- Star accent -->
         <text x="62" y="20" font-size="16" fill="#2D6A4F">✦</text>
       </svg>
-      <h2 class="ob-animate ob-delay-1">Find your flat.<br>Not just any flat.</h2>
-      <p class="ob-animate ob-delay-2">1,200+ Milan rentals scored daily so you don't have to guess.</p>
+      <h2 class="ob-animate ob-delay-1">Lume sees through Milan&rsquo;s listings.</h2>
+      <p class="ob-animate ob-delay-2">Lume scores every listing so you don&rsquo;t have to guess. Built by someone tired of overpaying.</p>
     </div>
 
     <!-- Slide 2: The problem -->
     <div class="onboard-slide slide2">
       <div class="onboard-big-number ob-animate" id="ob2Number">0%</div>
-      <h2 class="ob-animate ob-delay-1">of Milan rental listings are overpriced for what they offer.</h2>
-      <p class="ob-animate ob-delay-2">Based on OMI official benchmarks + live market comps.</p>
+      <h2 class="ob-animate ob-delay-1">of Milan rentals are overpriced for what they offer. Lume tells you which ones.</h2>
+      <p class="ob-animate ob-delay-2">Based on OMI benchmarks + live market data — Lume sees the patterns.</p>
     </div>
 
     <!-- Slide 3: How it works -->
     <div class="onboard-slide">
-      <h2 class="ob-animate">How we score every listing</h2>
+      <h2 class="ob-animate">How Lume scores every listing</h2>
       <div class="onboard-step-cards">
         <div class="onboard-step-card ob-animate ob-delay-1">
           <span class="onboard-step-icon">🏠</span>
           <div class="onboard-step-body">
-            <h3>Price vs market</h3>
-            <p>We compare asking rent against real comps within 500m, not just averages.</p>
+            <h3>What you&rsquo;d pay vs similar flats nearby</h3>
+            <p>Lume compares asking rent against real flats within 500m — not just averages.</p>
           </div>
         </div>
         <div class="onboard-step-card ob-animate ob-delay-2">
           <span class="onboard-step-icon">📍</span>
           <div class="onboard-step-body">
-            <h3>Location</h3>
-            <p>Metro distance, parks, supermarkets — all computed from coordinates.</p>
+            <h3>Where it actually is</h3>
+            <p>Metro distance, parks, supermarkets — Lume computes everything from coordinates.</p>
           </div>
         </div>
         <div class="onboard-step-card ob-animate ob-delay-3">
           <span class="onboard-step-icon">✦</span>
           <div class="onboard-step-body">
-            <h3>Hidden Gems</h3>
-            <p>Listings priced below market in desirable areas. Rare. We flag them for you.</p>
+            <h3>Hidden Gems — Lume&rsquo;s favourite finds</h3>
+            <p>Listings priced below similar flats nearby in desirable areas. Rare. Lume flags them for you.</p>
           </div>
         </div>
       </div>
@@ -1958,7 +2854,7 @@ function saveFilters() {
 
     <!-- Slide 4: Score explained -->
     <div class="onboard-slide">
-      <h2 class="ob-animate">One score. Instant decision.</h2>
+      <h2 class="ob-animate">One score. One read. Move on.</h2>
       <div class="onboard-score-demo">
         <div class="onboard-score-circle ob-animate ob-delay-1" id="ob4Score">0</div>
         <div class="onboard-bars ob-animate ob-delay-2">
@@ -1979,7 +2875,7 @@ function saveFilters() {
             <div class="onboard-bar-track"><div class="onboard-bar-fill" data-width="95"></div></div>
           </div>
         </div>
-        <p class="ob-animate ob-delay-2" style="font-size:11px;color:var(--muted);margin-top:12px">Scores above 72 with a low price delta = Hidden Gem candidate.</p>
+        <p class="ob-animate ob-delay-2" style="font-size:11px;color:var(--muted);margin-top:12px">Scores above 72 with a low price delta = Lume rates this a hidden gem.</p>
       </div>
     </div>
 
@@ -1997,9 +2893,9 @@ function saveFilters() {
         <rect x="8" y="68" width="64" height="4" rx="2" fill="white" opacity="0.4"/>
         <path d="M62 14 L65 22 L73 14 L65 6 Z M62 14 L54 11 L62 3 L70 11 Z M62 14 L59 22 L51 14 L59 6 Z M62 14 L70 17 L62 25 L54 17 Z" fill="white"/>
       </svg>
-      <h2 class="ob-animate ob-delay-1">138 Hidden Gems<br>in Milan right now.</h2>
-      <p class="ob-animate ob-delay-2">Updated daily. Free. No sign-up.</p>
-      <button class="onboard-cta-btn ob-animate ob-delay-2" id="onboardStart">Start exploring →</button>
+      <h2 class="ob-animate ob-delay-1">138 hidden gems in Milan right now.</h2>
+      <p class="ob-animate ob-delay-2">Lume updates daily. See through the market.</p>
+      <button class="onboard-cta-btn ob-animate ob-delay-2" id="onboardStart">Show me what Lume sees →</button>
     </div>
 
   </div><!-- /onboard-slides -->
@@ -2013,7 +2909,7 @@ function saveFilters() {
   <div class="drawer-handle"></div>
   <div class="drawer-title-row">
     <span class="drawer-title">Filters</span>
-    <button class="drawer-reset-btn" id="drawerReset">Reset</button>
+    <button class="drawer-reset-btn" id="drawerReset">Start fresh</button>
   </div>
 
   <!-- Mode toggle: Rentals vs Sales -->
@@ -2075,7 +2971,7 @@ function saveFilters() {
         <div class="drawer-gem-row" id="dGemFilter">
           <button class="gem-tab active" data-gem="">All</button>
           <button class="gem-tab" data-gem="hidden">✦ Hidden</button>
-          <button class="gem-tab" data-gem="good">↑ Great Value!</button>
+          <button class="gem-tab" data-gem="good">Great Value</button>
         </div>
       </div>
     </div>
@@ -2156,7 +3052,7 @@ function saveFilters() {
         <div class="drawer-gem-row" id="sdGemFilter">
           <button class="gem-tab active" data-sdgem="">All</button>
           <button class="gem-tab" data-sdgem="hidden">✦ Hidden</button>
-          <button class="gem-tab" data-sdgem="good">↑ Great Value!</button>
+          <button class="gem-tab" data-sdgem="good">Great Value</button>
         </div>
       </div>
     </div>
@@ -2166,36 +3062,38 @@ function saveFilters() {
 
 <!-- ── Header ── -->
 <header>
-  <!-- SVG wordmark -->
-  <div class="logo-wordmark">
-    <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <!-- Building silhouette: 3 rects bottom-aligned -->
-      <rect x="4"  y="14" width="6" height="10" fill="#1a1a1a"/>
-      <rect x="11" y="10" width="7" height="14" fill="#1a1a1a"/>
-      <rect x="19" y="17" width="5" height="7"  fill="#1a1a1a"/>
-      <!-- Ground line -->
-      <rect x="3" y="24" width="22" height="1.5" rx="0.75" fill="#1a1a1a" opacity="0.3"/>
-      <!-- 4-pointed star (top-right) -->
-      <path d="M21 5 L22 8 L25 5 L22 2 Z M21 5 L18 4 L21 1 L24 4 Z M21 5 L20 8 L17 5 L20 2 Z M21 5 L24 6 L21 9 L18 6 Z" fill="#2D6A4F"/>
+  <!-- Lume wordmark — flame dot + lowercase wordmark -->
+  <div class="logo-wordmark" aria-label="Lume — see through the listings">
+    <svg width="auto" height="28" viewBox="0 0 130 28" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <defs>
+        <radialGradient id="lume-glow-header" cx="50%" cy="50%" r="50%">
+          <stop offset="40%" stop-color="#2A7A5A"/>
+          <stop offset="100%" stop-color="#2A7A5A" stop-opacity="0.15"/>
+        </radialGradient>
+      </defs>
+      <circle cx="14" cy="14" r="12" fill="url(#lume-glow-header)"/>
+      <circle cx="14" cy="14" r="6"  fill="#2A7A5A"/>
+      <text x="32" y="22" font-family="Inter, -apple-system, sans-serif"
+            font-size="22" font-weight="700" fill="#1A1A1A"
+            letter-spacing="-0.5">lume</text>
     </svg>
-    <span class="logo-text">Immobiliare <span class="logo-scorer">Scorer</span></span>
   </div>
 
-  <span class="server-note" title="Requires python3 api.py running locally — does not work as a static file">⚙ local server only</span>
-  <!-- Status pill: Live (local) or Snapshot (Netlify) — toggled by applyStaticMode/init -->
+  <span class="server-note" title="Requires python3 api.py running locally — does not work as a static file">⚙ local · running on your machine</span>
+  <!-- Status pill: Live (local) or Snapshot (Cloudflare Pages) — toggled by applyStaticMode/init -->
   <span class="status-pill" id="statusPill">
     <span class="status-dot"></span>
     <span id="statusPillLabel">Snapshot</span>
   </span>
-  <!-- GitHub Actions CI status — shown only in static/Netlify mode -->
+  <!-- GitHub Actions CI status — shown only in static/Cloudflare Pages mode -->
   <a class="ci-pill" id="ciPill" target="_blank" rel="noopener"
      href="https://github.com/giodima7/immobiliare-scorer/actions/workflows/daily_scan.yml"
      title="Last GitHub Actions scan run">
     <span class="ci-dot"></span>
     <span id="ciPillLabel">CI –</span>
   </a>
-  <div class="meta" id="meta">Loading…</div>
-  <button class="btn-fetch-toggle" id="btnFetchToggle">▶ Fetch new data</button>
+  <div class="meta" id="meta">Lume is reading the listings…</div>
+  <button class="btn-fetch-toggle" id="btnFetchToggle">▶ Run Lume now</button>
   <a class="fav-link" href="/zone-mappings" id="zonesLink" title="Fix unmatched OMI zones">🗺 Zones <span class="fav-badge" id="unmatchedBadge" style="display:none"></span></a>
   <a class="fav-link fav-btn" href="/favourites" id="favLink">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
@@ -2208,12 +3106,12 @@ function saveFilters() {
       <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
     </svg>
   </button>
-  <!-- User avatar (shown after auth) -->
-  <div id="user-avatar" onclick="Auth.signOut()" style="
+  <!-- User avatar (shown after auth) — opens dropdown menu -->
+  <div id="user-avatar" onclick="showUserMenu(event)" style="
     display:none;width:32px;height:32px;border-radius:50%;
-    background:#2D6A4F;color:white;font-size:13px;font-weight:600;
+    background:#2A7A5A;color:white;font-size:13px;font-weight:600;
     align-items:center;justify-content:center;cursor:pointer;
-    flex-shrink:0;user-select:none" title=""></div>
+    flex-shrink:0;user-select:none" title="Account menu"></div>
 </header>
 
 <!-- ── Tab bar ── -->
@@ -2221,7 +3119,7 @@ function saveFilters() {
   <button class="tab-btn" id="tabSales" data-tab="sales" onclick="switchTab('sales')">🏡 Sales</button>
   <button class="tab-btn active" id="tabRentals" data-tab="rentals" onclick="switchTab('rentals')">🔑 Rentals</button>
   <button class="tab-btn" id="tabMap" data-tab="map" onclick="switchTab('map')">🗺 Map</button>
-  <button class="tab-btn" id="tabInsights" data-tab="insights" onclick="switchTab('insights')">📊 Insights</button>
+  <button class="tab-btn" id="tabInsights" data-tab="insights" onclick="switchTab('insights')">📊 What Lume sees</button>
   <button class="tab-btn" id="tabSettings" data-tab="settings" onclick="switchTab('settings')">⚙ Settings</button>
 </nav>
 
@@ -2232,17 +3130,17 @@ function saveFilters() {
 
 <!-- ── Sales fetch panel ── -->
 <div class="scanner-panel" id="sScanPanel">
-  <div class="fetch-section-title">Sales fetch — Immobiliare.it</div>
+  <div class="fetch-section-title">Lume — sales scan</div>
   <div class="scanner-row">
     <div class="scanner-status-wrap">
       <div class="scanner-dot" id="sScanDot"></div>
-      <span class="scanner-label" id="sScanLabel">Ready</span>
+      <span class="scanner-label" id="sScanLabel">Lume ready</span>
     </div>
     <span class="scanner-meta" id="sScanMeta"></span>
     <span class="scanner-new-badge" id="sScanBadge" style="display:none"></span>
     <div style="flex:1"></div>
-    <button class="btn-scanner btn-start" id="btnStartSaleFetch">▶ Fetch</button>
-    <button class="btn-scanner btn-stop"  id="btnStopSaleFetch"  disabled>■ Stop</button>
+    <button class="btn-scanner btn-start" id="btnStartSaleFetch">▶ Run Lume now</button>
+    <button class="btn-scanner btn-stop"  id="btnStopSaleFetch"  disabled>■ Stop Lume</button>
   </div>
   <div class="scanner-row" style="margin-bottom:0">
     <div class="fetch-group">
@@ -2298,6 +3196,14 @@ function saveFilters() {
       </div>
     </div>
     <span class="fetch-warn">Opens Edge · ~30 s/page</span>
+  </div>
+  <div class="scanner-row" id="idealSaleStatusRow" style="margin-bottom:0;display:none">
+    <div class="scanner-status-wrap">
+      <div class="scanner-dot" id="idealSaleDot"></div>
+      <span class="scanner-label" id="idealSaleLabel" style="color:var(--muted)">Idealista — Lume idle</span>
+    </div>
+    <span class="scanner-meta" id="idealSaleLastRun"></span>
+    <span class="scanner-new-badge" id="idealSaleCountBadge"></span>
   </div>
 </div>
 
@@ -2379,6 +3285,21 @@ function saveFilters() {
   </div>
   <div class="filter-sep"></div>
   <div class="filter-group">
+    <label style="display:flex;align-items:center;gap:5px;cursor:pointer;user-select:none"
+           title="Auctions are judicial sales — much cheaper but with major legal complications">
+      <input type="checkbox" id="sShowAuctions" style="accent-color:var(--accent);cursor:pointer">
+      Show auctions
+    </label>
+  </div>
+  <div class="filter-group">
+    <label style="display:flex;align-items:center;gap:5px;cursor:pointer;user-select:none"
+           title="Nuda proprietà = bare ownership; the seller keeps usufruct (right to live there for life)">
+      <input type="checkbox" id="sShowNuda" style="accent-color:var(--accent);cursor:pointer">
+      Show nuda proprietà
+    </label>
+  </div>
+  <div class="filter-sep"></div>
+  <div class="filter-group">
     <label>Min energy</label>
     <select id="sMinEnergy">
       <option value="">Any</option>
@@ -2392,6 +3313,15 @@ function saveFilters() {
     <label>Min score</label>
     <input type="range" id="sScore" min="0" max="100" value="0" step="5">
     <span class="range-val" id="sScoreVal">0</span>
+  </div>
+  <div class="filter-sep"></div>
+  <div class="filter-group">
+    <label>Source</label>
+    <div class="sort-tabs" id="sSourceFilter">
+      <button class="sort-tab active" data-ssource="">All</button>
+      <button class="sort-tab" data-ssource="sale">Immobiliare</button>
+      <button class="sort-tab" data-ssource="idealista_sale">Idealista</button>
+    </div>
   </div>
   <div class="filter-sep"></div>
   <div class="filter-group">
@@ -2409,10 +3339,10 @@ function saveFilters() {
     <div id="sGemFilterBar" style="display:flex;gap:4px">
       <button class="gem-tab active" data-sgem="">All</button>
       <button class="gem-tab" data-sgem="hidden">✦ Hidden</button>
-      <button class="gem-tab" data-sgem="good">↑ Great Value!</button>
+      <button class="gem-tab" data-sgem="good">Great Value</button>
     </div>
   </div>
-  <button class="btn-reset" id="sBtnReset">Reset</button>
+  <button class="btn-reset" id="sBtnReset">Start fresh</button>
 </div>
 
 <!-- ── Sales stats bar ── -->
@@ -2420,7 +3350,7 @@ function saveFilters() {
   <span>Showing <strong id="sShowCount">–</strong> listings</span>
   <span>Avg score <strong id="sAvgScore">–</strong> / 100</span>
   <span>Avg price <strong id="sAvgPrice">–</strong></span>
-  <span>Hidden gems <strong id="sGemCount">–</strong>
+  <span>Hidden Gems <strong id="sGemCount">–</strong>
     <button class="btn-enrich-geo" id="btnRescoreSales" title="Re-run sale scoring formula on current data" style="margin-left:6px">Rescore</button>
     <span id="rescoreSalesStatus" style="font-size:10px;color:var(--muted);margin-left:4px"></span>
   </span>
@@ -2433,6 +3363,7 @@ function saveFilters() {
 
 <!-- ── Sales grid ── -->
 <div class="grid" id="salesGrid"></div>
+<div class="scroll-status" id="saleScrollStatus"></div>
 
 </div><!-- /salesView -->
 
@@ -2443,18 +3374,18 @@ function saveFilters() {
 
   <!-- Scanner panel -->
   <div class="scanner-panel">
-    <div class="fetch-section-title">Rental scanner — Milano</div>
+    <div class="fetch-section-title">Lume — rental scan</div>
     <div class="scanner-row">
       <div class="scanner-status-wrap">
         <div class="scanner-dot" id="scannerDot"></div>
-        <span class="scanner-label" id="scannerLabel">Scanner stopped</span>
+        <span class="scanner-label" id="scannerLabel">Lume idle</span>
       </div>
       <span class="scanner-meta" id="scannerLastRun"></span>
       <span class="scanner-new-badge" id="scannerNewBadge"></span>
       <button id="scannerSkippedWarn" style="display:none;border:none;background:rgba(217,119,6,0.12);color:#92400E;border-radius:6px;padding:2px 10px;font-size:11px;font-weight:600;cursor:pointer;margin-left:4px" title="Some areas were skipped on the last scan"></button>
       <div style="flex:1"></div>
-      <button class="btn-scanner btn-start" id="btnStartScanner">▶ Start scanner</button>
-      <button class="btn-scanner btn-stop"  id="btnStopScanner"  disabled>■ Stop</button>
+      <button class="btn-scanner btn-start" id="btnStartScanner">▶ Start Lume</button>
+      <button class="btn-scanner btn-stop"  id="btnStopScanner"  disabled>■ Stop Lume</button>
     </div>
     <div class="scanner-row" style="margin-bottom:0">
       <div class="fetch-group">
@@ -2488,7 +3419,7 @@ function saveFilters() {
     <div class="scanner-row" id="idealistaStatusRow" style="margin-bottom:0;display:none">
       <div class="scanner-status-wrap">
         <div class="scanner-dot" id="idealistaDot"></div>
-        <span class="scanner-label" id="idealistaLabel" style="color:var(--muted)">Idealista stopped</span>
+        <span class="scanner-label" id="idealistaLabel" style="color:var(--muted)">Idealista — Lume idle</span>
       </div>
       <span class="scanner-meta" id="idealistaLastRun"></span>
       <span class="scanner-new-badge" id="idealistaNewBadge"></span>
@@ -2497,7 +3428,7 @@ function saveFilters() {
       <div class="cache-indicator">
         📦 Cache: <span class="cache-count" id="cacheCount">–</span>
         <span id="cacheNewest"></span>
-        <button class="btn-cache-clear" id="btnCacheClear" title="Delete the enrichment cache — all listings will be re-enriched on the next scan">Clear cache</button>
+        <button class="btn-cache-clear" id="btnCacheClear" title="Delete Lume's memory — all listings will be re-enriched on the next scan">Clear Lume's memory</button>
       </div>
     </div>
   </div>
@@ -2506,7 +3437,7 @@ function saveFilters() {
   <div class="email-panel">
     <div class="email-panel-header" id="emailPanelHeader">
       <span>📧</span>
-      <h3>Email digest</h3>
+      <h3>What Lume sends</h3>
       <label class="email-toggle" title="Enable daily email digest" onclick="event.stopPropagation()">
         <input type="checkbox" id="emailEnabled">
         <span class="email-slider"></span>
@@ -2698,6 +3629,7 @@ function saveFilters() {
       <label>Listed</label>
       <select id="rListed">
         <option value="">Any</option>
+        <option value="today">Today</option>
         <option value="7">Last 7 days</option>
         <option value="14">Last 14 days</option>
         <option value="30">Last 30 days</option>
@@ -2709,10 +3641,10 @@ function saveFilters() {
       <div id="rGemFilter" style="display:flex;gap:4px">
         <button class="gem-tab active" data-gem="">All</button>
         <button class="gem-tab" data-gem="hidden">✦ Hidden</button>
-        <button class="gem-tab" data-gem="good">↑ Great Value!</button>
+        <button class="gem-tab" data-gem="good">Great Value</button>
       </div>
     </div>
-    <button class="btn-reset" id="rBtnReset">Reset</button>
+    <button class="btn-reset" id="rBtnReset">Start fresh</button>
   </div>
 
   <!-- Rentals stats bar -->
@@ -2735,6 +3667,7 @@ function saveFilters() {
 
   <!-- Rentals grid -->
   <div class="grid" id="rentGrid"></div>
+  <div class="scroll-status" id="rentScrollStatus"></div>
 
 </div><!-- /rentalsView -->
 
@@ -2841,6 +3774,7 @@ function saveFilters() {
       <label>Listed</label>
       <select id="mRentListed">
         <option value="">Any</option>
+        <option value="today">Today</option>
         <option value="7">Last 7 days</option>
         <option value="14">Last 14 days</option>
         <option value="30">Last 30 days</option>
@@ -2852,7 +3786,7 @@ function saveFilters() {
       <input type="range" id="mRentScore" min="0" max="100" value="0" step="5">
       <span class="range-val" id="mRentScoreVal">0</span>
     </div>
-    <button class="btn-reset" id="mRentReset">Reset</button>
+    <button class="btn-reset" id="mRentReset">Start fresh</button>
   </div>
 
   <!-- ── Map sale filters ── -->
@@ -2897,7 +3831,7 @@ function saveFilters() {
       <input type="range" id="mSaleScore" min="0" max="100" value="0" step="5">
       <span class="range-val" id="mSaleScoreVal">0</span>
     </div>
-    <button class="btn-reset" id="mSaleReset">Reset</button>
+    <button class="btn-reset" id="mSaleReset">Start fresh</button>
   </div>
 
   <div id="mapContainer"></div>
@@ -3019,7 +3953,7 @@ function saveFilters() {
   </p>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:8px" id="gemThresholdWrap">
     <div>
-      <div style="font-size:12px;font-weight:700;color:#15803D;margin-bottom:8px">✦ Hidden Gem</div>
+      <div style="font-size:12px;font-weight:700;color:#2A7A5A;margin-bottom:8px">✦ Hidden Gem</div>
       <div class="score-settings-grid" id="gemSettingsGrid"></div>
     </div>
     <div>
@@ -3196,15 +4130,15 @@ function saveFilters() {
     <div id="dqTblCount" style="font-size:11px;color:var(--muted);margin-top:6px"></div>
   </div>
 
-  <!-- ── Access (Netlify Identity invite) ──────────────────────────── -->
+  <!-- ── Access (Clerk allowlist) ──────────────────────────────────── -->
   <div class="settings-section" style="margin-top:16px">
     <h3 style="font-size:14px;font-weight:600;margin-bottom:8px">Access</h3>
     <p style="font-size:13px;color:#6B7280;margin:0">
       To invite a friend: go to your
-      <a href="https://app.netlify.com" target="_blank" style="color:#2D6A4F">
-        Netlify dashboard
+      <a href="https://dashboard.clerk.com" target="_blank" style="color:#2D6A4F">
+        Clerk dashboard
       </a>
-      → Identity → Invite users → enter their email address.
+      → User &amp; Authentication → Restrictions → Allowlist → add their email.
     </p>
   </div>
 </div>
@@ -3606,7 +4540,7 @@ function render() {
   const grid = document.getElementById('grid');
   grid.innerHTML = '';
   if (!data.length) {
-    grid.innerHTML = '<div class="empty"><h3>No listings match</h3><p>Try relaxing your filters.</p></div>';
+    grid.innerHTML = '<div class="empty"><h3>Nothing matches yet.</h3><p>Loosen up a filter.</p></div>';
   } else {
     const frag = document.createDocumentFragment();
     data.forEach(l => frag.appendChild(renderCard(l)));
@@ -3786,11 +4720,10 @@ async function applyStaticMode() {
   hide('btnFetchToggle', 'zonesLink');
   document.querySelectorAll('.server-note').forEach(el => el.style.display = 'none');
 
-  // Scanner + email panels
-  const scannerPanel = document.querySelector('.scanner-panel');
-  const emailPanel   = document.querySelector('.email-panel');
-  if (scannerPanel) scannerPanel.style.display = 'none';
-  if (emailPanel)   emailPanel.style.display   = 'none';
+  // Scanner + email panels (querySelectorAll — there are two .scanner-panel elements)
+  document.querySelectorAll('.scanner-panel').forEach(p => p.style.display = 'none');
+  const emailPanel = document.querySelector('.email-panel');
+  if (emailPanel) emailPanel.style.display = 'none';
 
   // Rentals-tab action controls
   hide('btnApplyOmi', 'applyOmiStatus', 'btnEnrichGeo', 'btnDownloadPois', 'geoCoverage', 'cacheRow',
@@ -3899,6 +4832,31 @@ function _updateStickyTops() {
 }
 window.addEventListener('resize', _updateStickyTops);
 
+// ── Filter bar sticky shadow — sentinel-based detection ───────────────────────
+// Insert a 1px sentinel just before each .filters element. When the sentinel
+// scrolls out of view, the filter bar is "stuck" and gains the .is-stuck class,
+// which paints a stronger bottom shadow and removes its rounded outer margin.
+function _wireFilterBarStickyShadow() {
+  if (!('IntersectionObserver' in window)) return;
+  document.querySelectorAll('.filters').forEach(filterBar => {
+    if (filterBar.dataset.stuckObserved === '1') return;
+    filterBar.dataset.stuckObserved = '1';
+
+    let sentinel = filterBar.previousElementSibling;
+    if (!sentinel || !sentinel.classList.contains('filters-sentinel')) {
+      sentinel = document.createElement('div');
+      sentinel.className = 'filters-sentinel';
+      filterBar.parentNode.insertBefore(sentinel, filterBar);
+    }
+
+    const obs = new IntersectionObserver(
+      ([entry]) => filterBar.classList.toggle('is-stuck', !entry.isIntersecting),
+      { threshold: 1.0 }
+    );
+    obs.observe(sentinel);
+  });
+}
+
 async function init() {
   const isHttp = location.protocol === 'http:' || location.protocol === 'https:';
   if (!isHttp) {
@@ -3914,7 +4872,7 @@ async function init() {
     return;
   }
 
-  // Detect live-API vs static (Netlify) mode
+  // Detect live-API vs static (Cloudflare Pages) mode
   try {
     const ping = await fetch('/api-ping');
     IS_LIVE = ping.ok;
@@ -3947,6 +4905,8 @@ async function init() {
 
 // Set sticky top offsets once the DOM is painted
 requestAnimationFrame(_updateStickyTops);
+// Wire up the filter-bar "is-stuck" shadow detector
+requestAnimationFrame(_wireFilterBarStickyShadow);
 
 // ── Sales event listeners ─────────────────────────────────────────────────────
 document.getElementById('sScore').addEventListener('input', function () {
@@ -3965,6 +4925,8 @@ document.getElementById('sScore').addEventListener('input', function () {
 });
 
 document.getElementById('sElevator').addEventListener('change', renderSales);
+document.getElementById('sShowAuctions')?.addEventListener('change', renderSales);
+document.getElementById('sShowNuda')    ?.addEventListener('change', renderSales);
 
 document.getElementById('sBtnReset').addEventListener('click', () => {
   document.getElementById('sFascia').value    = '';
@@ -3975,6 +4937,8 @@ document.getElementById('sBtnReset').addEventListener('click', () => {
   document.getElementById('sMaxMetro').value  = '';
   document.getElementById('sMinFloor').value  = '';
   document.getElementById('sElevator').checked = false;
+  const sa = document.getElementById('sShowAuctions'); if (sa) sa.checked = false;
+  const sn = document.getElementById('sShowNuda');     if (sn) sn.checked = false;
   document.getElementById('sMinEnergy').value = '';
   document.getElementById('sScore').value     = 0;
   document.getElementById('sScoreVal').textContent = '0';
@@ -3985,6 +4949,8 @@ document.getElementById('sBtnReset').addEventListener('click', () => {
     t.classList.toggle('active', t.dataset.ssort === 'score_total'));
   document.querySelectorAll('#sGemFilterBar .gem-tab').forEach(t =>
     t.classList.toggle('active', t.dataset.sgem === ''));
+  document.querySelectorAll('#sSourceFilter .sort-tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.ssource === ''));
   renderSales();
 });
 
@@ -4001,6 +4967,14 @@ document.querySelectorAll('#sGemFilterBar .gem-tab').forEach(btn => {
   btn.addEventListener('click', () => {
     sSaleGemFilter = btn.dataset.sgem;
     document.querySelectorAll('#sGemFilterBar .gem-tab').forEach(t =>
+      t.classList.toggle('active', t === btn));
+    renderSales();
+  });
+});
+
+document.querySelectorAll('#sSourceFilter .sort-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#sSourceFilter .sort-tab').forEach(t =>
       t.classList.toggle('active', t === btn));
     renderSales();
   });
@@ -4051,9 +5025,10 @@ if (_sBtnRescore) _sBtnRescore.addEventListener('click', async () => {
   }
 });
 
-// ── Sales fetch polling ───────────────────────────────────────────────────────
+// ── Sales fetch polling (Immobiliare + Idealista combined) ────────────────────
 let _saleFetchPollTimer = null;
 let _lastSaleFetchRun   = null;
+let _lastIdealSaleRun   = null;
 
 function startSaleFetchPoll() {
   if (_saleFetchPollTimer) return;
@@ -4067,30 +5042,67 @@ function stopSaleFetchPoll() {
 
 async function updateSaleFetchStatus() {
   try {
-    const st    = await fetch('/sale-fetch-status').then(r => r.json());
-    const dot   = document.getElementById('sScanDot');
-    const lbl   = document.getElementById('sScanLabel');
-    const meta  = document.getElementById('sScanMeta');
-    const badge = document.getElementById('sScanBadge');
-    const btnStart = document.getElementById('btnStartSaleFetch');
-    const btnStop  = document.getElementById('btnStopSaleFetch');
+    // Fetch both statuses in parallel
+    const [immo, ideal] = await Promise.all([
+      fetch('/sale-fetch-status').then(r => r.json()).catch(() => null),
+      fetch('/ideal-sale-fetch-status').then(r => r.json()).catch(() => null),
+    ]);
 
-    if (dot)  dot.className = 'scanner-dot' + (st.running ? ' running' : '');
-    if (lbl)  {
-      lbl.textContent = st.running ? 'Fetching…' : (st.error ? 'Error' : 'Ready');
-      lbl.style.color = st.running ? 'var(--green)' : (st.error ? 'var(--red)' : 'var(--muted)');
-      lbl.title = st.error || '';
+    const anyRunning = !!(immo?.running) || !!(ideal?.running);
+    const btnStart   = document.getElementById('btnStartSaleFetch');
+    const btnStop    = document.getElementById('btnStopSaleFetch');
+    if (btnStart) btnStart.disabled = anyRunning;
+    if (btnStop)  btnStop.disabled  = !anyRunning;
+
+    // ── Immobiliare row ──────────────────────────────────────────────────────
+    if (immo) {
+      const dot   = document.getElementById('sScanDot');
+      const lbl   = document.getElementById('sScanLabel');
+      const meta  = document.getElementById('sScanMeta');
+      const badge = document.getElementById('sScanBadge');
+      if (dot) dot.className = 'scanner-dot' + (immo.running ? ' running' : '');
+      if (lbl) {
+        lbl.textContent = immo.running ? 'Fetching…' : (immo.error ? 'Error' : 'Ready');
+        lbl.style.color = immo.running ? 'var(--green)' : (immo.error ? 'var(--red)' : 'var(--muted)');
+        lbl.title = immo.error || '';
+      }
+      if (meta) meta.textContent = immo.last_run ? 'Last: ' + immo.last_run.replace('T', ' ') : '';
+      if (!immo.running && immo.last_run && immo.last_run !== _lastSaleFetchRun) {
+        _lastSaleFetchRun = immo.last_run;
+        if (badge) { badge.textContent = `+${immo.count} listings`; badge.style.display = 'inline'; }
+        ALL_SALE = [];
+        await loadSales();
+        setTimeout(() => { if (badge) badge.style.display = 'none'; }, 8000);
+      }
     }
-    if (meta) meta.textContent = st.last_run ? 'Last: ' + st.last_run.replace('T', ' ') : '';
-    if (btnStart) btnStart.disabled = !!st.running;
-    if (btnStop)  btnStop.disabled  = !st.running;
 
-    if (!st.running && st.last_run && st.last_run !== _lastSaleFetchRun) {
-      _lastSaleFetchRun = st.last_run;
-      if (badge) { badge.textContent = `+${st.count} listings`; badge.style.display = 'inline'; }
-      ALL_SALE = [];
-      await loadSales();
-      setTimeout(() => { if (badge) badge.style.display = 'none'; }, 8000);
+    // ── Idealista row ────────────────────────────────────────────────────────
+    if (ideal) {
+      const row   = document.getElementById('idealSaleStatusRow');
+      const dot   = document.getElementById('idealSaleDot');
+      const lbl   = document.getElementById('idealSaleLabel');
+      const meta  = document.getElementById('idealSaleLastRun');
+      const badge = document.getElementById('idealSaleCountBadge');
+      if (row) row.style.display = 'flex';
+      if (dot) dot.className = 'scanner-dot' + (ideal.running ? ' running' : '');
+      if (lbl) {
+        lbl.textContent = ideal.running ? 'Idealista running…'
+                        : ideal.error   ? 'Idealista error'
+                        : 'Idealista stopped';
+        lbl.style.color = ideal.running ? 'var(--green)' : (ideal.error ? 'var(--red)' : 'var(--muted)');
+        lbl.title = ideal.error || '';
+      }
+      if (meta) meta.textContent = ideal.last_run ? 'Last: ' + ideal.last_run.replace('T', ' ') : '';
+      if (!ideal.running && ideal.last_run && ideal.last_run !== _lastIdealSaleRun) {
+        _lastIdealSaleRun = ideal.last_run;
+        if (badge && ideal.count > 0) {
+          badge.textContent = ideal.count + ' Idealista';
+          badge.style.display = 'inline';
+          setTimeout(() => { if (badge) badge.style.display = 'none'; }, 10000);
+        }
+        ALL_SALE = [];
+        await loadSales();
+      }
     }
   } catch { /* API not running */ }
 }
@@ -4159,7 +5171,7 @@ document.getElementById('btnStartSaleFetch')?.addEventListener('click', async ()
   const cities = saleCityMsd.getSelected();
   const body = {
     pages:  parseInt(document.getElementById('sSaleFetchPages').value) || 3,
-    cities: cities.length ? cities : [],   // empty → api.py defaults to milano
+    cities: cities.length ? cities : [],
   };
   const maxPrice = document.getElementById('sSaleFetchMaxPrice').value;
   const minPrice = document.getElementById('sSaleFetchMinPrice').value;
@@ -4173,19 +5185,37 @@ document.getElementById('btnStartSaleFetch')?.addEventListener('click', async ()
   if (minRooms) body.min_rooms = parseInt(minRooms);
   const areas = saleAreaFetchMsd.getSelected();
   if (areas.length) body.areas = areas;
+
+  // Build Idealista prefs from same form inputs
+  const idealPrefs = { pages: body.pages || 3 };
+  if (maxPrice) idealPrefs.max_price = parseInt(maxPrice);
+  if (minSqm)   idealPrefs.min_sqm   = parseInt(minSqm);
+  if (minRooms) idealPrefs.min_rooms  = parseInt(minRooms);
+
   try {
-    const r = await fetch('/start-sale-fetch', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(body),
-    });
-    if (r.status === 409) { alert('Fetch already running.'); return; }
+    // Start both in parallel; tolerate 409 (already running) silently
+    const [r1, r2] = await Promise.all([
+      fetch('/start-sale-fetch', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body),
+      }),
+      fetch('/start-ideal-sale-fetch', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(idealPrefs),
+      }),
+    ]);
+    if (r1.status >= 500) alert('Could not start Immobiliare fetch (server error).');
+    if (r2.status >= 500) alert('Could not start Idealista fetch (server error).');
     await updateSaleFetchStatus();
   } catch (e) { alert('Could not start fetch: ' + e.message); }
 });
 
 document.getElementById('btnStopSaleFetch')?.addEventListener('click', async () => {
   try {
-    await fetch('/stop-sale-fetch', { method: 'POST' });
+    await Promise.all([
+      fetch('/stop-sale-fetch',        { method: 'POST' }),
+      fetch('/stop-ideal-sale-fetch',  { method: 'POST' }),
+    ]);
     await updateSaleFetchStatus();
   } catch (e) { alert('Could not stop: ' + e.message); }
 });
@@ -4209,7 +5239,7 @@ function switchTab(tab) {
     b.classList.toggle('active', b.dataset.tab === tab));
   if (tab === 'sales') {
     stopScannerPoll();
-    if (IS_LIVE) startSaleFetchPoll();   // fetch-panel polling requires local api.py
+    if (IS_LIVE) startSaleFetchPoll();      // Combined sale fetch polling (Immobiliare + Idealista)
     if (!ALL_SALE.length) loadSales();
   } else if (tab === 'rentals') {
     stopSaleFetchPoll();
@@ -4281,7 +5311,7 @@ const FASCIA_LABEL = { A: 'Fascia A — prime', B: 'Fascia B — semi-central', 
 // Populate the mobile drawer area searchable multiselects with the available
 // area list. Uses active scan areas when the local server is available,
 // otherwise falls back to all MILAN_AREAS so options always appear in static
-// (Netlify) mode.
+// (Cloudflare Pages) mode.
 function _populateDrawerAreaFromActive() {
   // Active areas from server, or every known Milan area as fallback
   const activeNames = (_settingsCurrentAreas || []).filter(a => a.active).length
@@ -4607,6 +5637,689 @@ const mapAreaMsd = buildMultiSelect({
   onChange: areas => { mapSelectedAreas = areas; if (typeof _mapRender === 'function') _mapRender(); },
 });
 
+// ── Score-ring entrance animation ─────────────────────────────────────────────
+// Each `.score-ring-wrap` carries `data-score-target` and a circle whose
+// `stroke-dashoffset` starts at full circumference. When the card enters
+// the viewport, animate the ring to its final offset and count up the number.
+const _reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const _scoreRingObserver = ('IntersectionObserver' in window) ? new IntersectionObserver(
+  (entries, obs) => {
+    entries.forEach(e => {
+      if (!e.isIntersecting) return;
+      const wrap = e.target;
+      obs.unobserve(wrap);
+      _animateScoreRing(wrap);
+    });
+  },
+  { threshold: 0.18 }
+) : null;
+
+function _animateScoreRing(wrap) {
+  const target = parseInt(wrap.dataset.scoreTarget || '0', 10) || 0;
+  const fill   = wrap.querySelector('.score-ring-fill');
+  const text   = wrap.querySelector('.score-ring-text');
+  if (!fill || !text) return;
+
+  if (_reduceMotion) {
+    const finalOff = parseFloat(fill.dataset.finalOffset || '0');
+    fill.setAttribute('stroke-dashoffset', finalOff);
+    text.textContent = target;
+    return;
+  }
+
+  // Trigger CSS transition on the ring (one frame later so the browser
+  // commits the initial state first).
+  requestAnimationFrame(() => {
+    const finalOff = parseFloat(fill.dataset.finalOffset || '0');
+    fill.setAttribute('stroke-dashoffset', finalOff);
+  });
+
+  // Number count-up — 520ms ease-out cubic
+  const start = performance.now();
+  const dur   = 520;
+  const tick  = (now) => {
+    const t = Math.min((now - start) / dur, 1);
+    const eased = 1 - Math.pow(1 - t, 3);
+    text.textContent = Math.round(target * eased);
+    if (t < 1) requestAnimationFrame(tick);
+    else      text.textContent = target;
+  };
+  requestAnimationFrame(tick);
+}
+
+function _observeScoreRings(rootEl) {
+  if (!_scoreRingObserver || !rootEl) return;
+  rootEl.querySelectorAll('.score-ring-wrap[data-score-target]').forEach(w => {
+    if (w.dataset.scoreObserved) return;
+    w.dataset.scoreObserved = '1';
+    _scoreRingObserver.observe(w);
+  });
+}
+
+// ── Cross-source de-duplication ───────────────────────────────────────────────
+// Same flat is often listed on Immobiliare AND Idealista (different IDs but
+// same flat). The fetchers de-dup within a single source; we collapse the
+// residual cross-source twins client-side at load time.
+//
+// Two passes are needed because the same flat sometimes has slightly
+// different lat/lng from each scraper (e.g. 45.4837 vs 45.4837043,
+// 9.1986 vs 9.1984046 — differs by ~15 m, falls into different 4-dp buckets):
+//   Pass 1: geo @ 4dp + sqm + rooms + price       — cheap, catches most
+//   Pass 2: normalized street address + sqm + rooms + price  — catches the rest
+
+function _normalizeAddress(addr, neighbourhood) {
+  if (!addr) return '';
+  let a = String(addr).toLowerCase().trim();
+  // Strip trailing ", <neighbourhood>, milano" or just ", milano"
+  if (neighbourhood) {
+    const suffix = ', ' + String(neighbourhood).toLowerCase() + ', milano';
+    if (a.endsWith(suffix)) a = a.slice(0, -suffix.length);
+  }
+  if (a.endsWith(', milano')) a = a.slice(0, -8);
+  return a.replace(/\s+/g, ' ').replace(/,\s*$/, '').trim();
+}
+
+function _dedupListings(list, isRental) {
+  if (!Array.isArray(list)) return list;
+  const priceField = isRental ? 'rent_mo' : 'price';
+
+  // Score function — pick the most informative entry from a duplicate group.
+  const FIELDS_FOR_COMPLETENESS = [
+    'thumbnail', 'condition', 'energy_class', 'floor_n', 'elevator',
+    'has_balcony', 'has_parking', 'photo_count', 'days_on_market',
+    'first_seen_date',
+  ];
+  function score(l) {
+    let s = 0;
+    for (const f of FIELDS_FOR_COMPLETENESS) {
+      if (l[f] != null && l[f] !== '') s += 1;
+    }
+    s += (l.score_total || 0) / 100;
+    if (l.source === 'immobiliare' || l.source === 'sale') s += 0.05;
+    return s;
+  }
+
+  function collapse(items, keyFn) {
+    const groups = new Map();
+    for (const l of items) {
+      const k = keyFn(l);
+      if (k == null) { groups.set(`__nokey__/${l.id}`, [l]); continue; }
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(l);
+    }
+    let collapsed = 0;
+    const out = [];
+    for (const grp of groups.values()) {
+      if (grp.length === 1) { out.push(grp[0]); continue; }
+      grp.sort((a, b) => score(b) - score(a));
+      const winner = grp[0];
+      // Preserve earliest first_seen_date so the New badge logic is honest.
+      const dates = grp.map(x => x.first_seen_date).filter(Boolean).sort();
+      if (dates.length) winner.first_seen_date = dates[0];
+      out.push(winner);
+      collapsed += grp.length - 1;
+    }
+    return { out, collapsed };
+  }
+
+  // Pass 1 — geo + sqm + rooms + price (catches exact-coord duplicates)
+  const r1 = collapse(list, l => {
+    if (l.latitude == null || l.longitude == null) return null;
+    return [
+      Math.round(l.latitude  * 1e4) / 1e4,
+      Math.round(l.longitude * 1e4) / 1e4,
+      l.sqm ?? '?', l.rooms ?? '?', l[priceField] ?? '?',
+    ].join('|');
+  });
+
+  // Pass 2 — normalized street address + sqm + rooms + price
+  // Catches cases where Immobiliare and Idealista geocoded the same flat to
+  // slightly-different lat/lng (e.g. 9.1986 vs 9.1984), or where the address
+  // is the only common identifier.
+  const r2 = collapse(r1.out, l => {
+    const norm = _normalizeAddress(l.address, l.neighbourhood);
+    if (!norm) return null;
+    return [norm, l.sqm ?? '?', l.rooms ?? '?', l[priceField] ?? '?'].join('|');
+  });
+
+  const totalCollapsed = r1.collapsed + r2.collapsed;
+  if (totalCollapsed > 0) {
+    console.log(
+      `[dedup] collapsed ${totalCollapsed} cross-source duplicate(s) ` +
+      `(geo: ${r1.collapsed}, address: ${r2.collapsed}) — ` +
+      `${r2.out.length} unique of ${list.length} input`
+    );
+  }
+  return r2.out;
+}
+
+// ── Toast utility ─────────────────────────────────────────────────────────────
+let _toastTimer = null;
+function showToast(msg, ms = 2400) {
+  let el = document.querySelector('.lume-toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.className = 'lume-toast';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  // Force reflow so the transition fires every time
+  void el.offsetWidth;
+  el.classList.add('show');
+  if (_toastTimer) clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('show'), ms);
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function formatRelativeTime(iso) {
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (diff < 60)    return 'just now';
+  if (diff < 3600)  return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
+// ── Collections module (per-user, localStorage-backed) ───────────────────────
+const Collections = {
+  getAll() { return Storage.get('collections', []) || []; },
+
+  create(name) {
+    const all = this.getAll();
+    const col = {
+      id: 'col_' + Math.random().toString(36).slice(2, 10),
+      name: (name || 'Untitled').slice(0, 60),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      listing_ids: [],
+    };
+    all.unshift(col);
+    Storage.set('collections', all);
+    return col;
+  },
+
+  addListing(collectionId, listingId) {
+    const all = this.getAll();
+    const col = all.find(c => c.id === collectionId);
+    if (!col) return false;
+    if (col.listing_ids.includes(String(listingId))) return false;
+    if (col.listing_ids.length >= 100) return 'full';
+    col.listing_ids.push(String(listingId));
+    col.updated_at = new Date().toISOString();
+    Storage.set('collections', all);
+    return true;
+  },
+
+  removeListing(collectionId, listingId) {
+    const all = this.getAll();
+    const col = all.find(c => c.id === collectionId);
+    if (!col) return false;
+    col.listing_ids = col.listing_ids.filter(id => String(id) !== String(listingId));
+    col.updated_at = new Date().toISOString();
+    Storage.set('collections', all);
+    return true;
+  },
+
+  delete(collectionId) {
+    Storage.set('collections', this.getAll().filter(c => c.id !== collectionId));
+  },
+
+  rename(collectionId, newName) {
+    const all = this.getAll();
+    const col = all.find(c => c.id === collectionId);
+    if (!col) return false;
+    col.name = String(newName).slice(0, 60);
+    col.updated_at = new Date().toISOString();
+    Storage.set('collections', all);
+    return true;
+  },
+
+  isInCollection(collectionId, listingId) {
+    const col = this.getAll().find(c => c.id === collectionId);
+    return col ? col.listing_ids.includes(String(listingId)) : false;
+  },
+
+  isInAnyCollection(listingId) {
+    return this.getAll().some(c => c.listing_ids.includes(String(listingId)));
+  },
+
+  encodeForShare(collectionId) {
+    const col = this.getAll().find(c => c.id === collectionId);
+    if (!col || !col.listing_ids.length) return null;
+    const payload = JSON.stringify({ n: col.name, i: col.listing_ids });
+    return btoa(unescape(encodeURIComponent(payload)))
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  },
+
+  decodeFromUrl(encoded) {
+    try {
+      let b64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
+      while (b64.length % 4) b64 += '=';
+      const data = JSON.parse(decodeURIComponent(escape(atob(b64))));
+      if (!data.n || !Array.isArray(data.i)) return null;
+      return { name: String(data.n).slice(0, 60), listing_ids: data.i.map(String) };
+    } catch (e) { return null; }
+  },
+
+  buildShareUrl(collectionId) {
+    const encoded = this.encodeForShare(collectionId);
+    return encoded ? `${location.origin}${location.pathname}?c=${encoded}` : null;
+  },
+};
+
+// ── Share / collection menu — used by both rentals and sales cards ───────────
+async function shareListing(listingId, ev) {
+  if (ev) ev.stopPropagation();
+  // Look up the listing in either dataset (rentals first, then sales).
+  // Use the lexically-scoped ALL_RENT / ALL_SALE — they're defined as `let`
+  // in this script, not attached to `window`.
+  const idStr = String(listingId);
+  const all   = (typeof ALL_RENT !== 'undefined' ? ALL_RENT : []).concat(
+                 typeof ALL_SALE !== 'undefined' ? ALL_SALE : []);
+  const listing = all.find(l => String(l.id) === idStr);
+
+  // Prefer the original source URL (Immobiliare or Idealista); fall back to
+  // the Lume deep-link only when the listing has no source URL stored.
+  const sourceUrl = listing && listing.url;
+  const url = sourceUrl
+    || `${location.origin}${location.pathname}?l=${encodeURIComponent(listingId)}`;
+
+  const sourceLbl = listing
+    ? (listing.source && String(listing.source).startsWith('idealista')
+       ? 'Idealista'
+       : 'Immobiliare.it')
+    : '';
+  const title = listing
+    ? `${listing.neighbourhood || 'Milan listing'} — Lume score ${listing.score_total ?? '?'}`
+    : 'Lume listing';
+  const text = listing
+    ? `Lume score ${listing.score_total ?? '?'}/100${sourceLbl ? ' · ' + sourceLbl : ''}`
+    : 'Shared via Lume';
+
+  if (navigator.share && /Mobi|Android|iPhone/i.test(navigator.userAgent)) {
+    try { await navigator.share({ title, url, text }); return; }
+    catch (e) { /* user cancelled — fall through to clipboard */ }
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast(sourceLbl ? `${sourceLbl} link copied` : 'Link copied to clipboard');
+  } catch {
+    prompt('Copy this link:', url);
+  }
+}
+
+let _outsideClickHandler = null;
+function closeCollectionMenu() {
+  const m = document.getElementById('active-collection-menu');
+  if (m) m.remove();
+  if (_outsideClickHandler) {
+    document.removeEventListener('click', _outsideClickHandler, true);
+    _outsideClickHandler = null;
+  }
+}
+
+function openCollectionMenu(listingId, ev) {
+  if (ev) ev.stopPropagation();
+  closeCollectionMenu();
+
+  const collections = Collections.getAll();
+  const trigger = (ev && ev.currentTarget) || document.activeElement;
+  const rect = trigger.getBoundingClientRect();
+
+  const menu = document.createElement('div');
+  menu.className = 'collection-menu';
+  menu.id = 'active-collection-menu';
+
+  const items = [];
+  if (!collections.length) {
+    items.push(`<div class="collection-empty">No collections yet</div>`);
+  } else {
+    collections.forEach(col => {
+      const inCol = Collections.isInCollection(col.id, listingId);
+      items.push(`
+        <button class="collection-item${inCol ? ' checked' : ''}"
+                onclick="toggleListingInCollection('${col.id}', '${escapeHtml(String(listingId))}', this)">
+          <span class="collection-check">${inCol ? '✓' : ''}</span>
+          <span class="collection-name">${escapeHtml(col.name)}</span>
+          <span class="collection-count">${col.listing_ids.length}</span>
+        </button>`);
+    });
+  }
+  items.push(`
+    <button class="collection-item collection-create"
+            onclick="createCollectionFromMenu('${escapeHtml(String(listingId))}')">
+      <span class="collection-check">+</span>
+      <span class="collection-name">Create new collection</span>
+    </button>`);
+
+  menu.innerHTML = items.join('');
+  document.body.appendChild(menu);
+
+  // Position above or below the trigger depending on viewport space
+  const menuHeight = Math.min(collections.length * 44 + 60, 320);
+  const fitsBelow = (window.innerHeight - rect.bottom) > menuHeight + 10;
+  menu.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 268))}px`;
+  menu.style.top  = fitsBelow
+    ? `${rect.bottom + 6}px`
+    : `${rect.top - menuHeight - 6}px`;
+
+  _outsideClickHandler = (e) => {
+    if (!menu.contains(e.target)) closeCollectionMenu();
+  };
+  setTimeout(() => document.addEventListener('click', _outsideClickHandler, true), 0);
+}
+
+function toggleListingInCollection(collectionId, listingId, btnEl) {
+  const wasIn = Collections.isInCollection(collectionId, listingId);
+  if (wasIn) {
+    Collections.removeListing(collectionId, listingId);
+    btnEl.classList.remove('checked');
+    btnEl.querySelector('.collection-check').textContent = '';
+    showToast('Removed from collection');
+  } else {
+    const result = Collections.addListing(collectionId, listingId);
+    if (result === 'full') {
+      showToast('Collections are capped at 100 listings to keep share links short.');
+      return;
+    }
+    btnEl.classList.add('checked');
+    btnEl.querySelector('.collection-check').textContent = '✓';
+    showToast('Added to collection');
+  }
+  updateBookmarkIcon(listingId);
+  const newCount = Collections.getAll().find(c => c.id === collectionId)?.listing_ids.length || 0;
+  btnEl.querySelector('.collection-count').textContent = newCount;
+}
+
+function createCollectionFromMenu(listingId) {
+  const name = prompt('Collection name:', '');
+  if (!name || !name.trim()) return;
+  const col = Collections.create(name.trim());
+  Collections.addListing(col.id, listingId);
+  updateBookmarkIcon(listingId);
+  closeCollectionMenu();
+  showToast(`Created "${col.name}" and added listing`);
+}
+
+function updateBookmarkIcon(listingId) {
+  const isInAny = Collections.isInAnyCollection(listingId);
+  document.querySelectorAll(`.btn-bookmark[data-listing-id="${CSS.escape(String(listingId))}"]`)
+    .forEach(btn => btn.classList.toggle('active', isInAny));
+}
+
+function refreshAllBookmarkIcons() {
+  document.querySelectorAll('.btn-bookmark[data-listing-id]').forEach(btn => {
+    const id = btn.getAttribute('data-listing-id');
+    btn.classList.toggle('active', Collections.isInAnyCollection(id));
+  });
+}
+
+// ── Avatar dropdown menu ──────────────────────────────────────────────────────
+let _avatarMenuOutside = null;
+function closeAvatarMenu() {
+  const m = document.getElementById('active-avatar-menu');
+  if (m) m.remove();
+  if (_avatarMenuOutside) {
+    document.removeEventListener('click', _avatarMenuOutside, true);
+    _avatarMenuOutside = null;
+  }
+}
+
+function showUserMenu(ev) {
+  if (ev) ev.stopPropagation();
+  closeAvatarMenu();
+
+  const avatar = document.getElementById('user-avatar');
+  const rect = avatar.getBoundingClientRect();
+  const collectionsCount = Collections.getAll().length;
+  const userName = (typeof Auth !== 'undefined' && Auth.userName) ? Auth.userName() : 'User';
+
+  const menu = document.createElement('div');
+  menu.className = 'avatar-menu';
+  menu.id = 'active-avatar-menu';
+  menu.innerHTML = `
+    <div class="avatar-menu-header">Signed in as <strong>${escapeHtml(userName)}</strong></div>
+    <button class="avatar-menu-item" onclick="closeAvatarMenu(); openCollectionsDrawer();">
+      📁 My collections <span class="badge">${collectionsCount}</span>
+    </button>
+    <button class="avatar-menu-item" onclick="closeAvatarMenu(); Auth.signOut();">
+      🚪 Sign out
+    </button>`;
+  document.body.appendChild(menu);
+
+  menu.style.right = `${Math.max(8, window.innerWidth - rect.right)}px`;
+  menu.style.top   = `${rect.bottom + 8}px`;
+
+  _avatarMenuOutside = (e) => {
+    if (!menu.contains(e.target) && e.target !== avatar) closeAvatarMenu();
+  };
+  setTimeout(() => document.addEventListener('click', _avatarMenuOutside, true), 0);
+}
+
+// ── Collections drawer ────────────────────────────────────────────────────────
+function openCollectionsDrawer() {
+  let backdrop = document.getElementById('collections-drawer-backdrop');
+  let drawer   = document.getElementById('collections-drawer');
+  if (!drawer) {
+    backdrop = document.createElement('div');
+    backdrop.id = 'collections-drawer-backdrop';
+    backdrop.className = 'collections-drawer-backdrop';
+    backdrop.onclick = closeCollectionsDrawer;
+    document.body.appendChild(backdrop);
+
+    drawer = document.createElement('aside');
+    drawer.id = 'collections-drawer';
+    drawer.className = 'collections-drawer';
+    drawer.innerHTML = `
+      <div class="drawer-header">
+        <h2>My collections</h2>
+        <button class="drawer-close" onclick="closeCollectionsDrawer()" aria-label="Close">×</button>
+      </div>
+      <div class="drawer-body" id="collections-list"></div>
+      <div class="drawer-footer">
+        <button class="btn-create-collection" onclick="createCollectionFromDrawer()">
+          + Create new collection
+        </button>
+      </div>`;
+    document.body.appendChild(drawer);
+  }
+  renderCollectionsList();
+  requestAnimationFrame(() => {
+    backdrop.classList.add('open');
+    drawer.classList.add('open');
+  });
+  document.addEventListener('keydown', _drawerEscHandler);
+}
+
+function closeCollectionsDrawer() {
+  const backdrop = document.getElementById('collections-drawer-backdrop');
+  const drawer   = document.getElementById('collections-drawer');
+  if (backdrop) backdrop.classList.remove('open');
+  if (drawer) drawer.classList.remove('open');
+  document.removeEventListener('keydown', _drawerEscHandler);
+  setTimeout(() => {
+    backdrop?.remove();
+    drawer?.remove();
+  }, 280);
+}
+function _drawerEscHandler(e) { if (e.key === 'Escape') closeCollectionsDrawer(); }
+
+function renderCollectionsList() {
+  const list = document.getElementById('collections-list');
+  if (!list) return;
+  const all = Collections.getAll();
+  if (!all.length) {
+    list.innerHTML = `
+      <div class="collections-empty">
+        <div class="empty-icon">📁</div>
+        <div class="empty-title">No collections yet</div>
+        <div class="empty-text">Save listings into collections to organise them and share with friends.</div>
+      </div>`;
+    return;
+  }
+  list.innerHTML = all.map(col => `
+    <div class="collection-card" data-id="${col.id}">
+      <div class="collection-card-main">
+        <div class="collection-card-name" onclick="renameCollectionInline('${col.id}', this)">${escapeHtml(col.name)}</div>
+        <div class="collection-card-meta">
+          ${col.listing_ids.length} listing${col.listing_ids.length === 1 ? '' : 's'}
+          · updated ${formatRelativeTime(col.updated_at)}
+        </div>
+      </div>
+      <div class="collection-card-actions">
+        <button onclick="shareCollection('${col.id}')" title="Share collection" aria-label="Share">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+            <line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/>
+          </svg>
+        </button>
+        <button onclick="viewCollection('${col.id}')" title="View collection" aria-label="View">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+          </svg>
+        </button>
+        <button class="danger" onclick="deleteCollectionConfirm('${col.id}')" title="Delete collection" aria-label="Delete">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>
+          </svg>
+        </button>
+      </div>
+    </div>`).join('');
+}
+
+async function shareCollection(collectionId) {
+  const url = Collections.buildShareUrl(collectionId);
+  if (!url) { showToast('Collection is empty — add listings first'); return; }
+  const col = Collections.getAll().find(c => c.id === collectionId);
+  if (navigator.share && /Mobi|Android|iPhone/i.test(navigator.userAgent)) {
+    try { await navigator.share({ title: `Lume — ${col.name}`, url, text: 'Lume collection' }); return; }
+    catch (e) {}
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast('Share link copied to clipboard');
+  } catch {
+    prompt('Copy this link:', url);
+  }
+}
+
+function viewCollection(collectionId) {
+  const url = Collections.buildShareUrl(collectionId);
+  if (!url) { showToast('Collection is empty'); return; }
+  closeCollectionsDrawer();
+  location.href = url;
+}
+
+function deleteCollectionConfirm(collectionId) {
+  const col = Collections.getAll().find(c => c.id === collectionId);
+  if (!col) return;
+  if (confirm(`Delete "${col.name}"? This cannot be undone.`)) {
+    Collections.delete(collectionId);
+    renderCollectionsList();
+    refreshAllBookmarkIcons();
+    showToast('Collection deleted');
+  }
+}
+
+function createCollectionFromDrawer() {
+  const name = prompt('Collection name:', '');
+  if (!name || !name.trim()) return;
+  Collections.create(name.trim());
+  renderCollectionsList();
+  showToast('Collection created');
+}
+
+function renameCollectionInline(collectionId, el) {
+  const current = el.textContent;
+  const newName = prompt('Rename collection:', current);
+  if (newName && newName.trim() && newName !== current) {
+    Collections.rename(collectionId, newName.trim());
+    renderCollectionsList();
+  }
+}
+
+// ── Shared-collection viewer (?c=...) ────────────────────────────────────────
+function handleSharedCollectionParam() {
+  const params = new URLSearchParams(location.search);
+  const encoded = params.get('c');
+  if (!encoded) return false;
+  const decoded = Collections.decodeFromUrl(encoded);
+  if (!decoded) {
+    showToast('Shared collection link is invalid');
+    return false;
+  }
+  window.sharedCollection = decoded;
+  return true;
+}
+
+function exitSharedCollection() {
+  window.sharedCollection = null;
+  const url = new URL(location);
+  url.searchParams.delete('c');
+  history.replaceState({}, '', url);
+  document.querySelector('.shared-collection-banner')?.remove();
+  // Re-render whatever tab is active so the dataset un-filters
+  if (typeof renderRentals === 'function') renderRentals();
+  if (typeof renderSales === 'function')   renderSales();
+}
+
+function renderSharedCollectionBanner(visibleCount, totalRequested) {
+  // Place the banner above the active grid
+  document.querySelectorAll('.shared-collection-banner').forEach(b => b.remove());
+  if (!window.sharedCollection) return;
+  const sc = window.sharedCollection;
+  const isLoggedOut = !(typeof Auth !== 'undefined' && Auth.user);
+  const cta = isLoggedOut
+    ? `· <a href="#" onclick="Auth.openSignIn();return false;">Sign up to see all of Milan with Lume scoring →</a>`
+    : '';
+  const missing = sc.listing_ids.length - totalRequested;
+  const missingNote = missing > 0
+    ? `<div class="banner-sub" style="color:var(--amber)">${missing} listing${missing===1?'':'s'} in this collection ${missing===1?'is':'are'} no longer available.</div>`
+    : '';
+  const banner = document.createElement('div');
+  banner.className = 'shared-collection-banner';
+  banner.innerHTML = `
+    <div class="banner-icon">📁</div>
+    <div class="banner-text">
+      <div class="banner-title">Shared collection: <strong>${escapeHtml(sc.name)}</strong></div>
+      <div class="banner-sub">${visibleCount} listing${visibleCount===1?'':'s'} ${cta}</div>
+      ${missingNote}
+    </div>
+    <button class="banner-clear" onclick="exitSharedCollection()">Show all listings</button>`;
+
+  // Insert above whichever grid is currently visible
+  const target = document.querySelector('#rentalsView:not([hidden]) .grid')
+              || document.querySelector('#salesView:not([hidden]) .grid');
+  if (target && target.parentNode) {
+    target.parentNode.insertBefore(banner, target);
+  } else {
+    document.body.prepend(banner);
+  }
+}
+
+// ── ?l= deep-link to a single listing ────────────────────────────────────────
+function handleSharedListingParam() {
+  const params = new URLSearchParams(location.search);
+  const id = params.get('l');
+  if (!id) return;
+  // Defer until the cards have rendered
+  const tryHighlight = (attemptsLeft = 20) => {
+    const card = document.querySelector(`.card[data-listing-id="${CSS.escape(id)}"]`);
+    if (card) {
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      card.classList.add('shared-highlight');
+      setTimeout(() => card.classList.remove('shared-highlight'), 3500);
+    } else if (attemptsLeft > 0) {
+      setTimeout(() => tryHighlight(attemptsLeft - 1), 250);
+    }
+  };
+  setTimeout(tryHighlight, 400);
+}
+
 // ── Rentals — global state ────────────────────────────────────────────────────
 let ALL_RENT          = [];
 let rentFasciaRanges  = {};
@@ -4659,14 +6372,197 @@ const ENERGY_RANK = { G:1, F:2, E:3, D:4, C:5, B:6, A1:7, A2:8, A3:9, A4:10, A:7
 const ENERGY_MIN_RANK = { C: 5, B: 6, A: 7 };
 
 // ── New listing badge helpers ──────────────────────────────────────────────────
+// "New" badge disappears 3 days after the listing was first seen by our scanner.
 function isNew(l) {
   if (!l.first_seen_date) return false;
   const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - 7);
+  cutoff.setDate(cutoff.getDate() - 3);
   return new Date(l.first_seen_date) >= cutoff;
 }
 function newBadgeHtml(l) {
   return isNew(l) ? '<span class="new-badge">New</span>' : '';
+}
+
+// Format first_seen_date as "May 2, 2026 (2 days ago)" for the data-points panel.
+function firstSeenLabel(l) {
+  const fsd = l && l.first_seen_date;
+  if (!fsd) return null;
+  const d = new Date(fsd);
+  if (isNaN(d.getTime())) return fsd;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dd = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const days = Math.round((today - dd) / 86400000);
+  const fmt = d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  const rel = days === 0 ? 'today'
+            : days === 1 ? 'yesterday'
+            : days < 0   ? `in ${Math.abs(days)}d`
+            : `${days} days ago`;
+  return `${fmt} (${rel})`;
+}
+
+// Up to 3 explanatory bullets beneath the why-sentence callout.
+// Each bullet carries a component tag — Price / Property / Location / Penalty —
+// matching the rows in the score-breakdown panel. Sentiment governs the icon:
+// ✓ positive (strength), ⚠ negative (weakness), • neutral (informational).
+// Reads `listing.score_reasons` (populated by explain.py at score time).
+const _reasonIconMap = { positive: '✓', negative: '⚠', neutral: '•' };
+
+function reasonsBulletsHtml(l) {
+  const reasons = Array.isArray(l && l.score_reasons) ? l.score_reasons : [];
+  if (!reasons.length) return '';
+  return `<ul class="callout-reasons">${reasons.map(r => {
+    const sentiment = (_reasonIconMap[r.sentiment]) ? r.sentiment : 'negative';
+    const icon      = _reasonIconMap[sentiment];
+    const component = (r.component || '').toString();
+    const cKey      = component.toLowerCase();
+    return `
+      <li class="callout-reason callout-reason-${sentiment}">
+        <span class="reason-icon">${icon}</span>
+        ${component
+          ? `<span class="reason-component reason-component-${escapeHtml(cKey)}">${escapeHtml(component)}</span>`
+          : ''}
+        <span class="reason-text">${escapeHtml(r.text || '')}</span>
+      </li>`;
+  }).join('')}</ul>`;
+}
+
+// Combined specs pill: 🛏 N · 🛁 N · Xm²
+// Falls back gracefully when fields are missing.
+function specsPillHtml(l) {
+  const parts = [];
+  if (l.bedrooms !== null && l.bedrooms !== undefined) {
+    const label = l.bedrooms === 0 ? 'studio' : `${l.bedrooms}`;
+    parts.push(`🛏 ${label}`);
+  }
+  if (l.bathrooms) parts.push(`🛁 ${l.bathrooms}`);
+  if (l.sqm)        parts.push(`${l.sqm}m²`);
+  if (parts.length === 0) return '';
+  return `<span class="specs-pill">${parts.join(' · ')}</span>`;
+}
+
+// ── Card layout helpers (Fixes 1, 2, 4) ───────────────────────────────────────
+
+// 3 horizontally-scrollable stat pills (metro · floor · comps delta)
+function statPillsHtml(l, isRental) {
+  const pills = [];
+
+  // Pill 1 — Metro: 🚇 Cadorna · 6 min M1
+  // Always show walking time, not distance. When metro_walk_min is missing
+  // (≈18 % of sale listings — geo enrichment didn't compute it), derive it
+  // from metro_nearest_dist_m using a 70 m/min walking pace, which matches
+  // the rest of our routed-time data within ±1 min.
+  let walkMin = (l.metro_walk_min != null) ? l.metro_walk_min : null;
+  if (walkMin == null && l.metro_nearest_dist_m != null) {
+    walkMin = Math.max(1, Math.round(l.metro_nearest_dist_m / 70));
+  }
+  if (walkMin != null) {
+    const color = walkMin <= 5  ? 'var(--green-deep)'
+                : walkMin <= 12 ? 'var(--amber)'
+                : 'var(--text-secondary)';
+    const name = l.metro_nearest_name ? `${l.metro_nearest_name} · ` : '';
+    const line = l.metro_nearest_line ? ` ${l.metro_nearest_line}` : '';
+    const distHint = (l.metro_walk_min == null && l.metro_nearest_dist_m != null)
+      ? ` (~${Math.round(l.metro_nearest_dist_m)}m)` : '';
+    const tip  = l.metro_nearest_name
+      ? `${l.metro_nearest_name}${l.metro_nearest_line ? ' (' + l.metro_nearest_line + ')' : ''} · ${walkMin} min walk${distHint}`
+      : `${walkMin} min walk to nearest metro${distHint}`;
+    pills.push(`<span class="stat-pill" style="color:${color}" title="${tip.replace(/"/g,'&quot;')}">🚇 ${name}${walkMin} min${line}</span>`);
+  } else {
+    pills.push(`<span class="stat-pill" style="color:var(--text-muted)">🚇 —</span>`);
+  }
+
+  // Pill 2 — Floor + lift, falling back to rooms / lift when floor is unknown.
+  // Idealista's scraper occasionally misses floor entirely (~6 % of sales);
+  // showing an empty `🏢 —` reads as a bug. Fall back to whatever's useful.
+  const floorLbl = (typeof _floorLabel === 'function' ? _floorLabel(l) : null)
+                || (l.floor_n != null ? `${l.floor_n}° piano` : null);
+  if (floorLbl) {
+    const fn = l.floor_n;
+    const fcol = fn != null && fn < 0   ? 'var(--coral)'
+              : fn === 0                 ? 'var(--amber)'
+              : 'var(--text-primary)';
+    const lift = l.elevator === true ? ' 🛗' : '';
+    pills.push(`<span class="stat-pill" style="color:${fcol}">🏢 ${floorLbl}${lift}</span>`);
+  } else if (l.elevator === true || l.elevator === false) {
+    // Floor unknown but lift state known — still useful
+    const liftLabel = l.elevator === true ? '🛗 With lift' : '🚫 No lift';
+    pills.push(`<span class="stat-pill" style="color:var(--text-secondary)">${liftLabel}</span>`);
+  } else if (l.rooms != null) {
+    // Last fallback: rooms count
+    const roomsLabel = l.rooms === 1 ? '1 room' : `${l.rooms} rooms`;
+    pills.push(`<span class="stat-pill" style="color:var(--text-secondary)">🛏 ${roomsLabel}</span>`);
+  }
+  // If floor + lift + rooms are all unknown, simply omit the middle pill
+  // — the row stays clean rather than displaying a placeholder.
+
+  // Pill 3 — vs comps delta
+  const delta = isRental ? l.comps_delta_pct : l.comps_sale_delta_pct;
+  if (delta != null) {
+    const sign = delta < 0 ? '' : '+';
+    const col = delta < -5 ? 'var(--green-deep)'
+              : delta >  5 ? 'var(--coral)'
+              : 'var(--amber)';
+    pills.push(`<span class="stat-pill" style="color:${col};font-weight:700">${sign}${Number(delta).toFixed(1)}% comps</span>`);
+  }
+
+  return `<div class="stat-pills">${pills.join('')}</div>`;
+}
+
+// Short comps context: "50 comps · B21" or "133 comps · B13 · adj."
+function compsContextStr(l, isRental) {
+  const n   = isRental ? (l.comps_n || 0) : (l.comps_sale_n || 0);
+  const z   = l.omi_zona || '';
+  const adj = isRental ? !!l.comps_adjusted : !!l.comps_sale_adjusted;
+  const parts = [`${n} comps`];
+  if (z)   parts.push(z);
+  if (adj) parts.push('adj.');
+  return parts.join(' · ');
+}
+
+// Methodology tooltip — full description on hover (kept for ⓘ icon)
+function compsMethodTip(l, isRental) {
+  const src    = (isRental ? l.comps_source : l.comps_sale_source) || '';
+  const cgroup = isRental ? l.comps_condition_group : l.comps_sale_condition_group;
+  const adj    = isRental ? !!l.comps_adjusted : !!l.comps_sale_adjusted;
+  const zona   = l.omi_zona || '?';
+  const fascia = l.omi_fascia || '?';
+  if (src === 'zone_stratified' && cgroup && cgroup !== 'unknown')
+    return `Comps from same OMI zone (${zona}) and same condition group (${cgroup}). Most reliable.`;
+  if (src === 'zone_any_condition')
+    return adj
+      ? `Comps include listings of different renovation states; prices adjusted to approximate ${cgroup || 'this'} condition before computing the median.`
+      : `Comps from OMI zone ${zona} with mixed conditions (target condition unknown — no adjustment).`;
+  if (src === 'radius_800m_same_fascia')
+    return `Zone too sparse — falling back to 800m radius within OMI fascia ${fascia}.`;
+  if (src === 'fascia_fallback')
+    return `No nearby comps — using full OMI fascia ${fascia} as benchmark.`;
+  if (src.startsWith('comps_')) return `Comps within ${src.replace('comps_','')}m radius.`;
+  if (src === 'omi_zone')       return `OMI zone benchmark (no per-listing comps).`;
+  if (src === 'omi_only')       return `No live comps — priced against OMI reference.`;
+  return '';
+}
+
+// Single-line comps row: [N comps · ZONE]  [━━━●━━]  [-19.9%]
+function compsRowHtml(l, isRental) {
+  const dp = isRental ? l.comps_delta_pct : l.comps_sale_delta_pct;
+  if (dp == null) return '';
+  const dpN  = Number(dp);
+  const pos  = Math.max(0, Math.min(100, Math.round((dpN + 20) / 40 * 100)));
+  const col  = dpN <= -5 ? 'var(--green-deep)'
+            : dpN >=  5 ? 'var(--coral)'
+            : 'var(--amber)';
+  const sign = dpN > 0 ? '+' : '';
+  const ctxText = compsContextStr(l, isRental);
+  const tip     = compsMethodTip(l, isRental).replace(/"/g, '&quot;');
+  return `<div class="comps-row">
+    <span class="comps-context" title="${tip}">${ctxText} <span class="comps-context-info">ⓘ</span></span>
+    <div class="comps-track-wrap" style="color:${col}">
+      <div class="comps-track-gradient"></div>
+      <div class="comps-track-dot" style="left:${pos}%"></div>
+    </div>
+    <span class="comps-delta-label" style="color:${col}">${sign}${dpN.toFixed(1)}%</span>
+  </div>`;
 }
 
 // ── Rentals — card renderer ───────────────────────────────────────────────────
@@ -4772,11 +6668,12 @@ function renderRentalCard(l) {
     return `<div class="dg-row"><span class="dg-lbl">${lbl}</span><span class="dg-val${cs}">${dv}</span></div>`;
   };
   const detailsHtml = `
-    <button class="btn-details-toggle" data-details-toggle>Show data points <span class="details-caret">▾</span></button>
+    <button class="btn-details-toggle" data-details-toggle>How Lume scored this <span class="details-caret">▾</span></button>
     <div class="card-details" data-details-panel>
       <div class="details-section-title">🏠 Physical</div>
       <div class="details-grid">
         ${_dRow('Rooms', l.rooms != null ? l.rooms + ' room' + (l.rooms !== 1 ? 's' : '') : null, l.rooms == null ? 'muted' : '')}
+        ${_dRow('Bedrooms', l.bedrooms != null ? (l.bedrooms === 0 ? 'Studio' : l.bedrooms + ' bed' + (l.bedrooms !== 1 ? 's' : '')) : null, l.bedrooms == null ? 'muted' : '')}
         ${(() => { const lbl = _floorLabel(l); const fn = l.floor_n; const cls = fn == null ? 'muted' : fn < 0 ? 'bad' : fn >= 3 ? 'good' : ''; return _dRow('Floor', lbl, cls); })()}
         ${_dRow('Elevator', l.elevator === true ? 'Yes ✓' : l.elevator === false ? 'No' : null, l.elevator === true ? 'good' : l.elevator == null ? 'muted' : '')}
         ${_dRow('External', l.is_external === true ? 'Yes ✓' : l.is_external === false ? 'No' : null, l.is_external === true ? 'good' : l.is_external == null ? 'muted' : '')}
@@ -4789,6 +6686,7 @@ function renderRentalCard(l) {
         ${_dRow('Furnished', l.furnished, l.furnished ? '' : 'muted')}
         ${_dRow('Photos', l.photo_count != null ? l.photo_count + ' photos' : null, l.photo_count >= 8 ? 'good' : l.photo_count > 0 ? '' : 'muted')}
         ${_dRow('Days listed', l.days_on_market != null ? l.days_on_market + 'd' : null, l.days_on_market != null && l.days_on_market > 60 ? 'bad' : l.days_on_market == null ? 'muted' : '')}
+        ${_dRow('First seen', firstSeenLabel(l), l.first_seen_date ? '' : 'muted')}
       </div>
       <div class="details-section-title" style="margin-top:6px">🌍 Geospatial</div>
       <div class="details-grid">
@@ -4815,7 +6713,7 @@ function renderRentalCard(l) {
       </div>
     </div>`;
 
-  // Comps-based price alert (only shown when listing is priced above nearby comps)
+  // Lume's price alert (only shown when listing is priced above similar flats nearby)
   const compsSugHtml = (() => {
     const dp  = l.comps_delta_pct;
     const med = l.comps_median;
@@ -4828,19 +6726,21 @@ function renderRentalCard(l) {
     return `<div class="suggested-rent-row sug-warn">
       <span class="sug-label">⚠ Comps suggest:</span>
       <span class="sug-val" style="color:var(--yellow);font-weight:700">€${fmt(compsSugRent)}/mo</span>
-      <span class="sug-label">(+€${fmt(diff)} vs ${l.comps_n || 0} nearby comps)</span>
+      <span class="sug-label">(+€${fmt(diff)} vs ${l.comps_n || 0} similar flats nearby)</span>
     </div>`;
   })();
 
   // ── Variant A: Calm Hierarchy ─────────────────────────────────────────────
   const score     = l.score_total ?? 0;
-  const ringColor = sc === 'high' ? '#15803D' : sc === 'mid' ? '#D97706' : '#DC2626';
-  const C         = 2 * Math.PI * 22;   // circumference for r=22, size=48
+  const ringColor = sc === 'high' ? '#2A7A5A' : sc === 'mid' ? '#E8922A' : '#E05C4B';
+  const C         = 2 * Math.PI * 23;   // r=23 for size=52
   const ringOffset = C * (1 - Math.max(0, Math.min(100, score)) / 100);
 
-  // SVG score ring (replaces filled circle badge)
+  // SVG score ring (animated count-up via IntersectionObserver — see globals)
   const scoreRingHtml = `
     <div class="score-ring-wrap"
+         data-score-target="${score}"
+         data-score-color="${ringColor}"
          data-sc-total="${l.score_total ?? ''}"
          data-sc-price="${l.score_price ?? ''}"
          data-sc-prop="${l.score_property ?? l.score_physical ?? ''}"
@@ -4856,51 +6756,39 @@ function renderRentalCard(l) {
          data-w-loc="${scoreSettings.w_location ?? 0.20}"
          data-w-pen="${scoreSettings.w_penalty ?? 0.10}"
          data-sc-omi-ctx="${l.vs_omi_label ? 'OMI: ' + l.vs_omi_label : ''}">
-      <svg width="48" height="48" style="display:block;transform:rotate(-90deg)">
-        <circle cx="24" cy="24" r="22" fill="none" stroke="var(--border)" stroke-width="4"/>
-        <circle cx="24" cy="24" r="22" fill="none" stroke="${ringColor}" stroke-width="4"
-          stroke-linecap="round"
-          stroke-dasharray="${C.toFixed(2)}" stroke-dashoffset="${ringOffset.toFixed(2)}"/>
+      <svg width="52" height="52" viewBox="0 0 52 52" style="display:block">
+        <circle cx="26" cy="26" r="23" fill="none" stroke="#EDEAE4" stroke-width="3.5"/>
+        <circle class="score-ring-fill" cx="26" cy="26" r="23" fill="none"
+                stroke="${ringColor}" stroke-width="3.5"
+                stroke-linecap="round"
+                stroke-dasharray="${C.toFixed(2)}"
+                stroke-dashoffset="${C.toFixed(2)}"
+                transform="rotate(-90 26 26)"
+                data-final-offset="${ringOffset.toFixed(2)}"/>
       </svg>
-      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-                  font-weight:800;font-size:15px;letter-spacing:-0.3px;color:${ringColor}">${score}</div>
+      <div class="score-ring-text"
+           style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+                  font-weight:800;font-size:17px;letter-spacing:-0.3px;color:${ringColor};font-family:var(--font)">0</div>
     </div>`;
 
   // Gem chip on photo (replaces header badge)
   const gemPhotoChip = l.hidden_gem
-    ? `<div class="gem-photo-chip chip-hidden"><span style="font-size:13px">💎</span><span>Hidden gem</span></div>`
+    ? `<div class="gem-photo-chip chip-hidden"><span style="font-size:13px">💎</span><span>Hidden Gem</span></div>`
     : l.good_value
-    ? `<div class="gem-photo-chip chip-good"><span style="font-size:13px">💰</span><span>Great Value!</span></div>`
+    ? `<div class="gem-photo-chip chip-good"><span style="font-size:13px">💰</span><span>Great Value</span></div>`
     : '';
 
   // Photo section
-  const photoSection = (l.thumbnail || gemPhotoChip)
-    ? `<div class="card-photo-wrap">${l.thumbnail ? `<img class="card-thumb" src="${l.thumbnail}" alt="" loading="lazy">` : ''}${gemPhotoChip}</div>`
+  // New badge as photo overlay (Fix 3)
+  const newOverlayHtml = isNew(l)
+    ? '<div class="card-photo-new-badge">New</div>'
+    : '';
+  const photoSection = (l.thumbnail || gemPhotoChip || newOverlayHtml)
+    ? `<div class="card-photo-wrap">${l.thumbnail ? `<img class="card-thumb" src="${l.thumbnail}" alt="" loading="lazy">` : ''}${gemPhotoChip}${newOverlayHtml}</div>`
     : '';
 
-  // Gradient comps bar
-  const compsBarHtml = (() => {
-    const dp = l.comps_delta_pct;
-    if (dp == null) return '';
-    const dpN  = Number(dp);
-    const pos  = Math.max(0, Math.min(100, Math.round((dpN + 20) / 40 * 100)));
-    const col  = dpN <= -5 ? 'var(--green)' : dpN >= 5 ? 'var(--red)' : 'var(--yellow)';
-    const sign = dpN > 0 ? '+' : '';
-    const lbl  = dpN <= -10 ? 'well below comps' : dpN <= -3 ? 'below comps'
-               : dpN <=   5 ? 'at comps'          : dpN <= 15 ? 'above comps' : 'well above comps';
-    return `<div class="comps-bar-wrap">
-      <div class="comps-bar-header">
-        <span>vs ${l.comps_n || 0} nearby comps</span>
-        <span style="color:${col};font-weight:600">${sign}${dpN.toFixed(1)}%
-          <span style="color:var(--muted);font-weight:400">· ${lbl}</span>
-        </span>
-      </div>
-      <div class="comps-bar-track">
-        <div class="comps-bar-gradient"></div>
-        <div class="comps-bar-dot" style="left:${pos}%;color:${col}"></div>
-      </div>
-    </div>`;
-  })();
+  // Single-line comps row (Fixes 1 + 4)
+  const compsBarHtml = compsRowHtml(l, true);
 
   // 4-up facts strip (rooms | floor+lift | metro | comps median)
   const _rentFloorLbl = _floorLabel(l);
@@ -4942,24 +6830,28 @@ function renderRentalCard(l) {
      </div>`
   ).join('');
 
-  // Single "why" sentence
+  // Single "why" sentence — Lume voice, neighbours framing
   const whySentence = (() => {
     const dp  = l.comps_delta_pct;
     const n   = l.comps_n || 0;
     const med = l.comps_median;
-    const conf = (l.comps_conf_label || '').toLowerCase();
+    const confRaw = (l.comps_conf_label || '').toLowerCase();
+    const confL = confRaw === 'high' ? 'Lume is confident'
+                : confRaw === 'medium' ? 'Lume is fairly sure'
+                : confRaw === 'low' ? "Lume isn't sure — thin data"
+                : '';
     if (dp == null && !omiMid) return null;
     if (dp != null && med != null) {
       const abs   = Math.abs(dp).toFixed(1);
-      const cpart = `€${med}/m²/mo, ${conf} confidence`;
-      if (l.hidden_gem)  return `<strong>Rare find</strong> — ${abs}% below ${n} nearby comps (${cpart}).`;
-      if (l.good_value)  return `<strong>Great Value!</strong> — ${abs}% below ${n} nearby comps (${cpart}).`;
-      if (dp <= -3)      return `${abs}% below ${n} nearby comps (${cpart}).`;
-      if (dp >= 5)       return `Asking ${dp.toFixed(1)}% above ${n} comps (${cpart}) — above market rate.`;
-      return `At comps median vs ${n} nearby listings (${cpart}).`;
+      const cpart = `€${med}/m²/mo · ${confL}`;
+      if (l.hidden_gem)  return `<strong>Hidden Gem</strong> — ${abs}% below similar flats nearby (${cpart}).`;
+      if (l.good_value)  return `<strong>Great Value</strong> — ${abs}% below similar flats nearby (${cpart}).`;
+      if (dp <= -3)      return `${abs}% below similar flats nearby (${cpart}).`;
+      if (dp >= 5)       return `${dp.toFixed(1)}% above similar flats nearby (${cpart}) — above market rate.`;
+      return `In line with similar flats nearby, ${n} similar flats nearby (${cpart}).`;
     }
     return omiMid
-      ? `No local comps — benchmarked against OMI ${l.omi_zona || 'zone'} (€${omiMid}/m²/mo).`
+      ? `No local flats to compare — Lume benchmarked against OMI ${l.omi_zona || 'zone'} (€${omiMid}/m²/mo).`
       : null;
   })();
   const whyClass  = (l.hidden_gem || l.good_value || (l.comps_delta_pct != null && l.comps_delta_pct < 0))
@@ -4975,23 +6867,27 @@ function renderRentalCard(l) {
     ? `<span style="font-size:11px;color:var(--muted)"> + €${fmt(l.spese_condominiali)} fees</span>`
     : '';
 
+  const sourceBadge = l.source === 'idealista'
+    ? '<span class="source-badge idealista">Idealista</span>'
+    : '<span class="source-badge immobiliare">Immobiliare.it</span>';
+  const fascia = l.omi_fascia || '?';
+
   const card = document.createElement('div');
-  card.className = 'card';
+  card.className = 'card' + (l.hidden_gem ? ' is-gem' : (l.good_value ? ' is-goodvalue' : ''));
+  card.setAttribute('data-listing-id', String(l.id));
   card.innerHTML = `
     ${photoSection}
 
     <div class="card-header-a">
       ${scoreRingHtml}
-      <div class="card-title-a">
-        <div class="card-neigh-a">
-          ${formatAddress(l.neighbourhood) || '–'}
-          ${newBadgeHtml(l)}
-          <span class="fascia-badge fascia-${l.omi_fascia}">Fascia ${l.omi_fascia || '?'}</span>
-          ${l.omi_fallback ? '<span style="font-size:10px;color:var(--red)" title="keyword OMI fallback">⚠</span>' : ''}
+      <div class="card-header-text">
+        <div class="card-neighbourhood-row">
+          <span class="card-neighbourhood">${formatAddress(l.neighbourhood) || '–'}</span>
+          <span class="fascia-badge fascia-${fascia}" title="OMI fascia ${fascia}">${l.omi_zona || ('Fascia ' + fascia)}</span>
         </div>
-        <div class="card-subline-a">
-          ${l.address ? formatAddress(l.address) : (formatAddress(l.neighbourhood) || '–')}
-          · ${l.source === 'idealista' ? 'Idealista' : 'Immobiliare.it'}
+        <div class="card-address-row">
+          <span class="card-address">${l.address ? formatAddress(l.address) : (formatAddress(l.neighbourhood) || '–')}</span>
+          ${sourceBadge}
         </div>
       </div>
     </div>
@@ -5000,25 +6896,46 @@ function renderRentalCard(l) {
       <span class="price-main-a">${l.rent_mo != null ? '€' + fmt(l.rent_mo) : '–'}</span>
       <span style="font-size:13px;color:var(--muted);font-weight:500">${l.rent_mo != null ? '/mo' : ''}</span>
       ${speseNote}
-      <span style="font-size:12px;color:var(--muted)">· ${fmt(l.sqm)} m²
-        ${l.ask_psqm != null ? '· €' + l.ask_psqm.toFixed(1) + '/m²' : ''}</span>
-      ${vsOmiHtml}
+      ${specsPillHtml(l)}
+      ${l.ask_psqm != null
+        ? `<span style="font-size:12px;color:var(--muted);white-space:nowrap">· €${l.ask_psqm.toFixed(1)}/m²</span>`
+        : ''}
     </div>
+    ${(() => {
+      // Show effective (all-in) cost when condo fees push it >5% above asking
+      const ask = Number(l.ask_psqm) || 0;
+      const eff = Number(l.ask_psqm_effective) || 0;
+      const condo = Number(l.spese_condominiali || l.condominium_fees) || 0;
+      if (!ask || !eff || eff <= ask * 1.05) return '';
+      const flag = l.condo_fee_flag;
+      const col  = flag === 'high_condo_fees' ? 'var(--amber)' : 'var(--text-muted)';
+      const totalAllIn = (Number(l.rent_mo) || 0) + condo;
+      return `<div style="padding: 0 16px; margin-top: 2px; font-size: 12px; color: ${col}; font-weight: 500">
+        + €${fmt(condo)} fees · €${totalAllIn.toLocaleString('en-US')} all-in · €${eff.toFixed(1)}/m² effective
+      </div>`;
+    })()}
 
     ${compsSugHtml}
     ${compsBarHtml}
 
-    <div class="facts-strip">${factsHtml}</div>
+    ${statPillsHtml(l, true)}
 
-    ${whySentence ? `<div class="${whyClass}">${whySentence}</div>` : ''}
+    ${whySentence ? `<div class="${whyClass}">${whySentence}${reasonsBulletsHtml(l)}</div>` : ''}
 
     <div class="card-footer-a">
-      <span class="omi-note">${l.omi_zona
-        ? `<span class="omi-zone-pill"
-               data-omi-code="${l.omi_zona}"
-               data-omi-title="${(omiDescr || '').replace(/"/g,'&quot;')}<br>${omiRange}${l.omi_compr_min != null ? '<br>Buy: €'+fmt(l.omi_compr_min)+'–'+fmt(l.omi_compr_max)+'/m²' : ''}<br>Source: ${l.omi_source || '?'}">
-             OMI ${l.omi_zona}</span> · ${omiRange}`
-        : 'OMI keyword fallback'}</span>
+      <button class="btn-bookmark${Collections.isInAnyCollection(l.id) ? ' active' : ''}"
+              data-listing-id="${l.id}"
+              style="margin-left:auto"
+              onclick="openCollectionMenu('${l.id}', event)"
+              title="Save to collection" aria-label="Save to collection">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+      </button>
+      <button class="btn-share"
+              data-listing-id="${l.id}"
+              onclick="shareListing('${l.id}', event)"
+              title="Share listing" aria-label="Share listing">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg>
+      </button>
       <button class="btn-fav${isRentFav(l.id) ? ' is-fav' : ''}"
               data-rent-id="${l.id}"
               title="${isRentFav(l.id) ? 'Remove from favourites' : 'Add to favourites'}">
@@ -5072,6 +6989,12 @@ function getRentFilters() {
 }
 
 function applyRentFilters(data, f) {
+  // Shared-collection mode: hard-restrict to the IDs in the URL before any
+  // other filter runs. The user can still narrow further with the filter bar.
+  if (window.sharedCollection) {
+    const ids = new Set(window.sharedCollection.listing_ids.map(String));
+    data = data.filter(l => ids.has(String(l.id)));
+  }
   return data.filter(l => {
     if (f.areas.length) {
       const nb = (l.neighbourhood || '').toLowerCase();
@@ -5101,12 +7024,15 @@ function applyRentFilters(data, f) {
     if (f.gemFilter === 'hidden' && !l.hidden_gem) return false;
     if (f.gemFilter === 'good'   && !(l.good_value === true && l.hidden_gem !== true)) return false;
     if (f.fListed) {
-      const days = parseInt(f.fListed);
-      if (l.first_seen_date) {
+      if (!l.first_seen_date) return false;
+      if (f.fListed === 'today') {
+        // Match listings whose first_seen_date is today's calendar date
+        const todayStr = new Date().toISOString().slice(0, 10);
+        if (String(l.first_seen_date).slice(0, 10) !== todayStr) return false;
+      } else {
+        const days = parseInt(f.fListed);
         const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - days);
         if (new Date(l.first_seen_date) < cutoff) return false;
-      } else {
-        return false;
       }
     }
     if (f.minEnergy) {
@@ -5120,28 +7046,61 @@ function applyRentFilters(data, f) {
 }
 
 // ── Progressive card loading ──────────────────────────────────────────────────
-const RENT_PAGE        = 25;
+// Initial render: 100 cards painted synchronously (so first paint is fast).
+// Subsequent batches: 100 more cards each time the scroll sentinel enters
+// the viewport (with a 600px root margin so cards arrive before the user
+// reaches the bottom). Filter changes reset the cursor and re-arm.
+const RENT_PAGE_INITIAL    = 100;
+const RENT_PAGE_SUBSEQUENT = 100;
+const SCROLL_ROOT_MARGIN   = '600px 0px 0px 0px';
+
 let _rentFilteredData  = [];
 let _rentRenderedCount = 0;
 let _rentObserver      = null;
 let _saleFilteredData  = [];
 
+function _updateRentScrollStatus() {
+  const el = document.getElementById('rentScrollStatus');
+  if (!el) return;
+  const total = _rentFilteredData.length;
+  const shown = Math.min(_rentRenderedCount, total);
+  if (total === 0) {
+    el.innerHTML = '';
+  } else if (shown >= total) {
+    el.innerHTML = total > RENT_PAGE_INITIAL
+      ? `Showing all ${total.toLocaleString()} rentals`
+      : '';
+  } else {
+    el.innerHTML =
+      `<span class="loading-dots">Loading more</span>` +
+      `<span class="scroll-meta">${shown.toLocaleString()} of ${total.toLocaleString()}</span>`;
+  }
+}
+
 function _rentAppendBatch() {
-  const grid  = document.getElementById('rentGrid');
-  const batch = _rentFilteredData.slice(_rentRenderedCount, _rentRenderedCount + RENT_PAGE);
+  const grid = document.getElementById('rentGrid');
+  if (!grid) return;
+  const pageSize = _rentRenderedCount === 0 ? RENT_PAGE_INITIAL : RENT_PAGE_SUBSEQUENT;
+  const batch    = _rentFilteredData.slice(_rentRenderedCount, _rentRenderedCount + pageSize);
   if (!batch.length) return;
 
   // Remove sentinel before appending so cards land above it
   const oldSentinel = document.getElementById('rentSentinel');
   if (oldSentinel) oldSentinel.remove();
 
+  const isFirstBatch = _rentRenderedCount === 0;
   const frag = document.createDocumentFragment();
-  batch.forEach(l => frag.appendChild(renderRentalCard(l)));
+  batch.forEach(l => {
+    const c = renderRentalCard(l);
+    if (!isFirstBatch) c.classList.add('no-anim');  // skip entrance animation
+    frag.appendChild(c);
+  });
   grid.appendChild(frag);
   _rentRenderedCount += batch.length;
+  _observeScoreRings(grid);
+  _updateRentScrollStatus();
 
   if (_rentRenderedCount < _rentFilteredData.length) {
-    // Invisible 1 px sentinel — observer fires 400 px before it enters view
     const s = document.createElement('div');
     s.id = 'rentSentinel';
     s.style.cssText = 'height:1px;pointer-events:none';
@@ -5150,7 +7109,7 @@ function _rentAppendBatch() {
     if (_rentObserver) _rentObserver.disconnect();
     _rentObserver = new IntersectionObserver(
       entries => { if (entries[0].isIntersecting) _rentAppendBatch(); },
-      { rootMargin: '400px' }
+      { rootMargin: SCROLL_ROOT_MARGIN, threshold: 0 }
     );
     _rentObserver.observe(s);
   } else {
@@ -5187,8 +7146,9 @@ function renderRentals() {
 
   if (!_rentFilteredData.length) {
     grid.innerHTML = ALL_RENT.length
-      ? '<div class="empty"><h3>No rentals match</h3><p>Try relaxing your filters.</p></div>'
-      : '<div class="empty"><h3>No rental data yet</h3><p>Start the scanner above, or run <code>python3 fetch_rentals.py</code> to fetch listings.</p></div>';
+      ? '<div class="empty"><h3>Nothing matches yet.</h3><p>Loosen up a filter.</p></div>'
+      : '<div class="empty"><h3>Lume hasn&rsquo;t scanned yet.</h3><p>Run the scanner to begin, or run <code>python3 fetch_rentals.py</code> to fetch listings.</p></div>';
+    _updateRentScrollStatus();
   } else {
     _rentAppendBatch();
   }
@@ -5201,7 +7161,7 @@ function renderRentals() {
       const gem = btn.dataset.gem;
       const n = gem === 'hidden' ? nHidden : gem === 'good' ? nGood : ALL_RENT.length;
       // Keep the label text, add/update a small count badge
-      const label = gem === 'hidden' ? '✦ Hidden' : gem === 'good' ? '↑ Great Value!' : 'All';
+      const label = gem === 'hidden' ? '✦ Hidden Gems' : gem === 'good' ? 'Great Value' : 'All';
       btn.textContent = `${label} (${n})`;
     });
     const nNew = ALL_RENT.filter(isNew).length;
@@ -5234,6 +7194,13 @@ function renderRentals() {
       (geoHaveIt === 0 ? 'Run the scanner to populate.' : `${geoTotal - geoHaveIt} still pending.`);
   }
   if (activeTab === 'map' && _mapDataType === 'rentals') _mapRender();
+
+  // Shared-collection banner — render above the grid when ?c=… is active
+  if (window.sharedCollection) {
+    renderSharedCollectionBanner(_rentFilteredData.length, window.sharedCollection.listing_ids.length);
+  }
+  // ?l= deep-link highlight (single-listing share)
+  handleSharedListingParam();
 }
 
 // ── Rentals — data loading ────────────────────────────────────────────────────
@@ -5242,7 +7209,7 @@ async function loadRentals() {
     const url  = IS_LIVE ? '/rentals' : './rentals_latest.json';
     const resp = await fetch(url);
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    ALL_RENT = await resp.json();
+    ALL_RENT = _dedupListings(await resp.json(), true);
   } catch(e) {
     ALL_RENT = [];
   }
@@ -5285,6 +7252,7 @@ function computeSaleFasciaRanges(data) {
 function getSaleFilters() {
   return {
     areas:    saleSelectedAreas,
+    source:   document.querySelector('#sSourceFilter .sort-tab.active')?.dataset.ssource || '',
     fascia:   document.getElementById('sFascia').value,
     omiZone:  document.getElementById('sOmiZone').value,
     maxPrice: parseInt(document.getElementById('sMaxPrice').value) || 0,
@@ -5296,6 +7264,11 @@ function getSaleFilters() {
     minEnergy:document.getElementById('sMinEnergy').value,
     minScore: parseInt(document.getElementById('sScore').value) || 0,
     gem:      sSaleGemFilter,
+    // Listing-type opt-ins (default off → judicial auctions and bare-ownership
+    // sales are hidden because they skew the comp pool and aren't comparable
+    // to a regular purchase).
+    showAuctions: document.getElementById('sShowAuctions')?.checked || false,
+    showNuda:     document.getElementById('sShowNuda')?.checked     || false,
     // Drawer-only filters (no desktop equivalent yet — stashed on window
     // by _applyDrawerToMain so they persist across renderSales() calls)
     condition: window._sCondition || '',
@@ -5304,8 +7277,17 @@ function getSaleFilters() {
 }
 
 function applySaleFilters(data, f) {
+  // Shared-collection hard restrict (same as rentals)
+  if (window.sharedCollection) {
+    const ids = new Set(window.sharedCollection.listing_ids.map(String));
+    data = data.filter(l => ids.has(String(l.id)));
+  }
   return data.filter(l => {
+    // Hide judicial auctions and nuda-proprietà sales unless explicitly opted in
+    if (l.is_auction        && !f.showAuctions) return false;
+    if (l.is_nuda_proprieta && !f.showNuda)     return false;
     if (f.areas && f.areas.length && !f.areas.includes(l.neighbourhood)) return false;
+    if (f.source  && l.source !== f.source)                              return false;
     if (f.fascia   && l.omi_fascia !== f.fascia)                          return false;
     if (f.omiZone  && l.omi_zona   !== f.omiZone)                         return false;
     if (f.maxPrice && l.price > f.maxPrice)                               return false;
@@ -5345,8 +7327,8 @@ function _populateSaleOmiZoneFilter(data) {
 // ── Sales — card renderer ─────────────────────────────────────────────────────
 function renderSaleCard(l) {
   const sc        = scoreClass(l.score_total);
-  const ringColor = sc === 'high' ? '#15803D' : sc === 'mid' ? '#D97706' : '#DC2626';
-  const C         = 2 * Math.PI * 22;
+  const ringColor = sc === 'high' ? '#2A7A5A' : sc === 'mid' ? '#E8922A' : '#E05C4B';
+  const C         = 2 * Math.PI * 23;   // r=23 for size=52
   const score     = l.score_total ?? 0;
   const ringOff   = C * (1 - Math.max(0, Math.min(100, score)) / 100);
 
@@ -5360,9 +7342,11 @@ function renderSaleCard(l) {
     ? `OMI zone ${l.omi_zona} (${l.omi_fascia}) · ${omiDescr || ''} · source: ${l.omi_source || '?'}`
     : 'Keyword-based OMI fallback';
 
-  // SVG score ring
+  // SVG score ring (animated count-up via IntersectionObserver)
   const scoreRingHtml = `
     <div class="score-ring-wrap"
+         data-score-target="${score}"
+         data-score-color="${ringColor}"
          data-sc-total="${l.score_total ?? ''}"
          data-sc-price="${l.score_price ?? ''}"
          data-sc-prop="${l.score_property ?? l.score_physical ?? ''}"
@@ -5373,52 +7357,47 @@ function renderSaleCard(l) {
          data-w-loc="${scoreSettings.w_location ?? 0.20}"
          data-w-pen="${scoreSettings.w_penalty ?? 0.10}"
          data-sc-omi-ctx="${l.vs_omi_label ? 'OMI: ' + l.vs_omi_label : ''}">
-      <svg width="48" height="48" style="display:block;transform:rotate(-90deg)">
-        <circle cx="24" cy="24" r="22" fill="none" stroke="var(--border)" stroke-width="4"/>
-        <circle cx="24" cy="24" r="22" fill="none" stroke="${ringColor}" stroke-width="4"
-          stroke-linecap="round"
-          stroke-dasharray="${C.toFixed(2)}" stroke-dashoffset="${ringOff.toFixed(2)}"/>
+      <svg width="52" height="52" viewBox="0 0 52 52" style="display:block">
+        <circle cx="26" cy="26" r="23" fill="none" stroke="#EDEAE4" stroke-width="3.5"/>
+        <circle class="score-ring-fill" cx="26" cy="26" r="23" fill="none"
+                stroke="${ringColor}" stroke-width="3.5"
+                stroke-linecap="round"
+                stroke-dasharray="${C.toFixed(2)}"
+                stroke-dashoffset="${C.toFixed(2)}"
+                transform="rotate(-90 26 26)"
+                data-final-offset="${ringOff.toFixed(2)}"/>
       </svg>
-      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-                  font-weight:800;font-size:15px;letter-spacing:-0.3px;color:${ringColor}">${score}</div>
+      <div class="score-ring-text"
+           style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+                  font-weight:800;font-size:17px;letter-spacing:-0.3px;color:${ringColor};font-family:var(--font)">0</div>
     </div>`;
 
   // Gem chip on photo
   const gemPhotoChip = l.hidden_gem
-    ? `<div class="gem-photo-chip chip-hidden"><span style="font-size:13px">💎</span><span>Hidden gem</span></div>`
+    ? `<div class="gem-photo-chip chip-hidden"><span style="font-size:13px">💎</span><span>Hidden Gem</span></div>`
     : l.good_value
-    ? `<div class="gem-photo-chip chip-good"><span style="font-size:13px">💰</span><span>Great Value!</span></div>`
+    ? `<div class="gem-photo-chip chip-good"><span style="font-size:13px">💰</span><span>Great Value</span></div>`
     : '';
 
-  const photoSection = (l.thumbnail || gemPhotoChip)
-    ? `<div class="card-photo-wrap">${l.thumbnail ? `<img class="card-thumb" src="${l.thumbnail}" alt="" loading="lazy">` : ''}${gemPhotoChip}</div>`
+  // New badge as photo overlay (Fix 3) — suppressed when an auction/nuda flag
+  // is taking the same top-right slot.
+  const flagOverlayHtml = l.is_auction
+    ? '<div class="card-photo-flag" title="Judicial auction — major legal complications">⚖ Auction</div>'
+    : l.is_nuda_proprieta
+    ? '<div class="card-photo-flag flag-nuda" title="Nuda proprietà — seller keeps right to live there for life">⚠ Nuda proprietà</div>'
+    : '';
+  const newOverlayHtml = (isNew(l) && !flagOverlayHtml)
+    ? '<div class="card-photo-new-badge">New</div>'
     : '';
 
-  // Comps bar (vs nearby sale comps)
-  const compsBarHtml = (() => {
-    const dp = l.comps_sale_delta_pct;
-    if (dp == null) return '';
-    const dpN  = Number(dp);
-    const pos  = Math.max(0, Math.min(100, Math.round((dpN + 20) / 40 * 100)));
-    const col  = dpN <= -5 ? 'var(--green)' : dpN >= 5 ? 'var(--red)' : 'var(--yellow)';
-    const sign = dpN > 0 ? '+' : '';
-    const lbl  = dpN <= -10 ? 'well below comps' : dpN <= -3 ? 'below comps'
-               : dpN <=   5 ? 'at comps'          : dpN <= 15 ? 'above comps' : 'well above comps';
-    return `<div class="comps-bar-wrap">
-      <div class="comps-bar-header">
-        <span>vs ${l.comps_sale_n || 0} nearby sale comps</span>
-        <span style="color:${col};font-weight:600">${sign}${dpN.toFixed(1)}%
-          <span style="color:var(--muted);font-weight:400">· ${lbl}</span>
-        </span>
-      </div>
-      <div class="comps-bar-track">
-        <div class="comps-bar-gradient"></div>
-        <div class="comps-bar-dot" style="left:${pos}%;color:${col}"></div>
-      </div>
-    </div>`;
-  })();
+  const photoSection = (l.thumbnail || gemPhotoChip || newOverlayHtml || flagOverlayHtml)
+    ? `<div class="card-photo-wrap">${l.thumbnail ? `<img class="card-thumb" src="${l.thumbnail}" alt="" loading="lazy">` : ''}${gemPhotoChip}${newOverlayHtml}${flagOverlayHtml}</div>`
+    : '';
 
-  // Comps suggest row (warn when priced above comps)
+  // Single-line comps row (Fixes 1 + 4)
+  const compsBarHtml = compsRowHtml(l, false);
+
+  // Lume's price alert (warn when priced above similar flats nearby)
   const compsSugHtml = (() => {
     const med = l.comps_sale_median;
     const dp  = l.comps_sale_delta_pct;
@@ -5477,19 +7456,23 @@ function renderSaleCard(l) {
     const dp   = l.comps_sale_delta_pct;
     const n    = l.comps_sale_n || 0;
     const med  = l.comps_sale_median;
-    const conf = (l.comps_sale_conf_label || '').toLowerCase();
+    const confRaw = (l.comps_sale_conf_label || '').toLowerCase();
+    const confL = confRaw === 'high' ? 'Lume is confident'
+                : confRaw === 'medium' ? 'Lume is fairly sure'
+                : confRaw === 'low' ? "Lume isn't sure — thin data"
+                : '';
     if (dp == null && !omiMid) return null;
     if (dp != null && med != null) {
       const abs   = Math.abs(dp).toFixed(1);
-      const cpart = `€${fmt(Math.round(med))}/m², ${conf} confidence`;
-      if (l.hidden_gem) return `<strong>Rare find</strong> — ${abs}% below ${n} nearby sale comps (${cpart}).`;
-      if (l.good_value) return `<strong>Great Value!</strong> — ${abs}% below ${n} nearby sale comps (${cpart}).`;
-      if (dp <= -3)     return `${abs}% below ${n} nearby sale comps (${cpart}).`;
-      if (dp >= 5)      return `Asking ${dp.toFixed(1)}% above ${n} sale comps (${cpart}) — above market rate.`;
-      return `At sale comps median vs ${n} nearby listings (${cpart}).`;
+      const cpart = `€${fmt(Math.round(med))}/m² · ${confL}`;
+      if (l.hidden_gem) return `<strong>Hidden Gem</strong> — ${abs}% below similar flats nearby (${cpart}).`;
+      if (l.good_value) return `<strong>Great Value</strong> — ${abs}% below similar flats nearby (${cpart}).`;
+      if (dp <= -3)     return `${abs}% below similar flats nearby (${cpart}).`;
+      if (dp >= 5)      return `${dp.toFixed(1)}% above similar flats nearby (${cpart}) — above market rate.`;
+      return `In line with similar flats nearby, ${n} nearby sales (${cpart}).`;
     }
     return omiMid
-      ? `No local sale comps — benchmarked against OMI ${l.omi_zona || 'zone'} (€${fmt(omiMid)}/m²).`
+      ? `No local sales to compare — Lume benchmarked against OMI ${l.omi_zona || 'zone'} (€${fmt(omiMid)}/m²).`
       : null;
   })();
   const whyClass = (l.hidden_gem || l.good_value || (l.comps_sale_delta_pct != null && l.comps_sale_delta_pct < 0))
@@ -5515,11 +7498,12 @@ function renderSaleCard(l) {
     return `<div class="dg-row"><span class="dg-lbl">${lbl}</span><span class="dg-val${cs}">${dv}</span></div>`;
   };
   const detailsHtml = `
-    <button class="btn-details-toggle" data-details-toggle>Show data points <span class="details-caret">▾</span></button>
+    <button class="btn-details-toggle" data-details-toggle>How Lume scored this <span class="details-caret">▾</span></button>
     <div class="card-details" data-details-panel>
       <div class="details-section-title">🏠 Physical</div>
       <div class="details-grid">
         ${_dRow('Rooms', l.rooms != null ? l.rooms + ' room' + (l.rooms !== 1 ? 's' : '') : null, l.rooms == null ? 'muted' : '')}
+        ${_dRow('Bedrooms', l.bedrooms != null ? (l.bedrooms === 0 ? 'Studio' : l.bedrooms + ' bed' + (l.bedrooms !== 1 ? 's' : '')) : null, l.bedrooms == null ? 'muted' : '')}
         ${(() => { const lbl = _floorLabel(l); const fn = l.floor_n; const cls = fn == null ? 'muted' : fn < 0 ? 'bad' : fn >= 3 ? 'good' : ''; return _dRow('Floor', lbl, cls); })()}
         ${_dRow('Elevator', l.elevator === true ? 'Yes ✓' : l.elevator === false ? 'No' : null, l.elevator === true ? 'good' : l.elevator == null ? 'muted' : '')}
         ${_dRow('External', l.is_external === true ? 'Yes ✓' : l.is_external === false ? 'No' : null, l.is_external === true ? 'good' : l.is_external == null ? 'muted' : '')}
@@ -5530,6 +7514,7 @@ function renderSaleCard(l) {
         ${_dRow('Parking', l.has_parking === true ? 'Yes ✓' : l.has_parking === false ? 'No' : null, l.has_parking === true ? 'good' : l.has_parking == null ? 'muted' : '')}
         ${_dRow('Condition', l.condition, l.condition ? '' : 'muted')}
         ${_dRow('Days listed', l.days_on_market != null ? l.days_on_market + 'd' : null, l.days_on_market != null && l.days_on_market > 90 ? 'bad' : l.days_on_market == null ? 'muted' : '')}
+        ${_dRow('First seen', firstSeenLabel(l), l.first_seen_date ? '' : 'muted')}
       </div>
       <div class="details-section-title" style="margin-top:6px">🌍 Geospatial</div>
       <div class="details-grid">
@@ -5556,49 +7541,60 @@ function renderSaleCard(l) {
       </div>
     </div>`;
 
+  const sourceBadge = l.source === 'idealista_sale'
+    ? '<span class="source-badge idealista">Idealista</span>'
+    : '<span class="source-badge immobiliare">Immobiliare.it</span>';
+  const fascia = l.omi_fascia || '?';
+
   const card = document.createElement('div');
-  card.className = 'card';
+  card.className = 'card' + (l.hidden_gem ? ' is-gem' : (l.good_value ? ' is-goodvalue' : ''));
+  card.setAttribute('data-listing-id', String(l.id));
   card.innerHTML = `
     ${photoSection}
 
     <div class="card-header-a">
       ${scoreRingHtml}
-      <div class="card-title-a">
-        <div class="card-neigh-a">
-          ${formatAddress(l.neighbourhood) || '–'}
-          ${newBadgeHtml(l)}
-          <span class="fascia-badge fascia-${l.omi_fascia}" title="${omiBenchTitle}">
-            ${l.omi_zona || ('Fascia ' + (l.omi_fascia || '?'))}
-          </span>
+      <div class="card-header-text">
+        <div class="card-neighbourhood-row">
+          <span class="card-neighbourhood">${formatAddress(l.neighbourhood) || '–'}</span>
+          <span class="fascia-badge fascia-${fascia}" title="${omiBenchTitle}">${l.omi_zona || ('Fascia ' + fascia)}</span>
         </div>
-        <div class="card-subline-a">
-          ${l.address ? formatAddress(l.address) : (formatAddress(l.neighbourhood) || '–')}
-          · Immobiliare.it
+        <div class="card-address-row">
+          <span class="card-address">${l.address ? formatAddress(l.address) : (formatAddress(l.neighbourhood) || '–')}</span>
+          ${sourceBadge}
         </div>
       </div>
     </div>
 
     <div class="price-row-a">
       <span class="price-main-a">€${fmt(l.price)}</span>
-      <span style="font-size:12px;color:var(--muted)">· ${fmt(l.sqm)} m²
-        ${l.ask_psqm != null ? '· €' + fmt(l.ask_psqm) + '/m²' : ''}</span>
-      ${yieldHtml}
+      ${specsPillHtml(l)}
+      ${l.ask_psqm != null
+        ? `<span style="font-size:12px;color:var(--muted);white-space:nowrap">· €${fmt(l.ask_psqm)}/m²</span>`
+        : ''}
     </div>
 
     ${compsSugHtml}
     ${compsBarHtml}
 
-    <div class="facts-strip">${factsHtml}</div>
+    ${statPillsHtml(l, false)}
 
-    ${whySentence ? `<div class="${whyClass}">${whySentence}</div>` : ''}
+    ${whySentence ? `<div class="${whyClass}">${whySentence}${reasonsBulletsHtml(l)}</div>` : ''}
 
     <div class="card-footer-a">
-      <span class="omi-note">${l.omi_zona
-        ? `<span class="omi-zone-pill"
-               data-omi-code="${l.omi_zona}"
-               data-omi-title="${(omiDescr || '').replace(/"/g,'&quot;')}<br>${omiRange}${l.omi_compr_min != null ? '<br>OMI compr: €'+fmt(l.omi_compr_min)+'–'+fmt(l.omi_compr_max)+'/m²' : ''}<br>Source: ${l.omi_source || '?'}">
-             OMI ${l.omi_zona}</span> · ${omiRange}`
-        : 'OMI keyword fallback'}</span>
+      <button class="btn-bookmark${Collections.isInAnyCollection(l.id) ? ' active' : ''}"
+              data-listing-id="${l.id}"
+              style="margin-left:auto"
+              onclick="openCollectionMenu('${l.id}', event)"
+              title="Save to collection" aria-label="Save to collection">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+      </button>
+      <button class="btn-share"
+              data-listing-id="${l.id}"
+              onclick="shareListing('${l.id}', event)"
+              title="Share listing" aria-label="Share listing">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg>
+      </button>
       <button class="btn-fav${isFavourite(l.id) ? ' is-fav' : ''}"
               data-sale-id="${l.id}"
               title="${isFavourite(l.id) ? 'Remove from favourites' : 'Add to favourites'}">
@@ -5631,6 +7627,69 @@ function renderSaleCard(l) {
 }
 
 // ── Sales — render ────────────────────────────────────────────────────────────
+// Sales-side counterparts to the rentals progressive-loading machinery.
+const SALE_PAGE_INITIAL    = 100;
+const SALE_PAGE_SUBSEQUENT = 100;
+let _saleRenderedCount = 0;
+let _saleObserver      = null;
+
+function _updateSaleScrollStatus() {
+  const el = document.getElementById('saleScrollStatus');
+  if (!el) return;
+  const total = _saleFilteredData.length;
+  const shown = Math.min(_saleRenderedCount, total);
+  if (total === 0) {
+    el.innerHTML = '';
+  } else if (shown >= total) {
+    el.innerHTML = total > SALE_PAGE_INITIAL
+      ? `Showing all ${total.toLocaleString()} sale listings`
+      : '';
+  } else {
+    el.innerHTML =
+      `<span class="loading-dots">Loading more</span>` +
+      `<span class="scroll-meta">${shown.toLocaleString()} of ${total.toLocaleString()}</span>`;
+  }
+}
+
+function _saleAppendBatch() {
+  const grid = document.getElementById('salesGrid');
+  if (!grid) return;
+  const pageSize = _saleRenderedCount === 0 ? SALE_PAGE_INITIAL : SALE_PAGE_SUBSEQUENT;
+  const batch    = _saleFilteredData.slice(_saleRenderedCount, _saleRenderedCount + pageSize);
+  if (!batch.length) return;
+
+  const oldSentinel = document.getElementById('saleSentinel');
+  if (oldSentinel) oldSentinel.remove();
+
+  const isFirstBatch = _saleRenderedCount === 0;
+  const frag = document.createDocumentFragment();
+  batch.forEach(l => {
+    const c = renderSaleCard(l);
+    if (!isFirstBatch) c.classList.add('no-anim');
+    frag.appendChild(c);
+  });
+  grid.appendChild(frag);
+  _saleRenderedCount += batch.length;
+  _observeScoreRings(grid);
+  _updateSaleScrollStatus();
+
+  if (_saleRenderedCount < _saleFilteredData.length) {
+    const s = document.createElement('div');
+    s.id = 'saleSentinel';
+    s.style.cssText = 'height:1px;pointer-events:none';
+    grid.appendChild(s);
+
+    if (_saleObserver) _saleObserver.disconnect();
+    _saleObserver = new IntersectionObserver(
+      entries => { if (entries[0].isIntersecting) _saleAppendBatch(); },
+      { rootMargin: SCROLL_ROOT_MARGIN, threshold: 0 }
+    );
+    _saleObserver.observe(s);
+  } else {
+    if (_saleObserver) { _saleObserver.disconnect(); _saleObserver = null; }
+  }
+}
+
 function renderSales() {
   const f    = getSaleFilters();
   let   data = applySaleFilters(ALL_SALE, f);
@@ -5641,17 +7700,19 @@ function renderSales() {
     const bv = b[sSortKey] ?? (asc ? Infinity : -Infinity);
     return asc ? av - bv : bv - av;
   });
-  _saleFilteredData = data;
+  _saleFilteredData    = data;
+  _saleRenderedCount   = 0;
+
+  if (_saleObserver) { _saleObserver.disconnect(); _saleObserver = null; }
 
   const grid = document.getElementById('salesGrid');
   if (!grid) return;
   grid.innerHTML = '';
   if (!data.length) {
-    grid.innerHTML = '<div class="empty"><h3>No listings match</h3><p>Try relaxing your filters.</p></div>';
+    grid.innerHTML = '<div class="empty"><h3>Nothing matches yet.</h3><p>Loosen up a filter.</p></div>';
+    _updateSaleScrollStatus();
   } else {
-    const frag = document.createDocumentFragment();
-    data.forEach(l => frag.appendChild(renderSaleCard(l)));
-    grid.appendChild(frag);
+    _saleAppendBatch();
   }
 
   const showEl = document.getElementById('sShowCount');
@@ -5673,6 +7734,12 @@ function renderSales() {
     const geo = data.filter(l => l.geo_score != null).length;
     geoCovEl.textContent = `${geo} / ${data.length}`;
   }
+
+  // Shared-collection banner + ?l= deep-link highlight (sales side)
+  if (window.sharedCollection) {
+    renderSharedCollectionBanner(data.length, window.sharedCollection.listing_ids.length);
+  }
+  handleSharedListingParam();
 }
 
 // ── Sales — data loading ──────────────────────────────────────────────────────
@@ -5681,7 +7748,7 @@ async function loadSales() {
     const url  = IS_LIVE ? '/sales' : 'sales_latest.json';
     const resp = await fetch(url);
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    ALL_SALE = await resp.json();
+    ALL_SALE = _dedupListings(await resp.json(), false);
   } catch {
     ALL_SALE = [];
   }
@@ -6957,8 +9024,8 @@ function _mapInit() {
       d.style.cssText = 'background:rgba(255,255,255,0.95);border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:11px;line-height:1.9;pointer-events:none;display:none';
       d.innerHTML = `
         <div style="display:flex;align-items:center;gap:7px"><div style="width:14px;height:14px;border-radius:50%;background:#6B7280"></div> Score</div>
-        <div style="display:flex;align-items:center;gap:7px"><div style="width:14px;height:14px;background:#15803D;transform:rotate(45deg);border-radius:2px;flex-shrink:0"></div> ✦ Hidden Gem</div>
-        <div style="display:flex;align-items:center;gap:7px"><div style="width:14px;height:14px;border-radius:50%;background:#0E7490;flex-shrink:0"></div> ↑ Great Value!</div>`;
+        <div style="display:flex;align-items:center;gap:7px"><div style="width:14px;height:14px;background:#15803D;transform:rotate(45deg);border-radius:2px;flex-shrink:0"></div> Hidden Gem</div>
+        <div style="display:flex;align-items:center;gap:7px"><div style="width:14px;height:14px;border-radius:50%;background:#0E7490;flex-shrink:0"></div> Great Value</div>`;
       return d;
     };
     _legend.addTo(_map);
@@ -7133,7 +9200,7 @@ function _renderMarketOverview(listings) {
     _metricCard('Total listings', fmt(listings.length), '#3B82F6'),
     _metricCard('Avg score', avgScore != null ? avgScore + '/100' : '–', scoreAccent),
     _metricCard(insightsMode === 'rentals' ? 'Avg rent /mo' : 'Avg price', avgPrice != null ? '€' + fmt(avgPrice) : '–', '#6366F1'),
-    _metricCard('Hidden gems', fmt(hidden), '#7C3AED'),
+    _metricCard('Hidden Gems', fmt(hidden), '#7C3AED'),
   ].join('');
 
   _destroyChart('scoreChart');
@@ -7880,7 +9947,7 @@ function _dqRenderTable(rows) {
   data.sort(_dqSortComparator(_dqSortKey, _dqSortDir));
 
   if (!data.length) {
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:20px">No listings match the current filters.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:20px">Nothing matches yet. Loosen up a filter.</td></tr>`;
     if (count) count.textContent = '';
     return;
   }

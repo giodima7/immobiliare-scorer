@@ -1,0 +1,14 @@
+# Cloudflare Pages headers — equivalent of the old netlify.toml [[headers]] blocks.
+# Cloudflare evaluates rules top-to-bottom; later rules merge with earlier ones.
+
+# JSON snapshots: 1-hour browser cache. Fresh data lands via GitHub Actions
+# committing to main, which triggers a Cloudflare Pages redeploy.
+/*.json
+  Cache-Control: public, max-age=3600
+  Access-Control-Allow-Origin: *
+
+# Security headers for every response
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin

@@ -1,7 +1,16 @@
-# Immobiliare Scorer
+# Lume
 
-Fetch live sale listings from Immobiliare.it and score each one against
-OMI (Agenzia delle Entrate) benchmark data for rental yield and value.
+> Lume scores every Milan rental and sales listing so you don't have to guess.
+> Built by someone tired of overpaying.
+
+Fetches live rental and sale listings from Immobiliare.it and Idealista,
+scores each one against OMI (Agenzia delle Entrate) benchmark data + live
+neighbourhood comps, and surfaces the hidden gems — listings genuinely
+priced below similar flats nearby in desirable areas.
+
+The repository directory is still named `immobiliare-scorer/` for git history
+continuity; the user-facing brand is **Lume**. Internal field names
+(`hidden_gem`, `good_value`, `comps_delta_pct`, …) are unchanged.
 
 ## Setup
 
@@ -123,3 +132,42 @@ the embedded listings.
 The script defaults to 1.2s between page requests per city. Increase `--delay`
 if you see connection errors. Immobiliare.it does not require authentication for
 read-only search requests.
+
+## Hosting
+
+The dashboard is deployed on **Cloudflare Pages** (free tier, unlimited
+bandwidth) and authenticated by **Clerk** (free tier, allowlist mode for
+invite-only access).
+
+### One-time setup
+
+1. **Cloudflare Pages**
+   - Sign in at <https://dash.cloudflare.com> → Workers &amp; Pages → Create
+     application → Pages → Connect to Git.
+   - Pick this repo. Build command: leave empty. Build output directory:
+     `dashboard`. Root directory: `/`.
+   - Cloudflare auto-deploys on every push to `main`. The daily GitHub Actions
+     scan commits fresh `*_latest.json` snapshots, which trigger a redeploy.
+   - `dashboard/_headers` and `dashboard/_redirects` replace the old
+     `netlify.toml` (cache-control, security headers, SPA fallback, /api-ping
+     404, Flask endpoint aliases).
+
+2. **Clerk**
+   - Create an application at <https://dashboard.clerk.com>.
+   - User &amp; Authentication → Restrictions → set **Sign-up mode** to
+     `Restricted`. Add invitee emails to the allowlist.
+   - API Keys → copy the **publishable key** and paste it into
+     `dashboard/index.html` as `window.__CLERK_PUBLISHABLE_KEY` (top of
+     `<head>`, replacing `pk_live_REPLACE_ME`).
+   - In Clerk's allowed origins, add the Pages URL (e.g.
+     `https://lume.pages.dev`) and any custom domain.
+
+3. **Email digest URL** (optional)
+   - `email_digest.py` reads `LUME_DASHBOARD_URL` (default `https://lume.pages.dev`).
+     Override in your shell or GitHub Actions secret if you point a custom domain.
+
+### Local development
+
+`localhost`/`127.0.0.1` skips the Clerk auth gate entirely (see the inline
+script at the top of `dashboard/index.html`), so you can iterate on the UI
+without signing in. Per-user `localStorage` keys fall back to `guest`.

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Favourites — Immobiliare Scorer</title>
+<title>Favourites — Lume</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
 <style>
@@ -303,15 +303,22 @@ header h1 span { color: var(--accent); }
 
 <div class="cards-container" id="cardsContainer"></div>
 
-<script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
 <script>
 // Scope localStorage keys per-user, matching the Storage module in index.html.
-// Skip widget on localhost to avoid the "Development Settings" popup.
+// Auth lives in Clerk now (see dashboard/index.html). This page is read-only,
+// so we just look up the cached Clerk user ID synchronously without loading
+// the SDK — Clerk persists `__session` / `__clerk_db_jwt` cookies, but the
+// stable user ID is also kept in localStorage by the main app.
 (function () {
   const isLocal = ['localhost', '127.0.0.1'].includes(location.hostname);
-  const ni = isLocal ? null : window.netlifyIdentity;
-  if (ni) ni.init();
-  const userId = ni?.currentUser()?.id || 'guest';
+  let userId = 'guest';
+  if (!isLocal) {
+    try {
+      // The main app caches the signed-in user ID here on _onLogin so other
+      // pages can scope storage without re-initialising Clerk.
+      userId = localStorage.getItem('lume_clerk_user_id') || 'guest';
+    } catch (_) {}
+  }
   window._FAV_KEY      = `scorer_favourites_${userId}`;
   window._RENT_FAV_KEY = `scorer_rentFavourites_${userId}`;
 })();

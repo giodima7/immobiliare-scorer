@@ -2,7 +2,7 @@
 """Check what pagination URL Idealista uses with path-based filter URLs."""
 import asyncio
 import nodriver as uc
-from fetch_rentals import EDGE_PATH
+from fetch_rentals import CHROME_PATH
 
 URL = ("https://www.idealista.it/affitto-case/milano-milano/"
        "con-prezzo_3000,bilocali-2,trilocali-3,quadrilocali-4,"
@@ -10,7 +10,7 @@ URL = ("https://www.idealista.it/affitto-case/milano-milano/"
 
 async def run():
     browser = await uc.start(
-        browser_executable_path=EDGE_PATH,
+        browser_executable_path=CHROME_PATH,
         headless=False,
         lang="it-IT",
     )
