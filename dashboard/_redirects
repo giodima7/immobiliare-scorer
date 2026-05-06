@@ -1,11 +1,11 @@
 # Cloudflare Pages redirects — equivalent of the old netlify.toml [[redirects]].
+# NOTE: Pages serves .html files for extensionless URLs automatically, so
+# `/favourites` resolves to `favourites.html` without an explicit rule. Adding
+# one creates a redirect loop (ERR_TOO_MANY_REDIRECTS), so it is intentionally
+# NOT listed here.
 
-# /api-ping must 404 in static mode — dashboard JS uses this to detect that
-# the local Flask API isn't running and switch to snapshot mode.
-/api-ping  /404  404
-
-# Flask endpoint aliases so old bookmarks and the IS_LIVE codepath keep working.
+# Flask endpoint aliases so favourites.html and the sales tab can fetch the
+# pre-computed JSON snapshots when no local API is running.
 /rentals    /rentals_latest.json  200
 /sales      /sales_latest.json    200
 /listings   /latest.json          200
-/favourites /favourites.html      200
