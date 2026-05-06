@@ -429,6 +429,135 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--green-deep); }
 .sort-tab:hover:not(.active) { background: var(--border-strong); color: var(--text-primary); }
 .sort-tab.active { background: var(--green-deep); color: #fff; }
 
+/* ── Buyer / Investor view toggle (Sales tab only) ──────────────────────── */
+.view-mode-toggle {
+  display: inline-flex;
+  background: var(--bg-muted);
+  border-radius: var(--radius-full);
+  padding: 3px;
+  gap: 2px;
+  margin: 14px 24px 0;
+}
+.view-mode-btn {
+  padding: 7px 16px;
+  border-radius: var(--radius-full);
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 150ms ease;
+  font-family: var(--font);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.view-mode-btn:hover:not(.active) { color: var(--text-primary); }
+.view-mode-btn.active {
+  background: var(--bg-card);
+  color: var(--green-deep);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+/* Filter / sort widgets that only make sense in investor mode */
+body:not(.is-investor) .investor-only { display: none !important; }
+
+/* Investor-specific reason-component pill colours
+   (extends the existing reason-component-* set from buyer mode) */
+.reason-component-yield     { background: rgba(42, 122, 90, 0.12);   color: var(--green-deep); }
+.reason-component-upside    { background: rgba(232, 146, 42, 0.18);  color: #B85C00; }
+.reason-component-demand    { background: rgba(74, 144, 217, 0.15);  color: #1A5FA8; }
+.reason-component-costs     { background: rgba(224, 92, 75, 0.12);   color: var(--coral); }
+.reason-component-liquidity { background: rgba(108, 99, 165, 0.15);  color: #5B4F8E; }
+
+/* Mortgage breakdown panel (rendered inside the expandable details panel) */
+.mortgage-breakdown {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border, #E5E1D8);
+}
+.mortgage-breakdown h4 {
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0 0 12px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-primary);
+}
+.indicative-tag {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  background: var(--bg-muted);
+  color: var(--text-secondary);
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.mortgage-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+@media (max-width: 540px) {
+  .mortgage-grid { grid-template-columns: 1fr; }
+}
+.mortgage-col {
+  background: var(--bg-muted);
+  border-radius: 10px;
+  padding: 12px;
+}
+.mortgage-col-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--green-deep);
+  margin-bottom: 8px;
+}
+.mortgage-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  padding: 4px 0;
+  color: var(--text-secondary);
+  gap: 8px;
+}
+.mortgage-row.primary {
+  border-top: 1px solid rgba(0,0,0,0.07);
+  margin-top: 6px;
+  padding-top: 8px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.mortgage-row .value { font-weight: 700; color: var(--text-primary); }
+.mortgage-meta {
+  font-size: 10px;
+  color: var(--text-secondary);
+  text-align: right;
+  margin-top: 4px;
+  opacity: 0.75;
+}
+.cashflow-summary {
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 10px 12px;
+  background: var(--green-light);
+  border-radius: 10px;
+  color: var(--text-primary);
+}
+.cashflow-summary strong { color: var(--green-deep); }
+.cashflow-summary .positive { color: var(--green-deep); font-weight: 700; }
+.cashflow-summary .negative { color: var(--coral);     font-weight: 700; }
+.mortgage-disclaimer {
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-top: 10px;
+  font-style: italic;
+  opacity: 0.85;
+}
+
 /* ── Stats bar (warm pill strip) ── */
 .stats-bar {
   margin: 14px 24px 0;
@@ -3271,6 +3400,18 @@ function saveFilters() {
   </div>
 </div>
 
+<!-- ── Buyer / Investor view toggle (Sales tab only) ── -->
+<div class="view-mode-toggle" id="salesViewToggle" role="tablist" aria-label="Sales view mode">
+  <button class="view-mode-btn active" data-mode="buyer" type="button"
+          onclick="setSalesViewMode('buyer')" role="tab" aria-selected="true">
+    🏠 For me
+  </button>
+  <button class="view-mode-btn" data-mode="investor" type="button"
+          onclick="setSalesViewMode('investor')" role="tab" aria-selected="false">
+    📈 As investment
+  </button>
+</div>
+
 <!-- ── Sales filter bar ── -->
 <div class="filters">
   <div class="filter-group">
@@ -3387,13 +3528,25 @@ function saveFilters() {
       <button class="sort-tab" data-ssource="idealista_sale">Idealista</button>
     </div>
   </div>
+  <div class="filter-sep investor-only"></div>
+  <div class="filter-group investor-only">
+    <label>Min yield</label>
+    <select id="sMinYield">
+      <option value="">Any</option>
+      <option value="5">5%+</option>
+      <option value="6">6%+</option>
+      <option value="7">7%+</option>
+      <option value="8">8%+</option>
+    </select>
+  </div>
   <div class="filter-sep"></div>
   <div class="filter-group">
     <label>Sort</label>
     <div class="sort-tabs" id="sSortTabs">
       <button class="sort-tab active" data-ssort="score_total">Score</button>
       <button class="sort-tab" data-ssort="comps_sale_delta_pct">vs Comps</button>
-      <button class="sort-tab" data-ssort="estimated_yield_pct">Yield</button>
+      <button class="sort-tab investor-only" data-ssort="_yield">Yield ↓</button>
+      <button class="sort-tab investor-only" data-ssort="_cashflow">Cash flow ↓</button>
       <button class="sort-tab" data-ssort="price">Price ↑</button>
     </div>
   </div>
@@ -4224,6 +4377,49 @@ let scoreSettings = {   // loaded from /api/scoring-settings, used for badge dat
   radii: [500, 800, 1200], min_comps: 5,
 };
 
+// ── Investor view config ────────────────────────────────────────────────────
+// Italian investment-property assumptions used by the Sales-tab investor view.
+// UPDATE THESE QUARTERLY to reflect current market conditions; the
+// disclaimer in the mortgage breakdown surfaces this date to the user.
+const INVESTOR_CONFIG = {
+  rates_set_on: 'April 2026',
+  // Yield rating thresholds (gross %) — Milan-specific
+  // ≥7.0 = high (rare in Milan, signals strong investment)
+  // 5.5-7.0 = medium (typical for outer rings, B1/B22/D zones)
+  // <5.5 = low (typical for prime central, where appreciation drives returns)
+  yield_threshold_high:   7.0,
+  yield_threshold_medium: 5.5,
+  // Mortgage scenarios — primary residence vs investment property
+  primary: {
+    rate:           0.038,   // 25-year fixed, prime borrower
+    ltv:            0.80,    // 80% loan-to-value (downpayment 20%)
+    closing_pct:    0.10,    // notary + 4% registry tax + agency commission
+    term_years:     25,
+  },
+  investment: {
+    rate:           0.042,   // 20-year fixed, second-home premium
+    ltv:            0.65,    // 65% LTV (downpayment 35%)
+    closing_pct:    0.12,    // notary + 9% registry tax (no prima-casa relief)
+    term_years:     20,
+  },
+  // Annual cost assumptions for net-yield calculation
+  costs: {
+    vacancy_months_per_year:  1,      // 1 month vacancy (8.3%)
+    management_pct_of_rent:   0.08,   // property manager fee
+    imu_pct_of_price:         0.0065, // IMU on second home ≈ 0.65% of price
+    maintenance_pct_of_price: 0.01,   // 1% reserve for repairs
+    condo_per_sqm_fallback:   5,      // €/m²/mo when condominium_fees missing
+  },
+};
+
+// Sales view mode: 'buyer' (default, owner-occupier) or 'investor'.
+// Persisted per user via Storage so the toggle state survives reloads.
+let salesViewMode = 'buyer';
+
+// Per-listing yield/mortgage caches — populated lazily, cleared if rates change
+const _yieldCache    = new WeakMap();
+const _mortgageCache = new WeakMap();
+
 // ── Global tooltip (item 4 + 5: fixed-position, no clipping) ─────────────────
 const _gtEl = document.getElementById('globalTooltip');
 let _gtHideTimer = null;
@@ -5012,6 +5208,25 @@ document.getElementById('sScore').addEventListener('input', function () {
 document.getElementById('sElevator').addEventListener('change', renderSales);
 document.getElementById('sShowAuctions')?.addEventListener('change', renderSales);
 document.getElementById('sShowNuda')    ?.addEventListener('change', renderSales);
+document.getElementById('sMinYield')    ?.addEventListener('change', renderSales);
+
+// Restore the persisted sales view mode (buyer/investor) on page load.
+// Done at module-load time so the toggle reflects the right state before
+// the first renderSales() call.
+try {
+  const _savedMode = (typeof Storage !== 'undefined' && Storage.get)
+    ? Storage.get('sales_view_mode', 'buyer') : 'buyer';
+  if (_savedMode === 'investor' || _savedMode === 'buyer') {
+    salesViewMode = _savedMode;
+    window.salesViewMode = _savedMode;
+    document.body.classList.toggle('is-investor', _savedMode === 'investor');
+    document.querySelectorAll('#salesViewToggle .view-mode-btn').forEach(b => {
+      const on = b.dataset.mode === _savedMode;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+  }
+} catch (_) {}
 
 document.getElementById('sBtnReset').addEventListener('click', () => {
   document.getElementById('sFascia').value    = '';
@@ -5024,6 +5239,7 @@ document.getElementById('sBtnReset').addEventListener('click', () => {
   document.getElementById('sElevator').checked = false;
   const sa = document.getElementById('sShowAuctions'); if (sa) sa.checked = false;
   const sn = document.getElementById('sShowNuda');     if (sn) sn.checked = false;
+  const sy = document.getElementById('sMinYield');     if (sy) sy.value = '';
   document.getElementById('sMinEnergy').value = '';
   document.getElementById('sScore').value     = 0;
   document.getElementById('sScoreVal').textContent = '0';
@@ -7308,6 +7524,14 @@ async function loadRentals() {
   _populateOmiZoneFilter(ALL_RENT);
   renderRentals();
   _updateUnmatchedBadge();
+  // If sales are already loaded, this is the second of the pair — fill in
+  // estimated_rent_mo on each sale so investor view has real yields.
+  maybeComputeEstimatedRents();
+  // If user is in investor mode and sales are visible, refresh them so the
+  // pills/yields show real numbers instead of "not computable".
+  if (salesViewMode === 'investor' && Array.isArray(ALL_SALE) && ALL_SALE.length) {
+    if (typeof renderSales === 'function') renderSales();
+  }
 }
 
 function _updateUnmatchedBadge() {
@@ -7360,6 +7584,10 @@ function getSaleFilters() {
     // to a regular purchase).
     showAuctions: document.getElementById('sShowAuctions')?.checked || false,
     showNuda:     document.getElementById('sShowNuda')?.checked     || false,
+    // Investor-only: minimum gross yield %, applied only when in investor mode
+    minYield: salesViewMode === 'investor'
+      ? (parseFloat(document.getElementById('sMinYield')?.value) || 0)
+      : 0,
     // Drawer-only filters (no desktop equivalent yet — stashed on window
     // by _applyDrawerToMain so they persist across renderSales() calls)
     condition: window._sCondition || '',
@@ -7396,6 +7624,11 @@ function applySaleFilters(data, f) {
     }
     if (f.gem === 'hidden' && !l.hidden_gem)                              return false;
     if (f.gem === 'good'   && !(l.good_value === true && l.hidden_gem !== true)) return false;
+    // Investor-mode only: filter listings whose computed gross yield is below threshold
+    if (f.minYield) {
+      const y = computeYieldMetrics(l).gross_yield_pct;
+      if (y == null || y < f.minYield) return false;
+    }
     return true;
   });
 }
@@ -7413,6 +7646,369 @@ function _populateSaleOmiZoneFilter(data) {
     sel.appendChild(o);
   });
   if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
+}
+
+// ── Investor view: data prep ─────────────────────────────────────────────────
+// Cross-reference each sale against the rentals dataset to estimate the
+// monthly rent it would command. Runs once when both ALL_SALE and ALL_RENT
+// are available; results are stashed on the sale listing as
+//   estimated_rent_mo · estimated_rent_psqm · estimated_rent_n_comps · estimated_rent_confidence
+// Uses a wider size band (0.80–1.20× sqm) than the comps engine (0.85–1.15×)
+// because we want enough rentals to project a stable median.
+function computeEstimatedRents(salesArr, rentalsArr) {
+  if (!Array.isArray(salesArr) || !Array.isArray(rentalsArr) || rentalsArr.length === 0) {
+    return;
+  }
+  // Index rentals by zone — turns a 4k×11k loop into a per-zone bucket lookup.
+  const byZone = new Map();
+  for (const r of rentalsArr) {
+    const z = r.omi_zona || r.omi_zone;
+    if (!z) continue;
+    const psqm = r.ask_psqm_effective || r.ask_psqm;
+    if (!psqm || psqm <= 0) continue;
+    if (!byZone.has(z)) byZone.set(z, []);
+    byZone.get(z).push(r);
+  }
+
+  for (const sale of salesArr) {
+    const sqm  = sale.sqm || 0;
+    const zona = sale.omi_zona || sale.omi_zone;
+    if (!sqm || !zona) {
+      sale.estimated_rent_mo = null;
+      continue;
+    }
+    const pool = byZone.get(zona);
+    if (!pool || pool.length === 0) {
+      sale.estimated_rent_mo = null;
+      sale.estimated_rent_confidence = 'low';
+      continue;
+    }
+    const sizeMin = sqm * 0.80;
+    const sizeMax = sqm * 1.20;
+    const matches = pool.filter(r => r.sqm >= sizeMin && r.sqm <= sizeMax);
+
+    if (matches.length < 3) {
+      sale.estimated_rent_mo = null;
+      sale.estimated_rent_confidence = 'low';
+      continue;
+    }
+    // If sale is renovated/excellent, prefer rentals in the same condition tier.
+    // Otherwise use all matches — mixing conditions gives a fairer median.
+    const saleCond = (sale.condition || '').toLowerCase();
+    const isPremium = saleCond.includes('ottimo') || saleCond.includes('ristrutturat');
+    let filtered = matches;
+    if (isPremium) {
+      const premiumOnly = matches.filter(r => {
+        const c = (r.condition || '').toLowerCase();
+        return c.includes('ottimo') || c.includes('ristrutturat');
+      });
+      if (premiumOnly.length >= 3) filtered = premiumOnly;
+    }
+    const psqmRents = filtered
+      .map(r => r.ask_psqm_effective || r.ask_psqm)
+      .filter(v => v > 0)
+      .sort((a, b) => a - b);
+    if (psqmRents.length < 3) {
+      sale.estimated_rent_mo = null;
+      sale.estimated_rent_confidence = 'low';
+      continue;
+    }
+    const median = psqmRents[Math.floor(psqmRents.length / 2)];
+    sale.estimated_rent_psqm        = median;
+    sale.estimated_rent_mo          = Math.round(median * sqm);
+    sale.estimated_rent_n_comps     = filtered.length;
+    sale.estimated_rent_confidence  =
+      filtered.length >= 15 ? 'high' :
+      filtered.length >= 6  ? 'medium' :
+                              'low';
+    // Invalidate any previously-cached yield so it's recomputed next render
+    _yieldCache.delete(sale);
+  }
+}
+// Trigger once both rentals and sales are present
+let _estRentsComputed = false;
+function maybeComputeEstimatedRents() {
+  if (_estRentsComputed) return;
+  if (!Array.isArray(window.ALL_SALE) && !Array.isArray(ALL_SALE)) return;
+  if (!Array.isArray(window.ALL_RENT) && !Array.isArray(ALL_RENT)) return;
+  const sales = (typeof ALL_SALE !== 'undefined') ? ALL_SALE : window.ALL_SALE;
+  const rents = (typeof ALL_RENT !== 'undefined') ? ALL_RENT : window.ALL_RENT;
+  if (!sales.length || !rents.length) return;
+  computeEstimatedRents(sales, rents);
+  _estRentsComputed = true;
+}
+
+// ── Investor view: per-listing computations ─────────────────────────────────
+// Yield: gross + net after running costs. Returns null fields when we can't
+// estimate (no rent or no price). Cached per listing object.
+function computeYieldMetrics(sale) {
+  if (_yieldCache.has(sale)) return _yieldCache.get(sale);
+  const price = sale.price || 0;
+  const rent  = sale.estimated_rent_mo || 0;
+  const sqm   = sale.sqm || 0;
+  const empty = {
+    gross_yield_pct: null, net_yield_pct: null, yield_rating: null,
+    annual_rent: null, annual_costs: null, monthly_costs: null,
+  };
+  if (!price || !rent) { _yieldCache.set(sale, empty); return empty; }
+
+  const c = INVESTOR_CONFIG.costs;
+  const annualRent = rent * 12;
+  const condoMonthly = sale.spese_condominiali || sale.condominium_fees ||
+                       (sqm > 0 ? Math.round(sqm * c.condo_per_sqm_fallback) : 0);
+  const condoAnnual       = condoMonthly * 12;
+  const vacancyAnnual     = rent * c.vacancy_months_per_year;
+  const managementAnnual  = annualRent * c.management_pct_of_rent;
+  const imuAnnual         = price * c.imu_pct_of_price;
+  const maintenanceAnnual = price * c.maintenance_pct_of_price;
+  const annualCosts = condoAnnual + vacancyAnnual + managementAnnual + imuAnnual + maintenanceAnnual;
+
+  const grossYield = (annualRent / price) * 100;
+  const netYield   = ((annualRent - annualCosts) / price) * 100;
+  let rating;
+  if      (grossYield >= INVESTOR_CONFIG.yield_threshold_high)   rating = 'high';
+  else if (grossYield >= INVESTOR_CONFIG.yield_threshold_medium) rating = 'medium';
+  else                                                            rating = 'low';
+
+  const out = {
+    gross_yield_pct: Math.round(grossYield * 10) / 10,
+    net_yield_pct:   Math.round(netYield   * 10) / 10,
+    yield_rating:    rating,
+    annual_rent:     annualRent,
+    annual_costs:    Math.round(annualCosts),
+    monthly_costs:   Math.round(annualCosts / 12),
+  };
+  _yieldCache.set(sale, out);
+  return out;
+}
+
+function computeMortgageScenarios(price) {
+  if (!price) return null;
+  const cached = _mortgageCache.get(price);
+  if (cached) return cached;
+
+  const monthlyPayment = (loan, annualRate, years) => {
+    const r = annualRate / 12;
+    const n = years * 12;
+    if (r === 0) return loan / n;
+    return loan * r * Math.pow(1+r, n) / (Math.pow(1+r, n) - 1);
+  };
+  const build = (cfg) => {
+    const loan       = price * cfg.ltv;
+    const downpay    = price * (1 - cfg.ltv);
+    const closing    = price * cfg.closing_pct;
+    const cashNeeded = downpay + closing;
+    const monthly    = monthlyPayment(loan, cfg.rate, cfg.term_years);
+    return {
+      cash_needed:     Math.round(cashNeeded),
+      downpayment:     Math.round(downpay),
+      closing_costs:   Math.round(closing),
+      loan_amount:     Math.round(loan),
+      monthly_payment: Math.round(monthly),
+      rate_pct:        +(cfg.rate * 100).toFixed(2),
+      ltv_pct:         Math.round(cfg.ltv * 100),
+      term_years:      cfg.term_years,
+    };
+  };
+  const out = {
+    primary:    build(INVESTOR_CONFIG.primary),
+    investment: build(INVESTOR_CONFIG.investment),
+  };
+  _mortgageCache.set(price, out);
+  return out;
+}
+
+// ── Investor view: card content ──────────────────────────────────────────────
+function investorStatPillsHtml(l) {
+  const y = computeYieldMetrics(l);
+  const m = computeMortgageScenarios(l.price);
+  const pills = [];
+  if (l.estimated_rent_mo) {
+    const conf = l.estimated_rent_confidence;
+    const tag  = conf === 'high' ? '' : conf === 'medium' ? ' ~' : ' ?';
+    const tip  = conf === 'high'   ? 'Rent estimate from 15+ similar rentals nearby'
+              : conf === 'medium' ? 'Rent estimate from 6–14 similar rentals nearby'
+              :                      'Rent estimate from limited comps — verify before offer';
+    pills.push(`<span class="stat-pill" title="${tip}" style="color:var(--text-primary)">💰 €${fmt(l.estimated_rent_mo)}/mo${tag}</span>`);
+  }
+  if (y.gross_yield_pct != null) {
+    const colors = { high: 'var(--green-deep)', medium: 'var(--amber)', low: 'var(--coral)' };
+    const labels = { high: 'high', medium: 'med', low: 'low' };
+    pills.push(`<span class="stat-pill" title="Gross yield = annual rent / asking price" style="color:${colors[y.yield_rating]};font-weight:700">📈 ${y.gross_yield_pct}% yield (${labels[y.yield_rating]})</span>`);
+  }
+  if (m) {
+    pills.push(`<span class="stat-pill" title="Cash needed (downpayment + closing costs) for the investment-property mortgage scenario" style="color:var(--text-primary)">🏦 €${(m.investment.cash_needed/1000).toFixed(0)}k down</span>`);
+  }
+  return pills.length ? `<div class="stat-pills">${pills.join('')}</div>` : '';
+}
+
+function generateInvestorReasons(l) {
+  const y = computeYieldMetrics(l);
+  const out = [];
+  // YIELD
+  if (y.yield_rating === 'high') {
+    out.push({ component: 'Yield', sentiment: 'positive', weight: 9,
+      text: `${y.gross_yield_pct}% gross yield — above Milan average` });
+  } else if (y.yield_rating === 'low' && y.gross_yield_pct != null) {
+    out.push({ component: 'Yield', sentiment: 'negative', weight: 8,
+      text: `${y.gross_yield_pct}% gross yield — below typical Milan investment threshold` });
+  } else if (y.yield_rating === 'medium') {
+    out.push({ component: 'Yield', sentiment: 'neutral', weight: 5,
+      text: `${y.gross_yield_pct}% gross yield — typical for the area` });
+  }
+  // PRICE vs comps (sales delta)
+  const dp = l.comps_sale_delta_pct;
+  const cn = l.comps_sale_n || 0;
+  if (dp != null && cn >= 10) {
+    if (dp <= -10) {
+      out.push({ component: 'Price', sentiment: 'positive', weight: 9,
+        text: `${Math.abs(dp).toFixed(0)}% below similar flats — strong entry point` });
+    } else if (dp >= 10) {
+      out.push({ component: 'Price', sentiment: 'negative', weight: 8,
+        text: `${dp.toFixed(0)}% above similar flats — limited margin` });
+    }
+  }
+  // RENOVATION upside (renovate-and-rent play in a desirable zone)
+  const cond = (l.condition || '').toLowerCase();
+  if ((cond.includes('ristrutturare') || cond.includes('da_ristrutturare')) && (l.ldi_score || 0) >= 60) {
+    out.push({ component: 'Upside', sentiment: 'positive', weight: 7,
+      text: 'Renovation play — needs work but in a desirable area' });
+  }
+  // RENTAL DEMAND signals (LDI + metro proximity)
+  const ldi = l.ldi_score || 0;
+  const mw  = l.metro_walk_min;
+  if (ldi >= 70 && mw != null && mw <= 7) {
+    out.push({ component: 'Demand', sentiment: 'positive', weight: 6,
+      text: 'Strong rental demand — desirable area, close to metro' });
+  } else if (ldi > 0 && ldi <= 25) {
+    out.push({ component: 'Demand', sentiment: 'negative', weight: 5,
+      text: 'Lower-demand zone — longer vacancies, weaker rent growth' });
+  }
+  // OPERATIONAL (condo fees drag)
+  const condoMo = l.spese_condominiali || l.condominium_fees;
+  if (condoMo && l.sqm) {
+    const condoPerSqm = condoMo / l.sqm;
+    if (condoPerSqm > 6) {
+      out.push({ component: 'Costs', sentiment: 'negative', weight: 5,
+        text: `High condo fees (€${fmt(condoMo)}/mo) — drag on net yield` });
+    }
+  }
+  // CONFIDENCE warning on rent estimate
+  if (l.estimated_rent_confidence === 'low' && l.estimated_rent_mo) {
+    out.push({ component: 'Yield', sentiment: 'neutral', weight: 3,
+      text: 'Rent estimate based on limited comps — verify before offer' });
+  }
+  out.sort((a, b) => b.weight - a.weight);
+  return out.slice(0, 4);
+}
+
+function investorReasonsBulletsHtml(l) {
+  const reasons = generateInvestorReasons(l);
+  if (!reasons.length) return '';
+  const icon = { positive: '✓', negative: '⚠', neutral: '•' };
+  return `
+    <ul class="callout-reasons" style="margin-top:8px;list-style:none;padding:0">
+      ${reasons.map(r => `
+        <li class="callout-reason callout-reason-${r.sentiment}" style="display:flex;gap:8px;align-items:flex-start;font-size:12px;line-height:1.45;padding:3px 0">
+          <span class="reason-icon" aria-hidden="true">${icon[r.sentiment]}</span>
+          <span class="reason-component reason-component-${r.component.toLowerCase()}" style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:999px;text-transform:uppercase;letter-spacing:0.04em;flex-shrink:0">${r.component}</span>
+          <span class="reason-text">${escapeHtml(r.text)}</span>
+        </li>`).join('')}
+    </ul>`;
+}
+
+function investorHeadline(l) {
+  const y  = computeYieldMetrics(l);
+  const dp = l.comps_sale_delta_pct;
+  if (y.yield_rating === 'high' && dp != null && dp <= -8) {
+    return `<strong>Strong investment</strong> — ${y.gross_yield_pct}% gross yield + ${Math.abs(dp).toFixed(0)}% below comps`;
+  }
+  if (y.yield_rating === 'high') {
+    return `<strong>High yield</strong> — ${y.gross_yield_pct}% gross (${y.net_yield_pct}% net after costs)`;
+  }
+  if (y.gross_yield_pct != null) {
+    return `<strong>${y.gross_yield_pct}% gross yield</strong> · ${y.net_yield_pct}% net after costs`;
+  }
+  return `Yield not computable — limited rental data for this zone/size`;
+}
+
+function investorMortgageBreakdownHtml(l) {
+  const m = computeMortgageScenarios(l.price);
+  if (!m) return '';
+  const y = computeYieldMetrics(l);
+  const cashflow = (l.estimated_rent_mo && y.monthly_costs != null)
+    ? Math.round(l.estimated_rent_mo - m.investment.monthly_payment - y.monthly_costs)
+    : null;
+  const cashflowHtml = (cashflow != null) ? `
+    <div class="cashflow-summary">
+      <strong>Cash flow as investment:</strong>
+      €${fmt(l.estimated_rent_mo)}/mo rent
+      − €${fmt(m.investment.monthly_payment)}/mo mortgage
+      − €${fmt(y.monthly_costs)}/mo running costs
+      = <span class="${cashflow >= 0 ? 'positive' : 'negative'}">€${fmt(cashflow)}/mo</span>
+    </div>` : '';
+  return `
+    <div class="mortgage-breakdown">
+      <h4>Financing scenarios <span class="indicative-tag">indicative only</span></h4>
+      <div class="mortgage-grid">
+        <div class="mortgage-col">
+          <div class="mortgage-col-title">As primary residence</div>
+          <div class="mortgage-row"><span>Cash needed</span><span class="value">€${fmt(m.primary.cash_needed)}</span></div>
+          <div class="mortgage-row"><span>Downpayment (${100 - m.primary.ltv_pct}%)</span><span>€${fmt(m.primary.downpayment)}</span></div>
+          <div class="mortgage-row"><span>Closing costs (~${Math.round(INVESTOR_CONFIG.primary.closing_pct*100)}%)</span><span>€${fmt(m.primary.closing_costs)}</span></div>
+          <div class="mortgage-row"><span>Mortgage</span><span>€${fmt(m.primary.loan_amount)} @ ${m.primary.rate_pct}%</span></div>
+          <div class="mortgage-row primary"><span>Monthly payment</span><span class="value">€${fmt(m.primary.monthly_payment)}/mo</span></div>
+          <div class="mortgage-meta">${m.primary.term_years}-year fixed</div>
+        </div>
+        <div class="mortgage-col">
+          <div class="mortgage-col-title">As investment</div>
+          <div class="mortgage-row"><span>Cash needed</span><span class="value">€${fmt(m.investment.cash_needed)}</span></div>
+          <div class="mortgage-row"><span>Downpayment (${100 - m.investment.ltv_pct}%)</span><span>€${fmt(m.investment.downpayment)}</span></div>
+          <div class="mortgage-row"><span>Closing costs (~${Math.round(INVESTOR_CONFIG.investment.closing_pct*100)}%)</span><span>€${fmt(m.investment.closing_costs)}</span></div>
+          <div class="mortgage-row"><span>Mortgage</span><span>€${fmt(m.investment.loan_amount)} @ ${m.investment.rate_pct}%</span></div>
+          <div class="mortgage-row primary"><span>Monthly payment</span><span class="value">€${fmt(m.investment.monthly_payment)}/mo</span></div>
+          <div class="mortgage-meta">${m.investment.term_years}-year fixed</div>
+        </div>
+      </div>
+      ${cashflowHtml}
+      <p class="mortgage-disclaimer">
+        Rates and terms are estimates based on Italian market conditions
+        (${INVESTOR_CONFIG.rates_set_on}). Actual mortgage terms vary by lender,
+        borrower profile, and credit history. Closing costs include notary,
+        registry tax, and agency commission. IMU and condo fees are factored
+        into the cash-flow line above. Always verify with a financial advisor
+        before making decisions.
+      </p>
+    </div>`;
+}
+
+// ── Investor view: toggle wiring ─────────────────────────────────────────────
+function setSalesViewMode(mode) {
+  if (mode !== 'buyer' && mode !== 'investor') mode = 'buyer';
+  salesViewMode = mode;
+  window.salesViewMode = mode;
+  try { Storage.set('sales_view_mode', mode); } catch (_) {}
+  document.body.classList.toggle('is-investor', mode === 'investor');
+  document.querySelectorAll('#salesViewToggle .view-mode-btn').forEach(b => {
+    const on = b.dataset.mode === mode;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  // If the active sort is investor-only and we switched to buyer, fall back to score
+  if (mode === 'buyer' && (sSortKey === '_yield' || sSortKey === '_cashflow')) {
+    sSortKey = 'score_total';
+    document.querySelectorAll('#sSortTabs .sort-tab').forEach(t =>
+      t.classList.toggle('active', t.dataset.ssort === 'score_total'));
+  }
+  // Switching modes may need rentals data — kick off lazily so the cards show real numbers
+  if (mode === 'investor' && !_estRentsComputed) {
+    if (Array.isArray(ALL_RENT) && ALL_RENT.length) {
+      maybeComputeEstimatedRents();
+    } else if (typeof loadRentals === 'function') {
+      loadRentals().then(maybeComputeEstimatedRents).then(() => renderSales());
+    }
+  }
+  if (typeof renderSales === 'function') renderSales();
 }
 
 // ── Sales — card renderer ─────────────────────────────────────────────────────
@@ -7630,6 +8226,7 @@ function renderSaleCard(l) {
         ${_dRow('Est. yield', l.estimated_yield_pct != null ? l.estimated_yield_pct.toFixed(1) + '% gross' : null, l.estimated_yield_pct != null ? (l.estimated_yield_pct >= 5 ? 'good' : l.estimated_yield_pct < 3.5 ? 'bad' : '') : 'muted')}
         ${_dRow('Total', l.score_total != null ? l.score_total + ' / 100' : null)}
       </div>
+      ${salesViewMode === 'investor' ? investorMortgageBreakdownHtml(l) : ''}
     </div>`;
 
   const sourceBadge = l.source === 'idealista_sale'
@@ -7668,9 +8265,11 @@ function renderSaleCard(l) {
     ${compsSugHtml}
     ${compsBarHtml}
 
-    ${statPillsHtml(l, false)}
+    ${salesViewMode === 'investor' ? investorStatPillsHtml(l) : statPillsHtml(l, false)}
 
-    ${whySentence ? `<div class="${whyClass}">${whySentence}${reasonsBulletsHtml(l)}</div>` : ''}
+    ${salesViewMode === 'investor'
+      ? `<div class="why-sentence">${investorHeadline(l)}${investorReasonsBulletsHtml(l)}</div>`
+      : (whySentence ? `<div class="${whyClass}">${whySentence}${reasonsBulletsHtml(l)}</div>` : '')}
 
     <div class="card-footer-a">
       <button class="btn-bookmark${Collections.isInAnyCollection(l.id) ? ' active' : ''}"
@@ -7786,12 +8385,29 @@ function renderSales() {
   const f    = getSaleFilters();
   let   data = applySaleFilters(ALL_SALE, f);
 
-  const asc = sSortKey === 'price' || sSortKey === 'comps_sale_delta_pct';
-  data.sort((a, b) => {
-    const av = a[sSortKey] ?? (asc ? Infinity : -Infinity);
-    const bv = b[sSortKey] ?? (asc ? Infinity : -Infinity);
-    return asc ? av - bv : bv - av;
-  });
+  // Investor-only computed sorts (yield and cash flow). Buyer-mode ignores these.
+  if (sSortKey === '_yield') {
+    data.sort((a, b) => {
+      const ya = computeYieldMetrics(a).gross_yield_pct ?? -Infinity;
+      const yb = computeYieldMetrics(b).gross_yield_pct ?? -Infinity;
+      return yb - ya;
+    });
+  } else if (sSortKey === '_cashflow') {
+    const cf = (l) => {
+      const m = computeMortgageScenarios(l.price);
+      const y = computeYieldMetrics(l);
+      if (!m || !l.estimated_rent_mo || y.monthly_costs == null) return -Infinity;
+      return l.estimated_rent_mo - m.investment.monthly_payment - y.monthly_costs;
+    };
+    data.sort((a, b) => cf(b) - cf(a));
+  } else {
+    const asc = sSortKey === 'price' || sSortKey === 'comps_sale_delta_pct';
+    data.sort((a, b) => {
+      const av = a[sSortKey] ?? (asc ? Infinity : -Infinity);
+      const bv = b[sSortKey] ?? (asc ? Infinity : -Infinity);
+      return asc ? av - bv : bv - av;
+    });
+  }
   _saleFilteredData    = data;
   _saleRenderedCount   = 0;
 
@@ -7846,6 +8462,9 @@ async function loadSales() {
   }
   saleFasciaRanges = computeSaleFasciaRanges(ALL_SALE);
   _populateSaleOmiZoneFilter(ALL_SALE);
+  // Cross-reference with rentals (if loaded) so investor-view yields are real.
+  // If rentals haven't loaded yet, the rentals load path will trigger this.
+  maybeComputeEstimatedRents();
 
   // Initialise area MSD for sales (once)
   if (!saleAreaMsd) {
