@@ -57,3 +57,9 @@ milan_pois.json
 !seen_ids.json
 !dashboard/rentals_latest.json
 !dashboard/sales_latest.json
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example
