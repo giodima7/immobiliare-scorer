@@ -1320,6 +1320,226 @@ body.detail-page-active .filter-bar { display: none !important; }
   .lightbox { animation: none; }
 }
 
+/* Phase 3b: Renovation calculator ─────────────────────────── */
+.detail-renovation h2 .section-meta {
+  font-size: 12px; font-weight: 500;
+  color: var(--text-muted);
+  margin-left: 8px;
+}
+.reno-explainer {
+  font-size: 13px; line-height: 1.6;
+  color: var(--text-primary);
+  margin-bottom: 20px;
+  padding: 12px 14px;
+  background: var(--bg-muted);
+  border-radius: var(--radius-md);
+}
+.reno-empty {
+  font-size: 13px; color: var(--text-muted);
+  font-style: italic; margin: 0;
+}
+
+/* Tier selector */
+.reno-tier-selector { margin-bottom: 24px; }
+.tier-selector-label {
+  font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+.tier-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.tier-btn {
+  padding: 12px 14px;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border, #E5E1D8);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease;
+  text-align: left;
+  font-family: var(--font);
+}
+.tier-btn:hover {
+  border-color: var(--green-deep);
+  background: var(--bg-muted);
+}
+.tier-btn.active {
+  background: var(--green-light);
+  border-color: var(--green-deep);
+}
+.tier-btn-label {
+  font-size: 13px; font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+.tier-btn-cost {
+  font-size: 14px; font-weight: 700;
+  color: var(--green-deep);
+}
+.tier-btn-time {
+  font-size: 11px; color: var(--text-muted);
+  margin-top: 4px;
+}
+.tier-desc {
+  font-size: 12px; color: var(--text-secondary);
+  line-height: 1.55; margin: 0;
+  font-style: italic;
+}
+
+/* Summary cards */
+.reno-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.reno-summary-card {
+  padding: 12px 14px;
+  background: var(--bg-muted);
+  border-radius: var(--radius-md);
+}
+.reno-summary-card-result {
+  background: var(--green-light);
+  border: 1.5px solid var(--green-deep);
+}
+.rs-label {
+  font-size: 10px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.rs-value {
+  font-size: 16px; font-weight: 700;
+  color: var(--text-primary);
+}
+.rs-value-large { font-size: 20px; color: var(--green-deep); }
+.rs-detail {
+  font-size: 11px; color: var(--text-muted);
+  margin-top: 3px;
+}
+
+/* Uplift box */
+.reno-uplift {
+  padding: 14px 18px;
+  background: var(--bg-card);
+  border: 1px solid var(--border, #E5E1D8);
+  border-radius: var(--radius-md);
+  margin-bottom: 24px;
+}
+.reno-uplift-row {
+  display: flex; justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  padding: 4px 0;
+}
+.reno-uplift-row + .reno-uplift-row {
+  border-top: 1px solid var(--border, #E5E1D8);
+  margin-top: 6px;
+  padding-top: 8px;
+}
+.reno-uplift-label {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+.reno-uplift-value {
+  font-size: 15px; font-weight: 700;
+}
+.reno-uplift-value.positive { color: var(--green-deep); }
+.reno-uplift-value.negative { color: var(--coral); }
+
+/* Three scenario cards */
+.reno-scenarios {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.scenario-card {
+  padding: 16px;
+  background: var(--bg-muted);
+  border-radius: var(--radius-md);
+  position: relative;
+  border: 1.5px solid transparent;
+}
+.scenario-card.recommended {
+  background: var(--green-light);
+  border-color: var(--green-deep);
+}
+.scenario-badge {
+  position: absolute;
+  top: -8px; right: 12px;
+  background: var(--green-deep);
+  color: white;
+  font-size: 10px; font-weight: 700;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.scenario-title {
+  font-size: 14px; font-weight: 700;
+  margin: 0 0 6px 0;
+  color: var(--text-primary);
+}
+.scenario-desc {
+  font-size: 11.5px; color: var(--text-secondary);
+  line-height: 1.55;
+  margin: 0 0 12px 0;
+  min-height: 50px;
+}
+.scenario-metrics {
+  border-top: 1px solid var(--border, #E5E1D8);
+  padding-top: 10px;
+}
+.scenario-card.recommended .scenario-metrics { border-top-color: rgba(42,122,90,0.25); }
+.metric-row {
+  display: flex; justify-content: space-between;
+  align-items: baseline;
+  font-size: 12px;
+  padding: 4px 0;
+}
+.metric-row .metric-label {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.metric-row .metric-value {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.metric-row .metric-value.positive { color: var(--green-deep); }
+.metric-row .metric-value.negative { color: var(--coral); }
+.metric-row-end {
+  border-top: 1px solid var(--border, #E5E1D8);
+  margin-top: 6px;
+  padding-top: 8px;
+}
+.scenario-card.recommended .metric-row-end { border-top-color: rgba(42,122,90,0.25); }
+.metric-row-headline {
+  margin-top: 4px;
+  padding-top: 6px;
+}
+.metric-row-headline .metric-value strong { font-size: 16px; }
+
+.reno-disclaimer {
+  font-size: 11px; color: var(--text-muted);
+  line-height: 1.6;
+  font-style: italic;
+  padding: 12px 14px;
+  background: var(--bg-page);
+  border-radius: var(--radius-md);
+  margin: 0;
+}
+.reno-disclaimer em { font-style: italic; color: var(--text-secondary); }
+
+@media (max-width: 768px) {
+  .reno-summary-grid { grid-template-columns: repeat(2, 1fr); }
+  .reno-scenarios    { grid-template-columns: 1fr; }
+  .tier-buttons      { grid-template-columns: 1fr; }
+}
+
 /* "Full investment analysis" CTA on investor cards ────────── */
 .btn-full-analysis {
   width: calc(100% - 32px);
@@ -9588,6 +9808,7 @@ function renderDetailPage(listingId) {
     detailNeighbourhoodHtml(listing),
     detailMiniMapHtml(listing),
     detailGalleryHtml(listing),
+    showsRenovationCalculator(listing) ? detailRenovationCalculatorHtml(listing) : '',
   ].join('');
 
   // Slider listener + mini-map (after innerHTML is in the DOM)
@@ -10579,6 +10800,446 @@ function _wireLightboxSwipe() {
       lightboxNav(dx > 0 ? -1 : 1);
     }
   };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 3b — Renovation calculator
+// Three-scenario value-add analysis for fixer-uppers and standard-condition
+// flats. Hidden entirely for `ottimo` and `ristrutturato` (already done).
+// All cost rates are Milan averages — UPDATE ANNUALLY for market shifts.
+// ════════════════════════════════════════════════════════════════════════════
+
+// Renovation tier presets — Milan 2026 averages. Real costs vary 10–30% by
+// building age, contractor, and finishes; users should add contingency.
+const RENOVATION_TIERS = {
+  light: {
+    label: 'Light refresh', psqm: 600, duration_months: 3,
+    desc: 'Paint, floors, bathroom + kitchen surface refresh. Minimal structural work.',
+  },
+  mid: {
+    label: 'Mid-tier renovation', psqm: 1000, duration_months: 6,
+    desc: 'New bathroom + kitchen, flooring, plumbing/electrical updates, energy upgrades.',
+  },
+  full: {
+    label: 'Full renovation', psqm: 1500, duration_months: 9,
+    desc: 'Gut and rebuild. New layouts, full systems, premium finishes, terrazzo, designer kitchen.',
+  },
+};
+
+// One-time costs at the start of any renovation (permits + geometra fees).
+const RENO_ONE_TIME_COSTS  = 3000;
+
+// Selling cost on a flip — 4% agency commission + ~2% IRPEF on capital gains
+// when held under 5 years (taxable for investment property).
+const RENO_SELL_COST_PCT   = 0.06;
+
+// Empirically: a renovated comp commands ~+18% over a standard comp in the
+// same zone (matches the comps engine's CONDITION_FACTORS).
+const RENO_PSQM_UPLIFT_PCT = 0.18;
+
+// Estimated rental premium for a renovated flat over its as-is rent.
+// Rough rule of thumb — actual depends on tenant pool and finish quality.
+const RENO_RENT_PREMIUM_PCT = 0.20;
+
+function showsRenovationCalculator(listing) {
+  const cond = (listing.condition || '').toLowerCase().trim();
+  // Skip for already-renovated / excellent flats (no value-add to model)
+  return !['ottimo', 'ristrutturato'].includes(cond);
+}
+
+function defaultRenovationTier(listing) {
+  const cond = (listing.condition || '').toLowerCase().trim();
+  if (cond === 'fatiscente' || cond === 'da_ristrutturare' || cond.includes('da ristrutturare')) {
+    return 'mid';
+  }
+  return 'light';
+}
+
+// Estimate post-renovation value by pulling renovated comps in the same zone
+// and similar size. Tiered fallback: zone+renovated → fascia+renovated →
+// zone-any-condition × +18% uplift. Returns null if there's not enough data.
+function computePostRenoValue(listing) {
+  const allSales = (typeof ALL_SALE !== 'undefined') ? ALL_SALE : (window.ALL_SALE || []);
+  const sqm  = listing.sqm || 0;
+  const zona = listing.omi_zona;
+  if (!sqm) return null;
+
+  const sizeMin = sqm * 0.80;
+  const sizeMax = sqm * 1.20;
+  const isPremium = (s) => ['ristrutturato','ottimo'].includes((s.condition||'').toLowerCase().trim());
+  const inSize    = (s) => s.sqm != null && s.sqm >= sizeMin && s.sqm <= sizeMax;
+  const validPsqm = (s) => (s.ask_psqm || 0) > 0;
+  const notSelf   = (s) => String(s.id) !== String(listing.id);
+
+  const med = (arr) => {
+    const xs = arr.map(s => s.ask_psqm).sort((a, b) => a - b);
+    return xs[Math.floor(xs.length / 2)];
+  };
+
+  // Pass 1: same zone, renovated, similar size — strongest signal
+  if (zona) {
+    const pool = allSales.filter(s =>
+      s.omi_zona === zona && isPremium(s) && inSize(s) && validPsqm(s) && notSelf(s));
+    if (pool.length >= 5) {
+      const m = med(pool);
+      return { value: Math.round(m * sqm), psqm: Math.round(m),
+               n_comps: pool.length, confidence: 'high', method: 'zone_renovated_strict' };
+    }
+  }
+
+  // Pass 2: same fascia, renovated, similar size
+  if (listing.omi_fascia) {
+    const pool = allSales.filter(s =>
+      s.omi_fascia === listing.omi_fascia && isPremium(s) && inSize(s) && validPsqm(s) && notSelf(s));
+    if (pool.length >= 5) {
+      const m = med(pool);
+      return { value: Math.round(m * sqm), psqm: Math.round(m),
+               n_comps: pool.length, confidence: 'medium', method: 'fascia_renovated' };
+    }
+  }
+
+  // Pass 3: same zone, any condition × +18% uplift (matches comps_engine
+  // CONDITION_FACTORS premium-vs-standard ratio).
+  if (zona) {
+    const pool = allSales.filter(s =>
+      s.omi_zona === zona && inSize(s) && validPsqm(s) && notSelf(s));
+    if (pool.length >= 5) {
+      const m = med(pool) * (1 + RENO_PSQM_UPLIFT_PCT);
+      return { value: Math.round(m * sqm), psqm: Math.round(m),
+               n_comps: pool.length, confidence: 'low', method: 'zone_any_adjusted' };
+    }
+  }
+
+  return null;
+}
+
+// Carrying costs = mortgage + IMU + condo for `durationMonths` months,
+// plus one-time permits/geometra. No rent income during reno.
+function computeCarryingCosts(listing, durationMonths) {
+  const mortgage = computeMortgageScenarios(listing.price);
+  if (!mortgage) return null;
+  const sqm  = listing.sqm || 0;
+  const c    = INVESTOR_CONFIG.costs;
+
+  const monthlyMortgage = mortgage.investment.monthly_payment;
+  const imuMonthly      = (listing.price * c.imu_pct_of_price) / 12;
+  const condoMonthly    = listing.spese_condominiali
+                       || listing.condominium_fees
+                       || (sqm * c.condo_per_sqm_fallback);
+
+  const monthlyHold = monthlyMortgage + imuMonthly + condoMonthly;
+  const total       = monthlyHold * durationMonths + RENO_ONE_TIME_COSTS;
+
+  return {
+    monthly_mortgage:  Math.round(monthlyMortgage),
+    monthly_imu:       Math.round(imuMonthly),
+    monthly_condo:     Math.round(condoMonthly),
+    monthly_hold:      Math.round(monthlyHold),
+    one_time:          RENO_ONE_TIME_COSTS,
+    total:             Math.round(total),
+    duration_months:   durationMonths,
+  };
+}
+
+// Three side-by-side scenarios for the chosen tier.
+// All return objects share the same shape so renderRenovationScenarios()
+// can iterate uniformly.
+function computeRenovationScenarios(listing, tierKey) {
+  const tier     = RENOVATION_TIERS[tierKey];
+  if (!tier) return null;
+  const sqm      = listing.sqm || 0;
+  const purchase = listing.price || 0;
+
+  const postReno = computePostRenoValue(listing);
+  const carrying = computeCarryingCosts(listing, tier.duration_months);
+  const mortgage = computeMortgageScenarios(purchase);
+  const yields   = computeYieldMetrics(listing);
+
+  if (!postReno || !carrying || !mortgage) return null;
+
+  const renoCost      = sqm * tier.psqm;
+  const downpayment   = mortgage.investment.cash_needed;
+  const apprPct       = defaultAppreciationRate(listing);
+  const projection5yr = computeAppreciationProjection(listing, mortgage, yields, apprPct);
+  const fiveYr        = projection5yr ? projection5yr[1] : null;
+
+  // ── Scenario 1: as-is rental — baseline already computed in Phase 1 ─────
+  const asIsCFAfter = (yields && yields.monthly_costs != null && listing.estimated_rent_mo)
+    ? (listing.estimated_rent_mo - mortgage.investment.monthly_payment - yields.monthly_costs)
+    : null;
+  const asIs = {
+    label: 'Buy as-is, rent out',
+    total_invested: downpayment,
+    timeline_months: 1,
+    reno_cost: 0,
+    carrying_cost: 0,
+    monthly_cashflow_during_reno: 0,
+    monthly_cashflow_after: asIsCFAfter != null ? Math.round(asIsCFAfter) : null,
+    property_value_end: fiveYr ? fiveYr.property_value : purchase,
+    total_return_5yr:   fiveYr ? fiveYr.total_return   : 0,
+    annualised_5yr:     fiveYr ? fiveYr.annualised_pct : 0,
+    description: 'Rent the flat in current condition. Lowest yield, no renovation risk or capital lock-up.',
+  };
+
+  // ── Scenario 2: renovate then rent ─────────────────────────────────────
+  const baseRent           = listing.estimated_rent_mo || 0;
+  const renoMonthlyRent    = Math.round(baseRent * (1 + RENO_RENT_PREMIUM_PCT));
+  const renoTotalCash      = downpayment + renoCost + carrying.total;
+  const postRenoOpCosts    = (yields && yields.monthly_costs != null)
+    ? Math.round(yields.monthly_costs * 1.05)   // slightly higher condo for upgraded building
+    : 0;
+  const renoRentMonthlyCF  = renoMonthlyRent - mortgage.investment.monthly_payment - postRenoOpCosts;
+
+  const months5yr           = 60;
+  const monthsAfterReno     = months5yr - tier.duration_months;
+  const cumulativeCashflow  = -carrying.total + (renoRentMonthlyCF * monthsAfterReno);
+  // Property appreciates from the new (post-reno) baseline, not the asking price
+  const propValue5yr        = postReno.value * Math.pow(1 + apprPct/100, 5);
+  const principalPaid5yr    = fiveYr ? fiveYr.principal_paid : 0;
+  // Total return = cash flow + principal pay-down + (final value − purchase) − reno cost
+  const renoRentReturn      = cumulativeCashflow + principalPaid5yr + (propValue5yr - purchase) - renoCost;
+  const renoRentBase        = renoTotalCash > 0 ? (1 + renoRentReturn / renoTotalCash) : 0;
+  const renoRentAnn         = renoRentBase > 0 ? (Math.pow(renoRentBase, 1/5) - 1) * 100 : -100;
+
+  const renoRent = {
+    label: 'Renovate, then rent',
+    total_invested: renoTotalCash,
+    timeline_months: tier.duration_months,
+    reno_cost: renoCost,
+    carrying_cost: carrying.total,
+    monthly_cashflow_during_reno: -Math.round(carrying.monthly_hold),
+    monthly_cashflow_after: renoRentMonthlyCF,
+    property_value_end: Math.round(propValue5yr),
+    total_return_5yr:   Math.round(renoRentReturn),
+    annualised_5yr:     Math.round(renoRentAnn * 10) / 10,
+    description: `${tier.duration_months}-month renovation, then rent at +${Math.round(RENO_RENT_PREMIUM_PCT*100)}% premium. Higher long-term yield, but capital is tied up while work runs.`,
+  };
+
+  // ── Scenario 3: renovate then flip ─────────────────────────────────────
+  const sellingCosts = postReno.value * RENO_SELL_COST_PCT;
+  const flipCash     = downpayment + renoCost + carrying.total;
+  const flipReturn   = postReno.value - sellingCosts - purchase - renoCost - carrying.total;
+  // Allow 3 months on top of renovation duration to find a buyer + close
+  const flipMonths   = tier.duration_months + 3;
+  const flipBase     = flipCash > 0 ? (1 + flipReturn / flipCash) : 0;
+  const flipAnn      = flipBase > 0 ? (Math.pow(flipBase, 12/flipMonths) - 1) * 100 : -100;
+
+  const renoFlip = {
+    label: 'Renovate, then sell',
+    total_invested: flipCash,
+    timeline_months: flipMonths,
+    reno_cost: renoCost,
+    carrying_cost: carrying.total,
+    selling_cost: Math.round(sellingCosts),
+    monthly_cashflow_during_reno: -Math.round(carrying.monthly_hold),
+    monthly_cashflow_after: null,   // sold — no ongoing cash flow
+    property_value_end: postReno.value,
+    total_return_5yr:   Math.round(flipReturn),
+    annualised_5yr:     Math.round(flipAnn * 10) / 10,
+    description: `Sell post-renovation. Faster capital recycle but no rental income, plus selling costs (~${Math.round(RENO_SELL_COST_PCT*100)}%).`,
+  };
+
+  return {
+    tier,
+    post_reno_value: postReno,
+    renovation_cost: renoCost,
+    carrying,
+    scenarios: { asIs, renoRent, renoFlip },
+  };
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────
+function detailRenovationCalculatorHtml(listing) {
+  const defaultTier = defaultRenovationTier(listing);
+  const result      = computeRenovationScenarios(listing, defaultTier);
+
+  if (!result || !result.post_reno_value) {
+    return `
+      <section class="detail-renovation">
+        <h2><span class="section-icon">🔨</span> Renovation upside</h2>
+        <p class="reno-empty">Insufficient data to compute renovation upside — need more renovated comparable sales in this zone.</p>
+      </section>`;
+  }
+
+  const cond = (listing.condition || '').toLowerCase().trim() || 'unknown';
+  const isFixerUpper = ['da_ristrutturare', 'fatiscente'].includes(cond) || cond.includes('da ristrutturare');
+
+  const tierBtns = Object.entries(RENOVATION_TIERS).map(([key, tier]) => `
+    <button type="button" class="tier-btn ${key === defaultTier ? 'active' : ''}"
+            data-tier="${escapeAttr(key)}"
+            onclick="setRenovationTier('${escapeAttr(key)}')">
+      <div class="tier-btn-label">${escapeHtml(tier.label)}</div>
+      <div class="tier-btn-cost">€${tier.psqm}/m²</div>
+      <div class="tier-btn-time">${tier.duration_months} months</div>
+    </button>`).join('');
+
+  return `
+    <section class="detail-renovation">
+      <h2><span class="section-icon">🔨</span> Renovation upside
+        <span class="section-meta">${isFixerUpper ? 'value-add play' : 'optional upgrade'}</span>
+      </h2>
+
+      <p class="reno-explainer">
+        ${isFixerUpper
+          ? `This listing is in <strong>${escapeHtml(cond)}</strong> condition — there's potential value to add through renovation. Lume estimates the post-renovation value using ${result.post_reno_value.n_comps} renovated comparable${result.post_reno_value.n_comps === 1 ? '' : 's'} in the same area.`
+          : `This listing is in <strong>${escapeHtml(cond)}</strong> condition — already liveable, but you could still upgrade to lift value. Numbers below show what an optional refresh might yield.`}
+      </p>
+
+      <div class="reno-tier-selector">
+        <div class="tier-selector-label">Renovation scope</div>
+        <div class="tier-buttons">${tierBtns}</div>
+        <p class="tier-desc" id="reno-tier-desc">${escapeHtml(RENOVATION_TIERS[defaultTier].desc)}</p>
+      </div>
+
+      <div class="reno-summary" id="reno-summary">
+        ${renderRenovationSummary(listing, result)}
+      </div>
+
+      <div class="reno-scenarios" id="reno-scenarios">
+        ${renderRenovationScenarios(result)}
+      </div>
+
+      <p class="reno-disclaimer">
+        Renovation cost ranges are Milan averages — actual costs vary by building age,
+        materials, and contractor. Add 10–30% contingency. Carrying costs include
+        mortgage, IMU, condo fees, and one-time permits/geometra (~€${RENO_ONE_TIME_COSTS.toLocaleString()}).
+        Selling cost of ~${Math.round(RENO_SELL_COST_PCT*100)}% covers agency commission and IRPEF on capital
+        gains (taxable when held under 5 years for investment). Always get a contractor
+        <em>sopralluogo</em> (site visit) before committing.
+      </p>
+    </section>`;
+}
+
+function renderRenovationSummary(listing, result) {
+  const sqm      = listing.sqm || 0;
+  const post     = result.post_reno_value;
+  const renoCost = result.renovation_cost;
+  const purchase = listing.price || 0;
+  const grossUplift = post.value - purchase - renoCost;
+  const upliftPct   = renoCost > 0 ? (grossUplift / renoCost * 100) : 0;
+
+  const confColor = post.confidence === 'high' ? 'var(--green-deep)'
+                  : post.confidence === 'medium' ? 'var(--amber)'
+                                                 : 'var(--coral)';
+
+  return `
+    <div class="reno-summary-grid">
+      <div class="reno-summary-card">
+        <div class="rs-label">Purchase price</div>
+        <div class="rs-value">€${fmt(purchase)}</div>
+        <div class="rs-detail">€${fmt(listing.ask_psqm ?? 0)}/m² · ${sqm} m²</div>
+      </div>
+      <div class="reno-summary-card">
+        <div class="rs-label">Renovation</div>
+        <div class="rs-value">+ €${fmt(renoCost)}</div>
+        <div class="rs-detail">${escapeHtml(result.tier.label)} · €${result.tier.psqm}/m²</div>
+      </div>
+      <div class="reno-summary-card">
+        <div class="rs-label">Carrying costs</div>
+        <div class="rs-value">+ €${fmt(result.carrying.total)}</div>
+        <div class="rs-detail">${result.carrying.duration_months} months · mortgage + condo + IMU</div>
+      </div>
+      <div class="reno-summary-card reno-summary-card-result">
+        <div class="rs-label">Estimated post-reno value</div>
+        <div class="rs-value rs-value-large">€${fmt(post.value)}</div>
+        <div class="rs-detail">€${fmt(post.psqm)}/m² · ${post.n_comps} comps · <span style="color:${confColor};font-weight:600">${escapeHtml(post.confidence)}</span></div>
+      </div>
+    </div>
+
+    <div class="reno-uplift">
+      <div class="reno-uplift-row">
+        <span class="reno-uplift-label">Gross uplift after costs:</span>
+        <span class="reno-uplift-value ${grossUplift >= 0 ? 'positive' : 'negative'}">
+          ${grossUplift >= 0 ? '+' : ''}€${fmt(grossUplift)}
+        </span>
+      </div>
+      <div class="reno-uplift-row">
+        <span class="reno-uplift-label">Return on renovation cost:</span>
+        <span class="reno-uplift-value ${upliftPct >= 30 ? 'positive' : upliftPct >= 0 ? '' : 'negative'}">
+          ${upliftPct >= 0 ? '+' : ''}${upliftPct.toFixed(0)}%
+        </span>
+      </div>
+    </div>`;
+}
+
+function renderRenovationScenarios(result) {
+  const { asIs, renoRent, renoFlip } = result.scenarios;
+  const all = [
+    { key: 'asIs',     s: asIs },
+    { key: 'renoRent', s: renoRent },
+    { key: 'renoFlip', s: renoFlip },
+  ];
+  const best = all.reduce((b, x) => x.s.annualised_5yr > b.s.annualised_5yr ? x : b);
+
+  const card = (s, key, isRecommended) => {
+    const cf = s.monthly_cashflow_after;
+    const cfPositive = cf != null && cf >= 0;
+    const ann = s.annualised_5yr;
+
+    return `
+      <div class="scenario-card ${isRecommended ? 'recommended' : ''}">
+        ${isRecommended ? '<div class="scenario-badge">Best return</div>' : ''}
+        <h4 class="scenario-title">${escapeHtml(s.label)}</h4>
+        <p class="scenario-desc">${escapeHtml(s.description)}</p>
+
+        <div class="scenario-metrics">
+          <div class="metric-row">
+            <span class="metric-label">Total cash invested</span>
+            <span class="metric-value">€${fmt(s.total_invested)}</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Timeline</span>
+            <span class="metric-value">${s.timeline_months}-month setup</span>
+          </div>
+          ${s.monthly_cashflow_during_reno !== 0 ? `
+            <div class="metric-row">
+              <span class="metric-label">CF during reno</span>
+              <span class="metric-value negative">−€${fmt(Math.abs(s.monthly_cashflow_during_reno))}/mo</span>
+            </div>` : ''}
+          ${cf !== null ? `
+            <div class="metric-row">
+              <span class="metric-label">CF post-setup</span>
+              <span class="metric-value ${cfPositive ? 'positive' : 'negative'}">
+                ${cfPositive ? '+' : '−'}€${fmt(Math.abs(cf))}/mo
+              </span>
+            </div>` : ''}
+          <div class="metric-row metric-row-end">
+            <span class="metric-label">${key === 'renoFlip' ? 'Net profit at sale' : '5-year total return'}</span>
+            <span class="metric-value ${s.total_return_5yr >= 0 ? 'positive' : 'negative'}">
+              <strong>${s.total_return_5yr >= 0 ? '+' : '−'}€${fmt(Math.abs(s.total_return_5yr))}</strong>
+            </span>
+          </div>
+          <div class="metric-row metric-row-headline">
+            <span class="metric-label">Annualised</span>
+            <span class="metric-value ${ann >= 5 ? 'positive' : ann >= 0 ? '' : 'negative'}">
+              <strong>${ann >= 0 ? '+' : ''}${ann.toFixed(1)}%</strong>
+            </span>
+          </div>
+        </div>
+      </div>`;
+  };
+
+  return all.map(x => card(x.s, x.key, x.key === best.key)).join('');
+}
+
+function setRenovationTier(tierKey) {
+  const sales   = (typeof ALL_SALE !== 'undefined') ? ALL_SALE : (window.ALL_SALE || []);
+  const listing = sales.find(l => String(l.id) === String(Router.currentListingId));
+  if (!listing) return;
+  const result  = computeRenovationScenarios(listing, tierKey);
+  if (!result) return;
+
+  document.querySelectorAll('.tier-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.tier === tierKey);
+  });
+  const desc = document.getElementById('reno-tier-desc');
+  if (desc) desc.textContent = RENOVATION_TIERS[tierKey].desc;
+
+  const summary = document.getElementById('reno-summary');
+  if (summary) summary.innerHTML = renderRenovationSummary(listing, result);
+
+  const scenarios = document.getElementById('reno-scenarios');
+  if (scenarios) scenarios.innerHTML = renderRenovationScenarios(result);
 }
 
 // ── Card-face additions: 5y projection summary + Full analysis CTA ───────
