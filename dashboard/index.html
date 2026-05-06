@@ -21,9 +21,12 @@
 <script>
   // Clerk publishable key — production (Cloudflare Pages) only. Local dev skips auth.
   window.__CLERK_PUBLISHABLE_KEY = 'pk_test_aW5jbHVkZWQtY2hvdy0zMC5jbGVyay5hY2NvdW50cy5kZXYk';
+  // Show the app immediately on every load — sign-in is now optional, only
+  // required when saving favourites/collections. The login screen is no
+  // longer used as a gate (kept in HTML in case we want to fall back).
+  document.write('<style>#login-screen{display:none!important}#app-root{display:block!important}</style>');
   if (['localhost','127.0.0.1'].includes(location.hostname)) {
-    // Local dev: no auth gate, show app immediately so nothing can hide it.
-    document.write('<style>#login-screen{display:none!important}#app-root{display:block!important}</style>');
+    // Local dev: nothing extra to do.
   } else {
     // Public deploy (Cloudflare Pages): hide every local-only / scanner control
     // before paint so the static dashboard never flashes scan UI it can't run.
@@ -2591,20 +2594,26 @@ const Auth = (() => {
     _clerk: null,       // Clerk SDK instance (null on localhost)
 
     async init() {
+      // Always show the app — sign-in is optional (only required when saving).
+      // On localhost we skip Clerk entirely; on prod we still load it in the
+      // background so we can detect an existing session and let the user
+      // sign in to access their favourites/collections.
+      showApp();
+      // Render shared-collection (?c=…) deep-link banner if present
+      if (typeof handleSharedCollectionParam === 'function') {
+        try { handleSharedCollectionParam(); } catch (_) {}
+      }
+
       if (isLocal) {
-        showApp();   // CSS shows app-root; showApp() restores filters + runs onboarding check
+        updateUserAvatar();
         return;
       }
 
-      // Shared-collection deep-links (`?c=…`) bypass the auth gate so anyone
-      // with the link can view the curated listings.
-      const isSharedView = (typeof handleSharedCollectionParam === 'function')
-                            && handleSharedCollectionParam();
-
       const clerk = await _waitForClerk();
       if (!clerk) {
-        // Clerk failed to load — fail open to login screen so the user isn't stuck on a blank page
-        if (isSharedView) showApp(); else showLoginScreen();
+        // Clerk failed to load (network blip, ad-blocker, etc.) — leave the
+        // app open as a guest. updateUserAvatar() will show a "Sign in" button.
+        updateUserAvatar();
         return;
       }
       this._clerk = clerk;
@@ -2620,13 +2629,29 @@ const Auth = (() => {
       });
 
       if (this.user) {
+        // Already signed in from a previous session — migrate any guest data
+        // and refresh the UI without disturbing the visible app.
         this._onLogin(this.user);
-      } else if (isSharedView) {
-        showApp();
       } else {
-        showLoginScreen();
+        updateUserAvatar();
       }
     },
+
+    /**
+     * Gate a save / write action behind sign-in. Returns true if signed in
+     * (caller may proceed), or false after opening the Clerk sign-in modal.
+     * Optional `message` is logged so callers can surface a toast if they wish.
+     */
+    requireSignIn(message) {
+      if (this.user) return true;
+      if (message && typeof showToast === 'function') {
+        try { showToast(message); } catch (_) {}
+      }
+      this.openSignIn();
+      return false;
+    },
+
+    isSignedIn() { return !!this.user; },
 
     userId() { return this.user?.id || 'guest'; },
     userName() {
@@ -2646,18 +2671,24 @@ const Auth = (() => {
     },
 
     _onLogin(user) {
-      hideLoginScreen();
+      // App is already visible (no auth gate). Just migrate any guest data
+      // into this user's namespace and refresh UI.
       Storage.migrate(user.id);
       // Cache the Clerk user ID so other static pages (e.g. favourites.html)
       // can scope their localStorage keys without re-loading the Clerk SDK.
       try { localStorage.setItem('lume_clerk_user_id', user.id); } catch (_) {}
-      showApp();
       updateUserAvatar();
+      updateFavBadge?.();
+      // Re-render listings so favourite hearts reflect the user's saved set
+      if (typeof renderRentals === 'function') try { renderRentals(); } catch (_) {}
+      if (typeof renderSales   === 'function') try { renderSales();   } catch (_) {}
     },
     _onLogout() {
       try { localStorage.removeItem('lume_clerk_user_id'); } catch (_) {}
-      showLoginScreen();
-      hideApp();
+      updateUserAvatar();
+      updateFavBadge?.();
+      if (typeof renderRentals === 'function') try { renderRentals(); } catch (_) {}
+      if (typeof renderSales   === 'function') try { renderSales();   } catch (_) {}
     },
 
     signOut() {
@@ -2739,9 +2770,31 @@ function hideApp() {
 function updateUserAvatar() {
   const el = document.getElementById('user-avatar');
   if (!el) return;
-  el.textContent = Auth.userInitial();
-  el.style.display = 'flex';
-  el.title = `Signed in as ${Auth.userName()} — click to sign out`;
+  if (typeof Auth !== 'undefined' && Auth.isSignedIn && Auth.isSignedIn()) {
+    // Signed in — round avatar with initial, opens account menu
+    el.textContent     = Auth.userInitial();
+    el.style.display   = 'flex';
+    el.style.width     = '32px';
+    el.style.padding   = '0';
+    el.style.fontSize  = '13px';
+    el.style.borderRadius = '50%';
+    el.style.background = '#2A7A5A';
+    el.style.color     = 'white';
+    el.title           = `Signed in as ${Auth.userName()} — click to sign out`;
+    el.setAttribute('onclick', 'showUserMenu(event)');
+  } else {
+    // Signed out — pill-shaped "Sign in" button, opens Clerk modal
+    el.textContent     = 'Sign in';
+    el.style.display   = 'flex';
+    el.style.width     = 'auto';
+    el.style.padding   = '0 14px';
+    el.style.fontSize  = '13px';
+    el.style.borderRadius = '999px';
+    el.style.background = '#2A7A5A';
+    el.style.color     = 'white';
+    el.title           = 'Sign in to save listings';
+    el.setAttribute('onclick', 'Auth.openSignIn()');
+  }
 }
 
 function restoreFilters() {
@@ -4502,6 +4555,7 @@ function renderCard(l) {
   card.querySelector('.btn-fav').addEventListener('click', e => {
     const id  = e.currentTarget.dataset.id;
     const now = toggleFavourite(id);
+    if (now === null) return;   // signed-out: Clerk modal opened, no UI flip
     e.currentTarget.innerHTML = (now ? '♥' : '♡') + ' Fav';
     e.currentTarget.classList.toggle('is-fav', now);
     e.currentTarget.title = now ? 'Remove from favourites' : 'Add to favourites';
@@ -4688,6 +4742,11 @@ function saveFavourites(ids) { Storage.set('favourites', ids); }
 function isFavourite(id)     { return getFavourites().includes(String(id)); }
 
 function toggleFavourite(id) {
+  // Sign-in required to save: opens Clerk modal if not signed in.
+  if (typeof Auth !== 'undefined'
+      && !Auth.requireSignIn('Sign in to save listings to your favourites')) {
+    return null; // null = caller should not flip its UI optimistically
+  }
   const ids = getFavourites();
   const i   = ids.indexOf(String(id));
   if (i === -1) ids.push(String(id)); else ids.splice(i, 1);
@@ -4710,6 +4769,11 @@ function saveRentFavs(ids)   { Storage.set('rentFavourites', ids); }
 function isRentFav(id)       { return getRentFavs().includes(String(id)); }
 
 function toggleRentFav(id) {
+  // Sign-in required to save: opens Clerk modal if not signed in.
+  if (typeof Auth !== 'undefined'
+      && !Auth.requireSignIn('Sign in to save listings to your favourites')) {
+    return null;
+  }
   const ids = getRentFavs();
   const i   = ids.indexOf(String(id));
   if (i === -1) ids.push(String(id)); else ids.splice(i, 1);
@@ -5985,6 +6049,11 @@ function closeCollectionMenu() {
 
 function openCollectionMenu(listingId, ev) {
   if (ev) ev.stopPropagation();
+  // Sign-in required to save to a collection. Opens Clerk modal if guest.
+  if (typeof Auth !== 'undefined'
+      && !Auth.requireSignIn('Sign in to save listings to collections')) {
+    return;
+  }
   closeCollectionMenu();
 
   const collections = Collections.getAll();
@@ -6970,6 +7039,7 @@ function renderRentalCard(l) {
   card.querySelector('[data-rent-id]').addEventListener('click', e => {
     const id  = e.currentTarget.dataset.rentId;
     const now = toggleRentFav(id);
+    if (now === null) return;   // signed-out: Clerk modal opened, no UI flip
     e.currentTarget.innerHTML = (now ? '♥' : '♡') + ' Fav';
     e.currentTarget.classList.toggle('is-fav', now);
     e.currentTarget.title = now ? 'Remove from favourites' : 'Add to favourites';
@@ -7629,6 +7699,7 @@ function renderSaleCard(l) {
   card.querySelector('[data-sale-id]').addEventListener('click', e => {
     const id  = e.currentTarget.dataset.saleId;
     const now = toggleFavourite(id);
+    if (now === null) return;   // signed-out: Clerk modal opened, no UI flip
     e.currentTarget.innerHTML = (now ? '♥' : '♡') + ' Fav';
     e.currentTarget.classList.toggle('is-fav', now);
     e.currentTarget.title = now ? 'Remove from favourites' : 'Add to favourites';
