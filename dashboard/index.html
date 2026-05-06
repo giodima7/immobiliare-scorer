@@ -577,12 +577,19 @@ body:not(.is-investor) .investor-only { display: none !important; }
   opacity: 0.85;
 }
 
-/* ── 5-pill dense investor metrics row (Sales tab investor mode) ── */
+/* ── 5-pill dense investor metrics row (Sales tab investor mode) ──
+   Pills wrap to a second line when they don't fit. justify-content:
+   space-between distributes them across the available row width so the
+   layout looks balanced both at desktop (5 in a row) and on narrow
+   cards (3 + 2 / 2 + 3 / etc.). row-gap keeps a comfortable vertical
+   gap when wrapping. */
 .stat-pills-investor {
   display: flex;
-  gap: 5px;
-  margin: 8px 16px 0;
   flex-wrap: wrap;
+  justify-content: space-between;
+  column-gap: 6px;
+  row-gap: 6px;
+  margin: 8px 16px 0;
 }
 .stat-pills-investor .stat-pill {
   display: inline-flex;
@@ -612,14 +619,6 @@ body:not(.is-investor) .investor-only { display: none !important; }
   border-radius: 10px;
   font-size: 12px;
   color: var(--text-secondary);
-}
-@media (max-width: 480px) {
-  .stat-pills-investor {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-  .stat-pills-investor::-webkit-scrollbar { display: none; }
 }
 
 /* ── Stats bar (warm pill strip) ── */
@@ -7821,6 +7820,10 @@ function estimateRentForSale(sale, rentalsArr, idx) {
     method: 'citywide_size', confidence: 'low',
   });
 
+  // Round rent to the nearest €25 — sub-€25 precision implies a confidence
+  // we don't have, and round numbers read cleaner on the card pill.
+  const round25 = (n) => Math.round(n / 25) * 25;
+
   const MIN_POOL_SIZE = 5;
   for (const cand of candidatePools) {
     if (cand.pool.length < MIN_POOL_SIZE) continue;
@@ -7831,7 +7834,7 @@ function estimateRentForSale(sale, rentalsArr, idx) {
       : applyConditionAdjustment(median, cand.pool, saleCondGroup);
     return {
       psqm:       Math.round(adjusted * 100) / 100,
-      rent_mo:    Math.round(adjusted * sqm),
+      rent_mo:    round25(adjusted * sqm),
       n_comps:    cand.pool.length,
       confidence: cand.confidence,
       method:     cand.method,
@@ -7842,7 +7845,7 @@ function estimateRentForSale(sale, rentalsArr, idx) {
   if (sale.omi_loc_mid && sale.omi_loc_mid > 0) {
     return {
       psqm:       sale.omi_loc_mid,
-      rent_mo:    Math.round(sale.omi_loc_mid * sqm),
+      rent_mo:    round25(sale.omi_loc_mid * sqm),
       n_comps:    0,
       confidence: 'low',
       method:     'omi_benchmark',
