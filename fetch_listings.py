@@ -508,6 +508,29 @@ def parse_advertiser(re_data: dict) -> dict:
 
 # ── Immobiliare.it API fetch ───────────────────────────────────────────────────
 
+def parse_photo_urls(photos_raw: list, cap: int = 8) -> list:
+    """
+    Extract up to `cap` photo URLs from an Immobiliare multimedia.photos list.
+    Prefers the largest available size for each photo and falls back through
+    the size variants gracefully so older fixtures still resolve.
+    """
+    if not isinstance(photos_raw, list):
+        return []
+    urls = []
+    for p in photos_raw[:cap]:
+        if not isinstance(p, dict):
+            continue
+        size_urls = p.get("urls") or {}
+        u = (size_urls.get("large")
+             or size_urls.get("medium")
+             or size_urls.get("small")
+             or p.get("url")
+             or p.get("src"))
+        if isinstance(u, str) and u:
+            urls.append(u)
+    return urls
+
+
 def parse_listing(item: dict, city_key: str, city_label: str) -> Optional[dict]:
     """Extract and normalise fields from a single __NEXT_DATA__ result item."""
     re_data = item.get("realEstate", {})
@@ -689,17 +712,12 @@ def parse_listing(item: dict, city_key: str, city_label: str) -> Optional[dict]:
     if furnished is None and "arredato" in _feature_types:
         furnished = True
 
-    # thumbnail — first photo URL
-    photos    = prop.get("multimedia", {}).get("photos", [])
-    thumbnail = None
-    if photos:
-        first = photos[0]
-        urls  = first.get("urls", {})
-        thumbnail = (
-            urls.get("medium") or urls.get("large") or
-            urls.get("small") or first.get("url") or first.get("src")
-        )
-    photo_count = len(photos)
+    # thumbnail + photo gallery — both come from properties[0].multimedia.photos
+    # Cap at 8 URLs to keep JSON output size reasonable (~150 chars each).
+    photos      = prop.get("multimedia", {}).get("photos", [])
+    photo_urls  = parse_photo_urls(photos)
+    thumbnail   = photo_urls[0] if photo_urls else None
+    photo_count = len(photos) if isinstance(photos, list) else 0
 
     # published_date + days_on_market
     published_date = None
@@ -773,6 +791,7 @@ def parse_listing(item: dict, city_key: str, city_label: str) -> Optional[dict]:
         "published_date":  published_date,
         "condition":       condition,
         "thumbnail":       thumbnail,
+        "photos":          photo_urls,   # up to 8 photo URLs for the gallery
         "url":             url,
         "fetched_at":      datetime.now().isoformat(timespec="seconds"),
         "omi":             omi,   # temporary – removed before CSV export

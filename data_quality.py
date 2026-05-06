@@ -25,7 +25,7 @@ FIELDS = {
     "useful": [
         "has_balcony", "has_parking", "energy_class", "heating_type",
         "furnished", "bathrooms", "bedrooms", "spese_condominiali",
-        "days_on_market", "photo_count",
+        "days_on_market", "photo_count", "photos",
         "tram_nearest_dist_m", "supermarket_nearest_dist_m",
         "park_nearest_dist_m", "university_nearest_dist_m",
         "score_explanation", "suggested_rent_mo",
@@ -48,7 +48,7 @@ SALE_FIELDS = {
     "useful": [
         "has_balcony", "has_parking", "energy_class", "heating_type",
         "furnished", "bathrooms", "bedrooms",
-        "days_on_market", "photo_count",
+        "days_on_market", "photo_count", "photos",
         "tram_nearest_dist_m", "supermarket_nearest_dist_m",
         "park_nearest_dist_m", "university_nearest_dist_m",
         "estimated_yield_pct", "omi_compr_mid",
@@ -83,6 +83,8 @@ def _is_present(field: str, value) -> bool:
         return True   # False is a known value, not missing
     if isinstance(value, str) and value == "":
         return False
+    if isinstance(value, (list, tuple)) and len(value) == 0:
+        return False   # empty array (e.g. `photos: []` on older listings)
     if field in _ZERO_FIELDS and value == 0:
         return False
     return True

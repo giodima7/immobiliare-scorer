@@ -444,6 +444,30 @@ JSON.stringify((() => {
                     || imgEl.src
                     || '';
             })(),
+            // Multi-photo gallery: pull every <picture>/<img> in the card
+            // multimedia container. Idealista's search-result cards usually
+            // expose 1–5 photos via the carousel; older mid-page items may
+            // expose only one. Cap at 8 to mirror the Immobiliare fetcher.
+            photos: (() => {
+                const out = [];
+                const seen = new Set();
+                const push = (u) => {
+                    if (!u || typeof u !== 'string') return;
+                    u = u.split(',')[0].split(' ')[0].trim();
+                    if (!u.startsWith('http') || seen.has(u)) return;
+                    seen.add(u);
+                    out.push(u);
+                };
+                a.querySelectorAll('picture source').forEach(s =>
+                    push(s.getAttribute('srcset') || s.srcset));
+                a.querySelectorAll('.item-multimedia img, picture img, img[data-src], img[data-lazy], img[data-original]').forEach(i => {
+                    push(i.getAttribute('data-src')
+                      || i.getAttribute('data-lazy')
+                      || i.getAttribute('data-original')
+                      || i.src);
+                });
+                return out.slice(0, 8);
+            })(),
             latitude:    a.getAttribute('data-latitude')  || '',
             longitude:   a.getAttribute('data-longitude') || '',
             agency:      (() => {
@@ -915,6 +939,7 @@ def parse_idealista_listing(raw: dict) -> Optional[dict]:
         "longitude":          lon,
         "url":                url,
         "thumbnail":          raw.get("img") or None,
+        "photos":             list(raw.get("photos") or ([raw["img"]] if raw.get("img") else [])),
         # ── Listing-type flags (rentals — usually False, kept for symmetry) ──
         "is_auction":         is_auction,
         "is_nuda_proprieta":  is_nuda,
@@ -1044,6 +1069,7 @@ def parse_idealista_sale_listing(raw: dict) -> Optional[dict]:
         "longitude":       lon,
         "url":             url,
         "thumbnail":       raw.get("img") or None,
+        "photos":          list(raw.get("photos") or ([raw["img"]] if raw.get("img") else [])),
         # Listing-type flags — used by dashboard filter to hide auctions /
         # nuda proprietà by default (see applySaleFilters in index.html).
         "is_auction":      is_auction,

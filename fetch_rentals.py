@@ -478,6 +478,29 @@ def _parse_condo_from_description(desc):
 
 # ── Parser ─────────────────────────────────────────────────────────────────────
 
+def parse_photo_urls(photos_raw: list, cap: int = 8) -> list:
+    """
+    Extract up to `cap` photo URLs from an Immobiliare multimedia.photos list.
+    Prefers the largest available size for each photo and falls back through
+    the size variants gracefully so older fixtures still resolve.
+    """
+    if not isinstance(photos_raw, list):
+        return []
+    urls = []
+    for p in photos_raw[:cap]:
+        if not isinstance(p, dict):
+            continue
+        size_urls = p.get("urls") or {}
+        u = (size_urls.get("large")
+             or size_urls.get("medium")
+             or size_urls.get("small")
+             or p.get("url")
+             or p.get("src"))
+        if isinstance(u, str) and u:
+            urls.append(u)
+    return urls
+
+
 def parse_rental(item: dict) -> Optional[dict]:
     """Extract and normalise a rental listing from __NEXT_DATA__ result."""
     re_data    = item.get("realEstate", {})
@@ -579,17 +602,13 @@ def parse_rental(item: dict) -> Optional[dict]:
     listing_id = str(re_data.get("id", ""))
     url = f"https://www.immobiliare.it/annunci/{listing_id}/" if listing_id else ""
 
-    # Thumbnail — first photo is inside properties[0].multimedia.photos
-    # (realEstate.multimedia is empty on listing-search pages)
-    photos    = prop.get("multimedia", {}).get("photos", [])
-    thumbnail = None
-    if photos:
-        first   = photos[0]
-        urls    = first.get("urls", {})
-        thumbnail = (
-            urls.get("medium") or urls.get("large") or
-            urls.get("small") or first.get("url") or first.get("src")
-        )
+    # Thumbnail + photo gallery — both come from properties[0].multimedia.photos
+    # (realEstate.multimedia is empty on listing-search pages).
+    # We capture up to 8 URLs total. Cap chosen because the average photo URL
+    # is ~150 chars — 8 × ~10k listings ≈ 12 MB added to the JSON.
+    photos        = prop.get("multimedia", {}).get("photos", [])
+    photo_urls    = parse_photo_urls(photos)
+    thumbnail     = photo_urls[0] if photo_urls else None
 
     omi = match_omi(neighbourhood)
 
@@ -721,8 +740,8 @@ def parse_rental(item: dict) -> Optional[dict]:
         if "arredato" in _feature_types:
             furnished = True
 
-    # photo_count — count photos; fall back to 1 if thumbnail was resolved but list missing
-    photo_count = len(photos)
+    # photo_count — count photos in the raw multimedia list (not the URL cap)
+    photo_count = len(photos) if isinstance(photos, list) else 0
 
     # published_date + days_on_market
     published_date = None
@@ -776,6 +795,7 @@ def parse_rental(item: dict) -> Optional[dict]:
         "published_date":     published_date,
         "condition":          condition_raw,
         "thumbnail":          thumbnail,    # first listing photo URL (or None)
+        "photos":             photo_urls,   # up to 8 photo URLs for the gallery
         "url":                url,
         "omi":                omi,           # dropped before JSON export
         "fetched_at":         datetime.now().isoformat(timespec="seconds"),
