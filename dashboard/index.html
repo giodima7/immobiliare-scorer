@@ -578,34 +578,30 @@ body:not(.is-investor) .investor-only { display: none !important; }
 }
 
 /* ── 5-pill dense investor metrics row (Sales tab investor mode) ──
-   Pills wrap to a second line when they don't fit. justify-content:
-   space-between distributes them across the available row width so the
-   layout looks balanced both at desktop (5 in a row) and on narrow
-   cards (3 + 2 / 2 + 3 / etc.). row-gap keeps a comfortable vertical
-   gap when wrapping.
+   CSS Grid with auto-fit + minmax gives all pills the SAME width and
+   the SAME gap, no matter how many fit on a row. As the card narrows,
+   columns drop one at a time (5 → 4 → 3 → 2) and every row stays a
+   perfectly even grid — no awkward space-between holes.
 
-   IMPORTANT: the base `.stat-pills` rule sets `flex-wrap: nowrap` and
-   `overflow-x: auto` for buyer-mode horizontal scroll. We MUST override
-   both with !important here because the cards apply both classes
-   ("stat-pills stat-pills-investor") and source order alone isn't
-   enough when overflow-x has already established a scroll container. */
+   The `!important`s override the base `.stat-pills` rule which uses
+   flex + nowrap + overflow-x: auto for buyer-mode horizontal scroll.
+   We need a different layout entirely for investor mode, and the cards
+   apply both classes ("stat-pills stat-pills-investor"). */
 .stat-pills.stat-pills-investor,
 .stat-pills-investor {
-  display: flex !important;
-  flex-wrap: wrap !important;
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
+  gap: 6px;
   overflow-x: visible !important;
-  justify-content: space-between;
-  column-gap: 6px;
-  row-gap: 6px;
-  /* Match the buyer-mode .stat-pills horizontal positioning so the row
-     starts and ends at the same edges on both views. */
+  flex-wrap: initial !important;
   margin: 0;
   padding: 8px 16px 0;
 }
 .stat-pills-investor .stat-pill {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  gap: 5px;
   background: var(--bg-muted);
   border-radius: 10px;
   padding: 6px 9px;
@@ -613,6 +609,7 @@ body:not(.is-investor) .investor-only { display: none !important; }
   font-weight: 500;
   white-space: nowrap;
   line-height: 1.2;
+  min-width: 0;        /* let grid track shrink the pill cleanly */
 }
 .stat-pills-investor .pill-icon  { font-size: 12px; opacity: 0.85; }
 .stat-pills-investor .pill-label {
