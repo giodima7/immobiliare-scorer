@@ -4416,9 +4416,12 @@ const INVESTOR_CONFIG = {
 // Persisted per user via Storage so the toggle state survives reloads.
 let salesViewMode = 'buyer';
 
-// Per-listing yield/mortgage caches — populated lazily, cleared if rates change
+// Per-listing yield/mortgage caches — populated lazily, cleared if rates change.
+// _yieldCache is keyed on the sale-listing object (WeakMap → auto-evicts).
+// _mortgageCache is keyed on price (a primitive number), so it must be a
+// regular Map — WeakMap rejects non-object keys with a TypeError.
 const _yieldCache    = new WeakMap();
-const _mortgageCache = new WeakMap();
+const _mortgageCache = new Map();
 
 // ── Global tooltip (item 4 + 5: fixed-position, no clipping) ─────────────────
 const _gtEl = document.getElementById('globalTooltip');
