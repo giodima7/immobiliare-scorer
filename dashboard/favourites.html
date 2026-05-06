@@ -347,11 +347,22 @@ function renderRentCard(l) {
   const vc   = vsClass(dp);
   const vsLabel = l.comps_label || l.vs_omi_label || '–';
 
-  const bullets = (l.score_explanation || []);
-  const bulletsHtml = bullets.map(b => {
-    const cls = b.startsWith('✓') ? 'expl-good' : b.startsWith('✗') ? 'expl-bad' : 'expl-warn';
-    return `<div class="expl-bullet ${cls}">${b}</div>`;
-  }).join('');
+  // Prefer the modern score_reasons (component-tagged dicts);
+  // fall back to legacy score_explanation strings for older snapshots.
+  const reasons = l.score_reasons || [];
+  const legacy  = !reasons.length ? (l.score_explanation || []) : [];
+  const _icon = { positive: '✓', negative: '⚠', neutral: '•' };
+  const bulletsHtml = reasons.length
+    ? reasons.map(r => {
+        const cls = r.sentiment === 'positive' ? 'expl-good'
+                  : r.sentiment === 'negative' ? 'expl-bad'
+                  : 'expl-warn';
+        return `<div class="expl-bullet ${cls}">${_icon[r.sentiment] || '•'} ${r.text}</div>`;
+      }).join('')
+    : legacy.map(b => {
+        const cls = b.startsWith('✓') ? 'expl-good' : b.startsWith('✗') ? 'expl-bad' : 'expl-warn';
+        return `<div class="expl-bullet ${cls}">${b}</div>`;
+      }).join('');
 
   const card = document.createElement('div');
   card.className = 'fav-card';

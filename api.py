@@ -304,7 +304,8 @@ def _geo_enrich_worker():
             # Flush after every chunk so the dashboard reflects progress in real time
             clean = [{k: v for k, v in l.items() if k != "omi"} for l in data]
             tmp = rent_path.with_suffix(".tmp")
-            tmp.write_text(_json.dumps(clean, ensure_ascii=False, indent=2))
+            from dashboard_io import write_snapshot
+            write_snapshot(tmp, clean)
             tmp.replace(rent_path)
             print(f"  [geo] {done_count}/{len(need_idx)} done")
 
@@ -327,7 +328,8 @@ def _flush_geo(data: list, path: Path, scoring_mod):
     scored = scoring_mod.score_all(list(data))
     clean  = [{k: v for k, v in l.items() if k != "omi"} for l in scored]
     tmp = path.with_suffix(".tmp")
-    tmp.write_text(_json.dumps(clean, ensure_ascii=False, indent=2))
+    from dashboard_io import write_snapshot
+    write_snapshot(tmp, clean)
     tmp.replace(path)
 
 
@@ -341,7 +343,8 @@ def _flush_sale_geo(data: list, path: Path):
     explain_all_sales(scored)
     clean  = [{k: v for k, v in l.items() if k != "omi"} for l in scored]
     tmp = path.with_suffix(".tmp")
-    tmp.write_text(_json.dumps(clean, ensure_ascii=False, indent=2))
+    from dashboard_io import write_snapshot
+    write_snapshot(tmp, clean)
     tmp.replace(path)
 
 
@@ -435,7 +438,8 @@ def _geo_enrich_sales_worker():
 
             clean = [{k: v for k, v in l.items() if k != "omi"} for l in data]
             tmp = sale_path.with_suffix(".tmp")
-            tmp.write_text(_json.dumps(clean, ensure_ascii=False, indent=2))
+            from dashboard_io import write_snapshot
+            write_snapshot(tmp, clean)
             tmp.replace(sale_path)
             print(f"  [geo-sale] {done_count}/{len(need_idx)} done")
 
@@ -877,7 +881,8 @@ def apply_omi_now():
         updated = _apply_omi_polygon(data, _ecache)
         scored  = _scoring.score_all(data)
         clean   = [{k: v for k, v in l.items() if k != "omi"} for l in scored]
-        rent_path.write_text(_json.dumps(clean, ensure_ascii=False, indent=2))
+        from dashboard_io import write_snapshot
+        write_snapshot(rent_path, clean)
         return jsonify({"ok": True, "updated": updated, "total": len(clean)})
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 500
@@ -1036,7 +1041,8 @@ def _rescore_with_new_mappings():
     import scoring as _scoring
     scored = _scoring.score_all(data)
     clean  = [{k: v for k, v in l.items() if k != "omi"} for l in scored]
-    rent_path.write_text(_json.dumps(clean, ensure_ascii=False))
+    from dashboard_io import write_snapshot
+    write_snapshot(rent_path, clean)
     return len(clean)
 
 
@@ -1510,7 +1516,8 @@ def _rescore_existing_json():
         import scoring as _scoring
         scored = _scoring.score_all(data)
         clean  = [{k: v for k, v in l.items() if k != 'omi'} for l in scored]
-        rent_path.write_text(_json.dumps(clean, ensure_ascii=False, indent=2))
+        from dashboard_io import write_snapshot
+        write_snapshot(rent_path, clean)
         print(f"  Rescore    → {len(clean)} listings updated")
     except Exception as exc:
         print(f"  Rescore    → skipped ({exc})")
@@ -1531,7 +1538,8 @@ def _rescore_existing_sales_json():
         scored = _score_sales(data)
         _explain_sales(scored)
         clean  = [{k: v for k, v in l.items() if k != 'omi'} for l in scored]
-        sale_path.write_text(_json.dumps(clean, ensure_ascii=False, indent=2))
+        from dashboard_io import write_snapshot
+        write_snapshot(sale_path, clean)
         print(f"  Rescore (sales) → {len(clean)} listings updated")
     except Exception as exc:
         print(f"  Rescore (sales) → skipped ({exc})")

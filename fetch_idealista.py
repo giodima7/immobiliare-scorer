@@ -1392,9 +1392,10 @@ def run_sale_once(args) -> list:
         id_map[l["id"]] = l
     merged = sorted(id_map.values(), key=lambda x: x.get("score_total", 0) or 0, reverse=True)
 
-    # Write atomically
+    # Write atomically — compact + null-strip to stay under the 25 MiB Cloudflare cap
+    from dashboard_io import write_snapshot
     tmp = SALE_OUTPUT_PATH.with_suffix(".tmp")
-    tmp.write_text(json.dumps(merged, ensure_ascii=False, indent=2))
+    write_snapshot(tmp, merged)
     tmp.replace(SALE_OUTPUT_PATH)
 
     new_listings = [l for l in scored if l["id"] not in {e["id"] for e in existing_sales}]

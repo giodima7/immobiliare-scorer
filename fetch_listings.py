@@ -952,16 +952,17 @@ def export(listings: list, prefix: str):
 
     # JSON (clean: drop internal `omi` dict, keep flat scored fields)
     json_listings = [{k: v for k, v in l.items() if k != "omi"} for l in listings]
-    with open(json_path, "w", encoding="utf-8") as f:
-        json.dump(json_listings, f, ensure_ascii=False, indent=2)
+    # Use compact JSON + null-strip so the snapshot stays under the 25 MiB
+    # Cloudflare Pages per-file cap.
+    from dashboard_io import write_snapshot
+    write_snapshot(json_path, json_listings)
 
     # Always mirror to dashboard/sales_latest.json so the dashboard auto-refreshes
     import os as _os
     dashboard_dir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "dashboard")
     _os.makedirs(dashboard_dir, exist_ok=True)
     latest_path = _os.path.join(dashboard_dir, "sales_latest.json")
-    with open(latest_path, "w", encoding="utf-8") as f:
-        json.dump(json_listings, f, ensure_ascii=False, indent=2)
+    write_snapshot(latest_path, json_listings)
 
     return csv_path, json_path
 

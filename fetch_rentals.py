@@ -1172,7 +1172,9 @@ def write_output(listings: list, source: str = "immobiliare",
 
     merged.sort(key=lambda x: x.get("score_total", 0), reverse=True)
     clean = [{k: v for k, v in l.items() if k != "omi"} for l in merged]
-    OUTPUT_PATH.write_text(json.dumps(clean, ensure_ascii=False, indent=2))
+    # Compact + null-strip so the snapshot stays under the 25 MiB Cloudflare cap.
+    from dashboard_io import write_snapshot
+    write_snapshot(OUTPUT_PATH, clean)
 
 
 def write_status(new_count: int, total_seen: int, skipped_areas: list = None):
