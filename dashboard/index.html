@@ -469,6 +469,93 @@ body:not(.is-investor) .investor-only { display: none !important; }
 .reason-component-demand    { background: rgba(74, 144, 217, 0.15);  color: #1A5FA8; }
 .reason-component-costs     { background: rgba(224, 92, 75, 0.12);   color: var(--coral); }
 .reason-component-liquidity { background: rgba(108, 99, 165, 0.15);  color: #5B4F8E; }
+.reason-component-returns   { background: rgba(108, 99, 165, 0.15);  color: #5B4F8E; }
+
+/* ── Appreciation projection panel (inside expanded data points) ── */
+.appreciation-section {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border, #E5E1D8);
+}
+.appreciation-section h4 {
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0 0 12px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-primary);
+}
+.appreciation-explainer {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  background: var(--bg-muted);
+  border-radius: 10px;
+}
+.appreciation-explainer strong { color: var(--text-primary); }
+.appreciation-slider-wrap { margin-bottom: 14px; }
+.appreciation-slider-wrap label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.appreciation-slider {
+  flex: 1;
+  accent-color: var(--green-deep);
+}
+.projection-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+.projection-table th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border, #E5E1D8);
+}
+.projection-table td {
+  padding: 8px;
+  border-bottom: 1px solid var(--border, #E5E1D8);
+  font-weight: 500;
+}
+.projection-table td:first-child { color: var(--text-primary); }
+.projection-table td.positive    { color: var(--green-deep); }
+.projection-table td.negative    { color: var(--coral); }
+.projection-table td.total {
+  border-left: 2px solid var(--border, #E5E1D8);
+  padding-left: 10px;
+}
+.appreciation-disclaimer {
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  font-style: italic;
+  opacity: 0.9;
+}
+@media (max-width: 480px) {
+  .projection-table { font-size: 11px; }
+  .projection-table th, .projection-table td { padding: 6px 4px; }
+}
 
 /* Mortgage breakdown panel (rendered inside the expandable details panel) */
 .mortgage-breakdown {
@@ -4473,15 +4560,51 @@ const INVESTOR_CONFIG = {
     closing_pct:    0.12,    // notary + 9% registry tax (no prima-casa relief)
     term_years:     20,
   },
-  // Annual cost assumptions for net-yield calculation
+  // ─── Investment cost assumptions for Milan (April 2026) ───────────────
+  // These approximate average-case Italian residential investing costs.
+  // Real costs vary by zone, property condition, management approach, and
+  // borrower profile. Assumptions chosen to be realistic, not pessimistic:
+  //   - Vacancy: 1 month/year (~8.3%)
+  //   - Management: 5% (self-managed with light support; pro mgmt is 8-10%)
+  //   - IMU: 0.4% of purchase price (proxy for the cadastral-based calc;
+  //     real IMU = rendita catastale × 1.05 × 160 × rate, which on typical
+  //     Milan flats works out to roughly 0.35-0.45% of price)
+  //   - Maintenance reserve: 0.3% of price (Italian condos cover building
+  //     common areas, lift, facade — this reserve is for in-flat repairs)
+  //   - Condo fees: from listing if known, else €5/m²/mo estimate
+  // Lume always shows the breakdown via tooltip so users can validate.
   costs: {
     vacancy_months_per_year:  1,      // 1 month vacancy (8.3%)
-    management_pct_of_rent:   0.08,   // property manager fee
-    imu_pct_of_price:         0.0065, // IMU on second home ≈ 0.65% of price
-    maintenance_pct_of_price: 0.01,   // 1% reserve for repairs
+    management_pct_of_rent:   0.05,   // self-managed with light support
+    imu_pct_of_price:         0.004,  // IMU on second home ≈ 0.4% of price
+    maintenance_pct_of_price: 0.003,  // in-flat maintenance reserve only
     condo_per_sqm_fallback:   5,      // €/m²/mo when condominium_fees missing
   },
 };
+
+// Fascia-based default appreciation rate (annual %).
+// Rough historical Milan trends — peripheral zones appreciate slower than
+// central. Users override this via the slider in the appreciation panel.
+const FASCIA_APPRECIATION_DEFAULTS = {
+  'A': 3.0,   // centro storico
+  'B': 2.5,   // semicentrale (Brera, Porta Venezia, Navigli, Washington)
+  'C': 2.0,   // pregio diffuso (Solari, Loreto, Argonne)
+  'D': 1.5,   // periferia di pregio
+  'E': 1.0,   // periferia
+};
+function defaultAppreciationRate(sale) {
+  const f = (sale.omi_fascia || 'C').toUpperCase();
+  return FASCIA_APPRECIATION_DEFAULTS[f] ?? 2.0;
+}
+
+// Escape a string for safe use inside an HTML attribute value.
+// title="..." tooltips need this — \n stays as \n (browsers render multi-line
+// titles natively), but quotes and ampersands need to be escaped.
+function escapeAttr(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;',
+  }[c]));
+}
 
 // Sales view mode: 'buyer' (default, owner-occupier) or 'investor'.
 // Persisted per user via Storage so the toggle state survives reloads.
@@ -7941,11 +8064,13 @@ function computeYieldMetrics(sale) {
   const empty = {
     gross_yield_pct: null, net_yield_pct: null, yield_rating: null,
     annual_rent: null, annual_costs: null, monthly_costs: null,
+    cost_breakdown: null,
   };
   if (!price || !rent) { _yieldCache.set(sale, empty); return empty; }
 
   const c = INVESTOR_CONFIG.costs;
   const annualRent = rent * 12;
+  const condoKnown   = !!(sale.spese_condominiali || sale.condominium_fees);
   const condoMonthly = sale.spese_condominiali || sale.condominium_fees ||
                        (sqm > 0 ? Math.round(sqm * c.condo_per_sqm_fallback) : 0);
   const condoAnnual       = condoMonthly * 12;
@@ -7969,6 +8094,14 @@ function computeYieldMetrics(sale) {
     annual_rent:     annualRent,
     annual_costs:    Math.round(annualCosts),
     monthly_costs:   Math.round(annualCosts / 12),
+    cost_breakdown: {
+      vacancy:     Math.round(vacancyAnnual),
+      management:  Math.round(managementAnnual),
+      imu:         Math.round(imuAnnual),
+      maintenance: Math.round(maintenanceAnnual),
+      condo:       Math.round(condoAnnual),
+      condo_known: condoKnown,   // false → condo was fallback-estimated
+    },
   };
   _yieldCache.set(sale, out);
   return out;
@@ -8067,26 +8200,56 @@ function investorStatPillsHtml(l) {
       </span>`);
   }
 
-  // 4) Cash needed to close (downpayment + closing — investment scenario)
+  // 4) Cash needed to close — tooltip surfaces the breakdown so users can
+  //    sanity-check the all-in cash requirement
   if (m) {
+    const ltvDownPct = 100 - m.investment.ltv_pct;
+    const closingPct = Math.round(INVESTOR_CONFIG.investment.closing_pct * 100);
+    const cashTip = [
+      `Total cash to close: €${fmt(m.investment.cash_needed)}`,
+      `• Downpayment (${ltvDownPct}%): €${fmt(m.investment.downpayment)}`,
+      `• Closing costs (~${closingPct}%): €${fmt(m.investment.closing_costs)}`,
+      `   - Notary: ~1% of price`,
+      `   - Agency commission: ~3% + IVA`,
+      `   - Registry tax (2nd home): ~9%`,
+      `   - Stamp duties + misc: ~1%`,
+      ``,
+      `Mortgage: €${fmt(m.investment.loan_amount)} @ ${m.investment.rate_pct}%`,
+      `${m.investment.term_years}-year fixed`,
+    ].join('\n');
     pills.push(`
-      <span class="stat-pill" title="Cash to close = downpayment (35%) + closing costs (~12%, notary + registry tax + agency)">
+      <span class="stat-pill" title="${escapeAttr(cashTip)}">
         <span class="pill-icon">🏦</span>
         <span class="pill-label">Cash</span>
         <span class="pill-value">€${(m.investment.cash_needed/1000).toFixed(0)}k</span>
       </span>`);
   }
 
-  // 5) Monthly cash flow (rent − mortgage − operating costs)
-  if (l.estimated_rent_mo && m && y.monthly_costs != null) {
+  // 5) Monthly cash flow — full cost-by-cost tooltip so the negative number
+  //    has visible math behind it. Coral threshold widened to -300 so most
+  //    Milan investments (which run a small monthly deficit) stay amber.
+  if (l.estimated_rent_mo && m && y.monthly_costs != null && y.cost_breakdown) {
     const cf = l.estimated_rent_mo - m.investment.monthly_payment - y.monthly_costs;
     const flowColor = cf >=  100 ? 'var(--green-deep)'
-                    : cf >= -100 ? 'var(--amber)'
+                    : cf >= -300 ? 'var(--amber)'
                     :              'var(--coral)';
     const sign = cf >= 0 ? '+' : '−';
+    const b = y.cost_breakdown;
+    const condoLbl = b.condo_known ? '' : ' (est)';
+    const cfTip = [
+      `Rent: €${fmt(l.estimated_rent_mo)}/mo`,
+      `− Mortgage: €${fmt(m.investment.monthly_payment)}/mo`,
+      `− Operating costs: €${fmt(y.monthly_costs)}/mo`,
+      `   • Vacancy: €${fmt(Math.round(b.vacancy/12))}/mo (1 mo/yr)`,
+      `   • Management: €${fmt(Math.round(b.management/12))}/mo (5%)`,
+      `   • IMU: €${fmt(Math.round(b.imu/12))}/mo (0.4% of price)`,
+      `   • Maintenance: €${fmt(Math.round(b.maintenance/12))}/mo (0.3%)`,
+      `   • Condo: €${fmt(Math.round(b.condo/12))}/mo${condoLbl}`,
+      `= ${sign}€${fmt(Math.abs(cf))}/mo`,
+    ].join('\n');
     pills.push(`
       <span class="stat-pill stat-pill-cf" style="color:${flowColor};font-weight:700"
-            title="Monthly cash flow = estimated rent − investment-mortgage payment − operating costs (vacancy, management, IMU, maintenance, condo)">
+            title="${escapeAttr(cfTip)}">
         <span class="pill-icon">${cf >= 0 ? '↑' : '↓'}</span>
         <span class="pill-label">CF</span>
         <span class="pill-value">${sign}€${fmt(Math.abs(cf))}/mo</span>
@@ -8155,6 +8318,26 @@ function generateInvestorReasons(l) {
     out.push({ component: 'Yield', sentiment: 'neutral', weight: 3,
       text: 'Rent estimate based on limited comps — verify before offer' });
   }
+  // RETURNS context: when monthly cash flow is negative but the 5yr total
+  // return (cash flow + principal pay-down + appreciation) is healthy, frame
+  // it as "normal for Milan" instead of letting the negative CF stand alone.
+  // Appreciation default is fascia-based; users can override via the slider
+  // in the expanded panel.
+  const m = computeMortgageScenarios(l.price);
+  if (m && l.estimated_rent_mo && y.monthly_costs != null) {
+    const monthlyCF = l.estimated_rent_mo - m.investment.monthly_payment - y.monthly_costs;
+    if (monthlyCF < 0) {
+      const projection = computeAppreciationProjection(l, m, y, defaultAppreciationRate(l));
+      const fiveYr = projection && projection[1];
+      if (fiveYr && fiveYr.annualised_pct >= 4) {
+        out.push({ component: 'Returns', sentiment: 'neutral', weight: 6,
+          text: `Negative cash flow normal for Milan — ${fiveYr.annualised_pct}% annualised over 5yr including appreciation` });
+      } else if (fiveYr) {
+        out.push({ component: 'Returns', sentiment: 'negative', weight: 7,
+          text: `Even with appreciation, projected 5yr return is weak (${fiveYr.annualised_pct}% annualised)` });
+      }
+    }
+  }
   out.sort((a, b) => b.weight - a.weight);
   return out.slice(0, 4);
 }
@@ -8187,6 +8370,173 @@ function investorHeadline(l) {
     return `<strong>${y.gross_yield_pct}% gross yield</strong> · ${y.net_yield_pct}% net after costs`;
   }
   return `Yield not computable — limited rental data for this zone/size`;
+}
+
+// ── Investor view: appreciation projection ─────────────────────────────────
+// Total return at 1Y / 5Y / 10Y horizons, combining cumulative cash flow,
+// principal pay-down (mortgage amortisation), and price appreciation.
+// Buyer-mode never calls this — investor mode only.
+function computeAppreciationProjection(sale, mortgage, yields, appreciationPct) {
+  if (!sale.price || !mortgage || !yields) return null;
+
+  const price            = sale.price;
+  const monthlyRent      = sale.estimated_rent_mo || 0;
+  const monthlyMortgage  = mortgage.investment.monthly_payment;
+  const monthlyOpCosts   = (yields.monthly_costs != null) ? yields.monthly_costs : 0;
+  const monthlyCashFlow  = monthlyRent - monthlyMortgage - monthlyOpCosts;
+
+  // Standard amortisation: balance after `m` months on a fixed-rate loan.
+  // Derived from the level-payment annuity formula. r is the monthly rate.
+  const r    = (mortgage.investment.rate_pct / 100) / 12;
+  const n    = mortgage.investment.term_years * 12;
+  const loan = mortgage.investment.loan_amount;
+  const balanceAfter = (m) => {
+    if (r === 0) return loan * (1 - m / n);
+    return loan * (Math.pow(1+r, n) - Math.pow(1+r, m)) / (Math.pow(1+r, n) - 1);
+  };
+  const principalPaidBy = (m) => Math.max(0, loan - balanceAfter(m));
+
+  const cashIn = mortgage.investment.cash_needed;
+  const horizons = [
+    { years: 1,  months: 12  },
+    { years: 5,  months: 60  },
+    { years: 10, months: 120 },
+  ];
+
+  return horizons.map(({ years, months }) => {
+    const cumulativeCashFlow = monthlyCashFlow * months;
+    const principalPaid      = principalPaidBy(months);
+    const propertyValue      = price * Math.pow(1 + appreciationPct/100, years);
+    const propertyGain       = propertyValue - price;
+    const totalReturn        = cumulativeCashFlow + principalPaid + propertyGain;
+    const totalReturnRatio   = (cashIn > 0) ? (totalReturn / cashIn) : 0;
+    // Annualised return = (1 + total_ratio) ^ (1/years) − 1
+    // Math.pow with negative bases (when total_ratio < -1, i.e. >100% loss
+    // on cash invested) returns NaN. Clamp.
+    const base   = 1 + totalReturnRatio;
+    const annual = base > 0 ? (Math.pow(base, 1/years) - 1) * 100 : -100;
+
+    return {
+      years,
+      cumulative_cashflow: Math.round(cumulativeCashFlow),
+      principal_paid:      Math.round(principalPaid),
+      property_value:      Math.round(propertyValue),
+      property_gain:       Math.round(propertyGain),
+      total_return:        Math.round(totalReturn),
+      total_return_pct:    Math.round(totalReturnRatio * 1000) / 10,  // e.g. 47.3 → 47.3%
+      annualised_pct:      Math.round(annual * 10) / 10,
+    };
+  });
+}
+
+function _projectionTableRowsHtml(projection) {
+  const fmtSign = (n) => {
+    const sign = n >= 0 ? '+' : '−';
+    return `${sign}€${fmt(Math.abs(n))}`;
+  };
+  return projection.map(p => `
+    <tr>
+      <td><strong>${p.years}-year</strong></td>
+      <td class="${p.cumulative_cashflow >= 0 ? 'positive' : 'negative'}">
+        ${fmtSign(p.cumulative_cashflow)}
+      </td>
+      <td class="positive">+€${fmt(p.principal_paid)}</td>
+      <td class="positive">+€${fmt(p.property_gain)}</td>
+      <td class="${p.total_return >= 0 ? 'positive' : 'negative'} total">
+        <strong>${fmtSign(p.total_return)}</strong>
+      </td>
+      <td class="${p.annualised_pct >= 5 ? 'positive' : p.annualised_pct >= 0 ? '' : 'negative'}">
+        <strong>${p.annualised_pct >= 0 ? '+' : ''}${p.annualised_pct}%</strong>
+      </td>
+    </tr>`).join('');
+}
+
+function appreciationSectionHtml(l) {
+  const y = computeYieldMetrics(l);
+  const m = computeMortgageScenarios(l.price);
+  if (!y || !m || !l.estimated_rent_mo) return '';
+  const defaultRate = defaultAppreciationRate(l);
+  const projection  = computeAppreciationProjection(l, m, y, defaultRate);
+  if (!projection) return '';
+
+  const fasciaHint = l.omi_fascia === 'A' || l.omi_fascia === 'B'
+    ? '2.5–3% per year for central zones'
+    : l.omi_fascia === 'C'
+    ? '~2% per year for mid-tier zones'
+    : '1–1.5% per year for peripheral zones';
+
+  // Slider state lives in the DOM via data-attr; we identify the listing's
+  // section by id so updateAppreciationProjection() can find + repaint it.
+  const sid = `apprc-${escapeAttr(String(l.id))}`;
+
+  return `
+    <div class="appreciation-section" data-listing-id="${escapeAttr(String(l.id))}">
+      <h4>Total return projection
+        <span class="indicative-tag">capital appreciation included</span>
+      </h4>
+      <div class="appreciation-explainer">
+        Cash flow alone shows part of the picture. With leverage, you also
+        build equity through mortgage pay-down, and the property typically
+        appreciates. Lume estimates total return assuming
+        <strong><span class="appreciation-rate">${defaultRate.toFixed(1)}</span>% annual appreciation</strong>
+        (default for fascia ${l.omi_fascia || '?'}).
+      </div>
+      <div class="appreciation-slider-wrap">
+        <label>Adjust appreciation rate</label>
+        <div class="slider-row">
+          <span>0%</span>
+          <input type="range" id="${sid}" class="appreciation-slider"
+                 min="0" max="6" step="0.1" value="${defaultRate}"
+                 oninput="updateAppreciationProjection('${escapeAttr(String(l.id))}', this.value)">
+          <span>6%</span>
+        </div>
+      </div>
+      <table class="projection-table" id="proj-${escapeAttr(String(l.id))}">
+        <thead>
+          <tr>
+            <th>Horizon</th>
+            <th>Cash flow</th>
+            <th>Principal paid</th>
+            <th>Property gain</th>
+            <th>Total return</th>
+            <th>Annualised</th>
+          </tr>
+        </thead>
+        <tbody>${_projectionTableRowsHtml(projection)}</tbody>
+      </table>
+      <p class="appreciation-disclaimer">
+        Appreciation rates are indicative averages. Past Milan trends suggest
+        ${fasciaHint}, but actual returns depend on market cycles, zone
+        trajectory, and timing. Total return assumes the property is held to
+        the end of each horizon and sold at market value (selling costs of
+        5–6% on exit are NOT included).
+      </p>
+    </div>`;
+}
+
+// Re-render the projection rows when the user moves the slider. Reads the
+// listing from ALL_SALE (the only place we have the canonical sale object).
+function updateAppreciationProjection(listingId, newRate) {
+  const sales = (typeof ALL_SALE !== 'undefined') ? ALL_SALE : (window.ALL_SALE || []);
+  const listing = sales.find(s => String(s.id) === String(listingId));
+  if (!listing) return;
+  const rate = parseFloat(newRate);
+  if (!isFinite(rate)) return;
+
+  const y = computeYieldMetrics(listing);
+  const m = computeMortgageScenarios(listing.price);
+  if (!y || !m) return;
+
+  const section = document.querySelector(`.appreciation-section[data-listing-id="${CSS.escape(String(listingId))}"]`);
+  if (section) {
+    const rateEl = section.querySelector('.appreciation-rate');
+    if (rateEl) rateEl.textContent = rate.toFixed(1);
+  }
+  const projection = computeAppreciationProjection(listing, m, y, rate);
+  const tbody = document.querySelector(`#proj-${CSS.escape(String(listingId))} tbody`);
+  if (tbody && projection) {
+    tbody.innerHTML = _projectionTableRowsHtml(projection);
+  }
 }
 
 function investorMortgageBreakdownHtml(l) {
@@ -8515,6 +8865,7 @@ function renderSaleCard(l) {
         ${_dRow('Total', l.score_total != null ? l.score_total + ' / 100' : null)}
       </div>
       ${salesViewMode === 'investor' ? investorMortgageBreakdownHtml(l) : ''}
+      ${salesViewMode === 'investor' ? appreciationSectionHtml(l) : ''}
     </div>`;
 
   const sourceBadge = l.source === 'idealista_sale'
