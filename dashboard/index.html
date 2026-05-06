@@ -25,6 +25,17 @@
     // Local dev: no auth gate, show app immediately so nothing can hide it.
     document.write('<style>#login-screen{display:none!important}#app-root{display:block!important}</style>');
   } else {
+    // Public deploy (Cloudflare Pages): hide every local-only / scanner control
+    // before paint so the static dashboard never flashes scan UI it can't run.
+    // applyStaticMode() also hides these in JS, but that runs after init(); the
+    // CSS below makes the hide unconditional and immediate.
+    document.write(
+      '<style>' +
+        '.scanner-panel,.email-panel,' +
+        '#btnFetchToggle,#zonesLink,#tabSettings,' +
+        '.server-note{display:none!important}' +
+      '</style>'
+    );
     // Production: load Clerk's browser SDK. Auth.init() waits for window.Clerk.
     document.write(
       '<scr'+'ipt async crossorigin="anonymous"' +
@@ -4872,12 +4883,22 @@ async function init() {
     return;
   }
 
-  // Detect live-API vs static (Cloudflare Pages) mode
-  try {
-    const ping = await fetch('/api-ping');
-    IS_LIVE = ping.ok;
-  } catch {
+  // Detect live-API vs static (Cloudflare Pages) mode.
+  // Primary signal: hostname. Only localhost/127.0.0.1 gets the live API
+  // (api.py listens on 8000). On Cloudflare Pages we can't trust /api-ping
+  // alone — Pages serves unknown URLs via SPA fallback as 200, defeating the
+  // probe. Hostname is the bulletproof signal; /api-ping is kept as a
+  // belt-and-suspenders check for unusual local setups (e.g. a LAN IP).
+  const _isLocalHost = ['localhost', '127.0.0.1', '0.0.0.0'].includes(location.hostname);
+  if (!_isLocalHost) {
     IS_LIVE = false;
+  } else {
+    try {
+      const ping = await fetch('/api-ping');
+      IS_LIVE = ping.ok;
+    } catch {
+      IS_LIVE = false;
+    }
   }
   if (!IS_LIVE) {
     applyStaticMode();
