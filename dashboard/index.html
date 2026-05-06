@@ -557,6 +557,405 @@ body:not(.is-investor) .investor-only { display: none !important; }
   .projection-table th, .projection-table td { padding: 6px 4px; }
 }
 
+/* ──────────────────────────────────────────────────────────────────────────
+   Investor detail page — full-page view at ?view=detail&l=ID
+   Phase 1 layout (hero, verdict, analysis, costs, mortgage, placeholders).
+   ────────────────────────────────────────────────────────────────────────── */
+body.detail-page-active .tab-bar,
+body.detail-page-active #salesView,
+body.detail-page-active #rentalsView,
+body.detail-page-active #mapView,
+body.detail-page-active #insightsView,
+body.detail-page-active #settingsView,
+body.detail-page-active #shared-collection-banner,
+body.detail-page-active .filter-bar { display: none !important; }
+
+.detail-page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 16px 80px;
+  background: var(--bg-page);
+  min-height: 100vh;
+}
+.detail-header {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  background: var(--bg-page);
+  padding: 14px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border, #E5E1D8);
+  margin-bottom: 24px;
+}
+.detail-back {
+  display: flex; align-items: center; gap: 8px;
+  background: transparent; border: none;
+  color: var(--text-primary);
+  font-size: 14px; font-weight: 500; font-family: var(--font);
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: var(--radius-md);
+  transition: background 120ms ease;
+}
+.detail-back:hover { background: var(--bg-muted); }
+.detail-header-actions { display: flex; gap: 8px; }
+.detail-share, .detail-bookmark {
+  padding: 8px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border, #E5E1D8);
+  border-radius: var(--radius-full);
+  font-size: 13px; font-weight: 500; font-family: var(--font);
+  cursor: pointer;
+  transition: background 120ms ease;
+  color: var(--text-primary);
+}
+.detail-share:hover, .detail-bookmark:hover { background: var(--bg-muted); }
+
+.detail-body section {
+  margin-bottom: 28px;
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  box-shadow: var(--shadow-card);
+}
+.detail-body section h2 {
+  font-size: 18px; font-weight: 700;
+  margin: 0 0 16px 0;
+  color: var(--text-primary);
+  display: flex; align-items: center; gap: 10px;
+}
+.detail-body section h2 .section-icon { font-size: 22px; }
+
+.detail-not-found { text-align: center; padding: 80px 20px; }
+.detail-not-found h1 { font-size: 24px; font-weight: 700; margin-bottom: 12px; }
+.detail-not-found p { color: var(--text-secondary); margin-bottom: 24px; }
+.detail-not-found .btn-primary {
+  background: var(--green-deep); color: white;
+  border: none; padding: 10px 20px;
+  border-radius: var(--radius-full);
+  font-weight: 600; font-size: 14px; font-family: var(--font);
+  cursor: pointer;
+}
+
+/* Hero ─────────────────────────────────────────────────────── */
+.detail-hero { padding: 0 !important; overflow: hidden; }
+.hero-photo {
+  position: relative;
+  width: 100%; aspect-ratio: 16/7;
+  overflow: hidden;
+  background: var(--bg-muted);
+}
+.hero-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.hero-badge {
+  position: absolute; top: 16px; left: 16px;
+  background: rgba(255,255,255,0.95);
+  backdrop-filter: blur(8px);
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  font-size: 13px; font-weight: 700;
+}
+.hero-badge-gem        { color: var(--green-deep); }
+.hero-badge-good-value { color: #B85C00; }
+
+.hero-content { padding: 24px; }
+.hero-top {
+  display: flex; align-items: flex-start; gap: 16px;
+  margin-bottom: 24px;
+}
+.hero-location { flex: 1; min-width: 0; }
+.hero-location h1 {
+  font-size: 26px; font-weight: 800;
+  margin: 0 0 4px 0;
+  letter-spacing: -0.5px;
+}
+.hero-address {
+  font-size: 14px; color: var(--text-secondary);
+  margin: 0 0 12px 0;
+}
+.hero-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+.detail-page .tag {
+  font-size: 11px; font-weight: 600;
+  padding: 3px 9px;
+  border-radius: var(--radius-full);
+  background: var(--bg-muted);
+  color: var(--text-secondary);
+}
+.detail-page .tag-fascia-a { background: #FBE9E5; color: #B85C00; }
+.detail-page .tag-fascia-b { background: #E6F4ED; color: #1F6B45; }
+.detail-page .tag-fascia-c { background: #EBF4FF; color: #1A5FA8; }
+.detail-page .tag-fascia-d { background: #F2EFE9; color: #6B6560; }
+.detail-page .tag-fascia-e { background: #ECECEC; color: #6B6560; }
+.detail-page .tag-source-immobiliare    { background: #EBF4FF; color: #1A5FA8; }
+.detail-page .tag-source-idealista      { background: #FFF0E6; color: #B85C00; }
+.detail-page .tag-source-idealista_sale { background: #FFF0E6; color: #B85C00; }
+.detail-page .tag-source-sale           { background: #EBF4FF; color: #1A5FA8; }
+
+.hero-numbers {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  padding: 20px;
+  background: var(--bg-muted);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+}
+.hero-number .num-label {
+  font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.hero-number .num-value {
+  font-size: 18px; font-weight: 700;
+  color: var(--text-primary);
+}
+.hero-number .num-value.num-large { font-size: 22px; }
+.hero-number .num-value.positive  { color: var(--green-deep); }
+.hero-number .num-value.negative  { color: var(--coral); }
+
+.hero-cta {
+  display: inline-block;
+  padding: 10px 20px;
+  background: var(--green-deep);
+  color: white !important; text-decoration: none;
+  border-radius: var(--radius-full);
+  font-weight: 600; font-size: 14px;
+  transition: background 150ms ease;
+}
+.hero-cta:hover { background: #235F47; }
+
+@media (max-width: 600px) {
+  .hero-numbers { grid-template-columns: repeat(2, 1fr); }
+  .hero-photo { aspect-ratio: 16/9; }
+}
+
+/* Verdict ──────────────────────────────────────────────────── */
+.verdict-card {
+  padding: 18px 20px;
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+  border-left: 4px solid;
+}
+.verdict-strong   { background: var(--green-light); border-left-color: var(--green-deep); }
+.verdict-decent   { background: #F2F8F5;            border-left-color: var(--green-mid); }
+.verdict-mediocre { background: var(--amber-light); border-left-color: var(--amber); }
+.verdict-weak     { background: var(--coral-light); border-left-color: var(--coral); }
+
+.verdict-headline {
+  display: flex; align-items: baseline;
+  justify-content: space-between; gap: 16px;
+  margin-bottom: 8px; flex-wrap: wrap;
+}
+.verdict-tier-label { font-size: 18px; font-weight: 800; color: var(--text-primary); }
+.verdict-rate       { font-size: 22px; font-weight: 800; color: var(--text-primary); }
+.verdict-desc       { font-size: 14px; line-height: 1.6; color: var(--text-primary); margin: 0 0 10px; }
+.verdict-note       { font-size: 12px; color: var(--text-muted); margin: 0; font-style: italic; }
+.verdict-no-data    { font-size: 13px; color: var(--text-muted); font-style: italic; margin: 0; }
+
+.benchmark-strip {
+  padding-top: 16px;
+  border-top: 1px solid var(--border, #E5E1D8);
+}
+.benchmark-title {
+  font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+.benchmark-grid { display: grid; gap: 8px; margin-bottom: 12px; }
+.benchmark-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 2fr;
+  align-items: center;
+  padding: 10px 14px;
+  background: var(--bg-muted);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  gap: 12px;
+}
+.benchmark-row.benchmark-this { background: var(--green-light); font-weight: 600; }
+.benchmark-name { font-weight: 600; }
+.benchmark-rate { font-weight: 700; text-align: center; }
+.benchmark-rate.positive { color: var(--green-deep); }
+.benchmark-rate.neutral  { color: var(--text-primary); }
+.benchmark-source { font-size: 11px; color: var(--text-muted); }
+.benchmark-disclaimer {
+  font-size: 11px; color: var(--text-muted);
+  line-height: 1.5; font-style: italic;
+  margin: 0;
+}
+
+/* Investment analysis section ─────────────────────────────── */
+.analysis-explainer {
+  font-size: 13px; color: var(--text-secondary);
+  line-height: 1.6; margin-bottom: 20px;
+}
+.analysis-slider {
+  background: var(--bg-muted);
+  border-radius: var(--radius-md);
+  padding: 16px 18px;
+  margin-bottom: 24px;
+}
+.analysis-slider .slider-row {
+  display: flex; justify-content: space-between;
+  align-items: baseline; margin-bottom: 10px;
+}
+.analysis-slider label {
+  font-size: 12px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.slider-current {
+  font-size: 18px; font-weight: 700;
+  color: var(--green-deep);
+}
+.appreciation-input {
+  width: 100%;
+  accent-color: var(--green-deep);
+  margin: 4px 0 8px;
+}
+.slider-marks {
+  display: flex; justify-content: space-between;
+  font-size: 11px; color: var(--text-muted);
+}
+
+.projection-wrap, .sensitivity-wrap { margin-bottom: 24px; }
+.projection-wrap h3, .sensitivity-wrap h3 {
+  font-size: 14px; font-weight: 700;
+  margin: 0 0 10px 0; color: var(--text-primary);
+}
+.sensitivity-intro {
+  font-size: 12px; color: var(--text-secondary);
+  line-height: 1.55; margin-bottom: 12px;
+}
+
+.detail-body .projection-table,
+.detail-body .sensitivity-table {
+  width: 100%; border-collapse: collapse; font-size: 13px;
+}
+.detail-body .projection-table th,
+.detail-body .sensitivity-table th {
+  text-align: left; font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.04em;
+  font-size: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border, #E5E1D8);
+}
+.detail-body .projection-table td,
+.detail-body .sensitivity-table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--border, #E5E1D8);
+}
+.detail-body .projection-table td.positive,
+.detail-body .sensitivity-table td.positive { color: var(--green-deep); font-weight: 600; }
+.detail-body .projection-table td.negative,
+.detail-body .sensitivity-table td.negative { color: var(--coral); font-weight: 600; }
+.detail-body .projection-table td.total {
+  border-left: 2px solid var(--border, #E5E1D8);
+  padding-left: 14px;
+}
+.sensitivity-table tr.sensitivity-default { background: var(--green-light); }
+.sensitivity-table tr.sensitivity-default td:first-child::after {
+  content: ' ← default';
+  font-size: 10px; font-weight: 500;
+  color: var(--text-muted);
+}
+.sensitivity-disclaimer {
+  font-size: 11px; color: var(--text-muted);
+  margin-top: 10px; line-height: 1.55;
+}
+
+/* Cost breakdown ──────────────────────────────────────────── */
+.costs-intro {
+  font-size: 13px; color: var(--text-secondary);
+  line-height: 1.55; margin-bottom: 16px;
+}
+.cost-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.cost-table th {
+  text-align: left;
+  padding: 10px 12px;
+  font-size: 10px; font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--border, #E5E1D8);
+}
+.cost-table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--border, #E5E1D8);
+}
+.cost-table .cost-note {
+  font-size: 11px; color: var(--text-muted); font-style: italic;
+}
+.cost-table .cost-total {
+  background: var(--bg-muted);
+  font-weight: 700;
+}
+.cost-table .cost-total td { border-bottom: none; }
+@media (max-width: 600px) {
+  .cost-table .cost-note { display: none; }
+  .cost-table { font-size: 12px; }
+  .detail-body .projection-table,
+  .detail-body .sensitivity-table { font-size: 11.5px; }
+  .detail-body .projection-table th, .detail-body .projection-table td,
+  .detail-body .sensitivity-table th, .detail-body .sensitivity-table td {
+    padding: 8px 6px;
+  }
+}
+
+/* Phase 2/3 placeholder sections ──────────────────────────── */
+.detail-placeholder { opacity: 0.6; }
+.placeholder-text {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 13px;
+  margin: 0;
+}
+
+/* "Full investment analysis" CTA on investor cards ────────── */
+.btn-full-analysis {
+  width: calc(100% - 32px);
+  margin: 12px 16px 0;
+  padding: 11px 16px;
+  background: var(--green-deep);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 13px; font-weight: 600; font-family: var(--font);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  gap: 8px;
+  transition: background 150ms ease;
+}
+.btn-full-analysis:hover { background: #235F47; }
+.btn-full-analysis .arrow { transition: transform 150ms ease; }
+.btn-full-analysis:hover .arrow { transform: translateX(2px); }
+
+/* Card-face 5y projection summary line */
+.card-projection-summary {
+  margin: 8px 16px 0;
+  padding: 8px 12px;
+  background: var(--bg-muted);
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  display: flex; align-items: center;
+  gap: 8px; flex-wrap: wrap;
+}
+.proj-label {
+  font-weight: 600; color: var(--text-secondary);
+  text-transform: uppercase; font-size: 10px; letter-spacing: 0.04em;
+}
+.proj-value { font-weight: 800; font-size: 14px; }
+.proj-detail { color: var(--text-muted); font-size: 11px; }
+
+@media (max-width: 768px) {
+  .detail-page { padding: 0 12px 60px; }
+  .detail-body section { padding: 16px; }
+  .detail-back span { display: none; }
+}
+
 /* Mortgage breakdown panel (rendered inside the expandable details panel) */
 .mortgage-breakdown {
   margin-top: 16px;
@@ -3066,6 +3465,11 @@ function showApp() {
   restoreFilters();
   // Deferred until here so Auth.userId() is the real user ID, not 'guest'
   if (typeof _checkOnboarding === 'function') _checkOnboarding();
+  // Router checks the URL: if ?view=detail&l=ID is present we render the
+  // detail page instead of the dashboard. Safe to call before sales data
+  // arrives — it shows a "Listing not loaded yet" empty state and the next
+  // call after loadSales() completes will populate it.
+  if (typeof Router !== 'undefined') Router.init();
 }
 function hideApp() {
   const r = document.getElementById('app-root');
@@ -3140,6 +3544,27 @@ function saveFilters() {
 
 <!-- Global fixed tooltip — avoids overflow:hidden clipping inside cards -->
 <div id="globalTooltip"></div>
+
+<!-- ── Investor detail page (full-page view, sales-only) ───────────────────────
+     Shown when URL has ?view=detail&l=ID. The Router (defined later in JS)
+     toggles visibility by setting body class .detail-page-active and showing
+     this container; tab views and the tab bar are hidden via that class. -->
+<div id="detail-page" class="detail-page" style="display:none">
+  <div class="detail-header">
+    <button class="detail-back" type="button" onclick="Router.closeDetail()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <line x1="19" y1="12" x2="5" y2="12"/>
+        <polyline points="12 19 5 12 12 5"/>
+      </svg>
+      <span>Back to dashboard</span>
+    </button>
+    <div class="detail-header-actions">
+      <button class="detail-share" type="button" onclick="shareDetailPage()">Share</button>
+      <button class="detail-bookmark" type="button" onclick="bookmarkFromDetail(event)">Save</button>
+    </div>
+  </div>
+  <div class="detail-body" id="detail-body"></div>
+</div>
 
 <!-- ── Onboarding overlay (shown on first visit only) ── -->
 <div id="onboardingOverlay">
@@ -8599,6 +9024,618 @@ function updateAppreciationProjection(listingId, newRate) {
   }
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// INVESTOR DETAIL PAGE — Phase 1
+// Full-page sales-listing analysis at ?view=detail&l=ID. Reuses existing
+// finance helpers (computeYieldMetrics, computeMortgageScenarios,
+// computeAppreciationProjection, defaultAppreciationRate) — no duplicate logic.
+// Phase 2 = comparable rentals/sales; Phase 3 = gallery + renovation calc.
+// Both have placeholder hooks here so the layout is ready for them.
+// ════════════════════════════════════════════════════════════════════════════
+
+// External investment-return benchmarks shown in the verdict section.
+// UPDATE ANNUALLY — these are approximate long-term averages.
+// (Last review: 2026-04. BTP yields: borsaitaliana.it. S&P avg: ~10y nominal.)
+const INVESTMENT_BENCHMARKS = [
+  { name: 'Italian BTP 10y',          rate: 3.8, source: 'government bond, no risk' },
+  { name: 'S&P 500 historical',       rate: 9.0, source: 'global equities, ~10y avg' },
+  { name: 'European real estate avg', rate: 4.5, source: 'unleveraged property' },
+];
+
+// Verdict tiers for the 5-year annualised return.
+// Tuned for Milan: leveraged residential investment with ~2% appreciation
+// typically lands around 6–8% annualised — anything ≥9% is a strong buy
+// once leverage and appreciation align; <3% trails most alternatives.
+const VERDICT_TIERS = [
+  { min:  9, key: 'strong',
+    label: 'Strong investment',
+    desc: 'Above-market returns expected. Combination of yield, leverage, and appreciation is favourable.' },
+  { min:  6, key: 'decent',
+    label: 'Decent investment',
+    desc: 'Returns are reasonable but not exceptional. Consider whether the time and effort match your alternatives.' },
+  { min:  3, key: 'mediocre',
+    label: 'Mediocre as pure investment',
+    desc: 'Returns trail typical financial alternatives. May still make sense for inflation hedge, future primary residence, or Milan exposure.' },
+  { min: -Infinity, key: 'weak',
+    label: 'Weak as pure investment',
+    desc: 'Projected returns are below most financial alternatives. Buy only with clear non-financial rationale (eventual primary residence, family use).' },
+];
+
+// ── Router ─────────────────────────────────────────────────────────────────
+// Detects ?view=detail&l=ID in the URL and renders the detail page.
+// Plain ?l=ID (no view) keeps working for the existing share-link behaviour.
+const Router = {
+  currentView: 'dashboard',
+  currentListingId: null,
+  _savedScroll: 0,
+
+  init() {
+    if (this._inited) return;
+    this._inited = true;
+    this.handleRoute();
+    window.addEventListener('popstate', () => this.handleRoute());
+    // Esc closes the detail page
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && this.currentView === 'detail') this.closeDetail();
+    });
+  },
+
+  handleRoute() {
+    const params      = new URLSearchParams(location.search);
+    const view        = params.get('view');
+    const listingId   = params.get('l');
+
+    if (view === 'detail' && listingId) {
+      this.currentView      = 'detail';
+      this.currentListingId = listingId;
+      renderDetailPage(listingId);
+    } else {
+      const wasDetail       = this.currentView === 'detail';
+      this.currentView      = 'dashboard';
+      this.currentListingId = null;
+      if (wasDetail) hideDetailPage();
+    }
+  },
+
+  openDetail(listingId) {
+    // Detail page is sales-only. If the id isn't in ALL_SALE we still try —
+    // showDetailNotFound() handles the not-loaded-yet / not-a-sale case.
+    this._savedScroll = window.scrollY || window.pageYOffset || 0;
+    const url = new URL(location);
+    url.searchParams.set('view', 'detail');
+    url.searchParams.set('l', String(listingId));
+    history.pushState({}, '', url);
+    this.handleRoute();
+    window.scrollTo({ top: 0 });
+  },
+
+  closeDetail() {
+    const url = new URL(location);
+    url.searchParams.delete('view');
+    url.searchParams.delete('l');
+    history.pushState({}, '', url);
+    this.handleRoute();
+    // Restore the dashboard scroll position
+    window.scrollTo({ top: this._savedScroll || 0 });
+  },
+};
+window.Router = Router;
+
+// ── Render orchestration ──────────────────────────────────────────────────
+function renderDetailPage(listingId) {
+  const sales   = (typeof ALL_SALE !== 'undefined') ? ALL_SALE : (window.ALL_SALE || []);
+  const listing = sales.find(l => String(l.id) === String(listingId));
+
+  // Show the page chrome regardless — even for not-found, we want the back
+  // button and the "Listing not in dataset" empty state, not a flash of
+  // broken dashboard.
+  document.body.classList.add('detail-page-active');
+  const page = document.getElementById('detail-page');
+  if (page) page.style.display = 'block';
+
+  if (!listing) {
+    // If sales haven't loaded yet (user landed directly on the detail URL),
+    // kick off a load and re-render once it finishes — instead of just
+    // showing "not found" while ALL_SALE is empty.
+    if (!sales.length && typeof loadSales === 'function') {
+      const body = document.getElementById('detail-body');
+      if (body) body.innerHTML = `<div class="detail-not-found"><h1>Loading…</h1><p>Fetching listing data.</p></div>`;
+      loadSales().then(() => {
+        // Only re-render if we're still on the detail page for the same id
+        if (Router.currentView === 'detail' && Router.currentListingId === listingId) {
+          renderDetailPage(listingId);
+        }
+      });
+      return;
+    }
+    showDetailNotFound(listingId);
+    return;
+  }
+
+  // Detail page is sales-only. If the id matches a rental, bounce.
+  // (Rentals don't end up in ALL_SALE so this is precautionary; if a future
+  // share-link convention sends rental IDs through ?view=detail, we still
+  // recover gracefully.)
+  if (listing.source === 'rent' || listing.source === 'rental') {
+    Router.closeDetail();
+    if (typeof showToast === 'function') showToast('Detail view is sales-only for now');
+    return;
+  }
+
+  const body = document.getElementById('detail-body');
+  if (!body) return;
+  body.innerHTML = [
+    detailHeroHtml(listing),
+    detailVerdictHtml(listing),
+    detailFinancialAnalysisHtml(listing),
+    detailCostBreakdownHtml(listing),
+    detailMortgageScenariosHtml(listing),
+    detailComparablesPlaceholderHtml(),
+    detailGalleryPlaceholderHtml(),
+  ].join('');
+
+  // Slider listener (after innerHTML is in the DOM)
+  wireUpAppreciationSlider(listing);
+}
+
+function hideDetailPage() {
+  document.body.classList.remove('detail-page-active');
+  const page = document.getElementById('detail-page');
+  if (page) page.style.display = 'none';
+  const body = document.getElementById('detail-body');
+  if (body) body.innerHTML = '';   // free DOM nodes
+}
+
+function showDetailNotFound(id) {
+  const body = document.getElementById('detail-body');
+  if (!body) return;
+  body.innerHTML = `
+    <div class="detail-not-found">
+      <h1>Listing not found</h1>
+      <p>Listing ID <code>${escapeHtml(String(id))}</code> isn't in the current dataset.
+         It may have been removed from the market, or the sales data hasn't
+         loaded yet.</p>
+      <button type="button" class="btn-primary" onclick="Router.closeDetail()">Back to dashboard</button>
+    </div>`;
+}
+
+// ── Hero ──────────────────────────────────────────────────────────────────
+function detailHeroHtml(listing) {
+  const score    = listing.score_total ?? 0;
+  const tierKey  = listing.hidden_gem ? 'gem' : listing.good_value ? 'good-value' : null;
+  const tierLbl  = listing.hidden_gem ? 'Hidden Gem' : listing.good_value ? 'Great Value' : null;
+  const photo    = listing.thumbnail || '';
+  const fascia   = (listing.omi_fascia || '').toLowerCase();
+  const dp       = listing.comps_sale_delta_pct;
+  const dpStr    = (dp != null) ? (dp >= 0 ? '+' : '') + dp.toFixed(1) + '%' : '–';
+  const dpCls    = (dp == null) ? '' : (dp < 0 ? 'positive' : 'negative');
+
+  const photoBlock = photo ? `
+    <div class="hero-photo">
+      <img src="${escapeAttr(photo)}" alt="${escapeAttr(listing.title || listing.neighbourhood || '')}">
+      ${tierLbl ? `<span class="hero-badge hero-badge-${tierKey}">${tierLbl}</span>` : ''}
+    </div>` : '';
+
+  return `
+    <section class="detail-hero">
+      ${photoBlock}
+      <div class="hero-content">
+        <div class="hero-top">
+          <div class="hero-location">
+            <h1>${escapeHtml(listing.neighbourhood || 'Listing')}</h1>
+            <p class="hero-address">${escapeHtml(listing.address || '')}</p>
+            <div class="hero-tags">
+              <span class="tag tag-fascia tag-fascia-${fascia || 'unknown'}">Fascia ${listing.omi_fascia || '?'}</span>
+              ${listing.omi_zona ? `<span class="tag tag-zone">${escapeHtml(listing.omi_zona)}</span>` : ''}
+              <span class="tag tag-source tag-source-${escapeAttr(listing.source || 'sale')}">${escapeHtml(listing.source || 'sale')}</span>
+            </div>
+          </div>
+          <div class="hero-score">
+            ${_detailScoreCircleSvg(score, 64)}
+          </div>
+        </div>
+
+        <div class="hero-numbers">
+          <div class="hero-number">
+            <div class="num-label">Asking price</div>
+            <div class="num-value num-large">${listing.price != null ? '€' + fmt(listing.price) : '?'}</div>
+          </div>
+          <div class="hero-number">
+            <div class="num-label">Size</div>
+            <div class="num-value">${listing.sqm != null ? fmt(listing.sqm) + ' m²' : '?'}</div>
+          </div>
+          <div class="hero-number">
+            <div class="num-label">€/m²</div>
+            <div class="num-value">${listing.ask_psqm != null ? '€' + fmt(listing.ask_psqm) : '?'}</div>
+          </div>
+          <div class="hero-number">
+            <div class="num-label">vs comps</div>
+            <div class="num-value ${dpCls}">${dpStr}</div>
+          </div>
+        </div>
+
+        ${listing.url
+          ? `<a href="${escapeAttr(listing.url)}" target="_blank" rel="noopener" class="hero-cta">View original listing →</a>`
+          : ''}
+      </div>
+    </section>`;
+}
+
+// Standalone score circle for the hero (we don't reuse the card ring because
+// the hero version is bigger and doesn't need the data-sc-* tooltip wiring).
+function _detailScoreCircleSvg(score, size) {
+  const s   = Math.max(0, Math.min(100, Number(score) || 0));
+  const r   = (size - 8) / 2;
+  const cx  = size / 2;
+  const C   = 2 * Math.PI * r;
+  const off = C * (1 - s/100);
+  const sc  = (typeof scoreClass === 'function') ? scoreClass(s) : 'mid';
+  const col = sc === 'high' ? '#2A7A5A' : sc === 'mid' ? '#E8922A' : '#E05C4B';
+  return `
+    <div style="position:relative;width:${size}px;height:${size}px">
+      <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="display:block">
+        <circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="#EDEAE4" stroke-width="4"/>
+        <circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="${col}" stroke-width="4"
+                stroke-linecap="round"
+                stroke-dasharray="${C.toFixed(2)}" stroke-dashoffset="${off.toFixed(2)}"
+                transform="rotate(-90 ${cx} ${cx})"/>
+      </svg>
+      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+                  font-weight:800;font-size:${Math.round(size * 0.32)}px;color:${col};
+                  font-family:var(--font);letter-spacing:-0.4px">${Math.round(s)}</div>
+    </div>`;
+}
+
+// ── Verdict ───────────────────────────────────────────────────────────────
+function detailVerdictHtml(listing) {
+  const yields   = computeYieldMetrics(listing);
+  const mortgage = computeMortgageScenarios(listing.price);
+  if (!yields || !mortgage) {
+    return `
+      <section class="detail-verdict">
+        <h2><span class="section-icon">🎯</span> Investment verdict</h2>
+        <p class="verdict-no-data">Unable to compute investment metrics — insufficient rental data for this zone/size.</p>
+      </section>`;
+  }
+
+  const defaultRate = defaultAppreciationRate(listing);
+  const projection  = computeAppreciationProjection(listing, mortgage, yields, defaultRate);
+  const fiveYr      = projection?.[1];
+  const fiveYrAnn   = fiveYr ? fiveYr.annualised_pct : 0;
+
+  const tier = VERDICT_TIERS.find(t => fiveYrAnn >= t.min) || VERDICT_TIERS[VERDICT_TIERS.length - 1];
+
+  const benchmarkRows = INVESTMENT_BENCHMARKS.map(b => `
+    <div class="benchmark-row">
+      <span class="benchmark-name">${escapeHtml(b.name)}</span>
+      <span class="benchmark-rate">+${b.rate}%</span>
+      <span class="benchmark-source">${escapeHtml(b.source)}</span>
+    </div>`).join('');
+
+  return `
+    <section class="detail-verdict">
+      <h2><span class="section-icon">🎯</span> Investment verdict</h2>
+
+      <div class="verdict-card verdict-${tier.key}">
+        <div class="verdict-headline">
+          <span class="verdict-tier-label">${tier.label}</span>
+          <span class="verdict-rate">${fiveYrAnn >= 0 ? '+' : ''}${fiveYrAnn.toFixed(1)}% annualised</span>
+        </div>
+        <p class="verdict-desc">${tier.desc}</p>
+        <p class="verdict-note">
+          Projection over 5 years at ${defaultRate.toFixed(1)}% appreciation
+          (Lume's default for fascia ${listing.omi_fascia || '?'}).
+        </p>
+      </div>
+
+      <div class="benchmark-strip">
+        <div class="benchmark-title">vs alternative investments</div>
+        <div class="benchmark-grid">
+          <div class="benchmark-row benchmark-this">
+            <span class="benchmark-name">This listing</span>
+            <span class="benchmark-rate ${fiveYrAnn >= 5 ? 'positive' : 'neutral'}">
+              ${fiveYrAnn >= 0 ? '+' : ''}${fiveYrAnn.toFixed(1)}%
+            </span>
+            <span class="benchmark-source">5-yr annualised, leveraged</span>
+          </div>
+          ${benchmarkRows}
+        </div>
+        <p class="benchmark-disclaimer">
+          Benchmarks are approximate long-term averages. Real estate returns include
+          leverage and appreciation; financial alternatives are unleveraged. Comparing
+          leveraged real estate to unleveraged equities understates the equity risk
+          premium. Use with judgement.
+        </p>
+      </div>
+    </section>`;
+}
+
+// ── Investment analysis (slider + projection table + sensitivity) ─────────
+function detailFinancialAnalysisHtml(listing) {
+  const yields   = computeYieldMetrics(listing);
+  const mortgage = computeMortgageScenarios(listing.price);
+  if (!yields || !mortgage) return '';
+
+  const defaultRate = defaultAppreciationRate(listing);
+
+  // Sensitivity matrix: 0–5% appreciation × 1Y/5Y/10Y horizons
+  const sensitivityRows = [0, 1, 2, 3, 4, 5].map(rate => {
+    const proj = computeAppreciationProjection(listing, mortgage, yields, rate);
+    if (!proj) return '';
+    const cell = (a) => `<td class="${a >= 5 ? 'positive' : a >= 0 ? '' : 'negative'}">${a >= 0 ? '+' : ''}${a.toFixed(1)}%</td>`;
+    const isDefault = Math.abs(rate - Math.round(defaultRate)) < 0.001;
+    return `
+      <tr ${isDefault ? 'class="sensitivity-default"' : ''}>
+        <td><strong>${rate}%</strong></td>
+        ${cell(proj[0].annualised_pct)}
+        ${cell(proj[1].annualised_pct)}
+        ${cell(proj[2].annualised_pct)}
+      </tr>`;
+  }).join('');
+
+  return `
+    <section class="detail-analysis">
+      <h2><span class="section-icon">📈</span> Investment analysis</h2>
+
+      <p class="analysis-explainer">
+        Projected total return on cash invested, combining cash flow, mortgage
+        principal pay-down, and capital appreciation. Adjust the appreciation
+        rate below to test sensitivity.
+      </p>
+
+      <div class="analysis-slider">
+        <div class="slider-row">
+          <label>Appreciation rate</label>
+          <span class="slider-current"><span id="appreciation-display">${defaultRate.toFixed(1)}</span>% / year</span>
+        </div>
+        <input type="range" id="appreciation-slider"
+               min="0" max="6" step="0.1" value="${defaultRate}"
+               class="appreciation-input">
+        <div class="slider-marks">
+          <span>0% (no growth)</span>
+          <span>3% (typical)</span>
+          <span>6% (boom)</span>
+        </div>
+      </div>
+
+      <div class="projection-wrap">
+        <h3>Total return projection</h3>
+        <table class="projection-table" id="detail-projection-table">
+          <thead>
+            <tr>
+              <th>Horizon</th>
+              <th>Cash flow</th>
+              <th>Principal paid</th>
+              <th>Property gain</th>
+              <th>Total return</th>
+              <th>Annualised</th>
+            </tr>
+          </thead>
+          <tbody><!-- populated by updateDetailProjection() --></tbody>
+        </table>
+      </div>
+
+      <div class="sensitivity-wrap">
+        <h3>Sensitivity to appreciation</h3>
+        <p class="sensitivity-intro">
+          Annualised return at different appreciation rates and horizons.
+          If you have a view on how much this zone will appreciate, look at
+          the corresponding row.
+        </p>
+        <table class="sensitivity-table">
+          <thead>
+            <tr>
+              <th>Appreciation</th>
+              <th>1-year</th>
+              <th>5-year</th>
+              <th>10-year</th>
+            </tr>
+          </thead>
+          <tbody>${sensitivityRows}</tbody>
+        </table>
+        <p class="sensitivity-disclaimer">
+          Lume's default of <strong>${defaultRate.toFixed(1)}%</strong> for fascia
+          ${listing.omi_fascia || '?'} is based on rough historical Milan averages.
+          Actual appreciation depends on market cycle timing and zone-specific dynamics.
+        </p>
+      </div>
+    </section>`;
+}
+
+function wireUpAppreciationSlider(listing) {
+  const slider  = document.getElementById('appreciation-slider');
+  const display = document.getElementById('appreciation-display');
+  if (!slider) return;
+
+  const yields   = computeYieldMetrics(listing);
+  const mortgage = computeMortgageScenarios(listing.price);
+  if (!yields || !mortgage) return;
+
+  const update = () => {
+    const rate = parseFloat(slider.value);
+    if (display) display.textContent = rate.toFixed(1);
+    updateDetailProjection(listing, mortgage, yields, rate);
+  };
+
+  slider.addEventListener('input', update);
+  update();   // initial render of the projection table
+}
+
+function updateDetailProjection(listing, mortgage, yields, rate) {
+  const projection = computeAppreciationProjection(listing, mortgage, yields, rate);
+  if (!projection) return;
+  const tbody = document.querySelector('#detail-projection-table tbody');
+  if (!tbody) return;
+
+  const formatEuro = (n) => {
+    const sign = n >= 0 ? '+' : '−';
+    return `${sign}€${fmt(Math.abs(n))}`;
+  };
+
+  tbody.innerHTML = projection.map(p => `
+    <tr>
+      <td><strong>${p.years}-year</strong></td>
+      <td class="${p.cumulative_cashflow >= 0 ? 'positive' : 'negative'}">${formatEuro(p.cumulative_cashflow)}</td>
+      <td class="positive">+€${fmt(p.principal_paid)}</td>
+      <td class="${p.property_gain >= 0 ? 'positive' : 'negative'}">${formatEuro(p.property_gain)}</td>
+      <td class="${p.total_return >= 0 ? 'positive' : 'negative'} total"><strong>${formatEuro(p.total_return)}</strong></td>
+      <td class="${p.annualised_pct >= 5 ? 'positive' : p.annualised_pct >= 0 ? '' : 'negative'}">
+        <strong>${p.annualised_pct >= 0 ? '+' : ''}${p.annualised_pct.toFixed(1)}%</strong>
+      </td>
+    </tr>`).join('');
+}
+
+// ── Cost breakdown ────────────────────────────────────────────────────────
+function detailCostBreakdownHtml(listing) {
+  const yields = computeYieldMetrics(listing);
+  if (!yields || !yields.cost_breakdown) return '';
+
+  const c           = yields.cost_breakdown;
+  const monthlyRent = listing.estimated_rent_mo || 0;
+  const condoLbl    = c.condo_known ? 'from listing' : 'estimated €5/m²/mo';
+
+  const items = [
+    { name: 'Vacancy reserve',     monthly: c.vacancy/12,     annual: c.vacancy,     note: '1 month/year' },
+    { name: 'Management',          monthly: c.management/12,  annual: c.management,  note: '5% — self-managed' },
+    { name: 'IMU',                 monthly: c.imu/12,         annual: c.imu,         note: 'second-home tax, ~0.4% of price' },
+    { name: 'Maintenance reserve', monthly: c.maintenance/12, annual: c.maintenance, note: '0.3% of price (in-flat repairs)' },
+    { name: 'Condo fees',          monthly: c.condo/12,       annual: c.condo,       note: condoLbl },
+  ];
+  const totalMonthly = items.reduce((s, i) => s + i.monthly, 0);
+  const totalAnnual  = items.reduce((s, i) => s + i.annual,  0);
+
+  const pctOfRent = (annual) => monthlyRent ? Math.round((annual / (monthlyRent * 12)) * 100) + '%' : '—';
+
+  return `
+    <section class="detail-costs">
+      <h2><span class="section-icon">💸</span> Operating cost breakdown</h2>
+      <p class="costs-intro">
+        What it costs to hold this property each month, before mortgage payments.
+        These are realistic Milan estimates — adjust mentally if your situation differs.
+      </p>
+      <table class="cost-table">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Monthly</th>
+            <th>Annual</th>
+            <th>% of rent</th>
+            <th>Note</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${items.map(item => `
+            <tr>
+              <td>${escapeHtml(item.name)}</td>
+              <td>€${fmt(Math.round(item.monthly))}</td>
+              <td>€${fmt(Math.round(item.annual))}</td>
+              <td>${pctOfRent(item.annual)}</td>
+              <td class="cost-note">${escapeHtml(item.note)}</td>
+            </tr>`).join('')}
+          <tr class="cost-total">
+            <td><strong>Total operating costs</strong></td>
+            <td><strong>€${fmt(Math.round(totalMonthly))}</strong></td>
+            <td><strong>€${fmt(Math.round(totalAnnual))}</strong></td>
+            <td><strong>${pctOfRent(totalAnnual)}</strong></td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>`;
+}
+
+// ── Mortgage scenarios (reuse existing breakdown) ─────────────────────────
+function detailMortgageScenariosHtml(listing) {
+  const inner = investorMortgageBreakdownHtml(listing);
+  if (!inner) return '';
+  return `
+    <section class="detail-mortgage">
+      <h2><span class="section-icon">🏦</span> Mortgage scenarios</h2>
+      ${inner}
+    </section>`;
+}
+
+// ── Phase 2 + Phase 3 placeholder hooks ───────────────────────────────────
+function detailComparablesPlaceholderHtml() {
+  return `
+    <section class="detail-placeholder">
+      <h2><span class="section-icon">🏘️</span> Comparable listings</h2>
+      <p class="placeholder-text">Coming soon — comparable rentals (used for the yield estimate) and comparable sales (used for the price comparison) with map view.</p>
+    </section>`;
+}
+function detailGalleryPlaceholderHtml() {
+  return `
+    <section class="detail-placeholder">
+      <h2><span class="section-icon">📸</span> More details</h2>
+      <p class="placeholder-text">Coming soon — photo gallery, neighbourhood amenities, renovation upside calculator.</p>
+    </section>`;
+}
+
+// ── Card-face additions: 5y projection summary + Full analysis CTA ───────
+function cardProjectionSummaryHtml(listing) {
+  const yields   = computeYieldMetrics(listing);
+  const mortgage = computeMortgageScenarios(listing.price);
+  if (!yields || !mortgage) return '';
+  const defaultRate = defaultAppreciationRate(listing);
+  const projection  = computeAppreciationProjection(listing, mortgage, yields, defaultRate);
+  if (!projection) return '';
+
+  const fiveYr     = projection[1];
+  const annualised = fiveYr.annualised_pct;
+  const colour = annualised >= 5  ? 'var(--green-deep)'
+              : annualised >= 0  ? 'var(--amber)'
+              :                    'var(--coral)';
+
+  return `
+    <div class="card-projection-summary">
+      <span class="proj-label">5y projection</span>
+      <span class="proj-value" style="color:${colour}">
+        ${annualised >= 0 ? '+' : ''}${annualised.toFixed(1)}% / yr
+      </span>
+      <span class="proj-detail">at ${defaultRate.toFixed(1)}% appreciation</span>
+    </div>`;
+}
+
+function cardFullAnalysisButtonHtml(listing) {
+  return `
+    <button class="btn-full-analysis" type="button"
+            onclick="event.stopPropagation(); Router.openDetail('${escapeAttr(String(listing.id))}')">
+      📊 Full investment analysis
+      <span class="arrow">→</span>
+    </button>`;
+}
+
+// ── Detail-page header buttons ────────────────────────────────────────────
+async function shareDetailPage() {
+  const url   = location.href;
+  const sales = (typeof ALL_SALE !== 'undefined') ? ALL_SALE : (window.ALL_SALE || []);
+  const listing = sales.find(l => String(l.id) === String(Router.currentListingId));
+  const title = listing
+    ? `Lume analysis: ${listing.neighbourhood || 'listing'} — Score ${listing.score_total ?? '?'}`
+    : 'Lume listing analysis';
+
+  if (navigator.share && /Mobi|Android|iPhone/i.test(navigator.userAgent)) {
+    try { await navigator.share({ title, url }); return; } catch (_) {}
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    if (typeof showToast === 'function') showToast('Analysis link copied');
+  } catch {
+    prompt('Copy this URL:', url);
+  }
+}
+
+function bookmarkFromDetail(ev) {
+  if (!Router.currentListingId) return;
+  const target = (ev && ev.currentTarget) || document.querySelector('.detail-bookmark');
+  if (typeof openCollectionMenu === 'function') {
+    openCollectionMenu(Router.currentListingId, {
+      stopPropagation() {},
+      currentTarget: target,
+    });
+  }
+}
+
 function investorMortgageBreakdownHtml(l) {
   const m = computeMortgageScenarios(l.price);
   if (!m) return '';
@@ -8970,6 +10007,9 @@ function renderSaleCard(l) {
     ${salesViewMode === 'investor'
       ? `<div class="why-sentence">${investorHeadline(l)}${investorReasonsBulletsHtml(l)}</div>`
       : (whySentence ? `<div class="${whyClass}">${whySentence}${reasonsBulletsHtml(l)}</div>` : '')}
+
+    ${salesViewMode === 'investor' ? cardProjectionSummaryHtml(l) : ''}
+    ${salesViewMode === 'investor' ? cardFullAnalysisButtonHtml(l) : ''}
 
     <div class="card-footer-a">
       <button class="btn-bookmark${Collections.isInAnyCollection(l.id) ? ' active' : ''}"
