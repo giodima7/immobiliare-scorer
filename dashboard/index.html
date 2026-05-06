@@ -7733,14 +7733,17 @@ function _populateSaleOmiZoneFilter(data) {
 function _rentPsqm(r) { return r.ask_psqm_effective || r.ask_psqm || 0; }
 
 // Map raw condition strings to comparable groups.
+// IMPORTANT ordering: check 'da ristrutturare' BEFORE 'ristrutturat'.
+// 'da ristrutturare' (needs renovation) does NOT contain the substring
+// 'ristrutturat' — the 11th char is 'r', not 't' — so a naive
+// includes('ristrutturat') check would miss it and fall through to 'unknown'.
 function conditionGroup(listing) {
   const c = (listing.condition || '').toLowerCase().trim();
-  if (c.includes('ottimo') || c.includes('ristrutturat')) {
-    // 'ristrutturato' = renovated; 'da ristrutturare' = needs work — keep apart
-    if (c.includes('da ristrutturare') || c.includes('da_ristrutturare')) return 'needs_work';
-    return 'premium';
+  if (!c) return 'unknown';
+  if (c.includes('da ristrutturare') || c.includes('da_ristrutturare') || c.includes('fatiscente')) {
+    return 'needs_work';
   }
-  if (c.includes('fatiscente')) return 'needs_work';
+  if (c.includes('ottimo') || c.includes('ristrutturat')) return 'premium';
   if (c.includes('buono') || c.includes('abitabile') || c.includes('normale')) return 'standard';
   return 'unknown';
 }
@@ -7897,17 +7900,23 @@ function computeEstimatedRents(salesArr, rentalsArr) {
     console.log('[rent estimates] by method:', byMethod);
   } catch (_) { /* console may be readonly in some embeddings */ }
 }
-// Trigger once both rentals and sales are present
-let _estRentsComputed = false;
-function maybeComputeEstimatedRents() {
-  if (_estRentsComputed) return;
-  if (!Array.isArray(window.ALL_SALE) && !Array.isArray(ALL_SALE)) return;
-  if (!Array.isArray(window.ALL_RENT) && !Array.isArray(ALL_RENT)) return;
+// Trigger whenever both rentals and sales are present. Safe to call
+// repeatedly — keyed off `_estRentsSourceRev` so we re-run whenever either
+// dataset is replaced (e.g. ALL_SALE = ... after a refetch). The previous
+// _estRentsComputed flag was too sticky: once set, it never re-ran even
+// if the second of the pair (rentals) loaded after the first run finished.
+let _estRentsSourceRev = null;
+function maybeComputeEstimatedRents(force) {
   const sales = (typeof ALL_SALE !== 'undefined') ? ALL_SALE : window.ALL_SALE;
   const rents = (typeof ALL_RENT !== 'undefined') ? ALL_RENT : window.ALL_RENT;
-  if (!sales.length || !rents.length) return;
+  if (!Array.isArray(sales) || !Array.isArray(rents)) return false;
+  if (!sales.length || !rents.length) return false;
+  // Cheap "did the inputs change?" key — avoids redoing work on every render
+  const rev = sales.length + ':' + rents.length;
+  if (!force && rev === _estRentsSourceRev) return false;
   computeEstimatedRents(sales, rents);
-  _estRentsComputed = true;
+  _estRentsSourceRev = rev;
+  return true;
 }
 
 // ── Investor view: per-listing computations ─────────────────────────────────
@@ -8266,12 +8275,14 @@ function setSalesViewMode(mode) {
     document.querySelectorAll('#sSortTabs .sort-tab').forEach(t =>
       t.classList.toggle('active', t.dataset.ssort === 'score_total'));
   }
-  // Switching modes may need rentals data — kick off lazily so the cards show real numbers
-  if (mode === 'investor' && !_estRentsComputed) {
+  // Switching modes may need rentals data — kick off lazily so the cards
+  // show real numbers. maybeComputeEstimatedRents is idempotent now, so we
+  // can call it unconditionally; it returns false when nothing changed.
+  if (mode === 'investor') {
     if (Array.isArray(ALL_RENT) && ALL_RENT.length) {
       maybeComputeEstimatedRents();
     } else if (typeof loadRentals === 'function') {
-      loadRentals().then(maybeComputeEstimatedRents).then(() => renderSales());
+      loadRentals().then(() => { maybeComputeEstimatedRents(); renderSales(); });
     }
   }
   if (typeof renderSales === 'function') renderSales();
@@ -8648,6 +8659,15 @@ function _saleAppendBatch() {
 }
 
 function renderSales() {
+  // Self-healing: if rentals are loaded but no sale has an estimated rent
+  // yet, recompute. Catches the page-load races where loadSales() ran
+  // before ALL_RENT was populated, or a stale build skipped the call.
+  if (Array.isArray(ALL_RENT) && ALL_RENT.length
+      && Array.isArray(ALL_SALE) && ALL_SALE.length
+      && !ALL_SALE.some(s => s.estimated_rent_mo)) {
+    maybeComputeEstimatedRents(true);
+  }
+
   const f    = getSaleFilters();
   let   data = applySaleFilters(ALL_SALE, f);
 
