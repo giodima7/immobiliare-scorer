@@ -582,14 +582,25 @@ body:not(.is-investor) .investor-only { display: none !important; }
    space-between distributes them across the available row width so the
    layout looks balanced both at desktop (5 in a row) and on narrow
    cards (3 + 2 / 2 + 3 / etc.). row-gap keeps a comfortable vertical
-   gap when wrapping. */
+   gap when wrapping.
+
+   IMPORTANT: the base `.stat-pills` rule sets `flex-wrap: nowrap` and
+   `overflow-x: auto` for buyer-mode horizontal scroll. We MUST override
+   both with !important here because the cards apply both classes
+   ("stat-pills stat-pills-investor") and source order alone isn't
+   enough when overflow-x has already established a scroll container. */
+.stat-pills.stat-pills-investor,
 .stat-pills-investor {
-  display: flex;
-  flex-wrap: wrap;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  overflow-x: visible !important;
   justify-content: space-between;
   column-gap: 6px;
   row-gap: 6px;
-  margin: 8px 16px 0;
+  /* Match the buyer-mode .stat-pills horizontal positioning so the row
+     starts and ends at the same edges on both views. */
+  margin: 0;
+  padding: 8px 16px 0;
 }
 .stat-pills-investor .stat-pill {
   display: inline-flex;
