@@ -914,6 +914,250 @@ body.detail-page-active .filter-bar { display: none !important; }
   margin: 0;
 }
 
+/* Phase 2: comparable rentals + sales ─────────────────────── */
+.section-meta {
+  font-size: 12px; font-weight: 500;
+  color: var(--text-muted);
+  margin-left: 8px;
+}
+.comps-method {
+  font-size: 13px; line-height: 1.6;
+  color: var(--text-primary);
+  padding: 12px 14px;
+  background: var(--bg-muted);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+}
+.comps-method strong { font-weight: 700; }
+.comps-method em     { color: var(--text-secondary); font-style: italic; }
+.comps-method .positive { color: var(--green-deep); font-weight: 600; }
+.comps-method .negative { color: var(--coral); font-weight: 600; }
+.comps-empty {
+  font-size: 13px; color: var(--text-muted); font-style: italic;
+  margin: 0;
+}
+
+.comp-list {
+  display: flex; flex-direction: column;
+  gap: 8px;
+}
+.comp-list-hidden                       { display: none; }
+.comp-list-hidden.comp-list-visible     { display: flex; margin-top: 8px; }
+
+.comp-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border, #E5E1D8);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+.comp-row:hover {
+  border-color: var(--green-deep);
+  box-shadow: var(--shadow-card);
+  transform: translateY(-1px);
+}
+
+.comp-photo {
+  width: 64px; height: 64px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-muted);
+  flex-shrink: 0;
+}
+.comp-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.comp-photo-placeholder {
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; color: var(--text-muted);
+}
+
+.comp-info { flex: 1; min-width: 0; }
+.comp-info-top {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 2px;
+}
+.comp-neighbourhood {
+  font-size: 13px; font-weight: 700;
+  color: var(--text-primary);
+}
+.comp-source-tag {
+  font-size: 9px; font-weight: 600;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  background: var(--bg-muted);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+.comp-address {
+  font-size: 11px; color: var(--text-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+.comp-stats { display: flex; gap: 8px; flex-wrap: wrap; }
+.comp-stat  {
+  font-size: 11px; color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.comp-price {
+  text-align: right;
+  flex-shrink: 0;
+  min-width: 100px;
+}
+.comp-price-main {
+  font-size: 14px; font-weight: 700;
+  color: var(--text-primary);
+}
+.comp-price-main .suffix {
+  font-size: 11px; font-weight: 500;
+  color: var(--text-secondary);
+}
+.comp-price-psqm {
+  font-size: 11px; color: var(--text-muted);
+  margin-top: 2px;
+}
+.comp-delta {
+  font-size: 11px; font-weight: 700;
+  margin-top: 4px;
+  padding: 2px 6px;
+  border-radius: var(--radius-full);
+  display: inline-block;
+}
+.comp-delta.positive { background: var(--green-light); color: var(--green-deep); }
+.comp-delta.negative { background: var(--coral-light); color: var(--coral); }
+
+.show-more-btn {
+  width: 100%;
+  padding: 10px;
+  margin-top: 8px;
+  background: var(--bg-muted);
+  border: 1px dashed var(--border, #E5E1D8);
+  border-radius: var(--radius-md);
+  font-size: 12px; font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer; font-family: var(--font);
+  transition: background 120ms ease, color 120ms ease;
+}
+.show-more-btn:hover {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+@media (max-width: 600px) {
+  .comp-row     { padding: 8px; }
+  .comp-photo   { width: 52px; height: 52px; }
+  .comp-stats   { gap: 6px; }
+  .comp-price   { min-width: 80px; }
+}
+
+/* Phase 2: neighbourhood ─────────────────────────────────── */
+.nbhd-zone-info { margin-bottom: 20px; }
+.zone-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 0;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border, #E5E1D8);
+}
+.zone-row:last-child { border-bottom: none; }
+.zone-label {
+  font-weight: 600; color: var(--text-secondary);
+  min-width: 130px;
+  font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.zone-value { font-weight: 700; color: var(--text-primary); }
+.zone-detail {
+  color: var(--text-secondary);
+  font-size: 12px; flex: 1;
+}
+.ldi-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--bg-muted);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  max-width: 200px;
+}
+.ldi-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width 400ms ease;
+}
+
+.detail-neighbourhood h3 {
+  font-size: 12px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin: 0 0 12px 0;
+}
+
+.nbhd-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+.nbhd-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px;
+  background: var(--bg-muted);
+  border-radius: var(--radius-md);
+  border-left: 3px solid transparent;
+}
+.nbhd-item.nbhd-great { border-left-color: var(--green-deep); }
+.nbhd-item.nbhd-good  { border-left-color: var(--amber); }
+.nbhd-item.nbhd-far   { border-left-color: var(--coral); opacity: 0.85; }
+.nbhd-icon  { font-size: 20px; flex-shrink: 0; }
+.nbhd-label {
+  font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.nbhd-value {
+  font-size: 14px; font-weight: 700;
+  color: var(--text-primary);
+  margin-top: 2px;
+}
+.nbhd-detail {
+  font-size: 11px; color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* Phase 2: mini-map ──────────────────────────────────────── */
+#detail-mini-map {
+  width: 100%;
+  height: 360px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--border, #E5E1D8);
+}
+.map-legend {
+  display: flex; gap: 16px; flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  align-items: center;
+}
+.legend-dot {
+  display: inline-block;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid white;
+  margin-right: 4px;
+  vertical-align: middle;
+  box-shadow: 0 0 0 1px var(--border, #E5E1D8);
+}
+.legend-listing   { background: var(--green-deep); width: 12px; height: 12px; }
+.legend-sale-comp { background: #4A90D9; }
+.legend-rent-comp { background: #E8922A; }
+
+@media (max-width: 600px) {
+  #detail-mini-map { height: 280px; }
+  .zone-label { min-width: 100px; }
+}
+
 /* "Full investment analysis" CTA on investor cards ────────── */
 .btn-full-analysis {
   width: calc(100% - 32px);
@@ -8448,12 +8692,17 @@ function estimateRentForSale(sale, rentalsArr, idx) {
     const adjusted = cand.method === 'zone_condition_strict'
       ? median
       : applyConditionAdjustment(median, cand.pool, saleCondGroup);
+    // Capture matched-pool ids (sorted by psqm asc, capped at 30) so the
+    // detail page can show the exact rentals that fed the estimate.
+    const sortedPool = [...cand.pool].sort((a, b) => _rentPsqm(a) - _rentPsqm(b));
+    const compIds = sortedPool.slice(0, 30).map(r => r.id).filter(id => id != null);
     return {
       psqm:       Math.round(adjusted * 100) / 100,
       rent_mo:    round25(adjusted * sqm),
       n_comps:    cand.pool.length,
       confidence: cand.confidence,
       method:     cand.method,
+      comp_ids:   compIds,
     };
   }
 
@@ -8465,9 +8714,10 @@ function estimateRentForSale(sale, rentalsArr, idx) {
       n_comps:    0,
       confidence: 'low',
       method:     'omi_benchmark',
+      comp_ids:   [],
     };
   }
-  return { psqm: null, rent_mo: null, n_comps: 0, confidence: 'none', method: 'no_data' };
+  return { psqm: null, rent_mo: null, n_comps: 0, confidence: 'none', method: 'no_data', comp_ids: [] };
 }
 
 function computeEstimatedRents(salesArr, rentalsArr) {
@@ -8502,6 +8752,7 @@ function computeEstimatedRents(salesArr, rentalsArr) {
     sale.estimated_rent_n_comps    = result.n_comps;
     sale.estimated_rent_confidence = result.confidence;
     sale.estimated_rent_method     = result.method;
+    sale.estimated_rent_comp_ids   = result.comp_ids || [];
     // Invalidate any previously-cached yield so it's recomputed next render
     _yieldCache.delete(sale);
   }
@@ -9170,12 +9421,16 @@ function renderDetailPage(listingId) {
     detailFinancialAnalysisHtml(listing),
     detailCostBreakdownHtml(listing),
     detailMortgageScenariosHtml(listing),
-    detailComparablesPlaceholderHtml(),
+    detailComparableRentalsHtml(listing),
+    detailComparableSalesHtml(listing),
+    detailNeighbourhoodHtml(listing),
+    detailMiniMapHtml(listing),
     detailGalleryPlaceholderHtml(),
   ].join('');
 
-  // Slider listener (after innerHTML is in the DOM)
+  // Slider listener + mini-map (after innerHTML is in the DOM)
   wireUpAppreciationSlider(listing);
+  initDetailMiniMap(listing);
 }
 
 function hideDetailPage() {
@@ -9555,14 +9810,472 @@ function detailMortgageScenariosHtml(listing) {
     </section>`;
 }
 
-// ── Phase 2 + Phase 3 placeholder hooks ───────────────────────────────────
-function detailComparablesPlaceholderHtml() {
+// ── Phase 2: Comparable rentals / sales / neighbourhood / mini-map ───────
+// Sales carry `comps_sale_comp_ids` (added by comps_engine.py post-Phase 2)
+// and `estimated_rent_comp_ids` (added by computeEstimatedRents). Older
+// datasets won't have these arrays — sections gracefully show an empty state.
+
+const _METHOD_LABELS_RENT = {
+  'zone_condition_strict': 'same zone + same condition',
+  'zone_any_condition':    'same zone + condition adjusted',
+  'zone_wide_size':        'same zone + wider size band',
+  'fascia_tight':           'same fascia + tight size band',
+  'fascia_wide':            'same fascia + wider size band',
+  'citywide_size':          'citywide by size only',
+  'omi_benchmark':          'OMI benchmark fallback',
+  'no_data':                'no data',
+};
+
+const _METHOD_LABELS_SALE = {
+  'zone_stratified':         'same zone + same condition',
+  'zone_any_condition':      'same zone + condition adjusted',
+  'radius_800m_same_fascia': '≤800 m + same fascia',
+  'fascia_fallback':         'same fascia (citywide)',
+  'comps_500':               '≤500 m radius',
+  'comps_800':               '≤800 m radius',
+  'comps_1200':              '≤1200 m radius',
+  'omi_zone':                'OMI zone fallback',
+  'omi_only':                'OMI-only (no comps)',
+};
+
+// Floor label helper that gracefully handles strings or numbers
+function _compFloorLabel(c) {
+  if (c.floor_label) return c.floor_label;
+  if (c.floor_n == null) return '—';
+  if (c.floor_n < 0) return 'basement';
+  if (c.floor_n === 0) return 'ground';
+  return c.floor_n + '°';
+}
+
+// One row per comp listing — used by both rental and sale comp lists.
+// `target` is the listing being analysed; we render a "vs target" delta so
+// the user sees relative pricing at a glance.
+function compRowHtml(comp, type, target) {
+  const isRent       = type === 'rent';
+  const compPsqm     = isRent
+    ? (comp.ask_psqm_effective || comp.ask_psqm || comp.effective_psqm_rent || 0)
+    : (comp.ask_psqm || 0);
+  const targetPsqm   = isRent ? (target.estimated_rent_psqm || 0) : (target.ask_psqm || 0);
+  const compPrice    = isRent ? (comp.rent_mo || comp.effective_rent_mo) : comp.price;
+  const psqmDelta    = (compPsqm && targetPsqm)
+    ? ((compPsqm - targetPsqm) / targetPsqm) * 100
+    : null;
+
+  const photo = comp.thumbnail
+    ? `<img src="${escapeAttr(comp.thumbnail)}" alt="" loading="lazy">`
+    : `<div class="comp-photo-placeholder">🏠</div>`;
+
+  const condition = comp.condition || '—';
+  const floor     = _compFloorLabel(comp);
+  const rooms     = (comp.rooms != null) ? comp.rooms + ' loc.' : '—';
+  const sqm       = (comp.sqm != null) ? comp.sqm + ' m²' : '—';
+  const addr      = (comp.address || '').slice(0, 60);
+  const source    = comp.source || '';
+
+  // Rentals stay on the dashboard (no detail view); sales open detail.
+  // Both use openCompDetail() — it picks the right path by looking the id up.
+  const linkAttrs = `href="?l=${encodeURIComponent(String(comp.id))}" onclick="event.preventDefault(); openCompDetail('${escapeAttr(String(comp.id))}', '${type}')"`;
+
+  const psqmDisp = compPsqm
+    ? '€' + (isRent ? compPsqm.toFixed(1) : fmt(Math.round(compPsqm))) + '/m²' + (isRent ? '/mo' : '')
+    : '—';
+  const priceDisp = compPrice != null
+    ? '€' + fmt(compPrice) + (isRent ? '<span class="suffix">/mo</span>' : '')
+    : '—';
+
+  const deltaCls = psqmDelta == null ? '' : (psqmDelta < 0 ? 'positive' : psqmDelta > 0 ? 'negative' : '');
+  const deltaStr = psqmDelta == null ? '' : (psqmDelta >= 0 ? '+' : '') + psqmDelta.toFixed(1) + '%';
+
   return `
-    <section class="detail-placeholder">
-      <h2><span class="section-icon">🏘️</span> Comparable listings</h2>
-      <p class="placeholder-text">Coming soon — comparable rentals (used for the yield estimate) and comparable sales (used for the price comparison) with map view.</p>
+    <a class="comp-row" ${linkAttrs}>
+      <div class="comp-photo">${photo}</div>
+      <div class="comp-info">
+        <div class="comp-info-top">
+          <span class="comp-neighbourhood">${escapeHtml(comp.neighbourhood || '?')}</span>
+          ${source ? `<span class="comp-source-tag">${escapeHtml(source)}</span>` : ''}
+        </div>
+        <div class="comp-address">${escapeHtml(addr)}</div>
+        <div class="comp-stats">
+          <span class="comp-stat">${sqm}</span>
+          <span class="comp-stat">${rooms}</span>
+          <span class="comp-stat">${floor}</span>
+          <span class="comp-stat">${escapeHtml(condition)}</span>
+        </div>
+      </div>
+      <div class="comp-price">
+        <div class="comp-price-main">${priceDisp}</div>
+        <div class="comp-price-psqm">${psqmDisp}</div>
+        ${psqmDelta != null ? `<div class="comp-delta ${deltaCls}">${deltaStr}</div>` : ''}
+      </div>
+    </a>`;
+}
+
+// Click handler for comp rows. Sales open the detail page; rentals scroll
+// to the listing on the dashboard (rentals have no detail page yet).
+function openCompDetail(compId, type) {
+  if (type === 'sale' || type === 'sales') {
+    Router.openDetail(compId);
+    return;
+  }
+  // Rentals → close detail (if open) and navigate to dashboard with ?l=ID
+  // so the existing single-listing-share scroll-to-and-highlight kicks in.
+  const url = new URL(location);
+  url.searchParams.delete('view');
+  url.searchParams.set('l', String(compId));
+  location.href = url.toString();
+}
+
+// ── Comparable rentals ─────────────────────────────────────────────────────
+function detailComparableRentalsHtml(listing) {
+  const compIds  = listing.estimated_rent_comp_ids || [];
+  const rentals  = (typeof ALL_RENT !== 'undefined') ? ALL_RENT : (window.ALL_RENT || []);
+  const byId     = new Map(rentals.map(r => [String(r.id), r]));
+  const comps    = compIds.map(id => byId.get(String(id))).filter(Boolean);
+
+  const headerMeta = `<span class="section-meta">used to estimate yield</span>`;
+
+  if (!comps.length) {
+    const reason = listing.estimated_rent_method === 'omi_benchmark'
+      ? 'Yield estimate uses an OMI rental benchmark — no individual rental comps were matched for this zone/size.'
+      : 'No comparable rentals were found for this zone/size combination.';
+    return `
+      <section class="detail-comps">
+        <h2><span class="section-icon">🏠</span> Comparable rentals ${headerMeta}</h2>
+        <p class="comps-empty">${reason}</p>
+      </section>`;
+  }
+
+  // Sort by sqm proximity, then by psqm
+  const targetSqm = listing.sqm || 0;
+  const sorted = [...comps].sort((a, b) => {
+    const da = Math.abs((a.sqm || 0) - targetSqm);
+    const db = Math.abs((b.sqm || 0) - targetSqm);
+    if (da !== db) return da - db;
+    return _rentPsqm(a) - _rentPsqm(b);
+  });
+
+  const SHOW_INITIAL = 6;
+  const visible = sorted.slice(0, SHOW_INITIAL);
+  const hidden  = sorted.slice(SHOW_INITIAL);
+
+  const methodLbl = _METHOD_LABELS_RENT[listing.estimated_rent_method] || listing.estimated_rent_method || '—';
+  const conf      = listing.estimated_rent_confidence || '—';
+  const rentMo    = listing.estimated_rent_mo;
+  const rentPsqm  = listing.estimated_rent_psqm;
+
+  return `
+    <section class="detail-comps">
+      <h2><span class="section-icon">🏠</span> Comparable rentals ${headerMeta}</h2>
+      <p class="comps-method">
+        Lume estimated this property would rent for
+        <strong>${rentMo != null ? '€' + fmt(rentMo) + '/mo' : '?'}</strong>
+        ${rentPsqm != null ? `(€${rentPsqm.toFixed(1)}/m²/mo)` : ''}
+        based on <strong>${listing.estimated_rent_n_comps || comps.length}</strong> comparable rentals —
+        match: <em>${escapeHtml(methodLbl)}</em>, confidence: <strong>${escapeHtml(conf)}</strong>.
+      </p>
+      <div class="comp-list" id="rental-comps-list">
+        ${visible.map(r => compRowHtml(r, 'rent', listing)).join('')}
+      </div>
+      ${hidden.length ? `
+        <button type="button" class="show-more-btn" onclick="showAllRentalComps(this)">
+          Show ${hidden.length} more rental comps
+        </button>
+        <div class="comp-list comp-list-hidden" id="rental-comps-hidden">
+          ${hidden.map(r => compRowHtml(r, 'rent', listing)).join('')}
+        </div>` : ''}
     </section>`;
 }
+
+function showAllRentalComps(btn) {
+  const hidden = document.getElementById('rental-comps-hidden');
+  if (hidden) hidden.classList.add('comp-list-visible');
+  if (btn) btn.style.display = 'none';
+}
+
+// ── Comparable sales ───────────────────────────────────────────────────────
+function detailComparableSalesHtml(listing) {
+  const compIds = listing.comps_sale_comp_ids || listing.comps_ids || [];
+  const sales   = (typeof ALL_SALE !== 'undefined') ? ALL_SALE : (window.ALL_SALE || []);
+  const byId    = new Map(sales.map(s => [String(s.id), s]));
+  const comps   = compIds.map(id => byId.get(String(id)))
+                          .filter(Boolean)
+                          .filter(s => String(s.id) !== String(listing.id));
+
+  const headerMeta = `<span class="section-meta">used to assess price</span>`;
+
+  if (!comps.length) {
+    const note = (listing.comps_sale_n || 0) > 0
+      ? 'Comp IDs were not stored on this listing yet — re-run a fresh scan to populate them.'
+      : 'No comparable sales recorded for this listing.';
+    return `
+      <section class="detail-comps">
+        <h2><span class="section-icon">🏷️</span> Comparable sales ${headerMeta}</h2>
+        <p class="comps-empty">${note}</p>
+      </section>`;
+  }
+
+  // Sort by ask_psqm so user sees the price spectrum
+  const sorted = [...comps].sort((a, b) => (a.ask_psqm || 0) - (b.ask_psqm || 0));
+  const SHOW_INITIAL = 6;
+  const visible = sorted.slice(0, SHOW_INITIAL);
+  const hidden  = sorted.slice(SHOW_INITIAL);
+
+  const median   = listing.comps_sale_median || 0;
+  const delta    = listing.comps_sale_delta_pct;
+  const adjusted = listing.comps_sale_adjusted;
+  const methodKey = listing.comps_sale_source;
+  const methodLbl = _METHOD_LABELS_SALE[methodKey] || methodKey || '—';
+
+  const deltaCls = (delta == null) ? '' : (delta < 0 ? 'positive' : 'negative');
+  const deltaStr = (delta == null) ? '—' : (delta >= 0 ? '+' : '') + delta.toFixed(1) + '%';
+
+  return `
+    <section class="detail-comps">
+      <h2><span class="section-icon">🏷️</span> Comparable sales ${headerMeta}</h2>
+      <p class="comps-method">
+        <strong>${comps.length}</strong> comparable sale listings — match:
+        <em>${escapeHtml(methodLbl)}</em>.
+        ${median ? `Median asking price: <strong>€${fmt(Math.round(median))}/m²</strong>.` : ''}
+        ${listing.ask_psqm != null
+          ? `This listing is at <strong>€${fmt(listing.ask_psqm)}/m²</strong> —
+             <span class="${deltaCls}">${deltaStr}</span> vs comps.`
+          : ''}
+        ${adjusted ? '<em>Note: prices adjusted for condition mix.</em>' : ''}
+      </p>
+      <div class="comp-list" id="sale-comps-list">
+        ${visible.map(s => compRowHtml(s, 'sale', listing)).join('')}
+      </div>
+      ${hidden.length ? `
+        <button type="button" class="show-more-btn" onclick="showAllSaleComps(this)">
+          Show ${hidden.length} more sale comps
+        </button>
+        <div class="comp-list comp-list-hidden" id="sale-comps-hidden">
+          ${hidden.map(s => compRowHtml(s, 'sale', listing)).join('')}
+        </div>` : ''}
+    </section>`;
+}
+
+function showAllSaleComps(btn) {
+  const hidden = document.getElementById('sale-comps-hidden');
+  if (hidden) hidden.classList.add('comp-list-visible');
+  if (btn) btn.style.display = 'none';
+}
+
+// ── Neighbourhood ──────────────────────────────────────────────────────────
+const _FASCIA_DESCR = {
+  'A': 'Centre — premium pricing, lowest yields, strongest appreciation',
+  'B': 'Semi-central — good rental demand, balanced returns',
+  'C': 'Mid-tier — best gross yields typically come from this band',
+  'D': 'Periphery — higher yields but slower appreciation',
+  'E': 'Outer periphery — yield-oriented, capital appreciation modest',
+};
+
+function detailNeighbourhoodHtml(listing) {
+  const items = [];
+
+  if (listing.metro_walk_min != null) {
+    items.push({
+      icon: '🚇', label: 'Metro',
+      value: `${listing.metro_walk_min} min walk`,
+      detail: listing.metro_nearest_name
+        ? `${listing.metro_nearest_name}${listing.metro_nearest_line ? ' (' + listing.metro_nearest_line + ')' : ''}`
+        : '',
+      quality: listing.metro_walk_min <= 5 ? 'great' : listing.metro_walk_min <= 12 ? 'good' : 'far',
+    });
+  } else if (listing.metro_nearest_dist_m != null) {
+    items.push({
+      icon: '🚇', label: 'Metro',
+      value: `${Math.round(listing.metro_nearest_dist_m)} m`,
+      detail: listing.metro_nearest_name || '',
+      quality: listing.metro_nearest_dist_m < 500 ? 'great' : listing.metro_nearest_dist_m < 1200 ? 'good' : 'far',
+    });
+  }
+
+  if (listing.tram_nearest_dist_m != null) {
+    items.push({
+      icon: '🚊', label: 'Tram',
+      value: `${Math.round(listing.tram_nearest_dist_m)} m`,
+      detail: '',
+      quality: listing.tram_nearest_dist_m < 300 ? 'great' : listing.tram_nearest_dist_m < 600 ? 'good' : 'far',
+    });
+  }
+
+  if (listing.supermarket_nearest_dist_m != null) {
+    items.push({
+      icon: '🛒', label: 'Supermarket',
+      value: `${Math.round(listing.supermarket_nearest_dist_m)} m`,
+      detail: '',
+      quality: listing.supermarket_nearest_dist_m < 300 ? 'great' : listing.supermarket_nearest_dist_m < 600 ? 'good' : 'far',
+    });
+  }
+
+  if (listing.park_nearest_dist_m != null) {
+    items.push({
+      icon: '🌳', label: 'Nearest park',
+      value: `${Math.round(listing.park_nearest_dist_m)} m`,
+      detail: '',
+      quality: listing.park_nearest_dist_m < 300 ? 'great' : listing.park_nearest_dist_m < 700 ? 'good' : 'far',
+    });
+  }
+
+  if (listing.university_nearest_dist_m != null) {
+    items.push({
+      icon: '🎓', label: 'University',
+      value: `${Math.round(listing.university_nearest_dist_m)} m`,
+      detail: 'Rental demand driver — students',
+      quality: listing.university_nearest_dist_m < 1000 ? 'great' : listing.university_nearest_dist_m < 2500 ? 'good' : 'far',
+    });
+  }
+
+  const ldi    = listing.ldi_score;
+  const fascia = listing.omi_fascia;
+  const zona   = listing.omi_zona;
+
+  if (!items.length && ldi == null && !fascia && !zona) return '';
+
+  const ldiColour = ldi == null ? null
+                  : ldi >= 70 ? 'var(--green-deep)'
+                  : ldi >= 40 ? 'var(--amber)'
+                  :             'var(--coral)';
+
+  return `
+    <section class="detail-neighbourhood">
+      <h2><span class="section-icon">📍</span> Neighbourhood</h2>
+
+      <div class="nbhd-zone-info">
+        ${zona ? `
+          <div class="zone-row">
+            <span class="zone-label">OMI zone</span>
+            <span class="zone-value">${escapeHtml(zona)}</span>
+            <span class="zone-detail">${escapeHtml(listing.omi_descr || '')}</span>
+          </div>` : ''}
+        ${fascia ? `
+          <div class="zone-row">
+            <span class="zone-label">Fascia ${escapeHtml(fascia)}</span>
+            <span class="zone-detail">${escapeHtml(_FASCIA_DESCR[fascia] || '')}</span>
+          </div>` : ''}
+        ${ldi != null ? `
+          <div class="zone-row">
+            <span class="zone-label">Lume desirability</span>
+            <span class="zone-value">${ldi}/100</span>
+            <div class="ldi-bar">
+              <div class="ldi-fill" style="width:${Math.max(0, Math.min(100, ldi))}%; background:${ldiColour}"></div>
+            </div>
+          </div>` : ''}
+      </div>
+
+      ${items.length ? `
+        <h3>Walking distances</h3>
+        <div class="nbhd-grid">
+          ${items.map(item => `
+            <div class="nbhd-item nbhd-${item.quality}">
+              <div class="nbhd-icon">${item.icon}</div>
+              <div class="nbhd-content">
+                <div class="nbhd-label">${escapeHtml(item.label)}</div>
+                <div class="nbhd-value">${escapeHtml(item.value)}</div>
+                ${item.detail ? `<div class="nbhd-detail">${escapeHtml(item.detail)}</div>` : ''}
+              </div>
+            </div>`).join('')}
+        </div>` : ''}
+    </section>`;
+}
+
+// ── Mini-map ───────────────────────────────────────────────────────────────
+function detailMiniMapHtml(listing) {
+  if (!listing.latitude || !listing.longitude) return '';
+  return `
+    <section class="detail-map">
+      <h2><span class="section-icon">🗺️</span> Location & comps map</h2>
+      <p class="map-legend">
+        <span class="legend-dot legend-listing"></span> This listing
+        <span class="legend-dot legend-sale-comp"></span> Sale comps
+        <span class="legend-dot legend-rent-comp"></span> Rental comps
+      </p>
+      <div id="detail-mini-map"></div>
+    </section>`;
+}
+
+function initDetailMiniMap(listing) {
+  const mapEl = document.getElementById('detail-mini-map');
+  if (!mapEl || !listing.latitude || !listing.longitude || typeof L === 'undefined') return;
+
+  // Tear down any previous map (re-render case)
+  if (mapEl._leaflet_map) {
+    try { mapEl._leaflet_map.remove(); } catch (_) {}
+    mapEl._leaflet_map = null;
+  }
+
+  const map = L.map(mapEl, {
+    zoomControl: true,
+    scrollWheelZoom: false,   // opt-in: one click on the map enables wheel-zoom
+    dragging: true,
+    attributionControl: true,
+  });
+  mapEl._leaflet_map = map;
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© OpenStreetMap contributors © CARTO',
+    maxZoom: 19,
+  }).addTo(map);
+
+  const allRentals = (typeof ALL_RENT !== 'undefined') ? ALL_RENT : (window.ALL_RENT || []);
+  const allSales   = (typeof ALL_SALE !== 'undefined') ? ALL_SALE : (window.ALL_SALE || []);
+
+  const rentalComps = (listing.estimated_rent_comp_ids || [])
+    .map(id => allRentals.find(r => String(r.id) === String(id)))
+    .filter(c => c && c.latitude && c.longitude);
+
+  const saleCompIds = listing.comps_sale_comp_ids || listing.comps_ids || [];
+  const saleComps   = saleCompIds
+    .map(id => allSales.find(s => String(s.id) === String(id)))
+    .filter(c => c && c.latitude && c.longitude && String(c.id) !== String(listing.id));
+
+  const allPoints = [
+    [listing.latitude, listing.longitude],
+    ...rentalComps.map(c => [c.latitude, c.longitude]),
+    ...saleComps.map(c => [c.latitude, c.longitude]),
+  ];
+
+  // The listing — green pin, larger
+  L.circleMarker([listing.latitude, listing.longitude], {
+    radius: 11, fillColor: '#2A7A5A', color: 'white',
+    weight: 3, opacity: 1, fillOpacity: 1,
+  })
+    .bindPopup(`<strong>${escapeHtml(listing.neighbourhood || 'Listing')}</strong><br>€${fmt(listing.price ?? 0)} · ${listing.sqm ?? '?'} m²`)
+    .addTo(map);
+
+  // Sale comps — blue dots
+  saleComps.slice(0, 30).forEach(c => {
+    L.circleMarker([c.latitude, c.longitude], {
+      radius: 5, fillColor: '#4A90D9', color: 'white',
+      weight: 1.5, opacity: 1, fillOpacity: 0.9,
+    })
+      .bindPopup(`<strong>Sale comp</strong><br>${escapeHtml(c.neighbourhood || '')}<br>€${fmt(c.price ?? 0)} · ${c.sqm ?? '?'} m² · €${fmt(c.ask_psqm ?? 0)}/m²`)
+      .addTo(map);
+  });
+
+  // Rental comps — amber dots
+  rentalComps.slice(0, 30).forEach(c => {
+    const psqm = c.ask_psqm_effective || c.ask_psqm || 0;
+    L.circleMarker([c.latitude, c.longitude], {
+      radius: 5, fillColor: '#E8922A', color: 'white',
+      weight: 1.5, opacity: 1, fillOpacity: 0.9,
+    })
+      .bindPopup(`<strong>Rental comp</strong><br>${escapeHtml(c.neighbourhood || '')}<br>€${fmt(c.rent_mo ?? 0)}/mo · ${c.sqm ?? '?'} m² · €${psqm.toFixed(1)}/m²/mo`)
+      .addTo(map);
+  });
+
+  if (allPoints.length > 1) {
+    map.fitBounds(allPoints, { padding: [40, 40], maxZoom: 16 });
+  } else {
+    map.setView([listing.latitude, listing.longitude], 15);
+  }
+
+  // One click on the map → enable scroll-wheel zoom (so the user opts in)
+  mapEl.addEventListener('click', () => map.scrollWheelZoom.enable(), { once: true });
+}
+
+// Phase 3 placeholder stays — gallery / renovation calculator land later.
 function detailGalleryPlaceholderHtml() {
   return `
     <section class="detail-placeholder">

@@ -437,6 +437,13 @@ def get_comps_benchmark(
     )
     delta_pct = (ask_psqm - blended) / blended if blended > 0 else 0
 
+    # Capture the IDs of the listings that fed into the median, so the
+    # detail-page comps section can show them. We sort by €/m² so the user
+    # sees the cheapest first; cap at 30 to keep the payload reasonable
+    # (n_raw is preserved separately for the count).
+    sorted_pool = sorted(pool, key=lambda l: _psqm(l) or 0)
+    comp_ids = [l.get("id") for l in sorted_pool[:30] if l.get("id") is not None]
+
     return {
         "median":            round(median, 2),
         "p40":               round(p40, 2),
@@ -450,6 +457,7 @@ def get_comps_benchmark(
         "blended_median":    round(blended, 2),
         "condition_group":   listing_cgroup,
         "adjusted":          adjusted,
+        "comp_ids":          comp_ids,
     }
 
 
@@ -471,6 +479,7 @@ def _no_comps_result(ask_psqm: float, omi_mid: Optional[float],
             "blended_median":   round(omi_mid, 2),
             "condition_group":  listing_cgroup,
             "adjusted":         False,
+            "comp_ids":         [],
         }
     return {
         "median":           None,
@@ -485,4 +494,5 @@ def _no_comps_result(ask_psqm: float, omi_mid: Optional[float],
         "blended_median":   None,
         "condition_group":  listing_cgroup,
         "adjusted":         False,
+        "comp_ids":         [],
     }

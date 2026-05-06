@@ -1338,6 +1338,9 @@ def score_sale_listing(listing: dict, all_listings: list, settings: dict | None 
         "comps_sale_label":            comps_label,
         "comps_sale_condition_group":  comps.get("condition_group"),
         "comps_sale_adjusted":         bool(comps.get("adjusted")),
+        # IDs of the matched comp listings (≤30, sorted by €/m² asc) — used
+        # by the detail page to show the actual comps that fed the median.
+        "comps_sale_comp_ids":         comps.get("comp_ids", []),
         # Sub-scores
         "score_price":           round(pvc_s),
         "score_property":        prop_s,
