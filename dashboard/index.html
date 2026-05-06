@@ -1353,7 +1353,7 @@ body:not(.is-investor) .investor-only { display: none !important; }
 .score-ring-wrap {
   position: relative;
   flex-shrink: 0;
-  cursor: help;
+  cursor: pointer;     /* tap/click reveals the Score breakdown popover */
   width: 52px;
   height: 52px;
 }
@@ -2029,7 +2029,25 @@ body:not(.is-investor) .investor-only { display: none !important; }
 .s-value    { color: #a78bfa; }   /* violet — city-wide value */
 
 /* Score breakdown — badge wrap (item 4: global tooltip, no clipping) */
-.score-badge-wrap { display: inline-flex; flex-shrink: 0; cursor: help; }
+/* Cursor: pointer + subtle hover ring → users learn the score is clickable.
+   Click toggles a pinned tooltip; hover still shows it as before on desktop. */
+.score-badge-wrap,
+.score-ring-wrap[data-sc-rent] {
+  display: inline-flex;
+  flex-shrink: 0;
+  cursor: pointer;
+  border-radius: 999px;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+.score-badge-wrap:hover,
+.score-ring-wrap[data-sc-rent]:hover {
+  transform: scale(1.04);
+  box-shadow: 0 0 0 4px rgba(42, 122, 90, 0.10);
+}
+.score-ring-wrap[data-sc-rent].is-pinned,
+.score-badge-wrap.is-pinned {
+  box-shadow: 0 0 0 4px rgba(42, 122, 90, 0.18);
+}
 /* .score-breakdown is hidden; content read by JS global tooltip */
 .score-breakdown { display: none; }
 .sb-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
@@ -4669,29 +4687,41 @@ function _gtPosition(point = null) {
   _gtEl.style.left = left + 'px';
 }
 
+// Build the Score-breakdown HTML from a wrapper element's data-* attrs.
+// Shared between hover (mouseenter) and click (pin) paths.
+function _scoreBreakdownHtml(bdWrap) {
+  const d = bdWrap.dataset;
+  const _fmtSub = (v, w) => v !== '' && v != null
+    ? `<span style="font-weight:700">${v}</span> <span style="color:var(--muted);font-size:10px">×${w} = ${Math.round(Number(v)*w)}</span>`
+    : `<span style="color:var(--muted)">– (neutral 50×${w} = ${Math.round(50*w)})</span>`;
+  const wP  = Number(d.wPrice || 0.40);
+  const wPr = Number(d.wProp  || 0.30);
+  const wL  = Number(d.wLoc   || 0.20);
+  const wPn = Number(d.wPen   || 0.10);
+  return `
+    <div class="gt-title">Score breakdown</div>
+    <div class="sb-row"><span class="sb-label">Price vs comps (×${wP})</span>${_fmtSub(d.scPrice,wP)}</div>
+    <div class="sb-row"><span class="sb-label">Property quality (×${wPr})</span>${_fmtSub(d.scProp,wPr)}</div>
+    <div class="sb-row"><span class="sb-label">Location / geo (×${wL})</span>${_fmtSub(d.scLoc,wL)}</div>
+    <div class="sb-row"><span class="sb-label">Penalty score (×${wPn})</span>${_fmtSub(d.scPen,wPn)}</div>
+    ${d.scOmiCtx ? `<div class="gt-sep"></div><div style="font-size:10px;color:var(--muted)">${d.scOmiCtx}</div>` : ''}
+    <div class="gt-sep"></div>
+    <div class="sb-row"><span class="sb-label" style="font-weight:700">Total</span><span style="font-weight:800;font-size:14px">${d.scTotal ?? '–'} / 100</span></div>`;
+}
+
+// "Pinned" state: when set, the tooltip stays open until the user clicks
+// outside the score badge or the same badge again. Pinning is what makes
+// the tooltip work on touch devices where there's no hover.
+let _gtPinnedAnchor = null;
+
 // Delegate tooltip triggers off document (works for dynamically created cards)
 document.addEventListener('mouseenter', e => {
   // Score badge wrap → score breakdown tooltip
   const bdWrap = e.target.closest('.score-badge-wrap[data-sc-rent], .score-ring-wrap[data-sc-rent]');
   if (bdWrap) {
-    const d = bdWrap.dataset;
-    const _fmtSub = (v, w) => v !== '' && v != null
-      ? `<span style="font-weight:700">${v}</span> <span style="color:var(--muted);font-size:10px">×${w} = ${Math.round(Number(v)*w)}</span>`
-      : `<span style="color:var(--muted)">– (neutral 50×${w} = ${Math.round(50*w)})</span>`;
-    const wP  = Number(d.wPrice  || 0.40);
-    const wPr = Number(d.wProp   || 0.30);
-    const wL  = Number(d.wLoc    || 0.20);
-    const wPn = Number(d.wPen    || 0.10);
-    const html = `
-      <div class="gt-title">Score breakdown</div>
-      <div class="sb-row"><span class="sb-label">Price vs comps (×${wP})</span>${_fmtSub(d.scPrice,wP)}</div>
-      <div class="sb-row"><span class="sb-label">Property quality (×${wPr})</span>${_fmtSub(d.scProp,wPr)}</div>
-      <div class="sb-row"><span class="sb-label">Location / geo (×${wL})</span>${_fmtSub(d.scLoc,wL)}</div>
-      <div class="sb-row"><span class="sb-label">Penalty score (×${wPn})</span>${_fmtSub(d.scPen,wPn)}</div>
-      ${d.scOmiCtx ? `<div class="gt-sep"></div><div style="font-size:10px;color:var(--muted)">${d.scOmiCtx}</div>` : ''}
-      <div class="gt-sep"></div>
-      <div class="sb-row"><span class="sb-label" style="font-weight:700">Total</span><span style="font-weight:800;font-size:14px">${d.scTotal ?? '–'} / 100</span></div>`;
-    _gtShow(html, bdWrap, 'cursor', e);
+    // If a different score is pinned, leave it pinned — hover doesn't unpin
+    if (_gtPinnedAnchor && _gtPinnedAnchor !== bdWrap) return;
+    _gtShow(_scoreBreakdownHtml(bdWrap), bdWrap, 'cursor', e);
     return;
   }
   // OMI zone pill (item 5)
@@ -4713,9 +4743,39 @@ document.addEventListener('mouseenter', e => {
 }, true);  // capture phase so it fires before child elements swallow it
 
 document.addEventListener('mouseleave', e => {
+  // Don't hide a pinned (clicked) score-breakdown tooltip on hover-out.
+  if (_gtPinnedAnchor) return;
   if (e.target.closest('.score-badge-wrap[data-sc-rent], .score-ring-wrap[data-sc-rent]') ||
       e.target.closest('.geo-tooltip-wrap[data-geo-lines]') ||
       e.target.closest('.omi-zone-pill[data-omi-title]')) {
+    _gtHide();
+  }
+}, true);
+
+// Click pins / unpins the score-breakdown tooltip. Clicking outside the
+// score badge (anywhere else on the page) unpins and hides it.
+document.addEventListener('click', e => {
+  const bdWrap = e.target.closest('.score-badge-wrap[data-sc-rent], .score-ring-wrap[data-sc-rent]');
+  if (bdWrap) {
+    if (_gtPinnedAnchor === bdWrap) {
+      // Tap again on the pinned badge → close
+      _gtPinnedAnchor.classList.remove('is-pinned');
+      _gtPinnedAnchor = null;
+      _gtHide();
+    } else {
+      // Pin a new badge (un-pinning any previously-pinned one)
+      if (_gtPinnedAnchor) _gtPinnedAnchor.classList.remove('is-pinned');
+      _gtPinnedAnchor = bdWrap;
+      bdWrap.classList.add('is-pinned');
+      _gtShow(_scoreBreakdownHtml(bdWrap), bdWrap, 'anchor');
+    }
+    e.stopPropagation();
+    return;
+  }
+  // Click anywhere else → if a tooltip is pinned, close it
+  if (_gtPinnedAnchor && !_gtEl.contains(e.target)) {
+    _gtPinnedAnchor.classList.remove('is-pinned');
+    _gtPinnedAnchor = null;
     _gtHide();
   }
 }, true);
