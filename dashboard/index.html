@@ -530,6 +530,15 @@ body:not(.is-investor) .investor-only { display: none !important; }
   font-weight: 700;
   color: var(--text-primary);
 }
+/* Subtotal row that sums the rows above it (downpayment + closing) */
+.mortgage-row.total {
+  border-top: 1px solid rgba(0,0,0,0.07);
+  margin-top: 4px;
+  padding-top: 6px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.mortgage-row.total .value { font-weight: 700; }
 .mortgage-row .value { font-weight: 700; color: var(--text-primary); }
 .mortgage-meta {
   font-size: 10px;
@@ -539,16 +548,26 @@ body:not(.is-investor) .investor-only { display: none !important; }
   opacity: 0.75;
 }
 .cashflow-summary {
-  font-size: 12px;
-  line-height: 1.6;
-  padding: 10px 12px;
+  margin-top: 12px;
+  padding: 12px 14px;
   background: var(--green-light);
   border-radius: 10px;
+  font-size: 12.5px;
+  line-height: 1.65;
   color: var(--text-primary);
 }
+.cashflow-line { margin: 0 0 4px 0; }
+.cashflow-line:last-child { margin-bottom: 0; }
 .cashflow-summary strong { color: var(--green-deep); }
 .cashflow-summary .positive { color: var(--green-deep); font-weight: 700; }
 .cashflow-summary .negative { color: var(--coral);     font-weight: 700; }
+.negative-note {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(0,0,0,0.06);
+  font-size: 11.5px;
+  color: var(--coral);
+}
 .mortgage-disclaimer {
   font-size: 10.5px;
   color: var(--text-secondary);
@@ -556,6 +575,51 @@ body:not(.is-investor) .investor-only { display: none !important; }
   margin-top: 10px;
   font-style: italic;
   opacity: 0.85;
+}
+
+/* ── 5-pill dense investor metrics row (Sales tab investor mode) ── */
+.stat-pills-investor {
+  display: flex;
+  gap: 5px;
+  margin: 8px 16px 0;
+  flex-wrap: wrap;
+}
+.stat-pills-investor .stat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-muted);
+  border-radius: 10px;
+  padding: 6px 9px;
+  font-size: 11.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+.stat-pills-investor .pill-icon  { font-size: 12px; opacity: 0.85; }
+.stat-pills-investor .pill-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+.stat-pills-investor .pill-value { font-weight: 700; color: inherit; }
+.investor-no-data {
+  margin: 8px 16px 0;
+  padding: 8px 12px;
+  background: var(--bg-muted);
+  border-radius: 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+@media (max-width: 480px) {
+  .stat-pills-investor {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .stat-pills-investor::-webkit-scrollbar { display: none; }
 }
 
 /* ── Stats bar (warm pill strip) ── */
@@ -7655,78 +7719,183 @@ function _populateSaleOmiZoneFilter(data) {
 // Cross-reference each sale against the rentals dataset to estimate the
 // monthly rent it would command. Runs once when both ALL_SALE and ALL_RENT
 // are available; results are stashed on the sale listing as
-//   estimated_rent_mo · estimated_rent_psqm · estimated_rent_n_comps · estimated_rent_confidence
-// Uses a wider size band (0.80–1.20× sqm) than the comps engine (0.85–1.15×)
-// because we want enough rentals to project a stable median.
+//   estimated_rent_psqm · estimated_rent_mo · estimated_rent_n_comps
+//   estimated_rent_confidence · estimated_rent_method
+//
+// Uses progressive relaxation across 7 passes (strict zone+condition →
+// citywide-by-size → OMI benchmark) so >95% of sales get an estimate even
+// when their zone has no exact-match rentals.
+//
+// NOTE: rentals JSON does not have a dedicated `ask_psqm_rent` field — the
+// monthly-rent-per-m² is stored as `ask_psqm` (or `ask_psqm_effective` when
+// the listing has condo fees folded in).
+
+function _rentPsqm(r) { return r.ask_psqm_effective || r.ask_psqm || 0; }
+
+// Map raw condition strings to comparable groups.
+function conditionGroup(listing) {
+  const c = (listing.condition || '').toLowerCase().trim();
+  if (c.includes('ottimo') || c.includes('ristrutturat')) {
+    // 'ristrutturato' = renovated; 'da ristrutturare' = needs work — keep apart
+    if (c.includes('da ristrutturare') || c.includes('da_ristrutturare')) return 'needs_work';
+    return 'premium';
+  }
+  if (c.includes('fatiscente')) return 'needs_work';
+  if (c.includes('buono') || c.includes('abitabile') || c.includes('normale')) return 'standard';
+  return 'unknown';
+}
+
+// When the comp pool is mixed, rescale its median €/m² to the sale's condition.
+// Multipliers below are rough Milan rules of thumb: premium ≈ +18% over
+// standard, needs_work ≈ −15% under standard.
+function applyConditionAdjustment(rawPsqm, pool, targetGroup) {
+  if (targetGroup === 'unknown') return rawPsqm;
+  let nP = 0, nS = 0, nN = 0, nU = 0;
+  for (const r of pool) {
+    const g = conditionGroup(r);
+    if      (g === 'premium')    nP++;
+    else if (g === 'standard')   nS++;
+    else if (g === 'needs_work') nN++;
+    else                          nU++;
+  }
+  const total = pool.length || 1;
+  // 'unknown' rentals are treated as standard for adjustment purposes
+  const poolFactor = (nP * 1.18 + (nS + nU) * 1.00 + nN * 0.85) / total;
+  const targetFactor =
+    targetGroup === 'premium'    ? 1.18 :
+    targetGroup === 'needs_work' ? 0.85 :
+                                   1.00;
+  if (poolFactor === 0) return rawPsqm;
+  return rawPsqm * (targetFactor / poolFactor);
+}
+
+function _medianPsqm(pool) {
+  const xs = pool.map(_rentPsqm).filter(v => v > 0).sort((a, b) => a - b);
+  return xs.length ? xs[Math.floor(xs.length / 2)] : null;
+}
+
+// Per-listing rent estimator. Pure function — receives pre-built indexes
+// to avoid filtering 11k rentals per sale per pass.
+function estimateRentForSale(sale, rentalsArr, idx) {
+  const sqm    = sale.sqm || 0;
+  const zona   = sale.omi_zona || sale.omi_zone;
+  const fascia = sale.omi_fascia;
+  if (!sqm) return { psqm: null, rent_mo: null, n_comps: 0, confidence: 'none', method: 'no_sqm' };
+
+  const saleCondGroup = conditionGroup(sale);
+  const sizeOK = (lo, hi) => (r) => r.sqm >= sqm * lo && r.sqm <= sqm * hi;
+
+  // Build progressively wider candidate pools. First pool with ≥ MIN_POOL_SIZE wins.
+  const candidatePools = [];
+  const zonePool = zona ? (idx.byZone.get(zona) || []) : [];
+  if (zonePool.length) {
+    candidatePools.push({
+      pool: zonePool.filter(r => conditionGroup(r) === saleCondGroup && sizeOK(0.85, 1.15)(r)),
+      method: 'zone_condition_strict', confidence: 'high',
+    });
+    candidatePools.push({
+      pool: zonePool.filter(sizeOK(0.85, 1.15)),
+      method: 'zone_any_condition', confidence: 'high',
+    });
+    candidatePools.push({
+      pool: zonePool.filter(sizeOK(0.75, 1.30)),
+      method: 'zone_wide_size', confidence: 'medium',
+    });
+  }
+  const fasciaPool = fascia ? (idx.byFascia.get(fascia) || []) : [];
+  if (fasciaPool.length) {
+    candidatePools.push({
+      pool: fasciaPool.filter(sizeOK(0.85, 1.15)),
+      method: 'fascia_tight', confidence: 'medium',
+    });
+    candidatePools.push({
+      pool: fasciaPool.filter(sizeOK(0.70, 1.40)),
+      method: 'fascia_wide', confidence: 'low',
+    });
+  }
+  candidatePools.push({
+    pool: idx.allWithPsqm.filter(sizeOK(0.85, 1.15)),
+    method: 'citywide_size', confidence: 'low',
+  });
+
+  const MIN_POOL_SIZE = 5;
+  for (const cand of candidatePools) {
+    if (cand.pool.length < MIN_POOL_SIZE) continue;
+    const median = _medianPsqm(cand.pool);
+    if (!median) continue;
+    const adjusted = cand.method === 'zone_condition_strict'
+      ? median
+      : applyConditionAdjustment(median, cand.pool, saleCondGroup);
+    return {
+      psqm:       Math.round(adjusted * 100) / 100,
+      rent_mo:    Math.round(adjusted * sqm),
+      n_comps:    cand.pool.length,
+      confidence: cand.confidence,
+      method:     cand.method,
+    };
+  }
+
+  // Final fallback: OMI rental benchmark for the zone
+  if (sale.omi_loc_mid && sale.omi_loc_mid > 0) {
+    return {
+      psqm:       sale.omi_loc_mid,
+      rent_mo:    Math.round(sale.omi_loc_mid * sqm),
+      n_comps:    0,
+      confidence: 'low',
+      method:     'omi_benchmark',
+    };
+  }
+  return { psqm: null, rent_mo: null, n_comps: 0, confidence: 'none', method: 'no_data' };
+}
+
 function computeEstimatedRents(salesArr, rentalsArr) {
-  if (!Array.isArray(salesArr) || !Array.isArray(rentalsArr) || rentalsArr.length === 0) {
-    return;
-  }
-  // Index rentals by zone — turns a 4k×11k loop into a per-zone bucket lookup.
+  if (!Array.isArray(salesArr) || !Array.isArray(rentalsArr) || rentalsArr.length === 0) return;
+
+  // Build indexes once — `byZone`, `byFascia`, and `allWithPsqm` (rentals with
+  // a valid €/m² regardless of zone). Filtering an 11k array seven times per
+  // sale would be O(n*m); index lookups make it O(zone_size) per pass.
   const byZone = new Map();
+  const byFascia = new Map();
+  const allWithPsqm = [];
   for (const r of rentalsArr) {
+    if (_rentPsqm(r) <= 0) continue;
+    allWithPsqm.push(r);
     const z = r.omi_zona || r.omi_zone;
-    if (!z) continue;
-    const psqm = r.ask_psqm_effective || r.ask_psqm;
-    if (!psqm || psqm <= 0) continue;
-    if (!byZone.has(z)) byZone.set(z, []);
-    byZone.get(z).push(r);
+    if (z) {
+      if (!byZone.has(z)) byZone.set(z, []);
+      byZone.get(z).push(r);
+    }
+    const f = r.omi_fascia;
+    if (f) {
+      if (!byFascia.has(f)) byFascia.set(f, []);
+      byFascia.get(f).push(r);
+    }
   }
+  const idx = { byZone, byFascia, allWithPsqm };
 
   for (const sale of salesArr) {
-    const sqm  = sale.sqm || 0;
-    const zona = sale.omi_zona || sale.omi_zone;
-    if (!sqm || !zona) {
-      sale.estimated_rent_mo = null;
-      continue;
-    }
-    const pool = byZone.get(zona);
-    if (!pool || pool.length === 0) {
-      sale.estimated_rent_mo = null;
-      sale.estimated_rent_confidence = 'low';
-      continue;
-    }
-    const sizeMin = sqm * 0.80;
-    const sizeMax = sqm * 1.20;
-    const matches = pool.filter(r => r.sqm >= sizeMin && r.sqm <= sizeMax);
-
-    if (matches.length < 3) {
-      sale.estimated_rent_mo = null;
-      sale.estimated_rent_confidence = 'low';
-      continue;
-    }
-    // If sale is renovated/excellent, prefer rentals in the same condition tier.
-    // Otherwise use all matches — mixing conditions gives a fairer median.
-    const saleCond = (sale.condition || '').toLowerCase();
-    const isPremium = saleCond.includes('ottimo') || saleCond.includes('ristrutturat');
-    let filtered = matches;
-    if (isPremium) {
-      const premiumOnly = matches.filter(r => {
-        const c = (r.condition || '').toLowerCase();
-        return c.includes('ottimo') || c.includes('ristrutturat');
-      });
-      if (premiumOnly.length >= 3) filtered = premiumOnly;
-    }
-    const psqmRents = filtered
-      .map(r => r.ask_psqm_effective || r.ask_psqm)
-      .filter(v => v > 0)
-      .sort((a, b) => a - b);
-    if (psqmRents.length < 3) {
-      sale.estimated_rent_mo = null;
-      sale.estimated_rent_confidence = 'low';
-      continue;
-    }
-    const median = psqmRents[Math.floor(psqmRents.length / 2)];
-    sale.estimated_rent_psqm        = median;
-    sale.estimated_rent_mo          = Math.round(median * sqm);
-    sale.estimated_rent_n_comps     = filtered.length;
-    sale.estimated_rent_confidence  =
-      filtered.length >= 15 ? 'high' :
-      filtered.length >= 6  ? 'medium' :
-                              'low';
+    const result = estimateRentForSale(sale, rentalsArr, idx);
+    sale.estimated_rent_psqm       = result.psqm;
+    sale.estimated_rent_mo         = result.rent_mo;
+    sale.estimated_rent_n_comps    = result.n_comps;
+    sale.estimated_rent_confidence = result.confidence;
+    sale.estimated_rent_method     = result.method;
     // Invalidate any previously-cached yield so it's recomputed next render
     _yieldCache.delete(sale);
   }
+
+  // One-shot diagnostic so we can spot-check coverage in the browser console.
+  try {
+    const total    = salesArr.length;
+    const computed = salesArr.filter(s => s.estimated_rent_mo).length;
+    const byMethod = {};
+    for (const s of salesArr) {
+      const m = s.estimated_rent_method || 'none';
+      byMethod[m] = (byMethod[m] || 0) + 1;
+    }
+    console.log(`[rent estimates] ${computed}/${total} computed (${Math.round(computed/total*100)}%)`);
+    console.log('[rent estimates] by method:', byMethod);
+  } catch (_) { /* console may be readonly in some embeddings */ }
 }
 // Trigger once both rentals and sales are present
 let _estRentsComputed = false;
@@ -7822,27 +7991,92 @@ function computeMortgageScenarios(price) {
 }
 
 // ── Investor view: card content ──────────────────────────────────────────────
+// 5-pill dense metrics row: Rent · Gross · Net · Cash · CF.
+// Each pill has a tooltip explaining the calculation — investors read
+// tooltips for transparency, so the math is visible without clicking through.
 function investorStatPillsHtml(l) {
   const y = computeYieldMetrics(l);
   const m = computeMortgageScenarios(l.price);
   const pills = [];
+
+  // 1) Estimated rent — confidence dot in the value, full method in tooltip
   if (l.estimated_rent_mo) {
     const conf = l.estimated_rent_confidence;
-    const tag  = conf === 'high' ? '' : conf === 'medium' ? ' ~' : ' ?';
-    const tip  = conf === 'high'   ? 'Rent estimate from 15+ similar rentals nearby'
-              : conf === 'medium' ? 'Rent estimate from 6–14 similar rentals nearby'
-              :                      'Rent estimate from limited comps — verify before offer';
-    pills.push(`<span class="stat-pill" title="${tip}" style="color:var(--text-primary)">💰 €${fmt(l.estimated_rent_mo)}/mo${tag}</span>`);
+    const dot  = conf === 'high' ? '' : conf === 'medium' ? '~' : '?';
+    const methodLabel = ({
+      zone_condition_strict: 'same zone, same condition, similar size',
+      zone_any_condition:    'same zone, similar size',
+      zone_wide_size:        'same zone, wider size band',
+      fascia_tight:          'same fascia, similar size',
+      fascia_wide:           'same fascia, wider size band',
+      citywide_size:         'citywide rentals of similar size',
+      omi_benchmark:         'OMI rental benchmark for the zone',
+    }[l.estimated_rent_method] || 'rental comps');
+    const tip = `Estimated rent · ${conf} confidence · ${l.estimated_rent_n_comps || 0} comps · ${methodLabel}`;
+    pills.push(`
+      <span class="stat-pill stat-pill-rent" title="${escapeHtml(tip)}">
+        <span class="pill-icon">💰</span>
+        <span class="pill-label">Rent</span>
+        <span class="pill-value">€${fmt(l.estimated_rent_mo)}${dot}</span>
+      </span>`);
   }
+
+  // 2) Gross yield (yield_rating-coloured)
   if (y.gross_yield_pct != null) {
     const colors = { high: 'var(--green-deep)', medium: 'var(--amber)', low: 'var(--coral)' };
-    const labels = { high: 'high', medium: 'med', low: 'low' };
-    pills.push(`<span class="stat-pill" title="Gross yield = annual rent / asking price" style="color:${colors[y.yield_rating]};font-weight:700">📈 ${y.gross_yield_pct}% yield (${labels[y.yield_rating]})</span>`);
+    pills.push(`
+      <span class="stat-pill stat-pill-yield" style="color:${colors[y.yield_rating]}"
+            title="Gross yield = annual rent ÷ asking price">
+        <span class="pill-icon">📈</span>
+        <span class="pill-label">Gross</span>
+        <span class="pill-value">${y.gross_yield_pct}%</span>
+      </span>`);
   }
+
+  // 3) Net yield (after vacancy, management, IMU, maintenance, condo)
+  if (y.net_yield_pct != null) {
+    const netColor = y.net_yield_pct >= 4 ? 'var(--green-deep)'
+                  : y.net_yield_pct >= 2 ? 'var(--amber)'
+                  :                        'var(--coral)';
+    pills.push(`
+      <span class="stat-pill stat-pill-yield" style="color:${netColor}"
+            title="Net yield = (annual rent − operating costs) ÷ asking price. Costs: vacancy, management, IMU, maintenance reserve, condo fees.">
+        <span class="pill-icon">📊</span>
+        <span class="pill-label">Net</span>
+        <span class="pill-value">${y.net_yield_pct}%</span>
+      </span>`);
+  }
+
+  // 4) Cash needed to close (downpayment + closing — investment scenario)
   if (m) {
-    pills.push(`<span class="stat-pill" title="Cash needed (downpayment + closing costs) for the investment-property mortgage scenario" style="color:var(--text-primary)">🏦 €${(m.investment.cash_needed/1000).toFixed(0)}k down</span>`);
+    pills.push(`
+      <span class="stat-pill" title="Cash to close = downpayment (35%) + closing costs (~12%, notary + registry tax + agency)">
+        <span class="pill-icon">🏦</span>
+        <span class="pill-label">Cash</span>
+        <span class="pill-value">€${(m.investment.cash_needed/1000).toFixed(0)}k</span>
+      </span>`);
   }
-  return pills.length ? `<div class="stat-pills">${pills.join('')}</div>` : '';
+
+  // 5) Monthly cash flow (rent − mortgage − operating costs)
+  if (l.estimated_rent_mo && m && y.monthly_costs != null) {
+    const cf = l.estimated_rent_mo - m.investment.monthly_payment - y.monthly_costs;
+    const flowColor = cf >=  100 ? 'var(--green-deep)'
+                    : cf >= -100 ? 'var(--amber)'
+                    :              'var(--coral)';
+    const sign = cf >= 0 ? '+' : '−';
+    pills.push(`
+      <span class="stat-pill stat-pill-cf" style="color:${flowColor};font-weight:700"
+            title="Monthly cash flow = estimated rent − investment-mortgage payment − operating costs (vacancy, management, IMU, maintenance, condo)">
+        <span class="pill-icon">${cf >= 0 ? '↑' : '↓'}</span>
+        <span class="pill-label">CF</span>
+        <span class="pill-value">${sign}€${fmt(Math.abs(cf))}/mo</span>
+      </span>`);
+  }
+
+  if (!pills.length) {
+    return `<div class="investor-no-data">⚠ Limited data — full investor view not available for this listing</div>`;
+  }
+  return `<div class="stat-pills stat-pills-investor">${pills.join('')}</div>`;
 }
 
 function generateInvestorReasons(l) {
@@ -7939,48 +8173,77 @@ function investorMortgageBreakdownHtml(l) {
   const m = computeMortgageScenarios(l.price);
   if (!m) return '';
   const y = computeYieldMetrics(l);
-  const cashflow = (l.estimated_rent_mo && y.monthly_costs != null)
-    ? Math.round(l.estimated_rent_mo - m.investment.monthly_payment - y.monthly_costs)
+
+  // Cash-flow + payback math (investment scenario)
+  const monthlyRent     = l.estimated_rent_mo || 0;
+  const monthlyMortgage = m.investment.monthly_payment;
+  const monthlyOpCosts  = (y.monthly_costs != null) ? y.monthly_costs : null;
+  const monthlyNet      = (monthlyRent && monthlyOpCosts != null)
+    ? monthlyRent - monthlyMortgage - monthlyOpCosts
     : null;
-  const cashflowHtml = (cashflow != null) ? `
+  const annualNet       = (monthlyNet != null) ? monthlyNet * 12 : null;
+  const totalCashIn     = m.investment.cash_needed;
+  const paybackYears    = (annualNet != null && annualNet > 0)
+    ? (totalCashIn / annualNet).toFixed(1)
+    : null;
+
+  const ratesNote = `${INVESTOR_CONFIG.primary.rate*100}% primary, ${INVESTOR_CONFIG.investment.rate*100}% investment`;
+
+  const cashflowSection = monthlyRent ? `
     <div class="cashflow-summary">
-      <strong>Cash flow as investment:</strong>
-      €${fmt(l.estimated_rent_mo)}/mo rent
-      − €${fmt(m.investment.monthly_payment)}/mo mortgage
-      − €${fmt(y.monthly_costs)}/mo running costs
-      = <span class="${cashflow >= 0 ? 'positive' : 'negative'}">€${fmt(cashflow)}/mo</span>
+      <div class="cashflow-line">
+        <strong>Cash flow as investment (monthly):</strong>
+      </div>
+      <div class="cashflow-line">
+        Rent <strong>€${fmt(monthlyRent)}</strong>
+        − Mortgage <strong>€${fmt(monthlyMortgage)}</strong>
+        − Operating <strong>€${fmt(monthlyOpCosts ?? 0)}</strong>
+        = <span class="${monthlyNet != null && monthlyNet >= 0 ? 'positive' : 'negative'}">
+            <strong>€${fmt(monthlyNet ?? 0)}/mo</strong>
+          </span>
+      </div>
+      ${paybackYears ? `
+        <div class="cashflow-line">
+          <span style="color:var(--text-secondary)">Payback on cash invested:</span>
+          <strong>${paybackYears} years</strong>
+          <span style="color:var(--text-secondary)"> · €${fmt(totalCashIn)} ÷ €${fmt(Math.round(annualNet))}/yr</span>
+        </div>` : `
+        <div class="cashflow-line negative-note">
+          ⚠ Negative cash flow — this investment requires holding for capital appreciation, not income
+        </div>`}
     </div>` : '';
+
   return `
     <div class="mortgage-breakdown">
-      <h4>Financing scenarios <span class="indicative-tag">indicative only</span></h4>
+      <h4>Financing scenarios <span class="indicative-tag">indicative · ${INVESTOR_CONFIG.rates_set_on} rates</span></h4>
       <div class="mortgage-grid">
         <div class="mortgage-col">
           <div class="mortgage-col-title">As primary residence</div>
-          <div class="mortgage-row"><span>Cash needed</span><span class="value">€${fmt(m.primary.cash_needed)}</span></div>
           <div class="mortgage-row"><span>Downpayment (${100 - m.primary.ltv_pct}%)</span><span>€${fmt(m.primary.downpayment)}</span></div>
           <div class="mortgage-row"><span>Closing costs (~${Math.round(INVESTOR_CONFIG.primary.closing_pct*100)}%)</span><span>€${fmt(m.primary.closing_costs)}</span></div>
+          <div class="mortgage-row total"><span>Total cash to close</span><span class="value">€${fmt(m.primary.cash_needed)}</span></div>
           <div class="mortgage-row"><span>Mortgage</span><span>€${fmt(m.primary.loan_amount)} @ ${m.primary.rate_pct}%</span></div>
           <div class="mortgage-row primary"><span>Monthly payment</span><span class="value">€${fmt(m.primary.monthly_payment)}/mo</span></div>
           <div class="mortgage-meta">${m.primary.term_years}-year fixed</div>
         </div>
         <div class="mortgage-col">
           <div class="mortgage-col-title">As investment</div>
-          <div class="mortgage-row"><span>Cash needed</span><span class="value">€${fmt(m.investment.cash_needed)}</span></div>
           <div class="mortgage-row"><span>Downpayment (${100 - m.investment.ltv_pct}%)</span><span>€${fmt(m.investment.downpayment)}</span></div>
           <div class="mortgage-row"><span>Closing costs (~${Math.round(INVESTOR_CONFIG.investment.closing_pct*100)}%)</span><span>€${fmt(m.investment.closing_costs)}</span></div>
+          <div class="mortgage-row total"><span>Total cash to close</span><span class="value">€${fmt(m.investment.cash_needed)}</span></div>
           <div class="mortgage-row"><span>Mortgage</span><span>€${fmt(m.investment.loan_amount)} @ ${m.investment.rate_pct}%</span></div>
           <div class="mortgage-row primary"><span>Monthly payment</span><span class="value">€${fmt(m.investment.monthly_payment)}/mo</span></div>
           <div class="mortgage-meta">${m.investment.term_years}-year fixed</div>
         </div>
       </div>
-      ${cashflowHtml}
+      ${cashflowSection}
       <p class="mortgage-disclaimer">
-        Rates and terms are estimates based on Italian market conditions
-        (${INVESTOR_CONFIG.rates_set_on}). Actual mortgage terms vary by lender,
-        borrower profile, and credit history. Closing costs include notary,
-        registry tax, and agency commission. IMU and condo fees are factored
-        into the cash-flow line above. Always verify with a financial advisor
-        before making decisions.
+        Mortgage rates and terms are estimates based on Italian market
+        conditions (${INVESTOR_CONFIG.rates_set_on} — ${ratesNote}). Operating
+        costs include vacancy (1mo/yr), management (8%), IMU (~0.65% of price),
+        maintenance reserve (1%), and condo fees. Actual returns depend on
+        rental demand, vacancy, and market conditions. Always verify with a
+        financial advisor before making decisions.
       </p>
     </div>`;
 }
