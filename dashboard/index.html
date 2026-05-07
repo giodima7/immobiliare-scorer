@@ -1540,6 +1540,31 @@ body.detail-page-active .filter-bar { display: none !important; }
   .tier-buttons      { grid-template-columns: 1fr; }
 }
 
+/* Sales analysis loading banner — shown only on first sales-tab visit */
+.sales-loading-banner {
+  padding: 14px 18px;
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  margin-bottom: 12px;
+  box-shadow: var(--shadow-card);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.sales-loading-content {
+  display: flex; align-items: center; gap: 12px;
+}
+.loading-spinner {
+  width: 18px; height: 18px;
+  border: 2px solid var(--bg-muted);
+  border-top-color: var(--green-deep);
+  border-radius: 50%;
+  animation: spin 800ms linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .loading-spinner { animation: none; border-top-color: var(--bg-muted); }
+}
+
 /* "Full investment analysis" CTA on investor cards ────────── */
 .btn-full-analysis {
   width: calc(100% - 32px);
@@ -6849,7 +6874,14 @@ function switchTab(tab) {
   if (tab === 'sales') {
     stopScannerPoll();
     if (IS_LIVE) startSaleFetchPoll();      // Combined sale fetch polling (Immobiliare + Idealista)
-    if (!ALL_SALE.length) loadSales();
+    if (!ALL_SALE.length) {
+      // First sales tab visit: load + analyse. Analysis runs after loadSales
+      // resolves so the index/cache work has the data it needs.
+      loadSales().then(() => ensureSalesAnalysis());
+    } else {
+      // Already loaded: kick analysis if it hasn't run yet (idempotent).
+      ensureSalesAnalysis();
+    }
   } else if (tab === 'rentals') {
     stopSaleFetchPoll();
     startScannerPoll();
@@ -8832,13 +8864,14 @@ async function loadRentals() {
   _populateOmiZoneFilter(ALL_RENT);
   renderRentals();
   _updateUnmatchedBadge();
-  // If sales are already loaded, this is the second of the pair — fill in
-  // estimated_rent_mo on each sale so investor view has real yields.
-  maybeComputeEstimatedRents();
-  // If user is in investor mode and sales are visible, refresh them so the
-  // pills/yields show real numbers instead of "not computable".
-  if (salesViewMode === 'investor' && Array.isArray(ALL_SALE) && ALL_SALE.length) {
-    if (typeof renderSales === 'function') renderSales();
+  // Rentals just changed — invalidate sales analysis so it reruns the next
+  // time the user visits the Sales tab. Don't compute eagerly here: that's
+  // a 300–600ms blocking job that's wasted if they never leave Rentals.
+  salesAnalysisReady = false;
+  _rentIdx = null;
+  if (activeTab === 'sales' && Array.isArray(ALL_SALE) && ALL_SALE.length) {
+    // Already on the sales tab → reanalyse + re-render now.
+    ensureSalesAnalysis();
   }
 }
 
@@ -9102,30 +9135,47 @@ function estimateRentForSale(sale, rentalsArr, idx) {
   return { psqm: null, rent_mo: null, n_comps: 0, confidence: 'none', method: 'no_data', comp_ids: [] };
 }
 
-function computeEstimatedRents(salesArr, rentalsArr) {
-  if (!Array.isArray(salesArr) || !Array.isArray(rentalsArr) || rentalsArr.length === 0) return;
+// Module-level rentals indexes — built once by buildRentalsIndexes() and
+// reused by every estimateRentForSale() call. Filtering 9k+ rentals per sale
+// per pass would be O(n × m); index lookups bring it down to O(zone_size).
+let _rentIdx = null;   // { byZone: Map, byFascia: Map, allValid: Rental[] } | null
 
-  // Build indexes once — `byZone`, `byFascia`, and `allWithPsqm` (rentals with
-  // a valid €/m² regardless of zone). Filtering an 11k array seven times per
-  // sale would be O(n*m); index lookups make it O(zone_size) per pass.
-  const byZone = new Map();
+function buildRentalsIndexes(rentalsArr) {
+  const t0 = (typeof performance !== 'undefined') ? performance.now() : 0;
+  const byZone   = new Map();
   const byFascia = new Map();
-  const allWithPsqm = [];
-  for (const r of rentalsArr) {
-    if (_rentPsqm(r) <= 0) continue;
-    allWithPsqm.push(r);
-    const z = r.omi_zona || r.omi_zone;
-    if (z) {
-      if (!byZone.has(z)) byZone.set(z, []);
-      byZone.get(z).push(r);
-    }
-    const f = r.omi_fascia;
-    if (f) {
-      if (!byFascia.has(f)) byFascia.set(f, []);
-      byFascia.get(f).push(r);
+  const allValid = [];
+
+  if (Array.isArray(rentalsArr)) {
+    for (const r of rentalsArr) {
+      if (!r || _rentPsqm(r) <= 0 || !(r.sqm > 0)) continue;
+      allValid.push(r);
+      const z = r.omi_zona || r.omi_zone;
+      if (z) {
+        if (!byZone.has(z)) byZone.set(z, []);
+        byZone.get(z).push(r);
+      }
+      const f = r.omi_fascia;
+      if (f) {
+        if (!byFascia.has(f)) byFascia.set(f, []);
+        byFascia.get(f).push(r);
+      }
     }
   }
-  const idx = { byZone, byFascia, allWithPsqm };
+  _rentIdx = { byZone, byFascia, allValid };
+  const dt = (typeof performance !== 'undefined') ? performance.now() - t0 : 0;
+  try {
+    console.log(`[index] rentals: ${byZone.size} zones, ${byFascia.size} fascie, ${allValid.length} valid (${dt.toFixed(0)}ms)`);
+  } catch (_) {}
+}
+
+function computeEstimatedRents(salesArr, rentalsArr) {
+  if (!Array.isArray(salesArr) || !Array.isArray(rentalsArr) || rentalsArr.length === 0) return;
+  // Reuse the module-level indexes so we don't rebuild them per call.
+  // Old per-call `idx` parameter on estimateRentForSale is kept for backwards
+  // compat (renovation/comps callers may pass their own).
+  if (!_rentIdx) buildRentalsIndexes(rentalsArr);
+  const idx = { byZone: _rentIdx.byZone, byFascia: _rentIdx.byFascia, allWithPsqm: _rentIdx.allValid };
 
   for (const sale of salesArr) {
     const result = estimateRentForSale(sale, rentalsArr, idx);
@@ -9137,6 +9187,12 @@ function computeEstimatedRents(salesArr, rentalsArr) {
     sale.estimated_rent_comp_ids   = result.comp_ids || [];
     // Invalidate any previously-cached yield so it's recomputed next render
     _yieldCache.delete(sale);
+    // Also clear the per-listing investor caches so precomputeInvestorMetrics
+    // (called next) re-derives them from the fresh rent estimate.
+    sale._cached_yields = null;
+    sale._cached_mortgage = null;
+    sale._cached_default_projection = null;
+    sale._cached_default_rate = null;
   }
 
   // One-shot diagnostic so we can spot-check coverage in the browser console.
@@ -9266,8 +9322,10 @@ function computeMortgageScenarios(price) {
 // Each pill has a tooltip explaining the calculation — investors read
 // tooltips for transparency, so the math is visible without clicking through.
 function investorStatPillsHtml(l) {
-  const y = computeYieldMetrics(l);
-  const m = computeMortgageScenarios(l.price);
+  // Prefer pre-computed caches (populated by precomputeInvestorMetrics);
+  // fall back to live compute for listings added between scans.
+  const y = l._cached_yields   || computeYieldMetrics(l);
+  const m = l._cached_mortgage || computeMortgageScenarios(l.price);
   const pills = [];
 
   // 1) Estimated rent — confidence dot in the value, full method in tooltip
@@ -9381,7 +9439,8 @@ function investorStatPillsHtml(l) {
 }
 
 function generateInvestorReasons(l) {
-  const y = computeYieldMetrics(l);
+  // Cache-aware (same fallback rule as investorStatPillsHtml).
+  const y = l._cached_yields || computeYieldMetrics(l);
   const out = [];
   // YIELD
   if (y.yield_rating === 'high') {
@@ -9441,11 +9500,12 @@ function generateInvestorReasons(l) {
   // it as "normal for Milan" instead of letting the negative CF stand alone.
   // Appreciation default is fascia-based; users can override via the slider
   // in the expanded panel.
-  const m = computeMortgageScenarios(l.price);
+  const m = l._cached_mortgage || computeMortgageScenarios(l.price);
   if (m && l.estimated_rent_mo && y.monthly_costs != null) {
     const monthlyCF = l.estimated_rent_mo - m.investment.monthly_payment - y.monthly_costs;
     if (monthlyCF < 0) {
-      const projection = computeAppreciationProjection(l, m, y, defaultAppreciationRate(l));
+      const projection = l._cached_default_projection
+        || computeAppreciationProjection(l, m, y, defaultAppreciationRate(l));
       const fiveYr = projection && projection[1];
       if (fiveYr && fiveYr.annualised_pct >= 4) {
         out.push({ component: 'Returns', sentiment: 'neutral', weight: 6,
@@ -9545,6 +9605,120 @@ function computeAppreciationProjection(sale, mortgage, yields, appreciationPct) 
       annualised_pct:      Math.round(annual * 10) / 10,
     };
   });
+}
+
+// ── Investor-metric pre-computation cache ────────────────────────────────
+// After rent estimates are populated, derive the investor metrics that the
+// card render path reads on every paint (yield, mortgage, default-rate
+// 5y projection) and stash them on each sale dict.
+//
+// IMPORTANT: only the card face uses these caches. The detail-page slider
+// and the renovation calculator must compute live (the user is dragging
+// values around) — they intentionally bypass `_cached_*`.
+function precomputeInvestorMetrics(salesArr) {
+  if (!Array.isArray(salesArr)) return;
+  const t0 = (typeof performance !== 'undefined') ? performance.now() : 0;
+  let n = 0;
+
+  for (const sale of salesArr) {
+    const yields   = computeYieldMetrics(sale);
+    sale._cached_yields = yields || null;
+
+    const mortgage = computeMortgageScenarios(sale.price);
+    sale._cached_mortgage = mortgage || null;
+
+    if (yields && mortgage) {
+      const rate = defaultAppreciationRate(sale);
+      sale._cached_default_projection = computeAppreciationProjection(sale, mortgage, yields, rate);
+      sale._cached_default_rate       = rate;
+      n++;
+    } else {
+      sale._cached_default_projection = null;
+      sale._cached_default_rate       = null;
+    }
+  }
+  const dt = (typeof performance !== 'undefined') ? performance.now() - t0 : 0;
+  try {
+    console.log(`[invest] cached metrics for ${n}/${salesArr.length} sales (${dt.toFixed(0)}ms)`);
+  } catch (_) {}
+}
+
+// ── Lazy-init orchestrator ─────────────────────────────────────────────────
+// `ensureSalesAnalysis` is the single entry point that runs:
+//   1. buildRentalsIndexes (zone/fascia maps, ~50ms)
+//   2. computeEstimatedRents (per-sale rent estimate, ~300–600ms)
+//   3. precomputeInvestorMetrics (yield/mortgage/projection caches, ~150ms)
+// It's idempotent — second call resolves immediately. Concurrent callers
+// share the same promise so we don't run the work twice in parallel.
+//
+// Invalidate by setting `salesAnalysisReady = false` after a fresh data load.
+let salesAnalysisReady    = false;
+let _salesAnalysisPromise = null;
+
+function ensureSalesAnalysis() {
+  if (salesAnalysisReady) return Promise.resolve();
+  if (_salesAnalysisPromise) return _salesAnalysisPromise;
+
+  const sales = (typeof ALL_SALE !== 'undefined') ? ALL_SALE : (window.ALL_SALE || []);
+  const rents = (typeof ALL_RENT !== 'undefined') ? ALL_RENT : (window.ALL_RENT || []);
+  if (!Array.isArray(sales) || !sales.length) return Promise.resolve();
+
+  // Schedule the heavy work via requestIdleCallback so the tab-switch paint
+  // lands first; fall back to setTimeout for older browsers.
+  _salesAnalysisPromise = new Promise(resolve => {
+    showSalesLoadingState(true);
+    const run = () => {
+      const t0 = (typeof performance !== 'undefined') ? performance.now() : 0;
+      try {
+        if (Array.isArray(rents) && rents.length) {
+          buildRentalsIndexes(rents);
+          computeEstimatedRents(sales, rents);
+        }
+        precomputeInvestorMetrics(sales);
+      } catch (e) {
+        try { console.warn('[sales] analysis failed:', e); } catch (_) {}
+      }
+      const dt = (typeof performance !== 'undefined') ? performance.now() - t0 : 0;
+      try { console.log(`[sales] analysis ready (${dt.toFixed(0)}ms total)`); } catch (_) {}
+      salesAnalysisReady = true;
+      _salesAnalysisPromise = null;
+      showSalesLoadingState(false);
+      // Re-render sales so cached metrics actually appear in the cards.
+      if (typeof renderSales === 'function') {
+        try { renderSales(); } catch (_) {}
+      }
+      resolve();
+    };
+    if (typeof requestIdleCallback === 'function') {
+      requestIdleCallback(run, { timeout: 100 });
+    } else {
+      setTimeout(run, 0);
+    }
+  });
+  return _salesAnalysisPromise;
+}
+
+// Loading banner — shown only while `ensureSalesAnalysis` is running for the
+// first time. Subsequent tab visits (cache hot) never see it.
+function showSalesLoadingState(loading) {
+  const grid = document.getElementById('salesGrid');
+  if (!grid) return;
+  let banner = document.getElementById('sales-analysis-loading');
+  if (loading) {
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'sales-analysis-loading';
+      banner.className = 'sales-loading-banner';
+      banner.innerHTML = `
+        <div class="sales-loading-content">
+          <div class="loading-spinner" aria-hidden="true"></div>
+          <span>Lume is computing investment analysis…</span>
+        </div>`;
+      grid.parentNode.insertBefore(banner, grid);
+    }
+  } else if (banner) {
+    banner.remove();
+  }
 }
 
 function _projectionTableRowsHtml(projection) {
@@ -9721,7 +9895,16 @@ const Router = {
     if (view === 'detail' && listingId) {
       this.currentView      = 'detail';
       this.currentListingId = listingId;
+      // Detail page reads `_cached_*` for the verdict + projection sections.
+      // If the user landed here directly (no sales tab visit yet), kick the
+      // analysis so the second render has the cached metrics. The first
+      // render shows live-computed numbers as a fallback.
       renderDetailPage(listingId);
+      ensureSalesAnalysis().then(() => {
+        if (this.currentView === 'detail' && this.currentListingId === listingId) {
+          renderDetailPage(listingId);
+        }
+      });
     } else {
       const wasDetail       = this.currentView === 'detail';
       this.currentView      = 'dashboard';
@@ -11244,11 +11427,16 @@ function setRenovationTier(tierKey) {
 
 // ── Card-face additions: 5y projection summary + Full analysis CTA ───────
 function cardProjectionSummaryHtml(listing) {
-  const yields   = computeYieldMetrics(listing);
-  const mortgage = computeMortgageScenarios(listing.price);
+  // Card-face only — read from caches populated by precomputeInvestorMetrics.
+  // Fallback to live compute for listings added between scans (rare).
+  const yields   = listing._cached_yields   || computeYieldMetrics(listing);
+  const mortgage = listing._cached_mortgage || computeMortgageScenarios(listing.price);
   if (!yields || !mortgage) return '';
-  const defaultRate = defaultAppreciationRate(listing);
-  const projection  = computeAppreciationProjection(listing, mortgage, yields, defaultRate);
+  const defaultRate = (listing._cached_default_rate != null)
+    ? listing._cached_default_rate
+    : defaultAppreciationRate(listing);
+  const projection  = listing._cached_default_projection
+    || computeAppreciationProjection(listing, mortgage, yields, defaultRate);
   if (!projection) return '';
 
   const fiveYr     = projection[1];
@@ -11404,14 +11592,13 @@ function setSalesViewMode(mode) {
     document.querySelectorAll('#sSortTabs .sort-tab').forEach(t =>
       t.classList.toggle('active', t.dataset.ssort === 'score_total'));
   }
-  // Switching modes may need rentals data — kick off lazily so the cards
-  // show real numbers. maybeComputeEstimatedRents is idempotent now, so we
-  // can call it unconditionally; it returns false when nothing changed.
+  // Switching to investor mode needs rentals data + the cached metrics.
+  // ensureSalesAnalysis() is idempotent — second call resolves immediately.
   if (mode === 'investor') {
     if (Array.isArray(ALL_RENT) && ALL_RENT.length) {
-      maybeComputeEstimatedRents();
+      ensureSalesAnalysis();
     } else if (typeof loadRentals === 'function') {
-      loadRentals().then(() => { maybeComputeEstimatedRents(); renderSales(); });
+      loadRentals().then(() => ensureSalesAnalysis());
     }
   }
   if (typeof renderSales === 'function') renderSales();
@@ -11794,12 +11981,14 @@ function _saleAppendBatch() {
 
 function renderSales() {
   // Self-healing: if rentals are loaded but no sale has an estimated rent
-  // yet, recompute. Catches the page-load races where loadSales() ran
-  // before ALL_RENT was populated, or a stale build skipped the call.
+  // yet, kick the lazy analysis. ensureSalesAnalysis() is idempotent and
+  // schedules itself via requestIdleCallback, then re-renders when done.
   if (Array.isArray(ALL_RENT) && ALL_RENT.length
       && Array.isArray(ALL_SALE) && ALL_SALE.length
-      && !ALL_SALE.some(s => s.estimated_rent_mo)) {
-    maybeComputeEstimatedRents(true);
+      && !salesAnalysisReady) {
+    ensureSalesAnalysis();
+    // Continue rendering with whatever data we have — the post-analysis
+    // re-render inside ensureSalesAnalysis() will fill in the cached values.
   }
 
   const f    = getSaleFilters();
@@ -11882,9 +12071,10 @@ async function loadSales() {
   }
   saleFasciaRanges = computeSaleFasciaRanges(ALL_SALE);
   _populateSaleOmiZoneFilter(ALL_SALE);
-  // Cross-reference with rentals (if loaded) so investor-view yields are real.
-  // If rentals haven't loaded yet, the rentals load path will trigger this.
-  maybeComputeEstimatedRents();
+  // Sales just (re)loaded — drop the cache flag. ensureSalesAnalysis() will
+  // recompute everything on the next sales tab visit (or right now if the
+  // user is already on the sales tab — switchTab/renderSales handle that).
+  salesAnalysisReady = false;
 
   // Initialise area MSD for sales (once)
   if (!saleAreaMsd) {
