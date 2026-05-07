@@ -43,10 +43,14 @@ OUTPUT_PATH          = DASHBOARD_DIR / "rentals_latest.json"
 CUSTOM_MAPPINGS_PATH = BASE_DIR / "custom_omi_mappings.json"
 AREA_SETTINGS_PATH   = BASE_DIR / "area_settings.json"
 
-CHROME_PATH = os.environ.get(
+# Microsoft Edge is preferred over Chrome — Immobiliare's bot detection lets
+# Edge through more reliably. Override via $BROWSER_EXECUTABLE_PATH.
+EDGE_PATH = os.environ.get(
     "BROWSER_EXECUTABLE_PATH",
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
 )
+# Backwards-compat alias — fetch_idealista.py still imports CHROME_PATH.
+CHROME_PATH = EDGE_PATH
 
 # ── Floor parsing ──────────────────────────────────────────────────────────────
 
@@ -935,7 +939,7 @@ def fetch_rentals(pages: int = 3, area_names: list = None, max_rent: int = 0,
                   min_sqm: int = 0, max_sqm: int = 0, min_rooms: int = 0,
                   delay: float = 2.5) -> tuple:
     """
-    One-shot fetch of Milano rental listings using Chrome via nodriver.
+    One-shot fetch of Milano rental listings using Microsoft Edge via nodriver.
     area_names: list of display names, e.g. ["Navigli", "Brera"].
                 Each is converted to a URL slug and fetched as a separate URL series.
     Returns (listings, skipped_areas) — skipped_areas is a list of
@@ -971,7 +975,7 @@ def fetch_rentals(pages: int = 3, area_names: list = None, max_rent: int = 0,
 
     async def _run():
         browser = await uc.start(
-            browser_executable_path=CHROME_PATH,
+            browser_executable_path=EDGE_PATH,
             headless=False,
             lang="it-IT",
         )

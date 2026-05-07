@@ -36,9 +36,11 @@ from urllib.parse import urlencode
 
 import nodriver as uc
 
+# Microsoft Edge is preferred over Chrome — Immobiliare's bot detection lets
+# Edge through more reliably. Override via $BROWSER_EXECUTABLE_PATH.
 EDGE_PATH = os.environ.get(
     "BROWSER_EXECUTABLE_PATH",
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
 )
 
 # ── Floor parsing ──────────────────────────────────────────────────────────────
