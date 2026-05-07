@@ -8864,14 +8864,27 @@ async function loadRentals() {
   _populateOmiZoneFilter(ALL_RENT);
   renderRentals();
   _updateUnmatchedBadge();
-  // Rentals just changed — invalidate sales analysis so it reruns the next
-  // time the user visits the Sales tab. Don't compute eagerly here: that's
-  // a 300–600ms blocking job that's wasted if they never leave Rentals.
+  // Rentals just changed — invalidate every sales-side cache that depends
+  // on rental data. We MUST clear `_cached_*` per sale: a previous
+  // ensureSalesAnalysis run may have completed with rents=[] (race at startup),
+  // locking in projections built from rent=0. Without this, the next render
+  // would still read those zero-rent caches.
   salesAnalysisReady = false;
   _rentIdx = null;
-  if (activeTab === 'sales' && Array.isArray(ALL_SALE) && ALL_SALE.length) {
-    // Already on the sales tab → reanalyse + re-render now.
-    ensureSalesAnalysis();
+  if (Array.isArray(ALL_SALE) && ALL_SALE.length) {
+    for (const s of ALL_SALE) {
+      s._cached_yields              = null;
+      s._cached_mortgage            = null;
+      s._cached_default_projection  = null;
+      s._cached_default_rate        = null;
+      _yieldCache.delete(s);
+    }
+    if (activeTab === 'sales') {
+      // Already on the sales tab → reanalyse + re-render now. On other tabs
+      // the next switchTab('sales') / setSalesViewMode('investor') will fire
+      // the analysis lazily.
+      ensureSalesAnalysis();
+    }
   }
 }
 
@@ -9659,28 +9672,49 @@ function ensureSalesAnalysis() {
   if (salesAnalysisReady) return Promise.resolve();
   if (_salesAnalysisPromise) return _salesAnalysisPromise;
 
-  const sales = (typeof ALL_SALE !== 'undefined') ? ALL_SALE : (window.ALL_SALE || []);
-  const rents = (typeof ALL_RENT !== 'undefined') ? ALL_RENT : (window.ALL_RENT || []);
-  if (!Array.isArray(sales) || !sales.length) return Promise.resolve();
+  // Quick gate at call time — if sales aren't loaded yet there's nothing
+  // to do, return immediately. The arrays themselves are re-read inside
+  // run() so we don't capture stale references.
+  const initialSales = (typeof ALL_SALE !== 'undefined') ? ALL_SALE : (window.ALL_SALE || []);
+  if (!Array.isArray(initialSales) || !initialSales.length) return Promise.resolve();
 
   // Schedule the heavy work via requestIdleCallback so the tab-switch paint
   // lands first; fall back to setTimeout for older browsers.
   _salesAnalysisPromise = new Promise(resolve => {
     showSalesLoadingState(true);
     const run = () => {
+      // CRITICAL: re-read ALL_SALE / ALL_RENT here, NOT at outer scope.
+      // The outer scope captures references at scheduling time; if loadRentals()
+      // resolves between then and now, the closure-captured array would still
+      // be the (possibly empty) old reference and we'd skip rent estimation
+      // entirely — leaving every sale with `_cached_*` projections built from
+      // rent=0, which produces ~0% annualised returns and a "Yield not
+      // computable" UI state.
+      const sales = (typeof ALL_SALE !== 'undefined') ? ALL_SALE : (window.ALL_SALE || []);
+      const rents = (typeof ALL_RENT !== 'undefined') ? ALL_RENT : (window.ALL_RENT || []);
+
+      // If rentals still aren't loaded by the time idle-callback fires, bail
+      // WITHOUT marking the analysis ready. A later call (e.g. after
+      // loadRentals completes) will retry and produce correct caches.
+      if (!Array.isArray(rents) || !rents.length) {
+        try { console.warn('[sales] analysis deferred — rentals not loaded yet'); } catch (_) {}
+        _salesAnalysisPromise = null;
+        showSalesLoadingState(false);
+        resolve();
+        return;
+      }
+
       const t0 = (typeof performance !== 'undefined') ? performance.now() : 0;
       try {
-        if (Array.isArray(rents) && rents.length) {
-          buildRentalsIndexes(rents);
-          computeEstimatedRents(sales, rents);
-        }
-        precomputeInvestorMetrics(sales);
+        buildRentalsIndexes(rents);
+        computeEstimatedRents(sales, rents);   // populates estimated_rent_mo
+        precomputeInvestorMetrics(sales);      // reads estimated_rent_mo
       } catch (e) {
         try { console.warn('[sales] analysis failed:', e); } catch (_) {}
       }
       const dt = (typeof performance !== 'undefined') ? performance.now() - t0 : 0;
       try { console.log(`[sales] analysis ready (${dt.toFixed(0)}ms total)`); } catch (_) {}
-      salesAnalysisReady = true;
+      salesAnalysisReady    = true;
       _salesAnalysisPromise = null;
       showSalesLoadingState(false);
       // Re-render sales so cached metrics actually appear in the cards.
