@@ -10002,6 +10002,27 @@ function renderDetailPage(listingId) {
     return;
   }
 
+  // If the analysis hasn't run yet for this dataset, the listing won't have
+  // estimated_rent_comp_ids / _cached_* yet — the comparables sections + the
+  // mini-map's amber rental dots all depend on those fields. ensureSalesAnalysis
+  // is idempotent: it returns immediately if already done, so this is cheap on
+  // subsequent navigations. The .then() re-renders once analysis populates the
+  // sale dict in place.
+  //
+  // This catches the cold-start direct-URL case: Router.handleRoute() previously
+  // kicked ensureSalesAnalysis() at a moment when ALL_SALE was still empty
+  // (sales not loaded yet), so it resolved immediately without doing work; the
+  // subsequent loadSales().then(renderDetailPage) chain then ran with no
+  // analysis behind it, leaving estimated_rent_comp_ids unset and the mini-map
+  // missing all amber dots.
+  if (!salesAnalysisReady && typeof ensureSalesAnalysis === 'function') {
+    ensureSalesAnalysis().then(() => {
+      if (Router.currentView === 'detail' && Router.currentListingId === listingId) {
+        renderDetailPage(listingId);
+      }
+    });
+  }
+
   // Detail page is sales-only. If the id matches a rental, bounce.
   // (Rentals don't end up in ALL_SALE so this is precautionary; if a future
   // share-link convention sends rental IDs through ?view=detail, we still
