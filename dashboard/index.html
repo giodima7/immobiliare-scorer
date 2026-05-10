@@ -10836,12 +10836,18 @@ function initDetailMiniMap(listing) {
     ...saleComps.map(c => [c.latitude, c.longitude]),
   ];
 
+  // Reuse the rich popup card from the main Map tab — same image + score
+  // ring + zone sub + comps delta + facts grid + "View listing" CTA. We
+  // pass an explicit isRental arg per marker because the mini-map mixes
+  // sale and rental markers regardless of the current map-tab data type.
+  const POPUP_OPTS = { maxWidth: 300, minWidth: 260 };
+
   // The listing — green pin, larger
   L.circleMarker([listing.latitude, listing.longitude], {
     radius: 11, fillColor: '#2A7A5A', color: 'white',
     weight: 3, opacity: 1, fillOpacity: 1,
   })
-    .bindPopup(`<strong>${escapeHtml(listing.neighbourhood || 'Listing')}</strong><br>€${fmt(listing.price ?? 0)} · ${listing.sqm ?? '?'} m²`)
+    .bindPopup(_createMapPopup(listing, false), POPUP_OPTS)
     .addTo(map);
 
   // Sale comps — blue dots
@@ -10850,18 +10856,17 @@ function initDetailMiniMap(listing) {
       radius: 5, fillColor: '#4A90D9', color: 'white',
       weight: 1.5, opacity: 1, fillOpacity: 0.9,
     })
-      .bindPopup(`<strong>Sale comp</strong><br>${escapeHtml(c.neighbourhood || '')}<br>€${fmt(c.price ?? 0)} · ${c.sqm ?? '?'} m² · €${fmt(c.ask_psqm ?? 0)}/m²`)
+      .bindPopup(_createMapPopup(c, false), POPUP_OPTS)
       .addTo(map);
   });
 
   // Rental comps — amber dots
   rentalComps.slice(0, 30).forEach(c => {
-    const psqm = c.ask_psqm_effective || c.ask_psqm || 0;
     L.circleMarker([c.latitude, c.longitude], {
       radius: 5, fillColor: '#E8922A', color: 'white',
       weight: 1.5, opacity: 1, fillOpacity: 0.9,
     })
-      .bindPopup(`<strong>Rental comp</strong><br>${escapeHtml(c.neighbourhood || '')}<br>€${fmt(c.rent_mo ?? 0)}/mo · ${c.sqm ?? '?'} m² · €${psqm.toFixed(1)}/m²/mo`)
+      .bindPopup(_createMapPopup(c, true), POPUP_OPTS)
       .addTo(map);
   });
 
@@ -13197,9 +13202,15 @@ function _createMapMarker(l, lat, lng) {
 }
 
 // ── Popup factory ─────────────────────────────────────────────────────────────
-function _createMapPopup(l) {
+function _createMapPopup(l, isRentalArg) {
+  // isRentalArg: optional override. The main Map tab uses the global
+  // _mapDataType, but the detail-page mini-map needs to render mixed
+  // marker types (the listing as a sale, plus rental comps) so it passes
+  // the type explicitly per marker.
   const score    = l.score_total ?? 0;
-  const isRental = _mapDataType === 'rentals';
+  const isRental = (typeof isRentalArg === 'boolean')
+    ? isRentalArg
+    : (_mapDataType === 'rentals');
 
   // Full popup — same on all screen sizes
   const sc       = scoreClass(score);
