@@ -438,10 +438,28 @@ def get_comps_benchmark(
     delta_pct = (ask_psqm - blended) / blended if blended > 0 else 0
 
     # Capture the IDs of the listings that fed into the median, so the
-    # detail-page comps section can show them. We sort by €/m² so the user
-    # sees the cheapest first; cap at 30 to keep the payload reasonable
-    # (n_raw is preserved separately for the count).
-    sorted_pool = sorted(pool, key=lambda l: _psqm(l) or 0)
+    # detail-page comps section + mini-map can show them. Cap at 30 to keep
+    # the payload reasonable (n_raw is preserved separately for the count).
+    #
+    # Sort priority: (1) same OMI zone first, (2) then geographic distance
+    # from the listing. This matters for the cascade passes — when the
+    # engine falls through to `fascia_fallback` or `omi_zone`, the pool can
+    # span the whole city; sorting by €/m² (the previous behaviour) tended
+    # to surface the cheapest comps which cluster in peripheral
+    # neighbourhoods, producing a confusing "all blue dots are 5km away"
+    # mini-map. Sorting by distance instead keeps the displayed sample
+    # geographically meaningful while the median still uses the full pool.
+    def _comp_sort_key(l: dict):
+        same_zone = 0 if (omi_zone and l.get("omi_zona") == omi_zone) else 1
+        if lat and lon:
+            ll_lat = l.get("latitude") or l.get("lat")
+            ll_lon = l.get("longitude") or l.get("lng") or l.get("lon")
+            if ll_lat and ll_lon:
+                return (same_zone, _haversine_m(lat, lon, ll_lat, ll_lon))
+        # No coords on the listing or this comp → fall back to psqm
+        return (same_zone, _psqm(l) or 0)
+
+    sorted_pool = sorted(pool, key=_comp_sort_key)
     comp_ids = [l.get("id") for l in sorted_pool[:30] if l.get("id") is not None]
 
     return {
