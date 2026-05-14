@@ -1753,24 +1753,57 @@ async def _scrape_listing_async(url: str) -> dict | None:
     POLL_INTERVAL  = 1.0
 
     def _find_real_estate(nd):
-        """Walk the parsed __NEXT_DATA__ looking for a realEstate object —
-        path varies across Immobiliare's page layouts so we don't hard-code it."""
+        """Walk parsed __NEXT_DATA__ looking for a realEstate dict. Some
+        Immobiliare layouts ship realEstate as a JSON-encoded *string* or
+        wrap queries in malformed entries — we tolerate both and only
+        return a dict that has `properties` (the actual listing payload).
+        """
         if not isinstance(nd, dict):
             return None
-        # Common paths first (fast path)
-        for q in (nd.get("props", {}) or {}).get("pageProps", {}).get("dehydratedState", {}).get("queries", []) or []:
-            d = (q.get("state", {}) or {}).get("data", {}) or {}
-            if isinstance(d, dict) and d.get("realEstate"):
-                return d["realEstate"]
-        direct = (nd.get("props", {}) or {}).get("pageProps", {}).get("realEstate")
-        if direct: return direct
-        # Generic DFS fallback — handles layouts we haven't seen yet
-        stack = [nd]
-        while stack:
+
+        def _coerce(v):
+            """Accept a dict, or a JSON-string that decodes to a dict.
+            Returns None for anything else."""
+            if isinstance(v, dict):
+                return v
+            if isinstance(v, str):
+                try:
+                    parsed = _json.loads(v)
+                    return parsed if isinstance(parsed, dict) else None
+                except Exception:
+                    return None
+            return None
+
+        def _is_real_estate(v):
+            d = _coerce(v)
+            return d if (d is not None and d.get("properties")) else None
+
+        # Fast path: dehydratedState queries
+        props_root = nd.get("props") if isinstance(nd.get("props"), dict) else {}
+        page_props = props_root.get("pageProps") if isinstance(props_root.get("pageProps"), dict) else {}
+        queries = (page_props.get("dehydratedState") or {}).get("queries") or []
+        if isinstance(queries, list):
+            for q in queries:
+                if not isinstance(q, dict): continue
+                state = q.get("state") if isinstance(q.get("state"), dict) else {}
+                data  = state.get("data")
+                data  = _coerce(data) or {}
+                re_v  = _is_real_estate(data.get("realEstate"))
+                if re_v: return re_v
+
+        # Second path: realEstate placed directly on pageProps
+        re_v = _is_real_estate(page_props.get("realEstate"))
+        if re_v: return re_v
+
+        # DFS fallback — find any dict with 'realEstate' whose decoded value
+        # is itself a dict carrying 'properties'.
+        stack, seen = [nd], 0
+        while stack and seen < 5000:
+            seen += 1
             v = stack.pop()
             if isinstance(v, dict):
-                if v.get("realEstate") and isinstance(v["realEstate"], dict) and v["realEstate"].get("properties"):
-                    return v["realEstate"]
+                cand = _is_real_estate(v.get("realEstate"))
+                if cand: return cand
                 stack.extend(v.values())
             elif isinstance(v, list):
                 stack.extend(v)
@@ -1834,20 +1867,24 @@ async def _scrape_listing_async(url: str) -> dict | None:
     return None
 
 
-def _parse_immobiliare_detail(re_data: dict) -> dict:
-    """Pull a Valuation-tab-shaped dict from Immobiliare's realEstate object."""
-    props = re_data.get("properties") or [{}]
-    prop  = props[0] if props else {}
-    price_data = re_data.get("price") or {}
-    location = prop.get("location") or {}
+def _parse_immobiliare_detail(re_data) -> dict:
+    """Pull a Valuation-tab-shaped dict from Immobiliare's realEstate object.
+    Defensive against unexpected shapes — every nested .get() is guarded by
+    isinstance(..., dict) so a stray string doesn't crash the endpoint."""
+    re_data = re_data if isinstance(re_data, dict) else {}
 
+    def _d(v): return v if isinstance(v, dict) else {}
     def _int(v):
         try: return int(float(str(v).split(" ")[0]))
         except Exception: return None
 
-    floor_raw = prop.get("floor") or {}
-    cond_raw  = prop.get("condition") or {}
-    feats     = prop.get("features") or {}
+    props_list = re_data.get("properties") if isinstance(re_data.get("properties"), list) else []
+    prop       = _d(props_list[0]) if props_list else {}
+    price_data = _d(re_data.get("price"))
+    location   = _d(prop.get("location"))
+    floor_raw  = _d(prop.get("floor"))
+    cond_raw   = _d(prop.get("condition"))
+    feats      = _d(prop.get("features"))
 
     return {
         "source":      "immobiliare",
@@ -1859,7 +1896,7 @@ def _parse_immobiliare_detail(re_data: dict) -> dict:
         "rooms":       _int(prop.get("rooms")),
         "floor_n":     _int(floor_raw.get("value") or floor_raw.get("abbreviation")),
         "floor_label": str(floor_raw.get("abbreviation") or ""),
-        "condition":   (cond_raw.get("value") or "").lower(),
+        "condition":   str(cond_raw.get("value") or "").lower(),
         "elevator":    prop.get("hasElevator"),
         "has_balcony": bool(prop.get("balcony") or feats.get("balcony")),
         "has_parking": bool(prop.get("hasBox") or prop.get("hasGarage")),
