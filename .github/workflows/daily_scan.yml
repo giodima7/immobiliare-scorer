@@ -63,6 +63,23 @@ jobs:
           print(f'Hidden gems: {len(gems)}')
           "
 
+      # Phase 2: Push fresh listings to Supabase BEFORE slimming so the DB
+      # gets the full field set. continue-on-error so a Supabase outage
+      # doesn't break the daily scan — JSON commit below still happens.
+      - name: Sync listings to Supabase
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          python3 supabase_sync.py --type rental
+          python3 supabase_sync.py --type sale
+        continue-on-error: true
+
+      # Phase 1: Strip dashboard-irrelevant fields and rewrite as compact
+      # JSON so rentals_latest.json fits under Cloudflare Pages' 25 MB cap.
+      - name: Slim JSON for Cloudflare Pages
+        run: python3 slim_json.py
+
       - name: Commit and push updated data
         run: |
           git config user.name  "github-actions[bot]"

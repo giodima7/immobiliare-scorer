@@ -4001,6 +4001,25 @@ body.detail-page-active .filter-bar { display: none !important; }
 .ci-pill.ci-running { color: #F4A261; }
 @keyframes ci-pulse { to { opacity: 0.4; } }
 
+/* Data-source badge — ⚡ Live (Supabase) vs 📄 Cached (static JSON) */
+.data-source-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: var(--radius-full, 999px);
+  background: var(--bg-muted, #F2EFE9);
+  color: var(--text-muted, #A09990);
+  white-space: nowrap;
+}
+.data-source-badge.live   { color: var(--green-deep); }
+.data-source-badge.cached { color: var(--text-muted, #A09990); }
+@media (max-width: 768px) {
+  .data-source-badge { display: none !important; }
+}
+
 /* ── Mobile layout ── */
 @media (max-width: 768px) {
   /* Fixed mobile header */
@@ -4532,6 +4551,98 @@ body.detail-page-active .filter-bar { display: none !important; }
 //   Auth.userInitial()  → first letter for the avatar circle
 //   Auth.signOut()      → sign out with confirm()
 //   Auth.openSignIn()   → open Clerk's hosted sign-in modal
+
+// ─── Supabase configuration ─────────────────────────────────────────────────
+// build.sh substitutes the %% placeholders at Cloudflare Pages build time
+// from the SUPABASE_URL / SUPABASE_ANON_KEY env vars. If the substitution
+// hasn't happened (local dev, or env vars unset), the placeholder strings
+// remain and SupabaseClient.configured stays false → JSON fallback path.
+//
+// The anon key is safe to embed in HTML — Row Level Security restricts it
+// to read-only access on non-stale listings.
+const SUPABASE_URL      = '%%SUPABASE_URL%%';
+const SUPABASE_ANON_KEY = '%%SUPABASE_ANON_KEY%%';
+
+const SupabaseClient = {
+  _base: null,
+  init() {
+    if (!SUPABASE_URL || SUPABASE_URL.startsWith('%%')) {
+      console.log('[supabase] not configured — JSON fallback in effect');
+      return;
+    }
+    this._base = `${SUPABASE_URL}/rest/v1`;
+    console.log('[supabase] configured');
+  },
+  get configured() { return !!this._base; },
+  /**
+   * Fetch all non-stale listings of a given type from Supabase.
+   * Returns null on any failure so callers fall through to JSON.
+   * Re-maps DB column names with a leading underscore back to the
+   * legacy listing-dict shape the rest of the dashboard expects.
+   */
+  async fetchAll(listingType, opts = {}) {
+    if (!this.configured) return null;
+    const { limit = 15000, order = 'score_total.desc.nullslast' } = opts;
+    const params = new URLSearchParams({
+      select:       '*',
+      listing_type: `eq.${listingType}`,
+      is_stale:     'eq.false',
+      order,
+      limit:        String(limit),
+    });
+    const url = `${this._base}/listings?${params}`;
+    try {
+      const resp = await fetch(url, {
+        headers: {
+          'apikey':        SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Accept':        'application/json',
+        },
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!resp.ok) {
+        console.warn(`[supabase] HTTP ${resp.status} for ${listingType}s`);
+        return null;
+      }
+      const rows = await resp.json();
+      console.log(`[supabase] loaded ${rows.length} ${listingType}s`);
+      // Restore the underscore-prefixed flag names the dashboard uses.
+      for (const r of rows) {
+        if ('room_efficiency_flag' in r) {
+          r._room_efficiency_flag = r.room_efficiency_flag;
+        }
+        if ('absolute_value_gate_applied' in r) {
+          r._absolute_value_gate_applied = r.absolute_value_gate_applied;
+        }
+      }
+      return rows;
+    } catch (err) {
+      console.warn(`[supabase] fetch failed (${err.message}) — JSON fallback`);
+      return null;
+    }
+  },
+};
+SupabaseClient.init();
+
+// dataSource gets set to 'supabase' or 'json' by loadRentals/loadSales so
+// the header badge can show the user which source is in use.
+window.dataSource = null;
+
+function updateDataSourceBadge() {
+  const el = document.getElementById('data-source-badge');
+  if (!el || !window.dataSource) return;
+  if (window.dataSource === 'supabase') {
+    el.textContent  = '⚡ Live';
+    el.title        = 'Loaded from Supabase (refreshed by every scan)';
+    el.className    = 'data-source-badge live';
+  } else {
+    el.textContent  = '📄 Cached';
+    el.title        = 'Loaded from the static JSON snapshot (daily refresh)';
+    el.className    = 'data-source-badge cached';
+  }
+  el.style.display = 'inline-flex';
+}
+
 const Auth = (() => {
   const isLocal = ['localhost','127.0.0.1'].includes(location.hostname);
 
@@ -5136,6 +5247,10 @@ function saveFilters() {
     <span class="status-dot"></span>
     <span id="statusPillLabel">Snapshot</span>
   </span>
+  <!-- Data-source badge: ⚡ Live (Supabase) vs 📄 Cached (static JSON).
+       Hidden until loadRentals/loadSales sets window.dataSource. -->
+  <span id="data-source-badge" class="data-source-badge" style="display:none"
+        title="Where the dashboard is reading listings from"></span>
   <!-- GitHub Actions CI status — shown only in static/Cloudflare Pages mode -->
   <a class="ci-pill" id="ciPill" target="_blank" rel="noopener"
      href="https://github.com/giodima7/immobiliare-scorer/actions/workflows/daily_scan.yml"
@@ -9583,14 +9698,26 @@ function renderRentals() {
 
 // ── Rentals — data loading ────────────────────────────────────────────────────
 async function loadRentals() {
-  try {
-    const url  = IS_LIVE ? '/rentals' : './rentals_latest.json';
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    ALL_RENT = _dedupListings(await resp.json(), true);
-  } catch(e) {
-    ALL_RENT = [];
+  // Try Supabase first when available — only on the deployed (static)
+  // dashboard, since local dev uses Flask routes /rentals and /sales.
+  let raw = null;
+  if (!IS_LIVE && typeof SupabaseClient !== 'undefined' && SupabaseClient.configured) {
+    raw = await SupabaseClient.fetchAll('rental');
+    if (raw) window.dataSource = 'supabase';
   }
+  if (!raw) {
+    try {
+      const url  = IS_LIVE ? '/rentals' : './rentals_latest.json';
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      raw = await resp.json();
+      if (window.dataSource !== 'supabase') window.dataSource = 'json';
+    } catch (e) {
+      raw = [];
+    }
+  }
+  ALL_RENT = _dedupListings(raw, true);
+  if (typeof updateDataSourceBadge === 'function') updateDataSourceBadge();
   rentFasciaRanges = computeRentFasciaRanges(ALL_RENT);
   _populateOmiZoneFilter(ALL_RENT);
   renderRentals();
@@ -13372,14 +13499,26 @@ function renderSales() {
 
 // ── Sales — data loading ──────────────────────────────────────────────────────
 async function loadSales() {
-  try {
-    const url  = IS_LIVE ? '/sales' : 'sales_latest.json';
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    ALL_SALE = _dedupListings(await resp.json(), false);
-  } catch {
-    ALL_SALE = [];
+  // Mirror of loadRentals — Supabase first on the deployed dashboard,
+  // JSON fallback locally and on any failure.
+  let raw = null;
+  if (!IS_LIVE && typeof SupabaseClient !== 'undefined' && SupabaseClient.configured) {
+    raw = await SupabaseClient.fetchAll('sale');
+    if (raw) window.dataSource = 'supabase';
   }
+  if (!raw) {
+    try {
+      const url  = IS_LIVE ? '/sales' : 'sales_latest.json';
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      raw = await resp.json();
+      if (window.dataSource !== 'supabase') window.dataSource = 'json';
+    } catch {
+      raw = [];
+    }
+  }
+  ALL_SALE = _dedupListings(raw, false);
+  if (typeof updateDataSourceBadge === 'function') updateDataSourceBadge();
   saleFasciaRanges = computeSaleFasciaRanges(ALL_SALE);
   _populateSaleOmiZoneFilter(ALL_SALE);
   // Sales just (re)loaded — drop the cache flag. ensureSalesAnalysis() will
