@@ -1869,8 +1869,9 @@ async def _scrape_listing_async(url: str) -> dict | None:
 
 def _parse_immobiliare_detail(re_data) -> dict:
     """Pull a Valuation-tab-shaped dict from Immobiliare's realEstate object.
-    Defensive against unexpected shapes — every nested .get() is guarded by
-    isinstance(..., dict) so a stray string doesn't crash the endpoint."""
+    Uses the same field-alias logic as fetch_rentals.parse_rental — the
+    Immobiliare API uses inconsistent key names across pages so each field
+    needs multiple fallbacks. Defensive against unexpected shapes too."""
     re_data = re_data if isinstance(re_data, dict) else {}
 
     def _d(v): return v if isinstance(v, dict) else {}
@@ -1878,29 +1879,91 @@ def _parse_immobiliare_detail(re_data) -> dict:
         try: return int(float(str(v).split(" ")[0]))
         except Exception: return None
 
+    def _bool(*vals):
+        """Coerce the first truthy/known-falsy candidate into bool. Returns
+        None if every candidate is None (= "unknown")."""
+        for v in vals:
+            if v is None: continue
+            if isinstance(v, bool): return v
+            if isinstance(v, (int, float)): return bool(v)
+            if isinstance(v, str):
+                s = v.strip().lower()
+                if s in ("", "null"): continue
+                return s not in ("false", "no", "0")
+        return None
+
     props_list = re_data.get("properties") if isinstance(re_data.get("properties"), list) else []
     prop       = _d(props_list[0]) if props_list else {}
     price_data = _d(re_data.get("price"))
     location   = _d(prop.get("location"))
     floor_raw  = _d(prop.get("floor"))
-    cond_raw   = _d(prop.get("condition"))
-    feats      = _d(prop.get("features"))
+
+    # Build a feature-type set (Immobiliare ships some signals only here)
+    feats_list = prop.get("features") if isinstance(prop.get("features"), list) else (
+                 re_data.get("features") if isinstance(re_data.get("features"), list) else [])
+    feat_types: set = set()
+    feat_labels: str = ""
+    for f in feats_list:
+        if isinstance(f, dict):
+            ft = (f.get("type") or f.get("name") or "")
+            feat_types.add(str(ft).lower())
+            feat_labels += " " + str(f.get("label") or "").lower()
+
+    def _feat_has(*keywords):
+        for k in keywords:
+            kl = k.lower()
+            if kl in feat_types: return True
+            if kl in feat_labels: return True
+        return False
+
+    # Condition — try the same priority chain as parse_rental
+    typology = _d(re_data.get("typology"))
+    condition = (prop.get("ga4Condition")
+                 or prop.get("condition")
+                 or typology.get("name")
+                 or "")
+    if isinstance(condition, dict):
+        condition = condition.get("value") or ""
+    condition = str(condition or "").strip().lower()
+
+    # Elevator
+    elevator = _bool(prop.get("elevator"), prop.get("hasElevator"))
+
+    # Balcony / terrace / garden
+    has_balcony = _bool(prop.get("hasBalcony"), prop.get("balcony"),
+                        prop.get("hasTerrace"), prop.get("terrace"),
+                        prop.get("hasGarden"), prop.get("garden"))
+    if has_balcony is None and _feat_has("balcony","terrace","garden","balcon","terrazza","giardino"):
+        has_balcony = True
+
+    # Parking / box / garage
+    has_parking = _bool(prop.get("hasParking"), prop.get("parking"),
+                        prop.get("hasGarage"), prop.get("garage"),
+                        prop.get("hasBox"), prop.get("box"))
+    if has_parking is None and _feat_has("parking","garage","box","parcheggio","posto auto"):
+        has_parking = True
+
+    # Furnished
+    furnished = _bool(prop.get("furnished"), prop.get("isFurnished"),
+                      prop.get("arredato"), re_data.get("furnished"))
+    if furnished is None and _feat_has("arredato","furnished"):
+        furnished = True
 
     return {
         "source":      "immobiliare",
         "address":     location.get("address") or "",
         "latitude":    location.get("latitude"),
         "longitude":   location.get("longitude"),
-        "sqm":         _int(prop.get("surface")),
+        "sqm":         _int(prop.get("surface") or prop.get("surfaceValue")),
         "price":       _int(price_data.get("value")),
         "rooms":       _int(prop.get("rooms")),
         "floor_n":     _int(floor_raw.get("value") or floor_raw.get("abbreviation")),
         "floor_label": str(floor_raw.get("abbreviation") or ""),
-        "condition":   str(cond_raw.get("value") or "").lower(),
-        "elevator":    prop.get("hasElevator"),
-        "has_balcony": bool(prop.get("balcony") or feats.get("balcony")),
-        "has_parking": bool(prop.get("hasBox") or prop.get("hasGarage")),
-        "furnished":   prop.get("furnished"),
+        "condition":   condition,
+        "elevator":    elevator,
+        "has_balcony": has_balcony,
+        "has_parking": has_parking,
+        "furnished":   furnished,
     }
 
 
