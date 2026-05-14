@@ -1634,6 +1634,288 @@ body.detail-page-active .filter-bar { display: none !important; }
   .detail-back span { display: none; }
 }
 
+/* ──────────────────────────────────────────────────────────────────────────
+   Valuation tab — property pricing tool
+   ────────────────────────────────────────────────────────────────────────── */
+.valuation-page { max-width: 860px; margin: 0 auto; padding: 24px 20px 60px; }
+.valuation-header { margin-bottom: 24px; }
+.valuation-header h1 {
+  font-size: 26px; font-weight: 800;
+  margin: 0 0 8px; letter-spacing: -0.5px;
+}
+.valuation-subtitle {
+  font-size: 14px; color: var(--text-secondary, #6B6560);
+  margin: 0; line-height: 1.6;
+}
+
+.val-section {
+  background: var(--bg-card, #FFFFFF);
+  border-radius: var(--radius-lg, 20px);
+  box-shadow: var(--shadow-card);
+  padding: 24px;
+  margin-bottom: 16px;
+}
+.val-section-label {
+  display: block;
+  font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--text-muted, #A09990);
+  margin-bottom: 10px;
+}
+.url-input-row { display: flex; gap: 10px; }
+.val-url-input {
+  flex: 1;
+  padding: 11px 14px;
+  border: 1.5px solid var(--border, #E5E1D8);
+  border-radius: var(--radius-md, 14px);
+  font-size: 14px; font-family: var(--font);
+  background: var(--bg-muted, #F2EFE9);
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+.val-url-input:focus { border-color: var(--green-deep); background: white; }
+.btn-val-fetch {
+  padding: 11px 20px;
+  background: var(--green-deep);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md, 14px);
+  font-size: 14px; font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: var(--font);
+  transition: background 150ms ease;
+}
+.btn-val-fetch:hover { background: #235F47; }
+
+.val-url-status {
+  margin-top: 8px; padding: 8px 12px;
+  font-size: 13px;
+  border-radius: var(--radius-md, 14px);
+}
+.val-url-status.loading { background: var(--bg-muted, #F2EFE9); color: var(--text-secondary); }
+.val-url-status.success { background: var(--green-light, #E6F4ED); color: var(--green-deep); }
+.val-url-status.warning { background: var(--amber-light, #FEF3E2); color: #92400E; }
+.val-url-status.error   { background: var(--coral-light, #FDEEEC); color: var(--coral); }
+
+.val-divider {
+  display: flex; align-items: center; gap: 12px;
+  margin: 4px 0;
+  color: var(--text-muted, #A09990);
+  font-size: 12px; font-weight: 500;
+}
+.val-divider::before, .val-divider::after {
+  content: ''; flex: 1;
+  height: 1px;
+  background: var(--border, #E5E1D8);
+}
+
+.val-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.val-field-full { grid-column: 1 / -1; }
+.val-field label {
+  display: block;
+  font-size: 12px; font-weight: 600;
+  color: var(--text-secondary, #6B6560);
+  margin-bottom: 5px;
+}
+.val-field input[type=text],
+.val-field input[type=number],
+.val-field input[type=url],
+.val-field select {
+  width: 100%; box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1.5px solid var(--border, #E5E1D8);
+  border-radius: var(--radius-md, 14px);
+  font-size: 14px; font-family: var(--font);
+  background: var(--bg-muted, #F2EFE9);
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+.val-field input:focus, .val-field select:focus {
+  border-color: var(--green-deep);
+  background: white;
+}
+.val-field-hint {
+  font-size: 11px; color: var(--text-muted, #A09990);
+  margin-top: 4px;
+  min-height: 16px;
+}
+.val-checkboxes {
+  display: flex; flex-wrap: wrap;
+  gap: 10px 18px;
+  margin-top: 4px;
+}
+.val-check {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 400;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.val-check input { cursor: pointer; margin: 0; }
+
+.val-zone-preview {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  background: var(--green-light, #E6F4ED);
+  border-radius: var(--radius-md, 14px);
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+.zone-chip {
+  background: var(--green-deep);
+  color: white;
+  padding: 3px 10px;
+  border-radius: var(--radius-full, 999px);
+  font-size: 12px; font-weight: 700;
+}
+.zone-desc { color: var(--text-secondary, #6B6560); }
+
+.btn-val-compute {
+  width: 100%;
+  padding: 14px;
+  background: var(--green-deep);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md, 14px);
+  font-size: 16px; font-weight: 700;
+  cursor: pointer;
+  font-family: var(--font);
+  letter-spacing: -0.2px;
+  transition: background 150ms ease;
+}
+.btn-val-compute:hover { background: #235F47; }
+
+.val-results-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.val-result-card {
+  background: var(--bg-card, #FFFFFF);
+  border-radius: var(--radius-lg, 20px);
+  box-shadow: var(--shadow-card);
+  padding: 24px;
+}
+.val-result-card h3 {
+  font-size: 15px; font-weight: 700;
+  margin: 0 0 16px;
+  color: var(--text-primary);
+}
+.val-headline { margin-bottom: 12px; }
+.val-main-number {
+  font-size: 36px; font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -1px;
+  margin-bottom: 4px;
+}
+.val-range { font-size: 13px; color: var(--text-secondary, #6B6560); margin-bottom: 4px; }
+.val-psqm  { font-size: 13px; color: var(--text-muted, #A09990); }
+.val-confidence {
+  font-size: 12px; font-weight: 600;
+  margin-bottom: 16px;
+}
+.val-no-data {
+  color: var(--text-muted, #A09990);
+  font-style: italic;
+  font-size: 13px;
+  margin: 0;
+}
+
+.val-breakdown summary {
+  font-size: 13px; font-weight: 500;
+  color: var(--text-secondary, #6B6560);
+  cursor: pointer;
+  padding: 8px 0;
+  border-top: 1px solid var(--border, #E5E1D8);
+}
+.val-breakdown-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-top: 10px;
+}
+.val-breakdown-table th {
+  text-align: left;
+  padding: 6px 8px;
+  font-size: 10px; font-weight: 600;
+  color: var(--text-muted, #A09990);
+  text-transform: uppercase; letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--border, #E5E1D8);
+}
+.val-breakdown-table td {
+  padding: 8px;
+  border-bottom: 1px solid var(--border, #E5E1D8);
+}
+.val-breakdown-table .positive  { color: var(--green-deep); font-weight: 600; }
+.val-breakdown-table .negative  { color: var(--coral); font-weight: 600; }
+.val-breakdown-table .val-total-row { background: var(--bg-muted, #F2EFE9); font-weight: 700; }
+
+.val-asking-comparison {
+  background: var(--bg-card, #FFFFFF);
+  border-radius: var(--radius-md, 14px);
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-card);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.asking-label {
+  font-size: 12px; font-weight: 600;
+  color: var(--text-muted, #A09990);
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.asking-delta {
+  font-size: 20px; font-weight: 800;
+  display: flex; align-items: center; gap: 10px;
+  flex-wrap: wrap;
+}
+.asking-verdict {
+  font-size: 14px; font-weight: 500;
+  color: var(--text-secondary, #6B6560);
+}
+
+.btn-val-reset {
+  display: block;
+  margin: 0 auto 16px;
+  padding: 10px 24px;
+  background: var(--bg-muted, #F2EFE9);
+  border: 1px solid var(--border, #E5E1D8);
+  border-radius: var(--radius-full, 999px);
+  font-size: 13px; font-weight: 600;
+  color: var(--text-secondary, #6B6560);
+  font-family: var(--font);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.btn-val-reset:hover {
+  background: var(--bg-card, #FFFFFF);
+  color: var(--text-primary);
+}
+
+.val-disclaimer {
+  font-size: 11px;
+  color: var(--text-muted, #A09990);
+  text-align: center;
+  line-height: 1.6;
+  font-style: italic;
+  margin: 0;
+}
+.val-result-empty p { color: var(--text-muted, #A09990); font-style: italic; font-size: 13px; }
+
+@media (max-width: 768px) {
+  .val-form-grid     { grid-template-columns: 1fr; }
+  .val-results-grid  { grid-template-columns: 1fr; }
+  .url-input-row     { flex-direction: column; }
+  .val-main-number   { font-size: 28px; }
+}
+
 /* Mortgage breakdown panel (rendered inside the expandable details panel) */
 .mortgage-breakdown {
   margin-top: 16px;
@@ -4596,6 +4878,7 @@ function saveFilters() {
   <button class="tab-btn active" id="tabRentals" data-tab="rentals" onclick="switchTab('rentals')">🔑 Rentals</button>
   <button class="tab-btn" id="tabMap" data-tab="map" onclick="switchTab('map')">🗺 Map</button>
   <button class="tab-btn" id="tabInsights" data-tab="insights" onclick="switchTab('insights')">📊 What Lume sees</button>
+  <button class="tab-btn" id="tabValuation" data-tab="valuation" onclick="switchTab('valuation')">🏷 Valuation</button>
   <button class="tab-btn" id="tabSettings" data-tab="settings" onclick="switchTab('settings')">⚙ Settings</button>
 </nav>
 
@@ -5430,6 +5713,13 @@ function saveFilters() {
     </details>
 
   </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     VALUATION VIEW — property pricing tool
+═══════════════════════════════════════════════════════════════ -->
+<div id="valuationView" hidden>
+  <div class="valuation-page"><!-- populated by renderValuationTab() --></div>
 </div>
 
 <!-- ══════════════════════════════════════════════════════════════
@@ -6905,7 +7195,7 @@ const TAB_STORAGE_KEY = 'active_tab';
 function switchTab(tab, opts) {
   const persist = !opts || opts.persist !== false;
   activeTab = tab;
-  ['salesView','rentalsView','mapView','insightsView','settingsView'].forEach(id => {
+  ['salesView','rentalsView','mapView','insightsView','valuationView','settingsView'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     const show = id === tab + 'View';
@@ -6948,6 +7238,14 @@ function switchTab(tab, opts) {
     stopScannerPoll();
     stopSaleFetchPoll();
     showInsightsTab();
+  } else if (tab === 'valuation') {
+    stopScannerPoll();
+    stopSaleFetchPoll();
+    // Make sure sales analysis is available so estimateSaleValue() has data
+    // (estimateRentForSale needs ALL_RENT too — load lazily).
+    if (typeof ensureSalesAnalysis === 'function') ensureSalesAnalysis();
+    if (!ALL_RENT.length && typeof loadRentals === 'function') loadRentals();
+    if (typeof renderValuationTab === 'function') renderValuationTab();
   } else if (tab === 'settings') {
     stopScannerPoll();
     stopSaleFetchPoll();
@@ -14719,6 +15017,567 @@ document.getElementById('btnDqExport')?.addEventListener('click', () => {
   a.download = `data_quality_${new Date().toISOString().slice(0,10)}.csv`;
   a.click();
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// VALUATION TAB — property pricing tool
+// Takes a property URL (or manual inputs) and returns rental + sale estimates.
+// Reuses existing engine pieces (estimateRentForSale, conditionGroup,
+// applyConditionAdjustment, haversineMetres) — no duplicate logic.
+// ════════════════════════════════════════════════════════════════════════════
+
+// Adjustment factors applied to the zone median for property-specific traits.
+// UPDATE ANNUALLY — values are Milan rules of thumb, calibrate as the dataset
+// grows. Multiplied onto the base €/m².
+const VAL_ADJUSTMENT_FACTORS = {
+  floor: {
+    rent: { '-2': -0.20, '-1': -0.12, '0': -0.08, '1': 0, '2': 0.02, '3': 0.04, '4': 0.05, '5': 0.06, '6': 0.07 },
+    sale: { '-2': -0.25, '-1': -0.15, '0': -0.10, '1': -0.02, '2': 0, '3': 0.03, '4': 0.05, '5': 0.07, '6': 0.08 },
+  },
+  no_lift_high_floor: { rent: -0.06, sale: -0.07 },
+  balcony:            { rent: +0.04, sale: +0.04 },
+  parking:            { rent: +0.05, sale: +0.05 },
+  furnished_rent:     +0.10,   // rentals only
+  concierge:          +0.03,
+};
+
+let _valuationRendered = false;
+
+function renderValuationTab() {
+  if (_valuationRendered) return;
+  const container = document.querySelector('#valuationView .valuation-page');
+  if (!container) return;
+
+  const totalListings = (ALL_RENT?.length || 0) + (ALL_SALE?.length || 0);
+  container.innerHTML = `
+    <div class="valuation-header">
+      <h1>🏷️ Property valuation</h1>
+      <p class="valuation-subtitle">
+        Paste a listing URL or fill in the details below. Lume estimates rental
+        and sale values using <strong>${totalListings.toLocaleString()}</strong> Milan comparables.
+      </p>
+    </div>
+
+    <div class="val-section val-url-section">
+      <label class="val-section-label">Paste listing URL</label>
+      <div class="url-input-row">
+        <input type="url" id="val-url-input"
+               placeholder="https://www.immobiliare.it/annunci/..."
+               class="val-url-input"
+               onkeydown="if(event.key==='Enter'){event.preventDefault();handleValuationUrlPaste(this.value);}">
+        <button type="button" class="btn-val-fetch"
+                onclick="handleValuationUrlPaste(document.getElementById('val-url-input').value)">
+          Auto-fill →
+        </button>
+      </div>
+      <div id="val-url-status" class="val-url-status" style="display:none"></div>
+    </div>
+
+    <div class="val-divider"><span>or fill in manually</span></div>
+
+    <div id="valuation-form-section" class="val-section">
+      <input type="hidden" id="val-omi-zona">
+      <input type="hidden" id="val-omi-fascia">
+      <input type="hidden" id="val-lat">
+      <input type="hidden" id="val-lng">
+
+      <div class="val-form-grid">
+        <div class="val-field val-field-full">
+          <label for="val-address">Address</label>
+          <input type="text" id="val-address"
+                 placeholder="Via Paolo da Cannobio, 5, Milano"
+                 oninput="debouncedValGeocode()">
+          <div id="val-address-status" class="val-field-hint"></div>
+        </div>
+
+        <div class="val-field">
+          <label for="val-sqm">Size (m²) *</label>
+          <input type="number" id="val-sqm" placeholder="70" min="10" max="500">
+        </div>
+        <div class="val-field">
+          <label for="val-rooms">Rooms (locali)</label>
+          <input type="number" id="val-rooms" placeholder="2" min="1" max="10">
+        </div>
+        <div class="val-field">
+          <label for="val-floor">Floor number</label>
+          <input type="number" id="val-floor" placeholder="3" min="-2" max="40">
+        </div>
+        <div class="val-field">
+          <label for="val-price">Asking price (€, optional)</label>
+          <input type="number" id="val-price" placeholder="Leave blank for valuation only">
+        </div>
+
+        <div class="val-field">
+          <label for="val-condition">Condition</label>
+          <select id="val-condition">
+            <option value="">Unknown</option>
+            <option value="ottimo">Ottimo / Ristrutturato</option>
+            <option value="buono">Buono</option>
+            <option value="abitabile">Abitabile</option>
+            <option value="da_ristrutturare">Da ristrutturare</option>
+          </select>
+        </div>
+        <div class="val-field">
+          <label for="val-elevator">Elevator</label>
+          <select id="val-elevator">
+            <option value="">Unknown</option>
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+          </select>
+        </div>
+
+        <div class="val-field val-field-checkboxes val-field-full">
+          <label>Features</label>
+          <div class="val-checkboxes">
+            <label class="val-check"><input type="checkbox" id="val-balcony"> Balcony / terrace</label>
+            <label class="val-check"><input type="checkbox" id="val-parking"> Parking / box</label>
+            <label class="val-check"><input type="checkbox" id="val-furnished"> Furnished</label>
+            <label class="val-check"><input type="checkbox" id="val-concierge"> Concierge</label>
+          </div>
+        </div>
+      </div>
+
+      <div id="val-zone-preview" class="val-zone-preview" style="display:none">
+        <span class="zone-chip" id="val-zone-chip"></span>
+        <span class="zone-desc" id="val-zone-desc"></span>
+      </div>
+
+      <button type="button" class="btn-val-compute" onclick="runValuation()">
+        Get valuation →
+      </button>
+    </div>
+
+    <div id="valuation-results" style="display:none"></div>`;
+
+  _valuationRendered = true;
+}
+
+function setValuationStatus(kind, msg) {
+  const el = document.getElementById('val-url-status');
+  if (!el) return;
+  el.className = 'val-url-status ' + kind;
+  el.textContent = msg;
+  el.style.display = msg ? 'block' : 'none';
+}
+
+async function handleValuationUrlPaste(url) {
+  url = (url || '').trim();
+  if (!url) return;
+  setValuationStatus('loading', 'Looking up listing…');
+
+  const immoMatch = url.match(/immobiliare\.it\/annunci\/(\d+)/);
+  const ideaMatch = url.match(/idealista\.it\/immobile\/(\d+)/);
+  const listingId = immoMatch?.[1] || (ideaMatch ? `id_${ideaMatch[1]}` : null);
+  const source    = immoMatch ? 'immobiliare' : ideaMatch ? 'idealista' : null;
+  if (!source) {
+    setValuationStatus('error', 'Unrecognised URL. Paste an Immobiliare.it or Idealista.it listing URL.');
+    return;
+  }
+
+  // Pass 1: check the dataset we already have in memory
+  const allRent  = (typeof ALL_RENT !== 'undefined') ? ALL_RENT : [];
+  const allSale  = (typeof ALL_SALE !== 'undefined') ? ALL_SALE : [];
+  const existing = [...allRent, ...allSale].find(l => String(l.id) === String(listingId));
+  if (existing) {
+    setValuationStatus('success', `Found in dataset — last seen ${existing.last_seen_date || 'recently'}`);
+    fillValuationForm(existing);
+    return;
+  }
+
+  // Pass 2: live scrape (local only — heavy nodriver call, ~5s)
+  const isLocal = ['localhost', '127.0.0.1'].includes(location.hostname);
+  if (!isLocal) {
+    setValuationStatus('warning',
+      'Listing not in dataset. Live scraping only works locally — fill the form manually for now.');
+    return;
+  }
+  setValuationStatus('loading', 'Not in dataset — scraping the live listing (this takes ~5 s)…');
+  try {
+    const resp = await fetch(`/api/scrape-listing?url=${encodeURIComponent(url)}`);
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || `HTTP ${resp.status}`);
+    setValuationStatus('success', 'Listing scraped successfully.');
+    fillValuationForm(data.listing);
+  } catch (err) {
+    setValuationStatus('error', `Could not fetch listing: ${err.message}`);
+  }
+}
+
+function fillValuationForm(listing) {
+  const set = (id, val) => {
+    const el = document.getElementById(id);
+    if (el && val != null && val !== '') el.value = val;
+  };
+  const setSelect = (id, want) => {
+    const el = document.getElementById(id);
+    if (!el || want == null || want === '') return;
+    const opt = Array.from(el.options).find(o =>
+      o.value.toLowerCase() === String(want).toLowerCase() ||
+      String(want).toLowerCase().includes(o.value.toLowerCase())
+    );
+    if (opt) el.value = opt.value;
+  };
+  const chk = (id, val) => {
+    const el = document.getElementById(id);
+    if (el && val != null) el.checked = !!val;
+  };
+
+  set('val-address',   listing.address || '');
+  set('val-sqm',       listing.sqm);
+  set('val-rooms',     listing.rooms);
+  if (listing.floor_n != null) set('val-floor', listing.floor_n);
+  set('val-price',     listing.price);
+  setSelect('val-condition', listing.condition);
+  setSelect('val-elevator',
+    listing.elevator === true ? 'yes'
+    : listing.elevator === false ? 'no'
+    : '');
+  chk('val-balcony',  listing.has_balcony);
+  chk('val-parking',  listing.has_parking);
+  chk('val-furnished', listing.furnished);
+
+  document.getElementById('val-omi-zona').value   = listing.omi_zona   || '';
+  document.getElementById('val-omi-fascia').value = listing.omi_fascia || '';
+  document.getElementById('val-lat').value        = listing.latitude   || '';
+  document.getElementById('val-lng').value        = listing.longitude  || '';
+
+  if (listing.omi_zona) {
+    document.getElementById('val-zone-chip').textContent = listing.omi_zona;
+    document.getElementById('val-zone-desc').textContent =
+      (listing.omi_descr || '') + (listing.omi_fascia ? ' · Fascia ' + listing.omi_fascia : '');
+    document.getElementById('val-zone-preview').style.display = 'flex';
+  }
+
+  document.getElementById('valuation-form-section').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+// Address geocoding — calls our server-side /api/valuation-geocode which
+// runs the same polygon-validated geocoder used during enrichment.
+let _valGeocodeTimer = null;
+function debouncedValGeocode() {
+  clearTimeout(_valGeocodeTimer);
+  _valGeocodeTimer = setTimeout(valGeocodeAddress, 700);
+}
+
+async function valGeocodeAddress() {
+  const addr = document.getElementById('val-address').value.trim();
+  const status  = document.getElementById('val-address-status');
+  const preview = document.getElementById('val-zone-preview');
+  if (!addr || addr.length < 6) {
+    status.textContent = '';
+    preview.style.display = 'none';
+    return;
+  }
+  status.textContent = 'Looking up address…';
+  try {
+    const resp = await fetch(`/api/valuation-geocode?address=${encodeURIComponent(addr)}`);
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+    if (data.error) { status.textContent = data.error; preview.style.display = 'none'; return; }
+    if (!data.omi_zona) {
+      status.textContent = 'Address found but outside Milan OMI zones';
+      preview.style.display = 'none';
+      return;
+    }
+    document.getElementById('val-lat').value        = data.lat;
+    document.getElementById('val-lng').value        = data.lng;
+    document.getElementById('val-omi-zona').value   = data.omi_zona;
+    document.getElementById('val-omi-fascia').value = data.omi_fascia || '';
+    document.getElementById('val-zone-chip').textContent = data.omi_zona;
+    document.getElementById('val-zone-desc').textContent =
+      (data.omi_descr || '') + (data.omi_fascia ? ' · Fascia ' + data.omi_fascia : '');
+    preview.style.display = 'flex';
+    status.textContent = '';
+  } catch (err) {
+    status.textContent = 'Could not geocode — try adding "Milano" to the address';
+    preview.style.display = 'none';
+  }
+}
+
+// Sale-side mirror of estimateRentForSale. Same distance-aware cascade.
+function estimateSaleValue(listing) {
+  const sqm    = Number(listing.sqm) || 0;
+  const zona   = listing.omi_zona;
+  const fascia = listing.omi_fascia;
+  const lat    = parseFloat(listing.latitude);
+  const lng    = parseFloat(listing.longitude);
+  const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
+  if (!sqm) return { psqm: null, n_comps: 0, method: 'no_sqm', confidence: 'none' };
+
+  const allSales = (typeof ALL_SALE !== 'undefined' ? ALL_SALE : [])
+    .filter(s => Number(s.ask_psqm) > 0 && Number(s.sqm) > 0);
+  const saleCondGroup = conditionGroup(listing);
+
+  const tight = { min: sqm * 0.85, max: sqm * 1.15 };
+  const wide  = { min: sqm * 0.75, max: sqm * 1.30 };
+  const inBand = (s, b) => Number(s.sqm) >= b.min && Number(s.sqm) <= b.max;
+  const withinDist = (s, maxM) => {
+    if (!hasCoords) return true;
+    const slat = parseFloat(s.latitude), slng = parseFloat(s.longitude);
+    if (!Number.isFinite(slat) || !Number.isFinite(slng)) return false;
+    return haversineMetres(lat, lng, slat, slng) <= maxM;
+  };
+
+  const zoneS   = allSales.filter(s => s.omi_zona === zona);
+  const fasciaS = allSales.filter(s => s.omi_fascia === fascia);
+
+  const pools = [
+    { pool: zoneS.filter(s => conditionGroup(s) === saleCondGroup && inBand(s, tight) && withinDist(s, 800)),
+      method: 'zone_cond_800m',  confidence: 'high' },
+    { pool: zoneS.filter(s => inBand(s, tight) && withinDist(s, 800)),
+      method: 'zone_any_800m',   confidence: 'high' },
+    { pool: zoneS.filter(s => inBand(s, wide)  && withinDist(s, 1200)),
+      method: 'zone_wide_1200m', confidence: 'medium' },
+    { pool: zoneS.filter(s => inBand(s, wide)),
+      method: 'zone_full',       confidence: 'medium' },
+    { pool: fasciaS.filter(s => inBand(s, tight)),
+      method: 'fascia_tight',    confidence: 'low' },
+    { pool: fasciaS.filter(s => inBand(s, wide)),
+      method: 'fascia_wide',     confidence: 'low' },
+  ];
+
+  const med = pool => {
+    const xs = pool.map(s => Number(s.ask_psqm)).sort((a,b) => a-b);
+    return xs[Math.floor(xs.length / 2)];
+  };
+
+  for (const c of pools) {
+    if (c.pool.length < 5) continue;
+    const psqm = med(c.pool);
+    if (!psqm) continue;
+    const adjusted = applyConditionAdjustment(psqm, c.pool, saleCondGroup);
+    return {
+      psqm:       Math.round(adjusted),
+      n_comps:    c.pool.length,
+      method:     c.method,
+      confidence: c.confidence,
+      comp_ids:   c.pool.slice(0, 5).map(s => String(s.id)),
+    };
+  }
+  return { psqm: null, n_comps: 0, method: 'no_data', confidence: 'none' };
+}
+
+// Apply property-specific adjustments on top of the zone median psqm.
+function applyValuationAdjustments(basePsqm, listing, mode) {
+  let psqm = basePsqm;
+  const adjustments = [];
+
+  const push = (label, factor) => {
+    if (!factor) return;
+    const delta = Math.round(psqm * factor);
+    adjustments.push({ label, factor, delta });
+    psqm *= (1 + factor);
+  };
+
+  // Floor adjustment
+  if (listing.floor_n != null) {
+    const fk  = String(Math.min(6, Math.max(-2, listing.floor_n)));
+    const tab = VAL_ADJUSTMENT_FACTORS.floor[mode] || {};
+    push(`Floor ${listing.floor_n}`, tab[fk] || 0);
+  }
+  // No-lift on high floor
+  if (listing.floor_n != null && listing.floor_n > 2 && listing.elevator === false) {
+    push('No lift on high floor', VAL_ADJUSTMENT_FACTORS.no_lift_high_floor[mode]);
+  }
+  // Balcony / parking
+  if (listing.has_balcony) push('Balcony / terrace', VAL_ADJUSTMENT_FACTORS.balcony[mode]);
+  if (listing.has_parking) push('Parking / box',     VAL_ADJUSTMENT_FACTORS.parking[mode]);
+  // Furnished — rentals only
+  if (mode === 'rent' && listing.furnished) push('Furnished', VAL_ADJUSTMENT_FACTORS.furnished_rent);
+  // Concierge — both modes
+  if (listing.has_concierge) push('Concierge', VAL_ADJUSTMENT_FACTORS.concierge);
+
+  const finalPsqm  = Math.round(psqm);
+  const finalTotal = Math.round(psqm * listing.sqm);
+  return {
+    psqm:      finalPsqm,
+    total:     finalTotal,
+    rangeLow:  Math.round(finalTotal * 0.90),
+    rangeHigh: Math.round(finalTotal * 1.10),
+    adjustments,
+  };
+}
+
+function runValuation() {
+  const _num = id => {
+    const v = document.getElementById(id)?.value;
+    if (v === '' || v == null) return null;
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  const _chk = id => document.getElementById(id)?.checked || false;
+  const _sel = id => document.getElementById(id)?.value || '';
+
+  const sqm  = _num('val-sqm');
+  const zona = _sel('val-omi-zona');
+
+  if (!sqm || sqm <= 0) { if (typeof showToast === 'function') showToast('Please enter the property size (m²)'); return; }
+  if (!zona)            { if (typeof showToast === 'function') showToast('Please enter an address so Lume can find the right zone'); return; }
+
+  const elevSel = _sel('val-elevator');
+  const condition = _sel('val-condition') || null;
+
+  const synth = {
+    id: '__valuation__',
+    sqm,
+    rooms:        _num('val-rooms'),
+    floor_n:      _num('val-floor'),
+    condition,
+    elevator:     elevSel === 'yes' ? true : elevSel === 'no' ? false : null,
+    has_balcony:  _chk('val-balcony'),
+    has_parking:  _chk('val-parking'),
+    furnished:    _chk('val-furnished'),
+    has_concierge: _chk('val-concierge'),
+    omi_zona:     zona,
+    omi_fascia:   _sel('val-omi-fascia'),
+    latitude:     _num('val-lat'),
+    longitude:    _num('val-lng'),
+    price:        _num('val-price'),
+  };
+
+  // Reuse the existing rent estimator + indexes
+  if (!_rentIdx && typeof buildRentalsIndexes === 'function' && Array.isArray(ALL_RENT) && ALL_RENT.length) {
+    buildRentalsIndexes(ALL_RENT);
+  }
+  const rentResult = (typeof estimateRentForSale === 'function' && _rentIdx)
+    ? estimateRentForSale(synth, ALL_RENT, _rentIdx)
+    : { psqm: null, n_comps: 0, method: 'no_data', confidence: 'none' };
+  const saleResult = estimateSaleValue(synth);
+
+  const rentEstimate = rentResult.psqm
+    ? applyValuationAdjustments(rentResult.psqm, synth, 'rent')
+    : null;
+  const saleEstimate = saleResult.psqm
+    ? applyValuationAdjustments(saleResult.psqm, synth, 'sale')
+    : null;
+
+  renderValuationResults({
+    listing: synth,
+    rentResult, saleResult,
+    rentEstimate, saleEstimate,
+    askingPrice: synth.price,
+  });
+}
+
+function renderValuationResults({ listing, rentResult, saleResult, rentEstimate, saleEstimate, askingPrice }) {
+  const el = document.getElementById('valuation-results');
+  if (!el) return;
+  el.style.display = 'block';
+
+  const fmtEuro   = n => '€' + Math.round(n).toLocaleString('it-IT');
+  const confColor = c => c === 'high' ? 'var(--green-deep)' : c === 'medium' ? 'var(--amber)' : 'var(--coral)';
+  const confLabel = c => c === 'high' ? 'Lume is confident'
+                       : c === 'medium' ? 'Lume is fairly sure'
+                       : 'Limited data — low confidence';
+
+  // Compare asking price (only if user provided one) to the sale estimate.
+  // We compare against sale, not rent (asking-price field is most useful for
+  // sale validation; rent listings rarely use it).
+  let askingBlock = '';
+  if (askingPrice && saleEstimate) {
+    const delta = ((askingPrice - saleEstimate.total) / saleEstimate.total) * 100;
+    const col = Math.abs(delta) < 5 ? 'var(--green-deep)'
+              : delta > 0           ? 'var(--coral)'
+              :                       'var(--amber)';
+    const verdict = Math.abs(delta) < 5 ? 'Well priced'
+                  : delta > 10           ? 'Likely overpriced'
+                  : delta < -10          ? 'Below market'
+                  :                        'Slightly off market';
+    askingBlock = `
+      <div class="val-asking-comparison">
+        <div class="asking-label">Your asking price vs Lume estimate</div>
+        <div class="asking-delta" style="color:${col}">
+          ${delta > 0 ? '+' : ''}${delta.toFixed(1)}% vs estimate
+          <span class="asking-verdict">${verdict}</span>
+        </div>
+      </div>`;
+  }
+
+  const card = (title, icon, estimate, result, unitSuffix) => {
+    if (!estimate) return `
+      <div class="val-result-card val-result-empty">
+        <h3>${icon} ${title}</h3>
+        <p class="val-no-data">Insufficient comparable data for this zone/size combination.</p>
+      </div>`;
+    const adjustmentRows = estimate.adjustments.map(a => `
+      <tr>
+        <td>${escapeHtml(a.label)}</td>
+        <td class="${a.factor > 0 ? 'positive' : 'negative'}">
+          ${a.factor > 0 ? '+' : ''}${(a.factor*100).toFixed(0)}%
+        </td>
+        <td class="${a.delta > 0 ? 'positive' : 'negative'}">
+          ${a.delta > 0 ? '+' : ''}${fmtEuro(a.delta)}/m²
+        </td>
+      </tr>`).join('');
+    return `
+      <div class="val-result-card">
+        <h3>${icon} ${title}</h3>
+        <div class="val-headline">
+          <div class="val-main-number">${fmtEuro(estimate.total)}${unitSuffix}</div>
+          <div class="val-range">${fmtEuro(estimate.rangeLow)} – ${fmtEuro(estimate.rangeHigh)} range</div>
+          <div class="val-psqm">${fmtEuro(estimate.psqm)}/m²</div>
+        </div>
+        <div class="val-confidence" style="color:${confColor(result.confidence)}">
+          ${confLabel(result.confidence)} · ${result.n_comps} comps · ${result.method.replace(/_/g,' ')}
+        </div>
+        <details class="val-breakdown">
+          <summary>See how Lume calculated this</summary>
+          <table class="val-breakdown-table">
+            <thead>
+              <tr><th>Factor</th><th>Adjustment</th><th>Effect on €/m²</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Zone median (${escapeHtml(listing.omi_zona || '?')})</td>
+                <td>baseline</td>
+                <td><strong>${fmtEuro(result.psqm)}/m²</strong></td>
+              </tr>
+              ${adjustmentRows}
+              <tr class="val-total-row">
+                <td><strong>Final estimate</strong></td>
+                <td></td>
+                <td><strong>${fmtEuro(estimate.psqm)}/m²</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </details>
+      </div>`;
+  };
+
+  const totalListings = (ALL_RENT?.length || 0) + (ALL_SALE?.length || 0);
+  el.innerHTML = `
+    <div class="val-results-grid">
+      ${card('Rental value', '🏠', rentEstimate, rentResult, '/mo')}
+      ${card('Sale value',   '🏷️', saleEstimate, saleResult, '')}
+    </div>
+    ${askingBlock}
+    <button type="button" class="btn-val-reset" onclick="resetValuation()">
+      Value another property
+    </button>
+    <p class="val-disclaimer">
+      Estimates derived from ${totalListings.toLocaleString()} Milan listing
+      comparables and OMI benchmarks. They represent market <em>asking-price</em>
+      ranges, not appraised values. Always verify with a licensed agent or
+      surveyor before financial decisions.
+    </p>`;
+
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function resetValuation() {
+  const r = document.getElementById('valuation-results');
+  if (r) { r.style.display = 'none'; r.innerHTML = ''; }
+  const urlEl = document.getElementById('val-url-input');
+  if (urlEl) urlEl.value = '';
+  setValuationStatus('', '');
+  document.querySelectorAll('#valuation-form-section input, #valuation-form-section select')
+    .forEach(el => {
+      if (el.type === 'checkbox') el.checked = false;
+      else                         el.value   = '';
+    });
+  const preview = document.getElementById('val-zone-preview');
+  if (preview) preview.style.display = 'none';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
 
 // ── Boot Auth ─────────────────────────────────────────────────────────────────
 Auth.init();

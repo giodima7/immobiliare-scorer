@@ -1647,6 +1647,211 @@ def cache_clear_single():
         return jsonify({"error": str(exc)}), 500
 
 
+# ── Valuation tab endpoints ──────────────────────────────────────────────────
+
+@app.route("/api/valuation-geocode")
+def api_valuation_geocode():
+    """
+    Geocode a free-form address (Milan-biased) and resolve its OMI zone via
+    point-in-polygon. Returns { lat, lng, omi_zona, omi_fascia, omi_descr }
+    or { error }. Used by the Valuation tab's address-input live preview.
+    """
+    address = request.args.get("address", "").strip()
+    if not address:
+        return jsonify({"error": "no address provided"}), 400
+
+    # Reuse enrich_geo's polygon-validated multi-result geocoder so we
+    # automatically reject same-named streets in adjacent municipalities.
+    try:
+        import enrich_geo as _eg
+    except Exception as exc:
+        return jsonify({"error": f"geocoder unavailable: {exc}"}), 500
+
+    coords = _eg._geocode(address)
+    if not coords:
+        # Try once more with explicit "Milano" hint
+        coords = _eg._geocode(f"{address}, Milano")
+    if not coords:
+        return jsonify({"error": "address not found inside Milan"}), 404
+
+    lat, lng = coords
+    try:
+        import omi_lookup as _omi
+        zone, src = _omi.lookup(lat, lng)
+    except Exception:
+        zone, src = None, "failed"
+
+    if not zone or src != "polygon":
+        return jsonify({
+            "lat": lat, "lng": lng, "omi_zona": None,
+            "error": "coordinates outside Milan OMI zones",
+        }), 200
+
+    return jsonify({
+        "lat":        lat,
+        "lng":        lng,
+        "omi_zona":   zone.get("zona"),
+        "omi_fascia": zone.get("fascia"),
+        "omi_descr":  zone.get("descr"),
+        "omi_source": "nominatim+polygon",
+    })
+
+
+@app.route("/api/scrape-listing")
+def api_scrape_listing():
+    """
+    Scrape one listing on demand for the Valuation tab. Reuses the
+    Immobiliare __NEXT_DATA__ extraction from fetch_rentals.py — heavy
+    (~5 s) because it spins up a real Edge browser, so this is local-only.
+    """
+    url = request.args.get("url", "").strip()
+    if not url:
+        return jsonify({"error": "no url"}), 400
+    if "immobiliare.it" not in url and "idealista.it" not in url:
+        return jsonify({"error": "unsupported URL — paste an Immobiliare or Idealista listing"}), 400
+
+    try:
+        listing = _scrape_listing_sync(url)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+    if not listing:
+        return jsonify({"error": "could not parse listing — try filling the form manually"}), 422
+    return jsonify({"listing": listing})
+
+
+def _scrape_listing_sync(url: str) -> dict | None:
+    """Run a single-listing scrape via nodriver. Blocks ~5s."""
+    import asyncio
+    try:
+        return asyncio.run(_scrape_listing_async(url))
+    except RuntimeError:
+        # Already inside an event loop (rare in Flask threaded mode) — use a
+        # nested loop. asyncio.new_event_loop is the conservative path.
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(_scrape_listing_async(url))
+        finally:
+            loop.close()
+
+
+async def _scrape_listing_async(url: str) -> dict | None:
+    import asyncio as _asyncio
+    import nodriver as uc
+    from fetch_rentals import EDGE_PATH
+
+    is_immobiliare = "immobiliare.it" in url
+    is_idealista   = "idealista.it" in url
+    browser = await uc.start(
+        browser_executable_path=EDGE_PATH,
+        headless=False, lang="it-IT",
+    )
+    try:
+        tab = await browser.get(url)
+        await _asyncio.sleep(3)
+
+        if is_immobiliare:
+            text = await tab.evaluate(
+                "(()=>{const el=document.getElementById('__NEXT_DATA__');return el?el.textContent:null;})()"
+            )
+            if not text:
+                return None
+            try:
+                nd = _json.loads(text)
+            except Exception:
+                return None
+            # __NEXT_DATA__ shape varies — pull the realEstate object out of
+            # whichever query result holds it.
+            queries = (nd.get("props", {}).get("pageProps", {})
+                         .get("dehydratedState", {}).get("queries", []))
+            re_data = None
+            for q in queries:
+                d = (q.get("state", {}) or {}).get("data", {}) or {}
+                if isinstance(d, dict) and d.get("realEstate"):
+                    re_data = d["realEstate"]
+                    break
+            if not re_data:
+                return None
+            return _parse_immobiliare_detail(re_data)
+
+        if is_idealista:
+            dom = await tab.evaluate("""
+              (() => {
+                const t = sel => { const el=document.querySelector(sel); return el?(el.innerText||el.textContent||'').trim():''; };
+                return {
+                  price_text:     t('.info-data-price') || t('[class*="price"]'),
+                  size_text:      t('[class*="size-feature"]') || t('[class*="superficie"]'),
+                  rooms_text:     t('[class*="rooms"]') || t('[class*="locali"]'),
+                  floor_text:     t('[class*="floor"]') || t('[class*="piano"]'),
+                  address_text:   t('.main-info__title-minor') || t('h1.jumbotron-title') || t('.txt-title'),
+                  condition_text: t('[class*="condition"]') || t('[class*="stato"]'),
+                };
+              })()
+            """)
+            return _parse_idealista_detail(dom)
+    finally:
+        try: await browser.close()
+        except Exception: pass
+    return None
+
+
+def _parse_immobiliare_detail(re_data: dict) -> dict:
+    """Pull a Valuation-tab-shaped dict from Immobiliare's realEstate object."""
+    props = re_data.get("properties") or [{}]
+    prop  = props[0] if props else {}
+    price_data = re_data.get("price") or {}
+    location = prop.get("location") or {}
+
+    def _int(v):
+        try: return int(float(str(v).split(" ")[0]))
+        except Exception: return None
+
+    floor_raw = prop.get("floor") or {}
+    cond_raw  = prop.get("condition") or {}
+    feats     = prop.get("features") or {}
+
+    return {
+        "source":      "immobiliare",
+        "address":     location.get("address") or "",
+        "latitude":    location.get("latitude"),
+        "longitude":   location.get("longitude"),
+        "sqm":         _int(prop.get("surface")),
+        "price":       _int(price_data.get("value")),
+        "rooms":       _int(prop.get("rooms")),
+        "floor_n":     _int(floor_raw.get("value") or floor_raw.get("abbreviation")),
+        "floor_label": str(floor_raw.get("abbreviation") or ""),
+        "condition":   (cond_raw.get("value") or "").lower(),
+        "elevator":    prop.get("hasElevator"),
+        "has_balcony": bool(prop.get("balcony") or feats.get("balcony")),
+        "has_parking": bool(prop.get("hasBox") or prop.get("hasGarage")),
+        "furnished":   prop.get("furnished"),
+    }
+
+
+def _parse_idealista_detail(dom: dict) -> dict:
+    """Pull a Valuation-tab-shaped dict from an Idealista detail page DOM."""
+    import re as _re
+    def _int(txt):
+        s = str(txt or "").replace(".", "").replace(",", "")
+        m = _re.search(r"\d+", s)
+        return int(m.group(0)) if m else None
+    return {
+        "source":      "idealista",
+        "address":     dom.get("address_text") or "",
+        "latitude":    None,
+        "longitude":   None,
+        "sqm":         _int(dom.get("size_text")),
+        "price":       _int(dom.get("price_text")),
+        "rooms":       _int(dom.get("rooms_text")),
+        "floor_n":     _int(dom.get("floor_text")),
+        "floor_label": str(dom.get("floor_text") or ""),
+        "condition":   str(dom.get("condition_text") or "").lower(),
+        "elevator":    None,
+        "has_balcony": None,
+        "has_parking": None,
+        "furnished":   None,
+    }
+
+
 if __name__ == "__main__":
     # Load saved scan prefs (written by the dashboard whenever filters change)
     _prefs = {}
