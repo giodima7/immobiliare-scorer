@@ -426,6 +426,51 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--green-deep); }
 .stale-toggle input  { cursor: pointer; margin: 0; }
 .stale-toggle:hover  { color: var(--text-secondary); }
 
+/* Agency-pin banner — set when an agency is clicked in Stats leaderboard */
+.agency-pin-banner {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  margin: 0 14px 12px;
+  background: var(--green-light, #E6F4ED);
+  color: var(--green-deep);
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: var(--radius-md, 14px);
+  border: 1px solid rgba(42,122,90,0.25);
+}
+.agency-pin-banner strong {
+  font-weight: 800;
+  color: var(--text-primary);
+}
+.agency-pin-clear {
+  background: rgba(255,255,255,0.6);
+  border: 1px solid rgba(42,122,90,0.30);
+  color: var(--green-deep);
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--radius-full, 999px);
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.agency-pin-clear:hover { background: white; }
+
+/* Clickable agency name in the Stats leaderboard */
+.agency-link {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  cursor: pointer;
+  text-align: left;
+}
+.agency-link:hover { text-decoration: underline; }
+
 /* Banner that appears on cards when a stale listing is shown via the toggle */
 .stale-banner {
   background: var(--coral-light, #FDEEEC);
@@ -5125,7 +5170,7 @@ function saveFilters() {
   <button class="tab-btn" id="tabSales" data-tab="sales" onclick="switchTab('sales')">🏡 Sales</button>
   <button class="tab-btn active" id="tabRentals" data-tab="rentals" onclick="switchTab('rentals')">🔑 Rentals</button>
   <button class="tab-btn" id="tabMap" data-tab="map" onclick="switchTab('map')">🗺 Map</button>
-  <button class="tab-btn" id="tabInsights" data-tab="insights" onclick="switchTab('insights')">📊 What Lume sees</button>
+  <button class="tab-btn" id="tabInsights" data-tab="insights" onclick="switchTab('insights')">📊 Stats</button>
   <button class="tab-btn" id="tabValuation" data-tab="valuation" onclick="switchTab('valuation')">🏷 Valuation</button>
   <button class="tab-btn" id="tabSettings" data-tab="settings" onclick="switchTab('settings')">⚙ Settings</button>
 </nav>
@@ -5394,6 +5439,12 @@ function saveFilters() {
     <div class="geo-progress-bar" id="sSaleGeoProgressBar"><div class="geo-progress-fill" id="sSaleGeoProgressFill" style="width:0%"></div></div>
     <span id="sSaleGeoEnrichStatus" style="font-size:10px;color:var(--muted)"></span>
   </span>
+</div>
+
+<!-- Agency-pinned banner (only visible when an agency filter is active) -->
+<div id="sAgencyBanner" class="agency-pin-banner" style="display:none">
+  <span>Filtered by agency: <strong id="sAgencyBannerName"></strong></span>
+  <button type="button" class="agency-pin-clear" onclick="clearPinnedAgency('sales')">✕ Clear</button>
 </div>
 
 <!-- ── Sales grid ── -->
@@ -5702,6 +5753,12 @@ function saveFilters() {
       <div class="geo-progress-bar" id="geoProgressBar"><div class="geo-progress-fill" id="geoProgressFill" style="width:0%"></div></div>
       <span id="geoEnrichStatus" style="font-size:10px;color:var(--muted)"></span>
     </span>
+  </div>
+
+  <!-- Agency-pinned banner (only visible when an agency filter is active) -->
+  <div id="rAgencyBanner" class="agency-pin-banner" style="display:none">
+    <span>Filtered by agency: <strong id="rAgencyBannerName"></strong></span>
+    <button type="button" class="agency-pin-clear" onclick="clearPinnedAgency('rentals')">✕ Clear</button>
   </div>
 
   <!-- Rentals grid -->
@@ -9304,6 +9361,13 @@ function applyRentFilters(data, f) {
     const ids = new Set(window.sharedCollection.listing_ids.map(String));
     data = data.filter(l => ids.has(String(l.id)));
   }
+  // Agency-pin filter: when the user clicks an agency name in the Stats
+  // leaderboard, we hard-restrict the grid to that agency's listings. The
+  // pin is cleared via the banner's ✕ button.
+  if (window._pinnedAgencyRent) {
+    const want = window._pinnedAgencyRent.toLowerCase();
+    data = data.filter(l => (l.agency_name || '').trim().toLowerCase() === want);
+  }
   // Hide stale (off-market) listings by default. The "Show expired" toggle
   // in the filter bar inverts this for debugging/historical review.
   const showStale = document.getElementById('rShowStale')?.checked || false;
@@ -9431,6 +9495,7 @@ function _rentAppendBatch() {
 }
 
 function renderRentals() {
+  if (typeof _refreshAgencyBanners === 'function') _refreshAgencyBanners();
   const f   = getRentFilters();
   const asc = (rentSortKey === 'rent_mo' || rentSortKey === 'vs_omi_rent_pct');
 
@@ -9620,6 +9685,11 @@ function applySaleFilters(data, f) {
   if (window.sharedCollection) {
     const ids = new Set(window.sharedCollection.listing_ids.map(String));
     data = data.filter(l => ids.has(String(l.id)));
+  }
+  // Agency-pin filter — set by clicking an agency in the Stats leaderboard.
+  if (window._pinnedAgencySale) {
+    const want = window._pinnedAgencySale.toLowerCase();
+    data = data.filter(l => (l.agency_name || '').trim().toLowerCase() === want);
   }
   // Hide stale (off-market) listings by default. Toggle in filter bar.
   const showStale = document.getElementById('sShowStale')?.checked || false;
@@ -13220,6 +13290,7 @@ function _saleAppendBatch() {
 }
 
 function renderSales() {
+  if (typeof _refreshAgencyBanners === 'function') _refreshAgencyBanners();
   // Self-healing: if rentals are loaded but no sale has an estimated rent
   // yet, kick the lazy analysis. ensureSalesAnalysis() is idempotent and
   // schedules itself via requestIdleCallback, then re-renders when done.
@@ -14963,14 +15034,75 @@ function _renderAgencyTable() {
     if (isStr) return _agencySortAsc ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
     return _agencySortAsc ? av - bv : bv - av;
   });
-  const rows = data.map(a => `<tr>
-    <td>${a.url ? `<a href="${a.url}" target="_blank" rel="noopener" style="color:var(--accent)">${a.name || a.id}</a>` : (a.name || a.id || '–')}</td>
-    <td>${_agencyTypeBadge(a.type || '')}</td>
-    <td>${fmt(a.count)}</td>
-    <td style="${_scoreColor(a.avg_score)}">${a.avg_score != null ? a.avg_score : '–'}</td>
-    <td>${a.avg_price != null ? '€' + fmt(a.avg_price) : '–'}</td>
-  </tr>`);
+  // The agency name is now a Lume-internal link: clicking switches to the
+  // matching listings tab and pins the filter. The external agency URL
+  // (from the source site) moves to a small "↗" icon next to the name.
+  const rows = data.map(a => {
+    const name = a.name || a.id || '–';
+    const safe = String(name).replace(/'/g, "\\'");
+    const ext  = a.url
+      ? ` <a href="${a.url}" target="_blank" rel="noopener" title="Open agency on ${insightsMode === 'sales' ? 'sales' : 'rentals'} source site" style="color:var(--muted);text-decoration:none;margin-left:6px">↗</a>`
+      : '';
+    return `<tr>
+      <td>
+        <button type="button" class="agency-link" onclick="pinAgency('${safe}', '${insightsMode === 'sales' ? 'sales' : 'rentals'}')">${name}</button>${ext}
+      </td>
+      <td>${_agencyTypeBadge(a.type || '')}</td>
+      <td>${fmt(a.count)}</td>
+      <td style="${_scoreColor(a.avg_score)}">${a.avg_score != null ? a.avg_score : '–'}</td>
+      <td>${a.avg_price != null ? '€' + fmt(a.avg_price) : '–'}</td>
+    </tr>`;
+  });
   tbody.innerHTML = rows.join('') || '<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:16px">No agencies with 2+ listings</td></tr>';
+}
+
+// Agency-pin: clicking an agency name in the Stats leaderboard switches
+// to the matching listings tab and hard-restricts the grid to that agency.
+// Backed by window._pinnedAgencyRent / window._pinnedAgencySale, honoured
+// by applyRentFilters / applySaleFilters.
+function pinAgency(name, mode) {
+  if (!name) return;
+  if (mode === 'sales') {
+    window._pinnedAgencySale = name;
+    window._pinnedAgencyRent = null;
+    if (typeof switchTab === 'function') switchTab('sales');
+    if (typeof renderSales === 'function') renderSales();
+  } else {
+    window._pinnedAgencyRent = name;
+    window._pinnedAgencySale = null;
+    if (typeof switchTab === 'function') switchTab('rentals');
+    if (typeof renderRentals === 'function') renderRentals();
+  }
+  _refreshAgencyBanners();
+}
+
+function clearPinnedAgency(mode) {
+  if (mode === 'sales') {
+    window._pinnedAgencySale = null;
+    if (typeof renderSales === 'function') renderSales();
+  } else {
+    window._pinnedAgencyRent = null;
+    if (typeof renderRentals === 'function') renderRentals();
+  }
+  _refreshAgencyBanners();
+}
+
+function _refreshAgencyBanners() {
+  const pairs = [
+    ['rAgencyBanner', 'rAgencyBannerName', window._pinnedAgencyRent],
+    ['sAgencyBanner', 'sAgencyBannerName', window._pinnedAgencySale],
+  ];
+  for (const [bannerId, nameId, val] of pairs) {
+    const b = document.getElementById(bannerId);
+    if (!b) continue;
+    if (val) {
+      const n = document.getElementById(nameId);
+      if (n) n.textContent = val;
+      b.style.display = 'flex';
+    } else {
+      b.style.display = 'none';
+    }
+  }
 }
 
 function _sortAgency(key) {
