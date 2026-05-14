@@ -4121,6 +4121,10 @@ function showApp() {
   // arrives — it shows a "Listing not loaded yet" empty state and the next
   // call after loadSales() completes will populate it.
   if (typeof Router !== 'undefined') Router.init();
+  // Restore the active tab from the user's previous session (per-user via
+  // Storage). Runs after the tab DOM exists; skips itself when the URL
+  // targets a detail page or shared collection.
+  if (typeof restoreActiveTab === 'function') restoreActiveTab();
 }
 function hideApp() {
   const r = document.getElementById('app-root');
@@ -6860,7 +6864,10 @@ init();
 // ── Tab switching ─────────────────────────────────────────────────────────────
 let activeTab = 'rentals';
 
-function switchTab(tab) {
+const TAB_STORAGE_KEY = 'active_tab';
+
+function switchTab(tab, opts) {
+  const persist = !opts || opts.persist !== false;
   activeTab = tab;
   ['salesView','rentalsView','mapView','insightsView','settingsView'].forEach(id => {
     const el = document.getElementById(id);
@@ -6871,6 +6878,12 @@ function switchTab(tab) {
   });
   document.querySelectorAll('.tab-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.tab === tab));
+  // Persist the active tab so reloading the dashboard keeps the user where
+  // they were. Skip persistence for detail-view navigations — those use the
+  // URL itself, not the tab state.
+  if (persist) {
+    try { Storage.set(TAB_STORAGE_KEY, tab); } catch (_) {}
+  }
   if (tab === 'sales') {
     stopScannerPoll();
     if (IS_LIVE) startSaleFetchPoll();      // Combined sale fetch polling (Immobiliare + Idealista)
@@ -6913,6 +6926,24 @@ function switchTab(tab) {
 
 document.querySelectorAll('.tab-btn').forEach(btn =>
   btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
+
+// Restore the active tab on page load. Called from showApp() once the DOM
+// is ready. Skipped when the URL targets a detail page or a shared
+// collection — those have their own routing/banner that takes priority.
+function restoreActiveTab() {
+  try {
+    const params = new URLSearchParams(location.search);
+    if (params.get('view') === 'detail') return;
+    if (params.get('c'))                  return;
+
+    const saved = Storage.get(TAB_STORAGE_KEY, 'rentals');
+    const validTabs = ['rentals', 'sales', 'map', 'insights', 'settings'];
+    // Avoid a redundant re-render when the saved tab matches the default.
+    if (validTabs.includes(saved) && saved !== 'rentals') {
+      switchTab(saved, { persist: false });
+    }
+  } catch (_) { /* localStorage unavailable — fall back to default rentals tab */ }
+}
 
 // ── Milan areas — Immobiliare.it macrozone names ──────────────────────────────
 // Names match the macrozone/microzone values returned by the Immobiliare.it API
@@ -9066,50 +9097,97 @@ function _medianPsqm(pool) {
 
 // Per-listing rent estimator. Pure function — receives pre-built indexes
 // to avoid filtering 11k rentals per sale per pass.
+// Great-circle distance in metres (Haversine). Pure function, hot-path
+// friendly — called once per (sale, candidate-rental) pair during analysis.
+function haversineMetres(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const phi1 = lat1 * Math.PI / 180;
+  const phi2 = lat2 * Math.PI / 180;
+  const dphi = (lat2 - lat1) * Math.PI / 180;
+  const dlam = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dphi/2)**2 + Math.cos(phi1)*Math.cos(phi2)*Math.sin(dlam/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
 function estimateRentForSale(sale, rentalsArr, idx) {
-  const sqm    = sale.sqm || 0;
+  const sqm    = Number(sale.sqm) || 0;
   const zona   = sale.omi_zona || sale.omi_zone;
   const fascia = sale.omi_fascia;
-  if (!sqm) return { psqm: null, rent_mo: null, n_comps: 0, confidence: 'none', method: 'no_sqm' };
+  if (!sqm) return { psqm: null, rent_mo: null, n_comps: 0, confidence: 'none', method: 'no_sqm', comp_ids: [] };
 
   const saleCondGroup = conditionGroup(sale);
-  const sizeOK = (lo, hi) => (r) => r.sqm >= sqm * lo && r.sqm <= sqm * hi;
+  const lat  = parseFloat(sale.latitude);
+  const lng  = parseFloat(sale.longitude);
+  const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
 
-  // Build progressively wider candidate pools. First pool with ≥ MIN_POOL_SIZE wins.
+  // Size bands
+  const tight    = { min: sqm * 0.85, max: sqm * 1.15 };
+  const wide     = { min: sqm * 0.75, max: sqm * 1.30 };
+  const veryWide = { min: sqm * 0.70, max: sqm * 1.40 };
+  const inBand   = (r, b) => {
+    const s = Number(r.sqm);
+    return s >= b.min && s <= b.max;
+  };
+
+  // Distance filter. If the sale has no coords we skip distance filtering
+  // entirely (returns true) so the algorithm degrades to the previous
+  // zone-only matching — no regression for sparse data. If the sale has
+  // coords but a rental doesn't, that rental can't be plotted on the map
+  // so it's excluded from any distance-aware pass.
+  const withinDist = (r, maxMetres) => {
+    if (!hasCoords) return true;
+    const rlat = parseFloat(r.latitude);
+    const rlng = parseFloat(r.longitude);
+    if (!Number.isFinite(rlat) || !Number.isFinite(rlng)) return false;
+    return haversineMetres(lat, lng, rlat, rlng) <= maxMetres;
+  };
+
+  const zonePool   = zona   ? (idx.byZone.get(zona)     || []) : [];
+  const fasciaPool = fascia ? (idx.byFascia.get(fascia) || []) : [];
+
+  // Candidate pools — distance-first, then progressively relaxed. The
+  // first pass with ≥ MIN_POOL_SIZE wins. Distance caps are 600/1000/1500m
+  // (walking-distance neighbourhood scales).
   const candidatePools = [];
-  const zonePool = zona ? (idx.byZone.get(zona) || []) : [];
   if (zonePool.length) {
     candidatePools.push({
-      pool: zonePool.filter(r => conditionGroup(r) === saleCondGroup && sizeOK(0.85, 1.15)(r)),
-      method: 'zone_condition_strict', confidence: 'high',
+      pool: zonePool.filter(r => conditionGroup(r) === saleCondGroup && inBand(r, tight) && withinDist(r, 600)),
+      method: 'zone_cond_600m',  confidence: 'high',
     });
     candidatePools.push({
-      pool: zonePool.filter(sizeOK(0.85, 1.15)),
-      method: 'zone_any_condition', confidence: 'high',
+      pool: zonePool.filter(r => inBand(r, tight) && withinDist(r, 600)),
+      method: 'zone_any_600m',   confidence: 'high',
     });
     candidatePools.push({
-      pool: zonePool.filter(sizeOK(0.75, 1.30)),
-      method: 'zone_wide_size', confidence: 'medium',
+      pool: zonePool.filter(r => inBand(r, tight) && withinDist(r, 1000)),
+      method: 'zone_any_1000m',  confidence: 'medium',
+    });
+    candidatePools.push({
+      pool: zonePool.filter(r => inBand(r, wide) && withinDist(r, 1000)),
+      method: 'zone_wide_1000m', confidence: 'medium',
+    });
+    candidatePools.push({
+      pool: zonePool.filter(r => inBand(r, wide)),
+      method: 'zone_any_full',   confidence: 'medium',
     });
   }
-  const fasciaPool = fascia ? (idx.byFascia.get(fascia) || []) : [];
   if (fasciaPool.length) {
     candidatePools.push({
-      pool: fasciaPool.filter(sizeOK(0.85, 1.15)),
-      method: 'fascia_tight', confidence: 'medium',
+      pool: fasciaPool.filter(r => inBand(r, tight) && withinDist(r, 1500)),
+      method: 'fascia_tight_1500m', confidence: 'low',
     });
     candidatePools.push({
-      pool: fasciaPool.filter(sizeOK(0.70, 1.40)),
-      method: 'fascia_wide', confidence: 'low',
+      pool: fasciaPool.filter(r => inBand(r, veryWide)),
+      method: 'fascia_wide',     confidence: 'low',
     });
   }
   candidatePools.push({
-    pool: idx.allWithPsqm.filter(sizeOK(0.85, 1.15)),
-    method: 'citywide_size', confidence: 'low',
+    pool: (idx.allWithPsqm || idx.allValid || []).filter(r => inBand(r, tight)),
+    method: 'citywide_size',     confidence: 'low',
   });
 
-  // Round rent to the nearest €25 — sub-€25 precision implies a confidence
-  // we don't have, and round numbers read cleaner on the card pill.
+  // Round rent to nearest €25 — sub-€25 precision implies a confidence we
+  // don't have, and round numbers read cleaner on the card pill.
   const round25 = (n) => Math.round(n / 25) * 25;
 
   const MIN_POOL_SIZE = 5;
@@ -9117,13 +9195,33 @@ function estimateRentForSale(sale, rentalsArr, idx) {
     if (cand.pool.length < MIN_POOL_SIZE) continue;
     const median = _medianPsqm(cand.pool);
     if (!median) continue;
-    const adjusted = cand.method === 'zone_condition_strict'
+    // 'zone_cond_600m' is by construction same-condition — no adjustment.
+    // Every other pass mixes conditions or uses the wider geography.
+    const adjusted = cand.method === 'zone_cond_600m'
       ? median
       : applyConditionAdjustment(median, cand.pool, saleCondGroup);
-    // Capture matched-pool ids (sorted by psqm asc, capped at 30) so the
-    // detail page can show the exact rentals that fed the estimate.
-    const sortedPool = [...cand.pool].sort((a, b) => _rentPsqm(a) - _rentPsqm(b));
+
+    // Capture comp ids. When the sale has coords, sort by distance asc so
+    // the mini-map dots cluster meaningfully around the listing instead of
+    // skewing to the cheapest end of the price spectrum. Fall back to
+    // price-asc sort when no sale coords are available.
+    let sortedPool;
+    if (hasCoords) {
+      sortedPool = cand.pool.slice().map(r => ({
+        r,
+        d: (() => {
+          const rlat = parseFloat(r.latitude);
+          const rlng = parseFloat(r.longitude);
+          return (Number.isFinite(rlat) && Number.isFinite(rlng))
+            ? haversineMetres(lat, lng, rlat, rlng)
+            : Infinity;
+        })(),
+      })).sort((a, b) => a.d - b.d).map(x => x.r);
+    } else {
+      sortedPool = cand.pool.slice().sort((a, b) => _rentPsqm(a) - _rentPsqm(b));
+    }
     const compIds = sortedPool.slice(0, 30).map(r => r.id).filter(id => id != null);
+
     return {
       psqm:       Math.round(adjusted * 100) / 100,
       rent_mo:    round25(adjusted * sqm),
@@ -10437,14 +10535,23 @@ function detailMortgageScenariosHtml(listing) {
 // datasets won't have these arrays — sections gracefully show an empty state.
 
 const _METHOD_LABELS_RENT = {
+  // New distance-capped methods (current)
+  'zone_cond_600m':     'same zone + same condition + 600m radius',
+  'zone_any_600m':      'same zone + 600m radius',
+  'zone_any_1000m':     'same zone + 1km radius',
+  'zone_wide_1000m':    'same zone + wider size + 1km radius',
+  'zone_any_full':      'same zone (full extent)',
+  'fascia_tight_1500m': 'same fascia + 1.5km radius',
+  // Legacy keys kept so older cached sales still display readable labels
   'zone_condition_strict': 'same zone + same condition',
   'zone_any_condition':    'same zone + condition adjusted',
   'zone_wide_size':        'same zone + wider size band',
-  'fascia_tight':           'same fascia + tight size band',
-  'fascia_wide':            'same fascia + wider size band',
-  'citywide_size':          'citywide by size only',
-  'omi_benchmark':          'OMI benchmark fallback',
-  'no_data':                'no data',
+  'fascia_tight':          'same fascia + tight size band',
+  // Shared fallback methods
+  'fascia_wide':           'same fascia + wider size band',
+  'citywide_size':         'citywide by size only',
+  'omi_benchmark':         'OMI benchmark fallback',
+  'no_data':               'no data',
 };
 
 const _METHOD_LABELS_SALE = {
