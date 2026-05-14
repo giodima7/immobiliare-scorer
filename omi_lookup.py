@@ -7,10 +7,16 @@ Point-in-polygon OMI zone lookup for Milano rental listings.
 Parses three official data files at import time (< 2 s) and builds
 a ZONES dict.  Call lookup(lat, lng) once per listing.
 
-Data files (project root):
-  F205.kml                        — 43 OMI zone polygons, coord order lon,lat,alt
-  QIP_1363767_1_20252_ZONE.csv    — zone metadata (fascia, description)
-  QIP_1363767_1_20252_VALORI.csv  — rental + purchase price benchmarks
+Data files:
+  F205.kml                                  — 43 OMI zone polygons (project root)
+  omi_data/QIP_*_ZONE.csv                   — zone metadata (fascia, description)
+  omi_data/QIP_*_VALORI.csv                 — rental + purchase price benchmarks
+
+  Current semester:  2025/2 (elaborazione 14-MAG-26)
+  Next update:       Semestre 2026/1 (expected ~June 2026)
+  Update procedure:  drop new CSVs in omi_data/, then update
+                     ZONE_PATH / VALORI_PATH below to point at them.
+                     Past semesters stay in omi_data/ for audit trail.
 
 Usage:
     from omi_lookup import lookup, ZONES
@@ -36,9 +42,11 @@ from shapely.geometry import MultiPolygon, Point, Polygon
 _log = logging.getLogger(__name__)
 
 BASE_DIR    = Path(__file__).parent
+OMI_DATA    = BASE_DIR / "omi_data"
 KML_PATH    = BASE_DIR / "F205.kml"
-ZONE_PATH   = BASE_DIR / "QIP_1363767_1_20252_ZONE.csv"
-VALORI_PATH = BASE_DIR / "QIP_1363767_1_20252_VALORI.csv"
+# Current semester. Bump these when a new OMI release lands in omi_data/.
+ZONE_PATH   = OMI_DATA / "QIP_1376358_1_20252_ZONE.csv"
+VALORI_PATH = OMI_DATA / "QIP_1376358_1_20252_VALORI.csv"
 
 KML_NS = "http://www.opengis.net/kml/2.2"
 

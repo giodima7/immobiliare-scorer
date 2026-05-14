@@ -1092,10 +1092,19 @@ def score_rental(listing: dict, all_listings: list, settings: dict | None = None
         vs_omi_pct   = None
         vs_omi_label = None
 
-    # Suggested rent from OMI (keep for display)
-    suggested_rent_mo = None
-    if omi_mid and omi_mid > 0 and sqm > 0:
-        suggested_rent_mo = int(round(omi_mid * sqm / 25) * 25)
+    # Suggested rent from OMI, adjusted for size + condition.
+    # Without these coefficients a 30 m² studio in da_ristrutturare and a
+    # 90 m² ottimo flat in the same zone would suggest the same €/m²/mo —
+    # which is wrong. _surface_coeff and _condition_coeff are the same
+    # multipliers score_sale_listing uses for estimated_yield_pct.
+    suggested_rent_mo   = None
+    suggested_rent_psqm = None
+    if omi_mid and omi_mid > 0 and sqm and sqm > 0:
+        surf_c = _surface_coeff(sqm)
+        cond_c = _condition_coeff(listing.get("condition", ""))
+        adjusted_psqm = omi_mid * surf_c * cond_c
+        suggested_rent_mo   = int(round(adjusted_psqm * sqm / 25) * 25)
+        suggested_rent_psqm = round(adjusted_psqm, 1)
 
     # ── Hidden Gem / Great Value flags ────────────────────────────────────────
     _gate_fired = listing.get("_absolute_value_gate_applied", False)
@@ -1160,6 +1169,7 @@ def score_rental(listing: dict, all_listings: list, settings: dict | None = None
         "vs_omi_rent_pct":     vs_omi_pct,
         "vs_omi_label":        vs_omi_label,
         "suggested_rent_mo":   suggested_rent_mo,
+        "suggested_rent_psqm": suggested_rent_psqm,
         "omi_fallback":        comps.get("benchmark_source") in ("omi_only", "none"),
         # Legacy names (score_physical / score_rent kept for dashboard compat)
         "score_physical":      prop_s,

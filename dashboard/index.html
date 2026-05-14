@@ -8977,6 +8977,18 @@ function renderRentalCard(l) {
         ${_dRow('Comps median', l.comps_median != null ? '€' + l.comps_median + '/m²/mo (' + (l.comps_n || 0) + ' comps)' : null, l.comps_median == null ? 'muted' : '')}
         ${_dRow('Comps source', l.comps_source || null, l.comps_source ? '' : 'muted')}
         ${_dRow('OMI context', l.vs_omi_label || null, l.vs_omi_label ? '' : 'muted')}
+        ${(() => {
+          // OMI suggested rent — already adjusted by scoring.py for sqm + condition.
+          if (l.suggested_rent_mo == null || !l.sqm) return '';
+          const psqm = l.suggested_rent_psqm != null ? l.suggested_rent_psqm.toFixed(1) : null;
+          const sublabel = `OMI mid ${l.omi_loc_mid ?? '?'} €/m²/mo, adjusted for ${l.sqm} m²${l.condition ? ' / ' + l.condition : ''}`;
+          const over     = l.rent_mo && l.rent_mo > l.suggested_rent_mo * 1.05;
+          const valStr   = `€${l.suggested_rent_mo.toLocaleString('it-IT')}/mo${psqm ? ` · €${psqm}/m²` : ''}`;
+          return `<div class="dg-row" title="${sublabel}">
+            <span class="dg-lbl">OMI suggested rent</span>
+            <span class="dg-val${over ? ' bad' : ''}">${valStr}</span>
+          </div>`;
+        })()}
         ${l.ldi_score != null ? _dRow('LDI zone boost', `${l.ldi_score}/100${l.ldi_bonus > 0 ? ' (+' + l.ldi_bonus + ' price bonus)' : ''}`, l.ldi_score >= 65 ? 'good' : '') : ''}
         ${_dRow('Total', l.score_total != null ? l.score_total + ' / 100' : null)}
       </div>
