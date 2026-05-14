@@ -13317,7 +13317,23 @@ function _renderVisibleMarkers() {
     const lat = l.latitude ?? l.lat;
     const lng = l.longitude ?? l.lng ?? l.lon;
     const marker = _createMapMarker(l, lat, lng);
-    marker.bindPopup(_createMapPopup(l), { maxWidth: 300, minWidth: 260 });
+
+    // Store the listing ID as a primitive on the marker, then generate
+    // the popup lazily by looking the listing up in _mapAllListings at
+    // popup-open time. This is immune to closure bugs (the captured value
+    // is a string, not an object reference) and stays correct even if
+    // _mapAllListings is replaced/filtered between marker creation and
+    // popup display. Always coerce to string when comparing so the lookup
+    // works for both numeric (Immobiliare) and prefixed-string (Idealista)
+    // listing IDs.
+    marker.listingId = String(id);
+    marker.bindPopup(() => {
+      const found = _mapAllListings.find(x => String(x.id ?? x.url) === marker.listingId);
+      return found
+        ? _createMapPopup(found)
+        : '<div style="padding:12px;color:#6B6560;font-size:12px">Listing no longer in view</div>';
+    }, { maxWidth: 300, minWidth: 260 });
+
     _clusterGroup.addLayer(marker);
     _mapRenderedIds.add(id);
   });
