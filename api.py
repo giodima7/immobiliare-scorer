@@ -1649,6 +1649,82 @@ def cache_clear_single():
 
 # ── Valuation tab endpoints ──────────────────────────────────────────────────
 
+@app.route("/api/address-autocomplete")
+def api_address_autocomplete():
+    """
+    Address autocomplete for the Valuation tab. Calls Photon (komoot.io,
+    free OSM-based geocoder — same provider already used by enrich_geo)
+    biased toward Milan, returns up to 5 suggestions with coordinates
+    pre-resolved and OMI zone attached. Selecting a suggestion fills the
+    form without a second round-trip.
+    """
+    q = (request.args.get("q") or "").strip()
+    if len(q) < 3:
+        return jsonify({"results": []})
+
+    import urllib.parse, urllib.request
+    # Bias toward Milan (Duomo coordinates) with a tight location_bias_scale
+    params = urllib.parse.urlencode({
+        "q":      q + " Milano",
+        "lat":    "45.4642",
+        "lon":    "9.1900",
+        "limit":  "8",
+    })
+    url = f"https://photon.komoot.io/api/?{params}"
+    req = urllib.request.Request(url, headers={"User-Agent": "lume/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=4) as resp:
+            data = _json.loads(resp.read())
+    except Exception as exc:
+        return jsonify({"results": [], "error": str(exc)}), 200
+
+    try:
+        import omi_lookup as _omi
+        _has_omi = True
+    except Exception:
+        _omi = None
+        _has_omi = False
+
+    results = []
+    for feat in (data.get("features") or [])[:8]:
+        if len(results) >= 5: break
+        geom = feat.get("geometry") or {}
+        coords = geom.get("coordinates") or []
+        if len(coords) < 2: continue
+        lon, lat = float(coords[0]), float(coords[1])
+        props = feat.get("properties") or {}
+        # Only return results inside the Milan OMI polygon set
+        if _has_omi:
+            try:
+                zone, src = _omi.lookup(lat, lon)
+                if src != "polygon" or not zone:
+                    continue
+            except Exception:
+                zone = None
+        else:
+            zone = None
+        # Build a human-readable single-line label
+        bits = []
+        street = props.get("street") or props.get("name") or ""
+        hnum   = props.get("housenumber") or ""
+        if street: bits.append(f"{street} {hnum}".strip())
+        elif props.get("name"): bits.append(props["name"])
+        if props.get("district") or props.get("city"):
+            bits.append(props.get("district") or props.get("city"))
+        if props.get("postcode"): bits.append(props["postcode"])
+        label = ", ".join([b for b in bits if b])
+        if not label: continue
+        results.append({
+            "label":      label,
+            "lat":        lat,
+            "lng":        lon,
+            "omi_zona":   zone.get("zona")   if zone else None,
+            "omi_fascia": zone.get("fascia") if zone else None,
+            "omi_descr":  zone.get("descr")  if zone else None,
+        })
+    return jsonify({"results": results})
+
+
 @app.route("/api/valuation-geocode")
 def api_valuation_geocode():
     """

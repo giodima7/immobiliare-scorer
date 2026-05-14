@@ -1760,6 +1760,50 @@ body.detail-page-active .filter-bar { display: none !important; }
 }
 .val-check input { cursor: pointer; margin: 0; }
 
+/* Address autocomplete dropdown */
+.val-autocomplete-wrap { position: relative; }
+.val-autocomplete-list {
+  position: absolute;
+  top: calc(100% + 4px); left: 0; right: 0;
+  z-index: 60;
+  background: var(--bg-card, #FFFFFF);
+  border: 1px solid var(--border, #E5E1D8);
+  border-radius: var(--radius-md, 14px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 4px;
+}
+.val-auto-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md, 14px);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 13px;
+  text-align: left;
+  color: var(--text-primary);
+  transition: background 80ms ease;
+}
+.val-auto-item:hover, .val-auto-item.active {
+  background: var(--bg-muted, #F2EFE9);
+}
+.val-auto-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.val-auto-zone  {
+  font-size: 11px; font-weight: 700;
+  color: var(--green-deep);
+  background: var(--green-light, #E6F4ED);
+  padding: 2px 8px;
+  border-radius: var(--radius-full, 999px);
+  flex-shrink: 0;
+}
+
 .val-zone-preview {
   display: flex; align-items: center; gap: 10px;
   padding: 10px 14px;
@@ -15083,9 +15127,15 @@ function renderValuationTab() {
       <div class="val-form-grid">
         <div class="val-field val-field-full">
           <label for="val-address">Address</label>
-          <input type="text" id="val-address"
-                 placeholder="Via Paolo da Cannobio, 5, Milano"
-                 oninput="debouncedValGeocode()">
+          <div class="val-autocomplete-wrap">
+            <input type="text" id="val-address"
+                   placeholder="Start typing… e.g. Via Paolo da Cannobio"
+                   autocomplete="off"
+                   oninput="valAutocomplete()"
+                   onkeydown="valAutocompleteKeydown(event)"
+                   onblur="setTimeout(()=>valHideAutocomplete(),150)">
+            <div id="val-autocomplete-list" class="val-autocomplete-list" style="display:none"></div>
+          </div>
           <div id="val-address-status" class="val-field-hint"></div>
         </div>
 
@@ -15254,47 +15304,82 @@ function fillValuationForm(listing) {
   document.getElementById('valuation-form-section').scrollIntoView({behavior:'smooth', block:'start'});
 }
 
-// Address geocoding — calls our server-side /api/valuation-geocode which
-// runs the same polygon-validated geocoder used during enrichment.
-let _valGeocodeTimer = null;
-function debouncedValGeocode() {
-  clearTimeout(_valGeocodeTimer);
-  _valGeocodeTimer = setTimeout(valGeocodeAddress, 700);
+// ── Address autocomplete via /api/address-autocomplete (Photon, Milan-biased) ──
+let _valAutoTimer = null;
+let _valAutoActive = -1;       // currently-highlighted suggestion index
+let _valAutoSuggestions = [];  // last server response
+
+function valAutocomplete() {
+  clearTimeout(_valAutoTimer);
+  _valAutoTimer = setTimeout(_valAutoFetch, 220);
 }
 
-async function valGeocodeAddress() {
-  const addr = document.getElementById('val-address').value.trim();
-  const status  = document.getElementById('val-address-status');
-  const preview = document.getElementById('val-zone-preview');
-  if (!addr || addr.length < 6) {
-    status.textContent = '';
-    preview.style.display = 'none';
-    return;
-  }
-  status.textContent = 'Looking up address…';
+async function _valAutoFetch() {
+  const input = document.getElementById('val-address');
+  const list  = document.getElementById('val-autocomplete-list');
+  const q     = (input?.value || '').trim();
+  if (q.length < 3) { valHideAutocomplete(); return; }
   try {
-    const resp = await fetch(`/api/valuation-geocode?address=${encodeURIComponent(addr)}`);
+    const resp = await fetch(`/api/address-autocomplete?q=${encodeURIComponent(q)}`);
     const data = await resp.json();
-    if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
-    if (data.error) { status.textContent = data.error; preview.style.display = 'none'; return; }
-    if (!data.omi_zona) {
-      status.textContent = 'Address found but outside Milan OMI zones';
-      preview.style.display = 'none';
-      return;
-    }
-    document.getElementById('val-lat').value        = data.lat;
-    document.getElementById('val-lng').value        = data.lng;
-    document.getElementById('val-omi-zona').value   = data.omi_zona;
-    document.getElementById('val-omi-fascia').value = data.omi_fascia || '';
-    document.getElementById('val-zone-chip').textContent = data.omi_zona;
-    document.getElementById('val-zone-desc').textContent =
-      (data.omi_descr || '') + (data.omi_fascia ? ' · Fascia ' + data.omi_fascia : '');
-    preview.style.display = 'flex';
-    status.textContent = '';
+    _valAutoSuggestions = data.results || [];
+    _valAutoActive = -1;
+    if (!_valAutoSuggestions.length) { valHideAutocomplete(); return; }
+    list.innerHTML = _valAutoSuggestions.map((r, i) => `
+      <button type="button" class="val-auto-item" data-idx="${i}"
+              onmousedown="valAutoSelect(${i})">
+        <span class="val-auto-label">${escapeHtml(r.label)}</span>
+        <span class="val-auto-zone">${escapeHtml(r.omi_zona || '')}</span>
+      </button>`).join('');
+    list.style.display = 'block';
   } catch (err) {
-    status.textContent = 'Could not geocode — try adding "Milano" to the address';
-    preview.style.display = 'none';
+    valHideAutocomplete();
   }
+}
+
+function valHideAutocomplete() {
+  const list = document.getElementById('val-autocomplete-list');
+  if (list) list.style.display = 'none';
+}
+
+function valAutocompleteKeydown(e) {
+  const list = document.getElementById('val-autocomplete-list');
+  if (!list || list.style.display === 'none' || !_valAutoSuggestions.length) return;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    const dir = e.key === 'ArrowDown' ? 1 : -1;
+    _valAutoActive = (_valAutoActive + dir + _valAutoSuggestions.length) % _valAutoSuggestions.length;
+    list.querySelectorAll('.val-auto-item').forEach((el, i) =>
+      el.classList.toggle('active', i === _valAutoActive));
+  } else if (e.key === 'Enter') {
+    if (_valAutoActive >= 0) { e.preventDefault(); valAutoSelect(_valAutoActive); }
+  } else if (e.key === 'Escape') {
+    valHideAutocomplete();
+  }
+}
+
+function valAutoSelect(idx) {
+  const r = _valAutoSuggestions[idx];
+  if (!r) return;
+  const input  = document.getElementById('val-address');
+  const status = document.getElementById('val-address-status');
+  const preview = document.getElementById('val-zone-preview');
+  if (input) input.value = r.label;
+  document.getElementById('val-lat').value        = r.lat;
+  document.getElementById('val-lng').value        = r.lng;
+  document.getElementById('val-omi-zona').value   = r.omi_zona || '';
+  document.getElementById('val-omi-fascia').value = r.omi_fascia || '';
+  if (r.omi_zona) {
+    document.getElementById('val-zone-chip').textContent = r.omi_zona;
+    document.getElementById('val-zone-desc').textContent =
+      (r.omi_descr || '') + (r.omi_fascia ? ' · Fascia ' + r.omi_fascia : '');
+    preview.style.display = 'flex';
+    if (status) status.textContent = '';
+  } else {
+    preview.style.display = 'none';
+    if (status) status.textContent = 'Outside Milan OMI zones';
+  }
+  valHideAutocomplete();
 }
 
 // Sale-side mirror of estimateRentForSale. Same distance-aware cascade.
