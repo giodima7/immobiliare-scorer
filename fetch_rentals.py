@@ -43,6 +43,16 @@ OUTPUT_PATH          = DASHBOARD_DIR / "rentals_latest.json"
 CUSTOM_MAPPINGS_PATH = BASE_DIR / "custom_omi_mappings.json"
 AREA_SETTINGS_PATH   = BASE_DIR / "area_settings.json"
 
+# ── Staleness thresholds ──────────────────────────────────────────────────────
+# A listing is "stale" (probably off-market) once it has been absent from
+# every scan for STALE_DAYS_THRESHOLD consecutive days. The dashboard hides
+# stale listings by default but keeps them in the JSON.
+# A listing is "removed" once it has been absent for REMOVE_AFTER_DAYS days —
+# at that point it's definitively gone and we trim it from the JSON to keep
+# the file bounded.
+STALE_DAYS_THRESHOLD = 7
+REMOVE_AFTER_DAYS    = 30
+
 # Microsoft Edge is preferred over Chrome — Immobiliare's bot detection lets
 # Edge through more reliably. Override via $BROWSER_EXECUTABLE_PATH.
 EDGE_PATH = os.environ.get(
@@ -1122,7 +1132,7 @@ def load_seen_ids() -> dict:
             raw = json.loads(SEEN_IDS_PATH.read_text())
             if isinstance(raw, list):
                 today = str(date.today())
-                migrated = {str(id_): {"first_seen_date": today} for id_ in raw}
+                migrated = {str(id_): {"first_seen_date": today, "last_seen_date": today} for id_ in raw}
                 print(f"  [migrate] seen_ids.json: migrated {len(migrated)} IDs to dict format")
                 return migrated
             return raw
@@ -1133,6 +1143,108 @@ def load_seen_ids() -> dict:
 
 def save_seen_ids(ids: dict):
     SEEN_IDS_PATH.write_text(json.dumps(ids, ensure_ascii=False))
+
+
+def mark_stale_listings(all_listings: list, today: date = None) -> int:
+    """
+    For every listing, compare last_seen_date to today and set
+    `days_since_seen` + `is_stale` accordingly. Listings WITHOUT a
+    last_seen_date (legacy data from before this feature) are NOT marked
+    stale on the first cycle — they get a grace pass until the next scan
+    stamps them.
+
+    Returns the number of listings flagged as stale.
+    """
+    if today is None:
+        today = date.today()
+    stale_count = 0
+    for l in all_listings:
+        last_seen = l.get("last_seen_date")
+        if not last_seen:
+            l["days_since_seen"] = None
+            l["is_stale"] = False
+            continue
+        try:
+            ds = (today - datetime.fromisoformat(last_seen).date()).days
+        except ValueError:
+            l["days_since_seen"] = None
+            l["is_stale"] = False
+            continue
+        l["days_since_seen"] = ds
+        is_stale = ds >= STALE_DAYS_THRESHOLD
+        l["is_stale"] = is_stale
+        if is_stale:
+            stale_count += 1
+    return stale_count
+
+
+def trim_stale_listings(all_listings: list, seen: dict,
+                        today: date = None) -> list:
+    """
+    Drop listings that haven't been seen in REMOVE_AFTER_DAYS days. Also
+    purges the corresponding entries from `seen` (mutated in place) so
+    seen_ids.json doesn't grow forever either.
+
+    Listings with no last_seen_date are kept (one-cycle grace).
+    """
+    if today is None:
+        today = date.today()
+    keep, dropped = [], 0
+    for l in all_listings:
+        last_seen = l.get("last_seen_date")
+        if not last_seen:
+            keep.append(l)
+            continue
+        try:
+            ds = (today - datetime.fromisoformat(last_seen).date()).days
+        except ValueError:
+            keep.append(l)
+            continue
+        if ds < REMOVE_AFTER_DAYS:
+            keep.append(l)
+        else:
+            dropped += 1
+            seen.pop(str(l.get("id", "")), None)
+    if dropped:
+        print(f"  [trim] removed {dropped} listings absent for {REMOVE_AFTER_DAYS}+ days")
+    return keep
+
+
+def _post_scan_stale_pass(seen: dict, today_str: str) -> None:
+    """
+    Read rentals_latest.json back in (after write_output merged the new scan),
+    backfill `last_seen_date` from seen_ids onto every listing, run the
+    stale-marking + trimming sweeps, and write the result back.
+
+    This runs once per scan and operates on the FULL merged dataset, so
+    listings that were absent from this scan (kept by the merger) get their
+    is_stale / days_since_seen flags updated.
+    """
+    if not OUTPUT_PATH.exists():
+        return
+    try:
+        all_listings = json.loads(OUTPUT_PATH.read_text())
+    except Exception as exc:
+        print(f"  [stale] could not read {OUTPUT_PATH}: {exc}")
+        return
+
+    today = datetime.fromisoformat(today_str).date()
+
+    # Backfill last_seen_date onto every listing from the seen_ids index
+    for l in all_listings:
+        lid = str(l.get("id", ""))
+        if lid in seen and seen[lid].get("last_seen_date"):
+            l["last_seen_date"] = seen[lid]["last_seen_date"]
+        # else: leave last_seen_date as None — grace pass (see mark_stale_listings)
+
+    stale_n = mark_stale_listings(all_listings, today)
+    before  = len(all_listings)
+    all_listings = trim_stale_listings(all_listings, seen, today)
+
+    OUTPUT_PATH.write_text(json.dumps(all_listings, ensure_ascii=False, indent=2))
+    save_seen_ids(seen)   # persist any IDs trimmed from seen
+    print(f"  [stale] {stale_n}/{before} listings flagged as stale "
+          f"(absent {STALE_DAYS_THRESHOLD}+ days)")
 
 
 def write_output(listings: list, source: str = "immobiliare",
@@ -1266,13 +1378,26 @@ def run_once(args) -> list:
     for l in scored:
         lid = l["id"]
         l["first_seen_date"] = seen[lid]["first_seen_date"] if lid in seen else today_str
+        # Always stamp last_seen_date — we just saw this listing in *this* scan.
+        l["last_seen_date"] = today_str
 
     write_output(scored, scanned_area_slugs=fetched_slugs or None)
 
     new_listings = [l for l in scored if l["id"] not in seen]
+    # Update seen_ids with both first_seen_date (preserved) and last_seen_date
+    # (refreshed to today for every listing returned by this scan).
     for l in scored:
-        seen[l["id"]] = {"first_seen_date": l["first_seen_date"]}
+        seen[l["id"]] = {
+            "first_seen_date": l["first_seen_date"],
+            "last_seen_date":  today_str,
+        }
     save_seen_ids(seen)
+
+    # ── Post-merge: mark stale + trim too-old listings across the full file ──
+    # Listings that didn't appear in *this* scan keep their old last_seen_date
+    # from `seen`. We need to backfill last_seen_date onto every entry of
+    # rentals_latest.json (not just `scored`) and then run mark+trim sweeps.
+    _post_scan_stale_pass(seen, today_str)
 
     write_status(len(new_listings), len(seen), skipped_areas=skipped_areas)
     print(f"  ✓ {len(scored)} rentals written · {len(new_listings)} new")

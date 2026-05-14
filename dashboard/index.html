@@ -412,6 +412,33 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--green-deep); }
 }
 .btn-reset:hover { background: var(--border-strong); color: var(--text-primary); }
 
+/* "Show expired" toggle in the filter bar — opens stale listings (off-market) */
+.stale-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+}
+.stale-toggle input  { cursor: pointer; margin: 0; }
+.stale-toggle:hover  { color: var(--text-secondary); }
+
+/* Banner that appears on cards when a stale listing is shown via the toggle */
+.stale-banner {
+  background: var(--coral-light, #FDEEEC);
+  color: var(--coral, #E05C4B);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 12px;
+  text-align: center;
+  border-top: 1px solid rgba(224,92,75,0.20);
+  border-radius: 0 0 var(--radius-lg, 20px) var(--radius-lg, 20px);
+  margin: 4px -1px -1px;
+}
+
 /* ── Sort tabs (pill style) ── */
 .sort-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
 .sort-tab {
@@ -4816,6 +4843,10 @@ function saveFilters() {
     </div>
   </div>
   <button class="btn-reset" id="sBtnReset">Start fresh</button>
+  <label class="stale-toggle" title="Show listings not seen by the scanner in 7+ days">
+    <input type="checkbox" id="sShowStale">
+    <span>Show expired</span>
+  </label>
 </div>
 
 <!-- ── Sales stats bar ── -->
@@ -5118,6 +5149,10 @@ function saveFilters() {
       </div>
     </div>
     <button class="btn-reset" id="rBtnReset">Start fresh</button>
+    <label class="stale-toggle" title="Show listings not seen by the scanner in 7+ days">
+      <input type="checkbox" id="rShowStale">
+      <span>Show expired</span>
+    </label>
   </div>
 
   <!-- Rentals stats bar -->
@@ -6546,6 +6581,7 @@ document.getElementById('sElevator').addEventListener('change', renderSales);
 document.getElementById('sShowAuctions')?.addEventListener('change', renderSales);
 document.getElementById('sShowNuda')    ?.addEventListener('change', renderSales);
 document.getElementById('sMinYield')    ?.addEventListener('change', renderSales);
+document.getElementById('sShowStale')   ?.addEventListener('change', renderSales);
 
 // Restore the persisted sales view mode (buyer/investor) on page load.
 // Done at module-load time so the toggle reflects the right state before
@@ -8242,6 +8278,16 @@ function compsRowHtml(l, isRental) {
   </div>`;
 }
 
+// Stale-banner footer for cards — only renders when is_stale is set and
+// the "Show expired" toggle has been flipped on (otherwise stale listings
+// are filtered out entirely by applyRentFilters/applySaleFilters).
+function staleBannerHtml(l) {
+  if (!l.is_stale) return '';
+  const days = l.days_since_seen;
+  const daysStr = (days != null) ? `${days} days` : 'a while';
+  return `<div class="stale-banner">⚠ Off-market — not seen by the scanner in ${daysStr}</div>`;
+}
+
 // ── Rentals — card renderer ───────────────────────────────────────────────────
 function renderRentalCard(l) {
   const sc       = scoreClass(l.score_total);
@@ -8621,6 +8667,7 @@ function renderRentalCard(l) {
       <a class="link-btn" href="${l.url}" target="_blank" rel="noopener">↗ View</a>
     </div>
     ${detailsHtml}
+    ${staleBannerHtml(l)}
   `;
 
   card.querySelector('[data-rent-id]').addEventListener('click', e => {
@@ -8673,6 +8720,10 @@ function applyRentFilters(data, f) {
     const ids = new Set(window.sharedCollection.listing_ids.map(String));
     data = data.filter(l => ids.has(String(l.id)));
   }
+  // Hide stale (off-market) listings by default. The "Show expired" toggle
+  // in the filter bar inverts this for debugging/historical review.
+  const showStale = document.getElementById('rShowStale')?.checked || false;
+  if (!showStale) data = data.filter(l => !l.is_stale);
   return data.filter(l => {
     if (f.areas.length) {
       const nb = (l.neighbourhood || '').toLowerCase();
@@ -8986,6 +9037,9 @@ function applySaleFilters(data, f) {
     const ids = new Set(window.sharedCollection.listing_ids.map(String));
     data = data.filter(l => ids.has(String(l.id)));
   }
+  // Hide stale (off-market) listings by default. Toggle in filter bar.
+  const showStale = document.getElementById('sShowStale')?.checked || false;
+  if (!showStale) data = data.filter(l => !l.is_stale);
   return data.filter(l => {
     // Hide judicial auctions and nuda-proprietà sales unless explicitly opted in
     if (l.is_auction        && !f.showAuctions) return false;
@@ -12058,6 +12112,7 @@ function renderSaleCard(l) {
       <a class="link-btn" href="${l.url}" target="_blank" rel="noopener">↗ View</a>
     </div>
     ${detailsHtml}
+    ${staleBannerHtml(l)}
   `;
 
   card.querySelector('[data-sale-id]').addEventListener('click', e => {
@@ -12455,6 +12510,7 @@ const _renderRentalsDebounced = _debounce(() => { renderRentals(); saveFilters()
 ['rMaxRent','rMinSqm','rMinRooms'].forEach(id =>
   document.getElementById(id).addEventListener('input', _renderRentalsDebounced));
 document.getElementById('rElevator').addEventListener('change', () => { renderRentals(); saveFilters(); });
+document.getElementById('rShowStale')?.addEventListener('change', renderRentals);
 document.querySelectorAll('#rSourceFilter .sort-tab').forEach(btn =>
   btn.addEventListener('click', () => {
     document.querySelectorAll('#rSourceFilter .sort-tab').forEach(b => b.classList.remove('active'));

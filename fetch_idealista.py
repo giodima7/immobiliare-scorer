@@ -1412,11 +1412,77 @@ def run_sale_once(args) -> list:
     else:
         scored = raw
 
-    # Merge: keep existing non-Idealista-sale entries, replace/add Idealista-sale entries
-    id_map = {l["id"]: l for l in existing_sales}
+    # Stamp first_seen_date + last_seen_date on every Idealista sale we just
+    # scored, using the shared seen_ids_sales.json so staleness state survives
+    # across runs (and across the two sale fetchers — Immobiliare + Idealista).
+    from fetch_listings import (
+        _load_seen_sales, _save_seen_sales,
+        STALE_DAYS_THRESHOLD, REMOVE_AFTER_DAYS,
+    )
+    from datetime import date as _date, datetime as _dt
+    today        = _date.today()
+    today_str    = str(today)
+    seen_sales   = _load_seen_sales()
+    for l in scored:
+        lid = str(l["id"])
+        l["first_seen_date"] = seen_sales[lid]["first_seen_date"] if lid in seen_sales else today_str
+        l["last_seen_date"]  = today_str
+        seen_sales[lid] = {
+            "first_seen_date": l["first_seen_date"],
+            "last_seen_date":  today_str,
+        }
+
+    # Merge: keep existing non-Idealista-sale entries, replace/add Idealista-sale entries.
+    # Existing Idealista entries that weren't re-seen this run survive with
+    # their old last_seen_date — the staleness sweep below flags them.
+    id_map = {l["id"]: l for l in existing_sales}   # non-Idealista (e.g. Immobiliare)
+    # Preserve any previously-stored Idealista entries that weren't re-seen:
+    if SALE_OUTPUT_PATH.exists():
+        try:
+            for l in json.loads(SALE_OUTPUT_PATH.read_text()):
+                if l.get("source") == SOURCE_SALE and l["id"] not in {x["id"] for x in scored}:
+                    id_map[l["id"]] = l
+        except Exception:
+            pass
     for l in scored:
         id_map[l["id"]] = l
-    merged = sorted(id_map.values(), key=lambda x: x.get("score_total", 0) or 0, reverse=True)
+    merged = list(id_map.values())
+
+    # Staleness sweep across the merged list (covers BOTH Idealista entries we
+    # didn't re-see AND Immobiliare entries we never touch from this side).
+    stale_count = 0
+    keep: list = []
+    for l in merged:
+        last_seen = l.get("last_seen_date")
+        if not last_seen:
+            l["days_since_seen"] = None
+            l["is_stale"]        = False
+            keep.append(l)
+            continue
+        try:
+            ds = (today - _dt.fromisoformat(last_seen).date()).days
+        except ValueError:
+            l["days_since_seen"] = None
+            l["is_stale"]        = False
+            keep.append(l)
+            continue
+        l["days_since_seen"] = ds
+        if ds >= REMOVE_AFTER_DAYS:
+            seen_sales.pop(str(l.get("id", "")), None)
+            continue
+        l["is_stale"] = ds >= STALE_DAYS_THRESHOLD
+        if l["is_stale"]:
+            stale_count += 1
+        keep.append(l)
+
+    _save_seen_sales(seen_sales)
+    dropped = len(merged) - len(keep)
+    if dropped:
+        print(f"  [trim]  removed {dropped} sales absent for {REMOVE_AFTER_DAYS}+ days")
+    print(f"  [stale] {stale_count}/{len(keep)} sales flagged stale "
+          f"(absent {STALE_DAYS_THRESHOLD}+ days)")
+
+    merged = sorted(keep, key=lambda x: x.get("score_total", 0) or 0, reverse=True)
 
     # Write atomically — compact + null-strip to stay under the 25 MiB Cloudflare cap
     from dashboard_io import write_snapshot

@@ -944,6 +944,119 @@ CSV_FIELDS = [
 ]
 
 
+# ── Staleness tracking — shared seen_ids_sales.json ──────────────────────────
+SEEN_IDS_SALES_PATH = Path(__file__).parent / "seen_ids_sales.json"
+
+# Shared with fetch_rentals.py — see those constants for the rationale.
+STALE_DAYS_THRESHOLD = 7
+REMOVE_AFTER_DAYS    = 30
+
+
+def _load_seen_sales() -> dict:
+    if SEEN_IDS_SALES_PATH.exists():
+        try:
+            raw = json.loads(SEEN_IDS_SALES_PATH.read_text())
+            if isinstance(raw, dict):
+                return raw
+        except Exception:
+            pass
+    return {}
+
+
+def _save_seen_sales(seen: dict) -> None:
+    SEEN_IDS_SALES_PATH.write_text(json.dumps(seen, ensure_ascii=False))
+
+
+def _stamp_and_apply_staleness(scored: list, latest_path: str) -> list:
+    """
+    1. Read existing sales_latest.json (if any). Listings from previous scans
+       that didn't appear in this run keep their old last_seen_date.
+    2. Stamp first_seen_date / last_seen_date onto every just-scanned listing.
+    3. Merge new scan over existing entries (Idealista entries preserved).
+    4. Mark stale (≥ STALE_DAYS_THRESHOLD days unseen) and trim (≥
+       REMOVE_AFTER_DAYS days unseen).
+    5. Persist the updated seen_ids_sales.json.
+
+    Returns the merged listing list.
+    """
+    from datetime import date as _date, datetime as _dt
+    today        = _date.today()
+    today_str    = str(today)
+    seen         = _load_seen_sales()
+    new_ids      = {str(l["id"]) for l in scored if l.get("id") is not None}
+
+    # Stamp first/last seen on every listing we just scored
+    for l in scored:
+        lid = str(l["id"])
+        l["first_seen_date"] = seen[lid]["first_seen_date"] if lid in seen else today_str
+        l["last_seen_date"]  = today_str
+        seen[lid] = {
+            "first_seen_date": l["first_seen_date"],
+            "last_seen_date":  today_str,
+        }
+
+    # Merge: pull in previously-known listings that didn't appear in this scan
+    existing: list = []
+    try:
+        with open(latest_path, encoding="utf-8") as fh:
+            existing = json.load(fh)
+    except Exception:
+        pass
+
+    # Decide which source(s) this scan covered. fetch_listings always emits
+    # Immobiliare sales — Idealista has its own pipeline that runs separately.
+    SCAN_SOURCE = "immobiliare_sale"
+    kept = []
+    for l in existing:
+        lid = str(l.get("id", ""))
+        if lid in new_ids:
+            continue   # superseded by fresh entry
+        if l.get("source") and l["source"] != SCAN_SOURCE:
+            kept.append(l)   # different source — preserve untouched
+            continue
+        # Same source, NOT in this scan → kept (potentially stale).
+        # last_seen_date is whatever was already on the listing dict; the
+        # mark/trim pass below will flag it appropriately.
+        kept.append(l)
+
+    merged = kept + scored
+
+    # Mark stale + trim too-old entries
+    stale_count   = 0
+    keep_after_trim: list = []
+    for l in merged:
+        last_seen = l.get("last_seen_date")
+        if not last_seen:
+            l["days_since_seen"] = None
+            l["is_stale"]        = False
+            keep_after_trim.append(l)
+            continue
+        try:
+            ds = (today - _dt.fromisoformat(last_seen).date()).days
+        except ValueError:
+            l["days_since_seen"] = None
+            l["is_stale"]        = False
+            keep_after_trim.append(l)
+            continue
+        l["days_since_seen"] = ds
+        if ds >= REMOVE_AFTER_DAYS:
+            seen.pop(str(l.get("id", "")), None)
+            continue   # drop entirely
+        l["is_stale"] = ds >= STALE_DAYS_THRESHOLD
+        if l["is_stale"]:
+            stale_count += 1
+        keep_after_trim.append(l)
+
+    dropped = len(merged) - len(keep_after_trim)
+    if dropped:
+        print(f"  [trim]  removed {dropped} sales absent for {REMOVE_AFTER_DAYS}+ days")
+    print(f"  [stale] {stale_count}/{len(keep_after_trim)} sales flagged stale "
+          f"(absent {STALE_DAYS_THRESHOLD}+ days)")
+
+    _save_seen_sales(seen)
+    return keep_after_trim
+
+
 def export(listings: list, prefix: str):
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     csv_path  = f"{prefix}_{ts}.csv"
@@ -978,12 +1091,19 @@ def export(listings: list, prefix: str):
     from dashboard_io import write_snapshot
     write_snapshot(json_path, json_listings)
 
-    # Always mirror to dashboard/sales_latest.json so the dashboard auto-refreshes
+    # Mirror to dashboard/sales_latest.json. Now goes through the staleness
+    # tracker which:
+    #   - stamps first_seen_date + last_seen_date on every just-scored listing,
+    #   - merges with the prior file (preserves Idealista entries + Immobiliare
+    #     entries not in *this* scan so they have a chance to be re-seen),
+    #   - marks 7-day-unseen entries as is_stale,
+    #   - trims 30-day-unseen entries entirely.
     import os as _os
     dashboard_dir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "dashboard")
     _os.makedirs(dashboard_dir, exist_ok=True)
     latest_path = _os.path.join(dashboard_dir, "sales_latest.json")
-    write_snapshot(latest_path, json_listings)
+    merged = _stamp_and_apply_staleness(json_listings, latest_path)
+    write_snapshot(latest_path, merged)
 
     return csv_path, json_path
 
