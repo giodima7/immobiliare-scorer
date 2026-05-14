@@ -13509,11 +13509,20 @@ function _mapInit() {
 function _mapRender() {
   if (!_map) return;
 
-  // Refresh dataset and reset viewport rendering state
+  // Refresh dataset and reset viewport rendering state.
+  // Exclude listings whose omi_source is centroid-based — Nominatim couldn't
+  // resolve the precise address and fell back to a zone centroid, so the
+  // coordinates can be kilometres off from the real listing. Those produced
+  // confusing "Cadore listing shows in Mecenate area" mismatches on the map.
+  // They're a tiny fraction (<1%) and still appear in the lists/sorts — just
+  // not on the map where geographic precision matters.
   _mapAllListings = _getMapData().filter(l => {
     const lat = l.latitude ?? l.lat;
     const lng = l.longitude ?? l.lng ?? l.lon;
-    return lat && lng && lat >= 44 && lat <= 47 && lng >= 8 && lng <= 11;
+    if (!lat || !lng || lat < 44 || lat > 47 || lng < 8 || lng > 11) return false;
+    const src = l.omi_source || '';
+    if (src === 'centroid' || src === 'nominatim+centroid') return false;
+    return true;
   });
   _mapRenderedIds.clear();
   _clusterGroup.clearLayers();
