@@ -1701,7 +1701,9 @@ body.detail-page-active .filter-bar { display: none !important; }
 
 .val-divider {
   display: flex; align-items: center; gap: 12px;
-  margin: 4px 0;
+  /* Match the cards' bottom margin (16px) on both sides so the divider
+     sits exactly midway between the URL block and the manual-form block. */
+  margin: 16px 0;
   color: var(--text-muted, #A09990);
   font-size: 12px; font-weight: 500;
 }
