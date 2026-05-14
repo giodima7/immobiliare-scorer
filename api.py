@@ -1735,59 +1735,83 @@ def _scrape_listing_sync(url: str) -> dict | None:
 
 
 async def _scrape_listing_async(url: str) -> dict | None:
+    """
+    Scrape one listing. Opens Edge VISIBLY so the user can solve the
+    Immobiliare/Idealista bot-check captcha if it appears. Polls the page
+    for up to SCRAPE_TIMEOUT seconds waiting for the real listing data to
+    appear. This mirrors the manual-captcha pattern the daemon scanner
+    uses in fetch_rentals.py.
+    """
     import asyncio as _asyncio
     import nodriver as uc
     from fetch_rentals import EDGE_PATH
 
     is_immobiliare = "immobiliare.it" in url
     is_idealista   = "idealista.it" in url
+
+    SCRAPE_TIMEOUT      = 90.0    # give the user time to solve a manual captcha
+    POLL_INTERVAL       = 1.5
+    MIN_REAL_HTML_BYTES = 30000   # captcha page is ~15 KB; real listing ≫ 30 KB
+
     browser = await uc.start(
         browser_executable_path=EDGE_PATH,
         headless=False, lang="it-IT",
     )
     try:
         tab = await browser.get(url)
-        await _asyncio.sleep(3)
+        # Bring the window forward so the user notices the captcha
+        try: await tab.activate()
+        except Exception: pass
+
+        deadline = _asyncio.get_event_loop().time() + SCRAPE_TIMEOUT
 
         if is_immobiliare:
-            text = await tab.evaluate(
-                "(()=>{const el=document.getElementById('__NEXT_DATA__');return el?el.textContent:null;})()"
-            )
-            if not text:
-                return None
-            try:
-                nd = _json.loads(text)
-            except Exception:
-                return None
-            # __NEXT_DATA__ shape varies — pull the realEstate object out of
-            # whichever query result holds it.
-            queries = (nd.get("props", {}).get("pageProps", {})
-                         .get("dehydratedState", {}).get("queries", []))
             re_data = None
-            for q in queries:
-                d = (q.get("state", {}) or {}).get("data", {}) or {}
-                if isinstance(d, dict) and d.get("realEstate"):
-                    re_data = d["realEstate"]
-                    break
+            while _asyncio.get_event_loop().time() < deadline:
+                text = await tab.evaluate(
+                    "(()=>{const el=document.getElementById('__NEXT_DATA__');return el?el.textContent:null;})()"
+                )
+                if text and len(text) >= MIN_REAL_HTML_BYTES:
+                    try:
+                        nd = _json.loads(text)
+                    except Exception:
+                        nd = None
+                    if nd:
+                        queries = (nd.get("props", {}).get("pageProps", {})
+                                     .get("dehydratedState", {}).get("queries", []))
+                        for q in queries:
+                            d = (q.get("state", {}) or {}).get("data", {}) or {}
+                            if isinstance(d, dict) and d.get("realEstate"):
+                                re_data = d["realEstate"]
+                                break
+                        if re_data:
+                            break
+                await _asyncio.sleep(POLL_INTERVAL)
             if not re_data:
                 return None
             return _parse_immobiliare_detail(re_data)
 
         if is_idealista:
-            dom = await tab.evaluate("""
-              (() => {
-                const t = sel => { const el=document.querySelector(sel); return el?(el.innerText||el.textContent||'').trim():''; };
-                return {
-                  price_text:     t('.info-data-price') || t('[class*="price"]'),
-                  size_text:      t('[class*="size-feature"]') || t('[class*="superficie"]'),
-                  rooms_text:     t('[class*="rooms"]') || t('[class*="locali"]'),
-                  floor_text:     t('[class*="floor"]') || t('[class*="piano"]'),
-                  address_text:   t('.main-info__title-minor') || t('h1.jumbotron-title') || t('.txt-title'),
-                  condition_text: t('[class*="condition"]') || t('[class*="stato"]'),
-                };
-              })()
-            """)
-            return _parse_idealista_detail(dom)
+            dom = None
+            while _asyncio.get_event_loop().time() < deadline:
+                dom = await tab.evaluate("""
+                  (() => {
+                    const t = sel => { const el=document.querySelector(sel); return el?(el.innerText||el.textContent||'').trim():''; };
+                    return {
+                      price_text:     t('.info-data-price') || t('[class*="price"]'),
+                      size_text:      t('[class*="size-feature"]') || t('[class*="superficie"]'),
+                      rooms_text:     t('[class*="rooms"]') || t('[class*="locali"]'),
+                      floor_text:     t('[class*="floor"]') || t('[class*="piano"]'),
+                      address_text:   t('.main-info__title-minor') || t('h1.jumbotron-title') || t('.txt-title'),
+                      condition_text: t('[class*="condition"]') || t('[class*="stato"]'),
+                    };
+                  })()
+                """)
+                # Real listing has at least price + size populated
+                if dom and dom.get("price_text") and dom.get("size_text"):
+                    return _parse_idealista_detail(dom)
+                await _asyncio.sleep(POLL_INTERVAL)
+            return None
     finally:
         try: await browser.close()
         except Exception: pass

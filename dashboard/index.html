@@ -15190,7 +15190,10 @@ async function handleValuationUrlPaste(url) {
       'Listing not in dataset. Live scraping only works locally — fill the form manually for now.');
     return;
   }
-  setValuationStatus('loading', 'Not in dataset — scraping the live listing (this takes ~5 s)…');
+  setValuationStatus('loading',
+    'Not in dataset — opening Edge to fetch the listing. If you see a ' +
+    '"Verification Required" slider in the Edge window, solve it and the ' +
+    'form will auto-fill. Lume waits up to 90 seconds.');
   try {
     const resp = await fetch(`/api/scrape-listing?url=${encodeURIComponent(url)}`);
     const data = await resp.json();
@@ -15198,7 +15201,8 @@ async function handleValuationUrlPaste(url) {
     setValuationStatus('success', 'Listing scraped successfully.');
     fillValuationForm(data.listing);
   } catch (err) {
-    setValuationStatus('error', `Could not fetch listing: ${err.message}`);
+    setValuationStatus('error',
+      `Could not fetch listing: ${err.message}. Fill the form manually below.`);
   }
 }
 
