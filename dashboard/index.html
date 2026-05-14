@@ -15193,7 +15193,7 @@ async function handleValuationUrlPaste(url) {
   setValuationStatus('loading',
     'Not in dataset — opening Edge to fetch the listing. If you see a ' +
     '"Verification Required" slider in the Edge window, solve it and the ' +
-    'form will auto-fill. Lume waits up to 90 seconds.');
+    'form will auto-fill. Lume waits up to 30 seconds.');
   try {
     const resp = await fetch(`/api/scrape-listing?url=${encodeURIComponent(url)}`);
     const data = await resp.json();

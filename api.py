@@ -1749,9 +1749,32 @@ async def _scrape_listing_async(url: str) -> dict | None:
     is_immobiliare = "immobiliare.it" in url
     is_idealista   = "idealista.it" in url
 
-    SCRAPE_TIMEOUT      = 90.0    # give the user time to solve a manual captcha
-    POLL_INTERVAL       = 1.5
-    MIN_REAL_HTML_BYTES = 30000   # captcha page is ~15 KB; real listing ≫ 30 KB
+    SCRAPE_TIMEOUT = 30.0   # gives the user time to solve a manual captcha
+    POLL_INTERVAL  = 1.0
+
+    def _find_real_estate(nd):
+        """Walk the parsed __NEXT_DATA__ looking for a realEstate object —
+        path varies across Immobiliare's page layouts so we don't hard-code it."""
+        if not isinstance(nd, dict):
+            return None
+        # Common paths first (fast path)
+        for q in (nd.get("props", {}) or {}).get("pageProps", {}).get("dehydratedState", {}).get("queries", []) or []:
+            d = (q.get("state", {}) or {}).get("data", {}) or {}
+            if isinstance(d, dict) and d.get("realEstate"):
+                return d["realEstate"]
+        direct = (nd.get("props", {}) or {}).get("pageProps", {}).get("realEstate")
+        if direct: return direct
+        # Generic DFS fallback — handles layouts we haven't seen yet
+        stack = [nd]
+        while stack:
+            v = stack.pop()
+            if isinstance(v, dict):
+                if v.get("realEstate") and isinstance(v["realEstate"], dict) and v["realEstate"].get("properties"):
+                    return v["realEstate"]
+                stack.extend(v.values())
+            elif isinstance(v, list):
+                stack.extend(v)
+        return None
 
     browser = await uc.start(
         browser_executable_path=EDGE_PATH,
@@ -1771,21 +1794,14 @@ async def _scrape_listing_async(url: str) -> dict | None:
                 text = await tab.evaluate(
                     "(()=>{const el=document.getElementById('__NEXT_DATA__');return el?el.textContent:null;})()"
                 )
-                if text and len(text) >= MIN_REAL_HTML_BYTES:
+                if text:
                     try:
                         nd = _json.loads(text)
                     except Exception:
                         nd = None
-                    if nd:
-                        queries = (nd.get("props", {}).get("pageProps", {})
-                                     .get("dehydratedState", {}).get("queries", []))
-                        for q in queries:
-                            d = (q.get("state", {}) or {}).get("data", {}) or {}
-                            if isinstance(d, dict) and d.get("realEstate"):
-                                re_data = d["realEstate"]
-                                break
-                        if re_data:
-                            break
+                    re_data = _find_real_estate(nd) if nd else None
+                    if re_data:
+                        break
                 await _asyncio.sleep(POLL_INTERVAL)
             if not re_data:
                 return None
