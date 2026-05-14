@@ -9011,6 +9011,32 @@ function renderRentalCard(l) {
     </div>`;
   })();
 
+  // OMI suggested rent — shown on the card face, complements the comps
+  // suggestion above. Already size + condition adjusted server-side
+  // (scoring.py × _surface_coeff × _condition_coeff). Always visible when
+  // available; colour-codes overpricing vs the suggestion.
+  const omiSugHtml = (() => {
+    const sug      = l.suggested_rent_mo;
+    const psqm     = l.suggested_rent_psqm;
+    const rentMo   = l.rent_mo;
+    if (sug == null || !rentMo) return '';
+    const diff = rentMo - sug;
+    const pct  = sug > 0 ? (diff / sug) * 100 : 0;
+    const over = pct > 5;           // ≥5% above suggestion → flag
+    const fair = Math.abs(pct) < 5; // within ±5% → neutral
+    const valColor = over ? 'var(--coral)' : fair ? 'var(--green-deep)' : 'var(--yellow)';
+    const tail = over
+      ? `(+€${fmt(Math.round(diff))} above OMI · ${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)`
+      : fair
+      ? `(in line with OMI benchmark)`
+      : `(${pct.toFixed(1)}% below OMI benchmark)`;
+    return `<div class="suggested-rent-row${over ? ' sug-warn' : ''}">
+      <span class="sug-label">OMI suggests:</span>
+      <span class="sug-val" style="color:${valColor};font-weight:700">€${fmt(sug)}/mo${psqm != null ? ' · €' + psqm.toFixed(1) + '/m²' : ''}</span>
+      <span class="sug-label">${tail}</span>
+    </div>`;
+  })();
+
   // ── Variant A: Calm Hierarchy ─────────────────────────────────────────────
   const score     = l.score_total ?? 0;
   const ringColor = sc === 'high' ? '#2A7A5A' : sc === 'mid' ? '#E8922A' : '#E05C4B';
@@ -9197,6 +9223,7 @@ function renderRentalCard(l) {
     })()}
 
     ${compsSugHtml}
+    ${omiSugHtml}
     ${compsBarHtml}
 
     ${statPillsHtml(l, true)}
