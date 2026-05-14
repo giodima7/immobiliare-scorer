@@ -22,6 +22,21 @@ Formula
   penalise a listing.
 """
 
+# ── Professional scoring reference ───────────────────────────────────────────
+# property_score() and floor_score() implement the Italian professional
+# Coefficienti di Merito standard for property valuation.
+#
+# Primary sources (all verified May 2026):
+#   - FIMAA (Federazione Italiana Mediatori Agenti d'Affari)
+#   - Tecnoborsa — Codice delle Valutazioni Immobiliari
+#   - OMI Agenzia delle Entrate — quotazioni semestrali + Rapporto Immobiliare 2025
+#   - myprojectcasa.it/blog/id/148 — coefficienti di merito tabelle
+#   - quifinanza.it — coefficienti merito valore casa
+#   - realadvisor.it — coefficienti di valutazione immobili
+#
+# Update annually or when market conditions shift significantly.
+# Current calibration: Milan residential market, May 2026.
+
 from __future__ import annotations
 import json
 import re as _re
@@ -31,6 +46,55 @@ from re import compile as re_compile
 
 from comps_engine import get_comps_benchmark
 import omi_lookup
+
+
+# ── Professional Coefficienti di Merito ─────────────────────────────────────
+# Source: FIMAA / Tecnoborsa / OMI professional appraisal standard.
+# These are percentage adjustments (as decimal fractions) applied to a
+# neutral baseline of 50. Each coefficient has a fixed, predictable impact
+# regardless of which other fields are populated.
+
+# Floor coefficients: (with_lift_pct, without_lift_pct).
+# Baseline (3° piano con ascensore) = 0%.
+FLOOR_COEFFICIENTS: dict[str, tuple[float, float]] = {
+    'interrato':     (-0.25, -0.25),
+    'seminterrato':  (-0.20, -0.20),
+    'terra':         (-0.10, -0.10),   # piano terra / rialzato
+    'primo':         (-0.05, -0.15),
+    'secondo':       (-0.03, -0.15),
+    'terzo':         ( 0.00, -0.20),   # neutral with lift
+    'quarto_quinto': ( 0.05, -0.25),
+    'sesto_nono':    ( 0.10, -0.30),
+    'attico':        ( 0.20, -0.20),
+}
+
+CONDITION_COEFFICIENTS: dict[str, float] = {
+    'nuova_costruzione':  0.10,
+    'ottimo':             0.10,
+    'ristrutturato':      0.05,
+    'buono':              0.00,   # baseline
+    'abitabile':          0.00,   # baseline
+    'da_ristrutturare':  -0.10,
+    'fatiscente':        -0.25,
+}
+
+ENERGY_COEFFICIENTS: dict[str, float] = {
+    'A4': 0.08, 'A3': 0.08,
+    'A2': 0.06, 'A1': 0.06,
+    'B':  0.04,
+    'C':  0.02,
+    'D':  0.00,   # baseline
+    'E': -0.02,
+    'F': -0.04,
+    'G': -0.06,
+}
+
+HEATING_COEFFICIENTS: dict[str, float] = {
+    'autonomous':            0.05,
+    'centralizzato_valvole': 0.02,
+    'none':                 -0.03,
+    'unknown':               0.00,   # baseline — absence of data is neutral
+}
 
 
 # ── Location Desirability Index ──────────────────────────────────────────────
@@ -240,60 +304,56 @@ def parse_floor(raw_floor) -> tuple[int | None, str | None]:
 
 # ── Floor scoring ─────────────────────────────────────────────────────────────
 
-def floor_score(listing: dict) -> tuple[int, int]:
+def floor_score(listing: dict) -> float:
     """
-    Returns (physical_pts, penalty_deduction) for floor + elevator combination.
+    Returns the floor coefficient as a decimal percentage adjustment
+    (e.g. -0.10 for piano terra, +0.20 for attico with lift).
 
-    physical_pts:      contribution to property_score (0–25)
-    penalty_deduction: subtracted from penalty_score (0–60)
+    Based on Italian professional Coefficienti di Merito standard
+    (FIMAA / Tecnoborsa / OMI, 2026). Baseline (3° piano con ascensore) = 0.00.
 
-    Called by property_score() and penalty_score(); never call directly.
+    Called by property_score() only. penalty_score() now owns its own
+    below-ground deal-breaker deductions (those serve a different purpose
+    — binary disqualifiers rather than quality gradations).
     """
     floor_n  = listing.get('floor_n')
     elevator = listing.get('elevator')   # True / False / None
+    has_lift = elevator is True
 
-    # ── Physical contribution from floor height ───────────────────────────────
     if floor_n is None:
-        physical = 8    # unknown — neutral, slight benefit of doubt
-    elif floor_n <= -2:
-        physical = 0    # interrato — worst possible
+        return 0.00   # unknown floor — neutral, no assumption
+
+    # ── Floor bucket ─────────────────────────────────────────────────────────
+    # piano terra (0) and rialzato/1st (1) are treated identically per the
+    # professional standard (both -10% regardless of lift).
+    if floor_n <= -2:
+        bucket = 'interrato'
     elif floor_n == -1:
-        physical = 2    # seminterrato — nearly as bad
-    elif floor_n == 0:
-        physical = 5    # piano terra — poor but usable
-    elif floor_n == 1:
-        physical = 12   # rialzato/1st — acceptable
+        bucket = 'seminterrato'
+    elif floor_n <= 1:
+        bucket = 'terra'
     elif floor_n == 2:
-        physical = 16   # decent
+        bucket = 'secondo'
+    elif floor_n == 3:
+        bucket = 'terzo'
     elif floor_n <= 5:
-        physical = 22   # sweet spot
-    elif floor_n <= 10:
-        physical = 25   # premium
+        bucket = 'quarto_quinto'
+    elif floor_n <= 9:
+        bucket = 'sesto_nono'
     else:
-        physical = 20   # very high — penthouse premium but lift-dependent
+        # 10° piano and above treated as attico/ultimo piano
+        bucket = 'attico'
 
-    # ── Penalty deductions ────────────────────────────────────────────────────
-    penalty = 0
+    coeff_with, coeff_without = FLOOR_COEFFICIENTS[bucket]
 
-    if floor_n is not None and floor_n <= -2:
-        penalty += 55   # interrato — near-disqualifying
-    elif floor_n is not None and floor_n == -1:
-        penalty += 40   # seminterrato — severe
-    elif floor_n == 0:
-        penalty += 20   # ground floor — light/security/dampness risk
+    if elevator is None:
+        # Lift unknown — blend the two coefficients, biased toward
+        # "no lift" for high floors (more conservative).
+        if floor_n > 3:
+            return coeff_without * 0.6 + coeff_with * 0.4
+        return (coeff_with + coeff_without) / 2.0
 
-    # High floor without confirmed elevator
-    if floor_n is not None and floor_n > 2:
-        if elevator is False:
-            penalty += 40   # confirmed no lift — severe
-        elif elevator is None:
-            penalty += 15   # unknown lift — mild
-
-    # Very high floor without confirmed elevator — extra penalty
-    if floor_n is not None and floor_n > 6 and elevator is not True:
-        penalty += 15   # 7th floor+ without confirmed lift is a dealbreaker
-
-    return physical, min(penalty, 60)   # cap total deduction at 60
+    return coeff_with if has_lift else coeff_without
 
 
 # ── Energy class → numeric ───────────────────────────────────────────────────
@@ -314,187 +374,188 @@ def _energy_numeric(energy_class) -> int | None:
 
 def property_score(listing: dict, settings: dict | None = None) -> int:
     """
-    Score physical quality 0–100.
+    Score physical quality 0–100 using Italian Coefficienti di Merito.
 
-    Normalised against the maximum positive score achievable from the fields
-    that are actually present, so listings are not penalised for data that the
-    scraper simply did not collect (e.g. energy_class, has_balcony, is_external,
-    heating_type, furnished are often 100 % null for this source).
+    Architecture: start from neutral baseline 50, apply percentage
+    adjustments for each known attribute. Each coefficient has a fixed
+    impact regardless of data coverage — no max_pos normalisation, so a
+    +10% condition bonus moves the score by the same amount whether the
+    listing has 3 known fields or 13.
 
-    Penalty-only fields (days_on_market, spese_condominiali) are included but
-    do not inflate the positive ceiling.
+    Source: FIMAA / Tecnoborsa / OMI professional appraisal standard.
 
-    Returns 50 (neutral) when no physical fields are present.
+    Returns 50 (neutral) when no physical fields are present. Clamped 0–100.
     """
     if settings is None:
         settings = {}
-    score   = 0
+
+    # Scale factor: 1 percentage point of adjustment → SCALE score points.
+    # Max positive sweep (attico+lift +20, ottimo +10, balcony +4, box +4,
+    # external +5, A3 +8, autonomous heat +5, furnished +8, bathrooms +3) ≈ +67%
+    # Max negative sweep (interrato -25, fatiscente -25, G -6, no-heat -3) ≈ -59%
+    # SCALE 1.5 → +67×1.5 = +100.5 (clamped to 100), -59×1.5 = -88.5 (clamped to 0)
+    SCALE = 1.5
+
     n_known = 0
-    max_pos = 0   # max POSITIVE points achievable from fields that are present
+    total_adjustment = 0.0
+    cond_key: str | None = None   # captured for the age × condition rule below
 
-    # ── Floor + elevator (unified via floor_score) ──────────────────────────────
-    if listing.get("floor_n") is not None:
-        physical, _ = floor_score(listing)
+    # ── Floor coefficient ────────────────────────────────────────────────────
+    if listing.get('floor_n') is not None:
         n_known += 1
-        max_pos += 25   # max achievable from floor (floors 6–10 with lift = 25)
-        score   += physical
-
-    # ── External facing ──────────────────────────────────────────────────────
-    ext = listing.get("is_external")
-    if ext is not None:
-        n_known += 1
-        max_pos += 10
-        if ext is True:
-            score += 10
-
-    # ── Energy class: (numeric/10) × 20 pts max ─────────────────────────────
-    ec = _energy_numeric(listing.get("energy_class"))
-    if ec is not None:
-        n_known += 1
-        max_pos += 20
-        score   += round((ec / 10) * 20)
-
-    # ── Balcony / terrace / garden ───────────────────────────────────────────
-    balc = listing.get("has_balcony")
-    if balc is not None:
-        n_known += 1
-        max_pos += 10
-        if balc is True:
-            score += 10
-
-    # ── Parking ──────────────────────────────────────────────────────────────
-    park = listing.get("has_parking")
-    if park is not None:
-        n_known += 1
-        max_pos += 5
-        if park is True:
-            score += 5
-
-    # ── Autonomous heating ───────────────────────────────────────────────────
-    ht = listing.get("heating_type")
-    if ht is not None:
-        n_known += 1
-        max_pos += 5
-        if str(ht).lower() == "autonomous":
-            score += 5
-
-    # ── Furnished ────────────────────────────────────────────────────────────
-    furn = listing.get("furnished")
-    if furn is not None:
-        n_known += 1
-        max_pos += 5
-        if furn is True:
-            score += 5
-
-    # ── Photo count (listing quality proxy) ─────────────────────────────────
-    photos = listing.get("photo_count")
-    if photos is not None:
-        n_known += 1
-        max_pos += 5            # max upside is +5; bad photos give -5
-        if photos >= 10:
-            score += 5
-        elif photos < 5:
-            score -= 5
-
-    # ── Days on market — penalty-only, does not raise max_pos ───────────────
-    dom = listing.get("days_on_market")
-    if dom is not None:
-        n_known += 1
-        if dom > 60:
-            score -= 10
-        elif dom > 30:
-            score -= 5
-
-    # ── Bathrooms ────────────────────────────────────────────────────────────
-    baths = listing.get("bathrooms")
-    if baths is not None:
-        n_known += 1
-        max_pos += 5
-        if baths >= 2:
-            score += 5
-
-    # ── Condominium fees — penalty-only, does not raise max_pos ─────────────
-    rent  = listing.get("rent_mo")
-    spese = listing.get("spese_condominiali")
-    if rent and spese and rent > 0:
-        n_known += 1
-        if spese > rent * 0.20:
-            score -= 10
+        total_adjustment += floor_score(listing)
 
     # ── Condition ────────────────────────────────────────────────────────────
-    cond = (listing.get("condition") or "").lower()
-    if cond:
+    cond_raw = (listing.get('condition') or '').lower().strip()
+    if cond_raw:
         n_known += 1
-        max_pos += 10
-        if "da " in cond and "ristruttur" in cond:
-            score -= 10
-        elif any(k in cond for k in ("ottim", "ristruttur", "nuovo", "costruz")):
-            score += 10
-        elif any(k in cond for k in ("buon", "abitabil")):
-            score += 5
+        # Order matters: check 'da_ristrutturare' BEFORE 'ristrutturat' since
+        # the substring 'ristruttur' is contained in both.
+        if 'fatiscente' in cond_raw:
+            cond_key = 'fatiscente'
+        elif ('da_ristrutturare' in cond_raw
+              or ('da ' in cond_raw and 'ristruttur' in cond_raw)):
+            cond_key = 'da_ristrutturare'
+        elif 'ottim' in cond_raw:
+            cond_key = 'ottimo'
+        elif 'nuov' in cond_raw or 'costruz' in cond_raw:
+            cond_key = 'nuova_costruzione'
+        elif 'ristruttur' in cond_raw:
+            cond_key = 'ristrutturato'
+        elif 'buon' in cond_raw:
+            cond_key = 'buono'
+        elif 'abitabil' in cond_raw:
+            cond_key = 'abitabile'
+        else:
+            cond_key = 'buono'   # unknown phrasing → neutral
+        total_adjustment += CONDITION_COEFFICIENTS.get(cond_key, 0.0)
 
-    # ── Year built (newer is a mild positive) ───────────────────────────────
-    yr = listing.get("year_built")
+    # ── Building age × condition interaction ─────────────────────────────────
+    yr = listing.get('year_built')
     if yr and isinstance(yr, (int, float)) and yr > 1900:
         n_known += 1
-        max_pos += 8
-        if yr >= 2010:
-            score += 8
-        elif yr >= 1990:
-            score += 3
+        age = 2026 - int(yr)
+        is_good_cond = cond_key in ('ottimo', 'nuova_costruzione', 'ristrutturato')
+        is_poor_cond = cond_key in ('da_ristrutturare', 'fatiscente')
+        if   age > 40 and is_good_cond:    total_adjustment += 0.05   # well-maintained historical
+        elif 20 < age <= 40 and is_good_cond: total_adjustment += 0.02
+        elif age > 40 and is_poor_cond:    total_adjustment -= 0.05   # old AND needs work
+        # otherwise no extra age adjustment (condition already captures)
 
-    # NOTE: bedrooms field is now captured but intentionally not used in scoring.
-    # Reasons:
-    #   1. Coverage starts at 0% — needs a few scans to stabilise
-    #   2. Italian agents fill it inconsistently (sometimes counts living room
-    #      as a bedroom, sometimes excludes it)
-    #   3. The existing rooms-vs-sqm penalty already catches mislabelled bilocali
-    # Revisit once coverage > 70% and a sample audit shows consistent fill.
+    # ── Exposure / luminosity ────────────────────────────────────────────────
+    ext = listing.get('is_external')
+    if ext is not None:
+        n_known += 1
+        if ext is True:
+            total_adjustment += 0.05   # external facing (proxy for sud/est/ovest)
 
-    # ── Room efficiency / monolocale size (penalty-only) ───────────────────
-    # rooms ≥ 2 → use sqm/rooms ratio (cramped multi-room flats)
-    # rooms ≤ 1 → use absolute sqm (small/micro studios)
-    _sqm   = listing.get("sqm")   or 0
-    _rooms = listing.get("rooms") or 0
+    # ── Energy class ─────────────────────────────────────────────────────────
+    ec_raw   = (listing.get('energy_class') or '').strip().upper()
+    ec_coeff = ENERGY_COEFFICIENTS.get(ec_raw)
+    if ec_coeff is not None:
+        n_known += 1
+        total_adjustment += ec_coeff
+
+    # ── Balcony / terrazza ────────────────────────────────────────────────────
+    balc = listing.get('has_balcony')
+    if balc is not None:
+        n_known += 1
+        if balc is True:
+            total_adjustment += 0.04
+
+    # ── Box / garage / posto auto (averaged at +4%) ──────────────────────────
+    park = listing.get('has_parking')
+    if park is not None:
+        n_known += 1
+        if park is True:
+            total_adjustment += 0.04
+
+    # ── Heating ──────────────────────────────────────────────────────────────
+    ht_raw = (listing.get('heating_type') or '').lower().strip()
+    if ht_raw:
+        n_known += 1
+        if 'autonomous' in ht_raw or 'autonomo' in ht_raw:
+            total_adjustment += HEATING_COEFFICIENTS['autonomous']
+        elif 'centraliz' in ht_raw and ('valvol' in ht_raw or 'termost' in ht_raw):
+            total_adjustment += HEATING_COEFFICIENTS['centralizzato_valvole']
+        elif 'none' in ht_raw or ht_raw in ('no', 'assente'):
+            total_adjustment += HEATING_COEFFICIENTS['none']
+        # other centralised → 0 (baseline)
+
+    # ── Furnished (rental market signal — not a formal coefficient) ──────────
+    furn = listing.get('furnished')
+    if furn is not None:
+        n_known += 1
+        if furn is True:
+            total_adjustment += 0.08
+
+    # ── Bathrooms (quality signal — not a formal coefficient) ────────────────
+    baths = listing.get('bathrooms')
+    if baths is not None:
+        n_known += 1
+        if baths >= 2:
+            total_adjustment += 0.03
+
+    # ── Photo count (listing-quality proxy — penalty only) ───────────────────
+    photos = listing.get('photo_count')
+    if photos is not None:
+        n_known += 1
+        if photos < 5:
+            total_adjustment -= 0.05
+
+    # ── Days on market (staleness penalty — not a property coefficient) ──────
+    dom = listing.get('days_on_market')
+    if dom is not None:
+        n_known += 1
+        if   dom > 60:  total_adjustment -= 0.07
+        elif dom > 30:  total_adjustment -= 0.03
+
+    # ── Condominium fees (cost penalty — not a property coefficient) ─────────
+    rent_mo = listing.get('rent_mo') or listing.get('price') or 0
+    spese   = listing.get('spese_condominiali') or listing.get('condominium_fees') or 0
+    if rent_mo and spese and rent_mo > 0:
+        n_known += 1
+        if   spese > rent_mo * 0.20:  total_adjustment -= 0.10
+        elif spese > rent_mo * 0.12:  total_adjustment -= 0.04
+
+    # ── Room efficiency / monolocale size (layout-quality penalty) ───────────
+    _sqm   = listing.get('sqm')   or 0
+    _rooms = listing.get('rooms') or 0
     if _sqm > 0:
         n_known += 1
         if _rooms >= 2:
             _eff = _sqm / _rooms
-            if _eff < 10:
-                score -= 20
-                listing["_room_efficiency_flag"] = "severe"
+            if   _eff < 10:
+                total_adjustment -= 0.20
+                listing['_room_efficiency_flag'] = 'severe'
             elif _eff < 14:
-                score -= 10
-                listing["_room_efficiency_flag"] = "tight"
+                total_adjustment -= 0.10
+                listing['_room_efficiency_flag'] = 'tight'
             else:
-                listing["_room_efficiency_flag"] = None
+                listing['_room_efficiency_flag'] = None
         else:
-            # monolocale / studio (rooms == 0 or 1) — penalise based on absolute sqm
-            if _sqm < 30:
-                score -= 25
-                listing["_room_efficiency_flag"] = "micro_studio"
+            # Monolocale / studio — penalise on absolute sqm
+            if   _sqm < 30:
+                total_adjustment -= 0.25
+                listing['_room_efficiency_flag'] = 'micro_studio'
             elif _sqm < 38:
-                score -= 15
-                listing["_room_efficiency_flag"] = "small_studio"
+                total_adjustment -= 0.15
+                listing['_room_efficiency_flag'] = 'small_studio'
             elif _sqm < 45:
-                score -= 8
-                listing["_room_efficiency_flag"] = "compact_studio"
+                total_adjustment -= 0.08
+                listing['_room_efficiency_flag'] = 'compact_studio'
             else:
-                listing["_room_efficiency_flag"] = None
+                listing['_room_efficiency_flag'] = None
     else:
-        listing["_room_efficiency_flag"] = None
+        listing['_room_efficiency_flag'] = None
 
+    # ── No data — return neutral ─────────────────────────────────────────────
     if n_known == 0:
-        return 50   # no data — neutral
+        return 50
 
-    if max_pos > 0:
-        # Normalise raw score against achievable ceiling so absent fields
-        # do not dilute the result.
-        return max(0, min(100, round(score / max_pos * 100)))
-
-    # Only penalty/neutral fields were present (ground floor, dom, spese).
-    # Centre at 50 and let penalties count down from there.
-    return max(0, min(50, score + 50))
+    # ── Apply to baseline and clamp ──────────────────────────────────────────
+    raw = 50.0 + (total_adjustment * 100 * SCALE)
+    return max(0, min(100, round(raw)))
 
 
 # ── Price-vs-comps score (0–100) ─────────────────────────────────────────────
@@ -561,24 +622,49 @@ def penalty_score(listing: dict, settings: dict) -> int:
     The result is MULTIPLIED by w_penalty in the composite formula, so a
     lower number hurts more.
 
+    NOTE: floor quality is now handled entirely by property_score() via
+    FLOOR_COEFFICIENTS. This function only handles floor-based DEAL-BREAKERS
+    (interrato/seminterrato hard caps, high-floor-no-lift accessibility)
+    that are binary disqualifiers rather than quality gradations.
+
     Returns int 0–100.
     """
-    score  = 100
-    sqm    = listing.get("sqm") or 0
-    rooms  = listing.get("rooms") or 0
-    dom    = listing.get("days_on_market") or 0
+    score   = 100
+    sqm     = listing.get("sqm") or 0
+    rooms   = listing.get("rooms") or 0
+    dom     = listing.get("days_on_market") or 0
     rent_mo = listing.get("rent_mo") or 0
     spese   = listing.get("spese_condominiali") or 0
+    floor_n  = listing.get("floor_n")
+    elevator = listing.get("elevator")
 
-    # Floor + elevator penalty (unified via floor_score)
-    _, deduction = floor_score(listing)
-    score -= deduction
+    # ── Below-ground / ground-floor deal-breaker penalties ──────────────────
+    # Separate from the property_score quality coefficient. These represent a
+    # deal-breaker signal: most tenants/buyers won't tolerate
+    # interrato/seminterrato regardless of price discount.
+    if floor_n is not None:
+        if floor_n <= -2:
+            score -= 55   # interrato — near-disqualifying
+        elif floor_n == -1:
+            score -= 40   # seminterrato — severe but not total disqualifier
+        elif floor_n == 0:
+            score -= 20   # ground floor — meaningful drawback
 
-    # Size mismatch: very small for rooms declared
+    # ── High-floor-no-lift accessibility deal-breakers ──────────────────────
+    # property_score already applied the -20% / -30% quality coefficient.
+    # This adds a FURTHER deal-breaker on extreme cases — physical
+    # accessibility, not just quality.
+    if floor_n is not None and elevator is False:
+        if floor_n >= 5:
+            score -= 25   # 5th+ floor, confirmed no lift — serious deal-breaker
+        elif floor_n >= 4:
+            score -= 15   # 4th floor, confirmed no lift — significant
+
+    # ── Size mismatch: very small for rooms declared ────────────────────────
     if sqm > 0 and rooms > 0 and sqm / rooms < 12:
         score -= 15
 
-    # Very stale listing
+    # ── Very stale listing ──────────────────────────────────────────────────
     stale = settings.get("penalty_dom_stale", 60)
     warn  = settings.get("penalty_dom_warn",  30)
     if dom > stale:
@@ -586,7 +672,7 @@ def penalty_score(listing: dict, settings: dict) -> int:
     elif dom > warn:
         score -= 10
 
-    # Condominium fees eating > 25% of rent
+    # ── Condominium fees eating > 25% of rent ───────────────────────────────
     if rent_mo > 0 and spese > rent_mo * 0.25:
         score -= 15
 
@@ -1564,33 +1650,39 @@ if __name__ == "__main__":
                       f"pen={l.get('score_penalty')}  ldi={l.get('ldi_score')}  "
                       f"delta={l.get('comps_delta_pct')}")
 
-    # ── Floor score validation table ──────────────────────────────────────────
-    print("Floor score validation:")
+    # ── Floor coefficient validation table ───────────────────────────────────
+    # floor_score() now returns a single float (the percentage adjustment),
+    # not a tuple. Below-ground hard caps live in penalty_score().
+    print("Floor coefficient validation:")
     _floor_cases = [
-        # (label,           floor_n, elevator, exp_phys, exp_pen)
-        ("Interrato",          -2,   None,        0,     55),
-        ("Seminterrato",       -1,   None,        2,     40),
-        ("Piano terra",         0,   None,        5,     20),
-        ("Piano rialzato (1)",  1,   None,       12,      0),
-        ("Floor 3, no lift",    3,   False,      22,     40),
-        ("Floor 3, lift",       3,   True,       22,      0),
-        ("Floor 12, lift",     12,   True,       20,      0),   # >10 floors → physical=20
-        ("Floor 12, no lift",  12,   False,      20,     55),
+        # (label,              floor_n, elevator, expected_coeff)
+        ('Interrato',             -2,   None,    -0.25),
+        ('Seminterrato',          -1,   None,    -0.20),
+        ('Piano terra',            0,   None,    -0.10),
+        ('Piano rialzato',         1,   None,    -0.10),
+        ('2° piano, lift',         2,   True,    -0.03),
+        ('2° piano, no lift',      2,   False,   -0.15),
+        ('3° piano, lift',         3,   True,     0.00),
+        ('3° piano, no lift',      3,   False,   -0.20),
+        ('5° piano, lift',         5,   True,     0.05),
+        ('5° piano, no lift',      5,   False,   -0.25),
+        ('8° piano, lift',         8,   True,     0.10),
+        ('8° piano, no lift',      8,   False,   -0.30),
+        ('Attico (12°), lift',    12,   True,     0.20),
+        ('Attico (12°), no lift', 12,   False,   -0.20),
     ]
-    print(f"  {'Case':<26}  {'phys':>6}  {'pen':>5}  {'ok?':>4}")
     _floor_ok = True
-    for lbl, fn, elev, exp_phys, exp_pen in _floor_cases:
-        _dummy = {"floor_n": fn}
+    for lbl, fn, elev, exp in _floor_cases:
+        _dummy = {'floor_n': fn}
         if elev is not None:
-            _dummy["elevator"] = elev
-        got_phys, got_pen = floor_score(_dummy)
-        ok = (got_phys == exp_phys and got_pen == exp_pen)
-        mark = "✓" if ok else "✗"
+            _dummy['elevator'] = elev
+        got = floor_score(_dummy)
+        ok = abs(got - exp) < 0.001
+        mark = '✓' if ok else '✗'
         if not ok:
             _floor_ok = False
-        print(f"  {mark} {lbl:<25}  {got_phys:>3} (exp {exp_phys:>2})  "
-              f"{got_pen:>3} (exp {exp_pen:>2})")
-    # Below-ground hard-cap assertion
+        print(f"  {mark} {lbl:<28} got={got:+.2f}  exp={exp:+.2f}")
+    # Below-ground hard-cap assertion (cap lives in score_rental/score_sale_listing)
     _bg_listings = [l for l in scored if (l.get("floor_n") or 0) < 0]
     _bg_above_55 = [l for l in _bg_listings if (l.get("score_total") or 0) > 55]
     if _bg_above_55:
