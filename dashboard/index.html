@@ -895,6 +895,208 @@ body.detail-page-active .filter-bar { display: none !important; }
   margin-top: 10px; line-height: 1.55;
 }
 
+/* ── Phase A pro metrics strip ─────────────────────────────── */
+.metrics-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 24px;
+}
+.metric-card {
+  padding: 14px 16px;
+  background: var(--bg-muted, #F2EFE9);
+  border-radius: var(--radius-md, 14px);
+  border: 1px solid var(--border, #E5E1D8);
+  cursor: help;
+  transition: border-color 150ms ease, transform 150ms ease;
+  position: relative;
+}
+.metric-card:hover {
+  border-color: var(--green-deep);
+  transform: translateY(-1px);
+}
+.metric-card-highlight {
+  background: var(--green-light, #E6F4ED);
+  border-color: rgba(42,122,90,0.30);
+}
+.metric-label {
+  font-size: 10px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-muted, #A09990);
+  margin-bottom: 8px;
+  display: flex; align-items: center; gap: 4px;
+}
+.metric-info {
+  font-size: 10px;
+  color: var(--text-muted, #A09990);
+  opacity: 0.7;
+  font-style: normal;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.metric-value {
+  font-size: 24px; font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.5px;
+  line-height: 1;
+}
+@media (max-width: 600px) {
+  .metrics-strip { grid-template-columns: repeat(2, 1fr); }
+  .metric-value  { font-size: 20px; }
+}
+
+/* ── Phase A 2x2 sensitivity matrix ────────────────────────── */
+.sensitivity-section { margin-bottom: 28px; }
+.sensitivity-section h3 {
+  font-size: 15px; font-weight: 700;
+  margin: 0 0 8px;
+  color: var(--text-primary);
+}
+.sensitivity-section .sensitivity-intro {
+  font-size: 13px; color: var(--text-secondary);
+  line-height: 1.55;
+  margin-bottom: 14px;
+}
+.sensitivity-table-wrap { overflow-x: auto; }
+.sensitivity-matrix {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 3px;
+  font-size: 13px;
+}
+.sensitivity-matrix th {
+  padding: 8px 12px;
+  background: var(--bg-muted, #F2EFE9);
+  border-radius: 8px;
+  font-size: 11px; font-weight: 600;
+  color: var(--text-muted, #A09990);
+  text-align: center;
+  white-space: nowrap;
+}
+.sensitivity-matrix .matrix-corner {
+  background: transparent;
+  font-size: 10px;
+  font-weight: 500;
+}
+.sensitivity-matrix .matrix-row-header {
+  padding: 8px 12px;
+  background: var(--bg-muted, #F2EFE9);
+  border-radius: 8px;
+  font-size: 11px; font-weight: 600;
+  color: var(--text-muted, #A09990);
+  text-align: left;
+  white-space: nowrap;
+}
+.sensitivity-matrix td {
+  padding: 10px 16px;
+  border-radius: 8px;
+  text-align: center;
+  font-size: 13px; font-weight: 500;
+  transition: transform 150ms ease;
+}
+.sensitivity-matrix td:hover { transform: scale(1.04); }
+.sensitivity-matrix td.matrix-cell-default {
+  outline: 2px solid var(--green-deep);
+  outline-offset: -2px;
+}
+
+/* ── Phase A tax regime comparison ─────────────────────────── */
+.tax-section { margin-bottom: 8px; }
+.tax-section h3 {
+  font-size: 15px; font-weight: 700;
+  margin: 0 0 8px;
+  color: var(--text-primary);
+}
+.tax-section .tax-intro {
+  font-size: 13px; color: var(--text-secondary);
+  line-height: 1.55;
+  margin-bottom: 14px;
+}
+.tax-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.tax-card {
+  padding: 16px;
+  background: var(--bg-muted, #F2EFE9);
+  border-radius: var(--radius-md, 14px);
+  border: 1.5px solid transparent;
+  position: relative;
+}
+.tax-card-best {
+  background: var(--green-light, #E6F4ED);
+  border-color: var(--green-deep);
+}
+.tax-best-badge {
+  position: absolute;
+  top: -8px; right: 12px;
+  background: var(--green-deep);
+  color: white;
+  font-size: 10px; font-weight: 700;
+  padding: 3px 10px;
+  border-radius: var(--radius-full, 999px);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.tax-name {
+  font-size: 13px; font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+.tax-rate {
+  font-size: 28px; font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.5px;
+  margin-bottom: 4px;
+  line-height: 1;
+}
+.tax-note {
+  font-size: 11px;
+  color: var(--text-muted, #A09990);
+  line-height: 1.5;
+  margin-bottom: 12px;
+  min-height: 48px;
+}
+.tax-divider {
+  height: 1px;
+  background: var(--border, #E5E1D8);
+  margin-bottom: 10px;
+}
+.tax-card-best .tax-divider { background: rgba(42,122,90,0.20); }
+.tax-row {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 12px;
+  padding: 4px 0;
+  color: var(--text-secondary);
+}
+.tax-row-yield {
+  border-top: 1px solid var(--border, #E5E1D8);
+  margin-top: 6px;
+  padding-top: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.tax-card-best .tax-row-yield { border-top-color: rgba(42,122,90,0.20); }
+.tax-row .positive { color: var(--green-deep); font-weight: 600; }
+.tax-row .negative { color: var(--coral); font-weight: 600; }
+.tax-disclaimer {
+  font-size: 11px;
+  color: var(--text-muted, #A09990);
+  line-height: 1.6;
+  font-style: italic;
+  padding: 10px 14px;
+  background: var(--bg-page, #F7F5F2);
+  border-radius: var(--radius-md, 14px);
+  margin: 0;
+}
+@media (max-width: 600px) {
+  .tax-grid { grid-template-columns: 1fr; }
+  .tax-note { min-height: auto; }
+}
+
 /* Cost breakdown ──────────────────────────────────────────── */
 .costs-intro {
   font-size: 13px; color: var(--text-secondary);
@@ -10659,6 +10861,230 @@ function _detailScoreCircleSvg(score, size) {
 }
 
 // ── Verdict ───────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE A — Pro investor metrics
+// IRR, Cash-on-Cash, Cap rate, DSCR, Equity Multiple, 2x2 sensitivity,
+// Italian tax regime comparison. All metrics consume the same yields +
+// mortgage caches the rest of the detail page uses — no double-compute.
+// ════════════════════════════════════════════════════════════════════════════
+
+// Italian rental tax rates as of 2026. UPDATE ANNUALLY when the Legge di
+// Bilancio changes brackets or cedolare rates.
+const TAX_RATES = {
+  cedolare_standard:    0.21,   // flat-rate cedolare secca
+  cedolare_concordato:  0.10,   // contratto concordato in high-density municipalities (incl. Milan)
+  irpef_deduction:      0.05,   // 5% deduction baked into IRPEF for residential rent
+  // IRPEF marginal brackets (cumulative — we model a single marginal rate)
+  irpef_marginal_rates: [
+    { threshold: 28000,    rate: 0.23 },
+    { threshold: 50000,    rate: 0.35 },
+    { threshold: Infinity, rate: 0.43 },
+  ],
+  irpef_assumed_marginal: 0.38, // most rental income lands in this band for our user base
+};
+
+// ─── IRR via Newton-Raphson ─────────────────────────────────────────────────
+// Returns the periodic rate that makes NPV(cashFlows) = 0. The cash flows
+// here are monthly; the caller annualises with (1+r)^12 − 1.
+function computeIRR(cashFlows, guess) {
+  if (!Array.isArray(cashFlows) || cashFlows.length < 2) return null;
+  const MAX_ITER  = 100;
+  const TOLERANCE = 1e-7;
+  let rate = (typeof guess === 'number') ? guess : 0.005;
+  for (let i = 0; i < MAX_ITER; i++) {
+    let npv = 0, dnpv = 0;
+    for (let t = 0; t < cashFlows.length; t++) {
+      const f = Math.pow(1 + rate, t);
+      npv  += cashFlows[t] / f;
+      dnpv -= t * cashFlows[t] / (f * (1 + rate));
+    }
+    if (Math.abs(dnpv) < 1e-10) break;
+    const next = rate - npv / dnpv;
+    if (Math.abs(next - rate) < TOLERANCE) return next;
+    rate = next;
+  }
+  return rate;
+}
+
+// Remaining loan balance after `m` monthly payments on a fixed-rate loan.
+function computeLoanBalance(investmentMortgage, m) {
+  const loan = investmentMortgage.loan_amount;
+  const r    = (investmentMortgage.rate_pct / 100) / 12;
+  const n    = investmentMortgage.term_years * 12;
+  if (r === 0) return loan * (1 - m / n);
+  return loan * (Math.pow(1+r, n) - Math.pow(1+r, m)) / (Math.pow(1+r, n) - 1);
+}
+
+// Build a monthly cash-flow array for IRR. Index 0 = initial cash outlay
+// (negative); months 1..N = net monthly CF (rent − mortgage − op costs);
+// final month also receives the net sale proceeds.
+function buildMonthlyIRRCashFlows(listing, mortgage, yields, appreciationPct, holdYears) {
+  const price       = listing.price || 0;
+  const rent        = listing.estimated_rent_mo || 0;
+  const cashIn      = mortgage.investment.cash_needed;
+  const monthlyMtg  = mortgage.investment.monthly_payment;
+  const monthlyOps  = (yields && yields.annual_costs != null)
+    ? Math.round(yields.annual_costs / 12) : 0;
+  const monthlyCF   = rent - monthlyMtg - monthlyOps;
+  const holdMonths  = Math.round(holdYears * 12);
+
+  const flows = [-cashIn];
+  for (let m = 1; m <= holdMonths; m++) flows.push(monthlyCF);
+
+  // Net sale proceeds at exit
+  const salePrice    = price * Math.pow(1 + appreciationPct / 100, holdYears);
+  const sellingCosts = salePrice * 0.06;   // ~4% agency + ~2% IRPEF on cap gain
+  const loanBalance  = computeLoanBalance(mortgage.investment, holdMonths);
+  flows[holdMonths]  += (salePrice - sellingCosts - loanBalance);
+
+  return flows;
+}
+
+// Compute annual IRR from a monthly cash-flow array. Returns null on
+// non-convergence or non-finite values.
+function computeMonthlyIRR(monthlyFlows) {
+  const r = computeIRR(monthlyFlows, 0.005);
+  if (r == null || !isFinite(r) || r < -0.5 || r > 1) return null;
+  return Math.pow(1 + r, 12) - 1;
+}
+
+// One pass: every headline pro-metric for a (listing, appreciation) pair.
+function computeProInvestorMetrics(listing, mortgage, yields, appreciationPct) {
+  if (!mortgage || !yields) return null;
+  const price      = listing.price || 0;
+  const rent       = listing.estimated_rent_mo || 0;
+  const cashIn     = mortgage.investment.cash_needed;
+  const monthlyMtg = mortgage.investment.monthly_payment;
+  const annualDebt = monthlyMtg * 12;
+  const noi        = (rent * 12) - (yields.annual_costs || 0);
+  const monthlyOps = (yields.annual_costs != null) ? Math.round(yields.annual_costs / 12) : 0;
+  const monthlyCF  = rent - monthlyMtg - monthlyOps;
+  const annualCF   = monthlyCF * 12;
+
+  const capRate = price > 0      ? (noi / price)     * 100 : null;
+  const dscr    = annualDebt > 0 ?  noi / annualDebt        : null;
+  const coc     = cashIn > 0     ? (annualCF / cashIn) * 100 : null;
+
+  const equityMult = (yr) => {
+    if (cashIn <= 0) return null;
+    const flows = buildMonthlyIRRCashFlows(listing, mortgage, yields, appreciationPct, yr);
+    const sumAfterInitial = flows.slice(1).reduce((a, b) => a + b, 0);
+    return (cashIn + sumAfterInitial) / cashIn;
+  };
+
+  const irrAt = (yr) => {
+    const flows = buildMonthlyIRRCashFlows(listing, mortgage, yields, appreciationPct, yr);
+    return computeMonthlyIRR(flows);
+  };
+  const irr5  = irrAt(5);
+  const irr10 = irrAt(10);
+
+  return {
+    cap_rate:        capRate,
+    dscr:            dscr,
+    coc:             coc,
+    noi:             Math.round(noi),
+    irr_5yr:         irr5  != null ? Math.round(irr5  * 1000) / 10 : null,
+    irr_10yr:        irr10 != null ? Math.round(irr10 * 1000) / 10 : null,
+    equity_mult_5yr: equityMult(5),
+    equity_mult_10yr: equityMult(10),
+    annual_cf:       Math.round(annualCF),
+    monthly_cf:      Math.round(monthlyCF),
+  };
+}
+
+// Three-way tax regime comparison on the gross rent.
+function computeTaxComparison(listing, yields) {
+  const grossRent = (listing.estimated_rent_mo || 0) * 12;
+  if (!grossRent) return null;
+  const opCosts = (yields && yields.annual_costs != null) ? yields.annual_costs : 0;
+  const noi     = grossRent - opCosts;
+
+  const taxCedolare    = grossRent * TAX_RATES.cedolare_standard;
+  const netCedolare    = noi - taxCedolare;
+  const taxConcordato  = grossRent * TAX_RATES.cedolare_concordato;
+  const netConcordato  = noi - taxConcordato;
+  const taxable        = grossRent * (1 - TAX_RATES.irpef_deduction);
+  const taxIrpef       = taxable * TAX_RATES.irpef_assumed_marginal;
+  const netIrpef       = noi - taxIrpef;
+
+  const best = (netConcordato > netCedolare && netConcordato > netIrpef) ? 'concordato'
+             : (netCedolare > netIrpef) ? 'cedolare'
+             : 'irpef';
+
+  const yieldOf = (net) => listing.price ? (net / listing.price) * 100 : null;
+
+  return {
+    gross_rent: Math.round(grossRent),
+    noi:        Math.round(noi),
+    regimes: [
+      {
+        id: 'concordato', name: 'Cedolare concordato',
+        rate_pct: 10,
+        note: 'Requires contratto concordato — typically 10–20% below market rent. Milan is eligible (high-density municipality).',
+        tax: Math.round(taxConcordato),
+        net_after_tax: Math.round(netConcordato),
+        net_yield_pct: yieldOf(netConcordato),
+      },
+      {
+        id: 'cedolare', name: 'Cedolare secca',
+        rate_pct: 21,
+        note: 'Flat 21% on gross rent — simplest option, no IRPEF interaction.',
+        tax: Math.round(taxCedolare),
+        net_after_tax: Math.round(netCedolare),
+        net_yield_pct: yieldOf(netCedolare),
+      },
+      {
+        id: 'irpef', name: 'IRPEF (38% marginal)',
+        rate_pct: Math.round(TAX_RATES.irpef_assumed_marginal * 100),
+        note: 'Progressive tax on 95% of rent. Assumes you\'re already in the 38% bracket — adjust mentally if not.',
+        tax: Math.round(taxIrpef),
+        net_after_tax: Math.round(netIrpef),
+        net_yield_pct: yieldOf(netIrpef),
+      },
+    ],
+    recommended: best,
+  };
+}
+
+// 2×2 (actually 4×4) sensitivity matrix — 5-year IRR across appreciation
+// rates × rent-growth rates. Computed once at render — independent of the
+// slider, so we don't recompute on every drag.
+function computeSensitivityMatrix(listing, mortgage, yields) {
+  if (!mortgage || !yields) return null;
+  const appreciationRates = [0, 1.5, 3.0, 4.5];
+  const rentGrowthRates   = [0, 2, 4, 6];
+
+  const matrix = appreciationRates.map(appr =>
+    rentGrowthRates.map(growth => {
+      const price       = listing.price || 0;
+      const cashIn      = mortgage.investment.cash_needed;
+      const monthlyMtg  = mortgage.investment.monthly_payment;
+      const baseRent    = listing.estimated_rent_mo || 0;
+      const baseOps     = (yields.annual_costs != null) ? yields.annual_costs / 12 : 0;
+      const HOLD        = 60;   // months
+      const flows       = [-cashIn];
+
+      for (let m = 1; m <= HOLD; m++) {
+        const yr = m / 12;
+        const rent = baseRent * Math.pow(1 + growth/100, yr);
+        const ops  = baseOps  * Math.pow(1 + 0.02,       yr);   // operating costs creep with inflation
+        flows.push(rent - monthlyMtg - ops);
+      }
+
+      const salePrice   = price * Math.pow(1 + appr/100, 5);
+      const loanBal     = computeLoanBalance(mortgage.investment, HOLD);
+      const netProceeds = salePrice * 0.94 - loanBal;            // 6% selling costs
+      flows[HOLD] += netProceeds;
+
+      const irr = computeMonthlyIRR(flows);
+      return irr != null ? Math.round(irr * 1000) / 10 : null;
+    })
+  );
+
+  return { appreciationRates, rentGrowthRates, matrix };
+}
+
 function detailVerdictHtml(listing) {
   const yields   = computeYieldMetrics(listing);
   const mortgage = computeMortgageScenarios(listing.price);
@@ -10671,11 +11097,34 @@ function detailVerdictHtml(listing) {
   }
 
   const defaultRate = defaultAppreciationRate(listing);
-  const projection  = computeAppreciationProjection(listing, mortgage, yields, defaultRate);
-  const fiveYr      = projection?.[1];
-  const fiveYrAnn   = fiveYr ? fiveYr.annualised_pct : 0;
+  const metrics     = computeProInvestorMetrics(listing, mortgage, yields, defaultRate);
+  const irr5yr      = metrics ? metrics.irr_5yr : null;
 
-  const tier = VERDICT_TIERS.find(t => fiveYrAnn >= t.min) || VERDICT_TIERS[VERDICT_TIERS.length - 1];
+  // Verdict tier driven by IRR — the standard pro metric — not the
+  // simple "annualised total return" the earlier version used. IRR
+  // properly weighs CF timing and exit proceeds.
+  let tierKey, tierLabel, tierDesc;
+  if (irr5yr == null) {
+    tierKey = 'mediocre';
+    tierLabel = 'Insufficient data';
+    tierDesc  = 'Lume could not compute a full IRR — likely limited rental data for this zone or size band.';
+  } else if (irr5yr >= 10) {
+    tierKey = 'strong';
+    tierLabel = 'Strong investment';
+    tierDesc  = `${irr5yr.toFixed(1)}% IRR is above typical Milan thresholds. Combination of yield, leverage and appreciation is favourable.`;
+  } else if (irr5yr >= 7) {
+    tierKey = 'decent';
+    tierLabel = 'Decent investment';
+    tierDesc  = `${irr5yr.toFixed(1)}% IRR is reasonable for leveraged Milan residential — above BTP and European property benchmarks.`;
+  } else if (irr5yr >= 3) {
+    tierKey = 'mediocre';
+    tierLabel = 'Mediocre as pure investment';
+    tierDesc  = `${irr5yr.toFixed(1)}% IRR trails most financial alternatives unleveraged. May still make sense for capital preservation, eventual primary residence, or long holds.`;
+  } else {
+    tierKey = 'weak';
+    tierLabel = 'Weak as pure investment';
+    tierDesc  = `${irr5yr.toFixed(1)}% IRR is below risk-free alternatives. Buy only with strong non-financial rationale.`;
+  }
 
   const benchmarkRows = INVESTMENT_BENCHMARKS.map(b => `
     <div class="benchmark-row">
@@ -10684,19 +11133,22 @@ function detailVerdictHtml(listing) {
       <span class="benchmark-source">${escapeHtml(b.source)}</span>
     </div>`).join('');
 
+  const irrLabel = irr5yr != null ? `${irr5yr >= 0 ? '+' : ''}${irr5yr.toFixed(1)}% IRR` : '—';
+
   return `
     <section class="detail-verdict">
       <h2><span class="section-icon">🎯</span> Investment verdict</h2>
 
-      <div class="verdict-card verdict-${tier.key}">
+      <div class="verdict-card verdict-${tierKey}">
         <div class="verdict-headline">
-          <span class="verdict-tier-label">${tier.label}</span>
-          <span class="verdict-rate">${fiveYrAnn >= 0 ? '+' : ''}${fiveYrAnn.toFixed(1)}% annualised</span>
+          <span class="verdict-tier-label">${tierLabel}</span>
+          <span class="verdict-rate">${irrLabel}</span>
         </div>
-        <p class="verdict-desc">${tier.desc}</p>
+        <p class="verdict-desc">${tierDesc}</p>
         <p class="verdict-note">
-          Projection over 5 years at ${defaultRate.toFixed(1)}% appreciation
-          (Lume's default for fascia ${listing.omi_fascia || '?'}).
+          5-year IRR at ${defaultRate.toFixed(1)}% appreciation + 0% rent growth
+          (Lume's default for fascia ${listing.omi_fascia || '?'}). Includes
+          mortgage interest + amortisation, operating costs and 6% selling costs.
         </p>
       </div>
 
@@ -10705,10 +11157,10 @@ function detailVerdictHtml(listing) {
         <div class="benchmark-grid">
           <div class="benchmark-row benchmark-this">
             <span class="benchmark-name">This listing</span>
-            <span class="benchmark-rate ${fiveYrAnn >= 5 ? 'positive' : 'neutral'}">
-              ${fiveYrAnn >= 0 ? '+' : ''}${fiveYrAnn.toFixed(1)}%
+            <span class="benchmark-rate ${irr5yr != null && irr5yr >= 5 ? 'positive' : 'neutral'}">
+              ${irrLabel}
             </span>
-            <span class="benchmark-source">5-yr annualised, leveraged</span>
+            <span class="benchmark-source">5-yr IRR, leveraged</span>
           </div>
           ${benchmarkRows}
         </div>
@@ -10722,95 +11174,226 @@ function detailVerdictHtml(listing) {
     </section>`;
 }
 
-// ── Investment analysis (slider + projection table + sensitivity) ─────────
+// ── Investment analysis (Phase A: pro metrics + IRR + tax + sensitivity) ──
 function detailFinancialAnalysisHtml(listing) {
   const yields   = computeYieldMetrics(listing);
   const mortgage = computeMortgageScenarios(listing.price);
   if (!yields || !mortgage) return '';
 
   const defaultRate = defaultAppreciationRate(listing);
+  const metrics     = computeProInvestorMetrics(listing, mortgage, yields, defaultRate);
+  const tax         = computeTaxComparison(listing, yields);
+  const sens        = computeSensitivityMatrix(listing, mortgage, yields);
 
-  // Sensitivity matrix: 0–5% appreciation × 1Y/5Y/10Y horizons
-  const sensitivityRows = [0, 1, 2, 3, 4, 5].map(rate => {
-    const proj = computeAppreciationProjection(listing, mortgage, yields, rate);
-    if (!proj) return '';
-    const cell = (a) => `<td class="${a >= 5 ? 'positive' : a >= 0 ? '' : 'negative'}">${a >= 0 ? '+' : ''}${a.toFixed(1)}%</td>`;
-    const isDefault = Math.abs(rate - Math.round(defaultRate)) < 0.001;
-    return `
-      <tr ${isDefault ? 'class="sensitivity-default"' : ''}>
-        <td><strong>${rate}%</strong></td>
-        ${cell(proj[0].annualised_pct)}
-        ${cell(proj[1].annualised_pct)}
-        ${cell(proj[2].annualised_pct)}
-      </tr>`;
-  }).join('');
+  const pctColor = n => n == null ? '' :
+    n >= 6 ? 'var(--green-deep)' :
+    n >= 3 ? 'var(--amber)' :
+             'var(--coral)';
+  const dscrColor = d => d == null ? '' :
+    d >= 1.2 ? 'var(--green-deep)' :
+    d >= 1.0 ? 'var(--amber)' :
+               'var(--coral)';
+  const multColor = m => m == null ? '' :
+    m >= 1.5 ? 'var(--green-deep)' :
+    m >= 1.0 ? 'var(--amber)' :
+               'var(--coral)';
+
+  // Headline metric strip
+  const stripCards = [
+    {
+      label: 'IRR (5yr)',
+      value: metrics && metrics.irr_5yr != null
+        ? (metrics.irr_5yr >= 0 ? '+' : '') + metrics.irr_5yr.toFixed(1) + '%' : '—',
+      color: pctColor(metrics ? metrics.irr_5yr : null),
+      tooltip: 'Internal Rate of Return over 5 years — the annualised discount rate that makes every cash flow break even. Includes mortgage, op costs, principal pay-down and net sale proceeds. The standard pro metric.',
+      highlight: true,
+    },
+    {
+      label: 'IRR (10yr)',
+      value: metrics && metrics.irr_10yr != null
+        ? (metrics.irr_10yr >= 0 ? '+' : '') + metrics.irr_10yr.toFixed(1) + '%' : '—',
+      color: pctColor(metrics ? metrics.irr_10yr : null),
+      tooltip: 'IRR over a 10-year hold. Typically higher than the 5-year IRR as appreciation compounds and selling costs are spread over more cash flow.',
+    },
+    {
+      label: 'Cash-on-Cash',
+      value: metrics && metrics.coc != null ? metrics.coc.toFixed(1) + '%' : '—',
+      color: pctColor(metrics ? metrics.coc : null),
+      tooltip: 'Annual cash flow ÷ total cash invested. Tells you how hard your equity is working *this year*, ignoring appreciation entirely. The Year-1 reality check.',
+    },
+    {
+      label: 'Cap Rate',
+      value: metrics && metrics.cap_rate != null ? metrics.cap_rate.toFixed(1) + '%' : '—',
+      color: pctColor(metrics ? metrics.cap_rate : null),
+      tooltip: 'NOI ÷ purchase price. Unleveraged return — comparable across properties regardless of financing. Milan typical: 3–5%.',
+    },
+    {
+      label: 'DSCR',
+      value: metrics && metrics.dscr != null ? metrics.dscr.toFixed(2) + 'x' : '—',
+      color: dscrColor(metrics ? metrics.dscr : null),
+      tooltip: 'Debt Service Coverage Ratio = NOI ÷ annual mortgage payments. Banks require ≥1.0 to lend, prefer ≥1.2. Below 1.0 means rent alone cannot service the debt.',
+    },
+    {
+      label: 'Equity Multiple (5yr)',
+      value: metrics && metrics.equity_mult_5yr != null
+        ? metrics.equity_mult_5yr.toFixed(2) + 'x' : '—',
+      color: multColor(metrics ? metrics.equity_mult_5yr : null),
+      tooltip: 'Total cash returned (incl. exit proceeds) ÷ total cash invested. 1.5× means you got back 1.5× your equity. Simple but powerful — pairs well with IRR.',
+    },
+  ];
+
+  const metricsStripHtml = `
+    <div class="metrics-strip">
+      ${stripCards.map((m, i) => `
+        <div class="metric-card ${m.highlight ? 'metric-card-highlight' : ''}"
+             title="${escapeAttr(m.tooltip)}" data-metric-idx="${i}">
+          <div class="metric-label">${m.label} <span class="metric-info">ⓘ</span></div>
+          <div class="metric-value" style="color:${m.color}">${m.value}</div>
+        </div>`).join('')}
+    </div>`;
+
+  // 2x2 (4x4) sensitivity matrix — IRR across appreciation × rent growth
+  const cellStyle = v => v == null ? '' :
+    v >= 8 ? 'background:var(--green-light);color:var(--green-deep);font-weight:700' :
+    v >= 5 ? 'background:#F2F8F5;color:var(--green-deep);font-weight:600' :
+    v >= 2 ? 'background:#FFF9EC;color:#B85C00' :
+    v >= 0 ? 'background:var(--amber-light);color:#92400E' :
+             'background:var(--coral-light);color:var(--coral)';
+
+  let sensitivityHtml = '';
+  if (sens) {
+    // Highlight the cell closest to Lume's default (appreciation = defaultRate, rent growth = 2%)
+    const defaultApprIdx   = sens.appreciationRates.reduce((best, _, i) =>
+      Math.abs(sens.appreciationRates[i] - defaultRate) < Math.abs(sens.appreciationRates[best] - defaultRate) ? i : best, 0);
+    const defaultGrowthIdx = 1;   // 2%/yr column matches Milan baseline
+
+    sensitivityHtml = `
+      <div class="sensitivity-section">
+        <h3>Return sensitivity</h3>
+        <p class="sensitivity-intro">
+          5-year IRR across combinations of price appreciation and rent growth.
+          Milan rents grew roughly 4–8%/yr post-2021. Highlighted cell is Lume's default.
+        </p>
+        <div class="sensitivity-table-wrap">
+          <table class="sensitivity-matrix">
+            <thead>
+              <tr>
+                <th class="matrix-corner">Appreciation ＼ Rent growth</th>
+                ${sens.rentGrowthRates.map(r => `<th>${r}%/yr rent</th>`).join('')}
+              </tr>
+            </thead>
+            <tbody>
+              ${sens.appreciationRates.map((appr, ai) => `
+                <tr>
+                  <td class="matrix-row-header">${appr}% appr.</td>
+                  ${sens.rentGrowthRates.map((_, ri) => {
+                    const v = sens.matrix[ai][ri];
+                    const isDefault = ai === defaultApprIdx && ri === defaultGrowthIdx;
+                    return `<td style="${cellStyle(v)}" class="${isDefault ? 'matrix-cell-default' : ''}">
+                      ${v != null ? (v >= 0 ? '+' : '') + v.toFixed(1) + '%' : '—'}
+                    </td>`;
+                  }).join('')}
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+  }
+
+  // Tax regime comparison
+  const taxHtml = tax ? `
+    <div class="tax-section">
+      <h3>Tax regime comparison</h3>
+      <p class="tax-intro">
+        Italian rental income can be taxed three ways — the choice can shift
+        your net yield by a full percentage point. Cards below show the after-tax
+        position on this listing's gross rent.
+      </p>
+      <div class="tax-grid">
+        ${tax.regimes.map(r => `
+          <div class="tax-card ${r.id === tax.recommended ? 'tax-card-best' : ''}">
+            ${r.id === tax.recommended ? '<div class="tax-best-badge">Recommended</div>' : ''}
+            <div class="tax-name">${escapeHtml(r.name)}</div>
+            <div class="tax-rate">${r.rate_pct}%</div>
+            <div class="tax-note">${escapeHtml(r.note)}</div>
+            <div class="tax-divider"></div>
+            <div class="tax-row">
+              <span>Tax on rent</span>
+              <span class="negative">−€${fmt(r.tax)}/yr</span>
+            </div>
+            <div class="tax-row">
+              <span>Net after tax</span>
+              <span class="${r.net_after_tax >= 0 ? 'positive' : 'negative'}">
+                ${r.net_after_tax >= 0 ? '+' : '−'}€${fmt(Math.abs(r.net_after_tax))}/yr
+              </span>
+            </div>
+            <div class="tax-row tax-row-yield">
+              <span>Net yield</span>
+              <span style="color:${pctColor(r.net_yield_pct)};font-weight:700">
+                ${r.net_yield_pct != null ? r.net_yield_pct.toFixed(1) + '%' : '—'}
+              </span>
+            </div>
+          </div>`).join('')}
+      </div>
+      <p class="tax-disclaimer">
+        IRPEF figure assumes a 38% marginal bracket — adjust mentally if yours is different.
+        Cedolare concordato requires a contratto concordato (typically 10–20% below
+        market rent) — for Milan (high-density municipality) the 10% headline rate
+        can still beat cedolare secca despite the lower rent ceiling. Always consult
+        a commercialista before choosing.
+      </p>
+    </div>` : '';
 
   return `
     <section class="detail-analysis">
       <h2><span class="section-icon">📈</span> Investment analysis</h2>
 
-      <p class="analysis-explainer">
-        Projected total return on cash invested, combining cash flow, mortgage
-        principal pay-down, and capital appreciation. Adjust the appreciation
-        rate below to test sensitivity.
-      </p>
+      <div class="analysis-explainer">
+        Pro investor metrics at a glance. All figures assume investment financing
+        (35% down, ${(INVESTOR_CONFIG.investment.rate * 100).toFixed(1)}%,
+        ${INVESTOR_CONFIG.investment.term_years} yr) and ${defaultRate}% annual
+        appreciation (Lume default for fascia ${listing.omi_fascia || '?'}).
+        Hover any metric for what it means.
+      </div>
+
+      ${metricsStripHtml}
 
       <div class="analysis-slider">
         <div class="slider-row">
           <label>Appreciation rate</label>
-          <span class="slider-current"><span id="appreciation-display">${defaultRate.toFixed(1)}</span>% / year</span>
+          <span class="slider-current">
+            <span id="appreciation-display">${defaultRate.toFixed(1)}</span>% / year
+          </span>
         </div>
         <input type="range" id="appreciation-slider"
                min="0" max="6" step="0.1" value="${defaultRate}"
                class="appreciation-input">
         <div class="slider-marks">
           <span>0% (no growth)</span>
-          <span>3% (typical)</span>
+          <span>3% (typical Milan)</span>
           <span>6% (boom)</span>
         </div>
       </div>
 
       <div class="projection-wrap">
-        <h3>Total return projection</h3>
+        <h3>Cash flow projection</h3>
         <table class="projection-table" id="detail-projection-table">
           <thead>
             <tr>
               <th>Horizon</th>
-              <th>Cash flow</th>
+              <th>Monthly CF</th>
               <th>Principal paid</th>
               <th>Property gain</th>
               <th>Total return</th>
-              <th>Annualised</th>
+              <th>IRR</th>
             </tr>
           </thead>
           <tbody><!-- populated by updateDetailProjection() --></tbody>
         </table>
       </div>
 
-      <div class="sensitivity-wrap">
-        <h3>Sensitivity to appreciation</h3>
-        <p class="sensitivity-intro">
-          Annualised return at different appreciation rates and horizons.
-          If you have a view on how much this zone will appreciate, look at
-          the corresponding row.
-        </p>
-        <table class="sensitivity-table">
-          <thead>
-            <tr>
-              <th>Appreciation</th>
-              <th>1-year</th>
-              <th>5-year</th>
-              <th>10-year</th>
-            </tr>
-          </thead>
-          <tbody>${sensitivityRows}</tbody>
-        </table>
-        <p class="sensitivity-disclaimer">
-          Lume's default of <strong>${defaultRate.toFixed(1)}%</strong> for fascia
-          ${listing.omi_fascia || '?'} is based on rough historical Milan averages.
-          Actual appreciation depends on market cycle timing and zone-specific dynamics.
-        </p>
-      </div>
+      ${sensitivityHtml}
+      ${taxHtml}
     </section>`;
 }
 
@@ -10836,6 +11419,12 @@ function wireUpAppreciationSlider(listing) {
 function updateDetailProjection(listing, mortgage, yields, rate) {
   const projection = computeAppreciationProjection(listing, mortgage, yields, rate);
   if (!projection) return;
+
+  // Refresh the metric strip in lockstep with the projection — IRR/CoC/etc
+  // all depend on the chosen appreciation rate.
+  const metrics = computeProInvestorMetrics(listing, mortgage, yields, rate);
+  if (metrics) updateMetricStrip(metrics);
+
   const tbody = document.querySelector('#detail-projection-table tbody');
   if (!tbody) return;
 
@@ -10844,17 +11433,64 @@ function updateDetailProjection(listing, mortgage, yields, rate) {
     return `${sign}€${fmt(Math.abs(n))}`;
   };
 
-  tbody.innerHTML = projection.map(p => `
-    <tr>
-      <td><strong>${p.years}-year</strong></td>
-      <td class="${p.cumulative_cashflow >= 0 ? 'positive' : 'negative'}">${formatEuro(p.cumulative_cashflow)}</td>
-      <td class="positive">+€${fmt(p.principal_paid)}</td>
-      <td class="${p.property_gain >= 0 ? 'positive' : 'negative'}">${formatEuro(p.property_gain)}</td>
-      <td class="${p.total_return >= 0 ? 'positive' : 'negative'} total"><strong>${formatEuro(p.total_return)}</strong></td>
-      <td class="${p.annualised_pct >= 5 ? 'positive' : p.annualised_pct >= 0 ? '' : 'negative'}">
-        <strong>${p.annualised_pct >= 0 ? '+' : ''}${p.annualised_pct.toFixed(1)}%</strong>
-      </td>
-    </tr>`).join('');
+  tbody.innerHTML = projection.map(p => {
+    // Per-horizon IRR — recompute monthly cash flows for each horizon so
+    // the IRR column reflects this listing's actual exit math.
+    const flows = buildMonthlyIRRCashFlows(listing, mortgage, yields, rate, p.years);
+    const irr   = computeMonthlyIRR(flows);
+    const irrCol = irr == null ? ''
+                 : irr >= 0.06 ? 'var(--green-deep)'
+                 : irr >= 0.03 ? 'var(--amber)'
+                 :               'var(--coral)';
+    const irrStr = irr != null
+      ? `<strong style="color:${irrCol}">${irr >= 0 ? '+' : ''}${(irr * 100).toFixed(1)}%</strong>`
+      : '—';
+
+    const months   = p.years * 12;
+    const monthlyCF = months > 0 ? Math.round(p.cumulative_cashflow / months) : 0;
+    const monthlyCFStr = formatEuro(monthlyCF);
+
+    return `
+      <tr>
+        <td><strong>${p.years}-year</strong></td>
+        <td class="${monthlyCF >= 0 ? 'positive' : 'negative'}">${monthlyCFStr}/mo</td>
+        <td class="positive">+€${fmt(p.principal_paid)}</td>
+        <td class="${p.property_gain >= 0 ? 'positive' : 'negative'}">${formatEuro(p.property_gain)}</td>
+        <td class="${p.total_return >= 0 ? 'positive' : 'negative'} total">
+          <strong>${formatEuro(p.total_return)}</strong>
+        </td>
+        <td>${irrStr}</td>
+      </tr>`;
+  }).join('');
+}
+
+// Live-update the 6 cards in the metric strip when the user drags the slider.
+function updateMetricStrip(m) {
+  const cards = document.querySelectorAll('.metric-card');
+  if (!cards.length) return;
+
+  const pct  = n => n == null ? '—' : (n >= 0 ? '+' : '') + n.toFixed(1) + '%';
+  const pctNoSign = n => n == null ? '—' : n.toFixed(1) + '%';
+  const multX = n => n == null ? '—' : n.toFixed(2) + 'x';
+
+  const pctColor = n => n == null ? '' : n >= 6 ? 'var(--green-deep)' : n >= 3 ? 'var(--amber)' : 'var(--coral)';
+  const dscrColor = d => d == null ? '' : d >= 1.2 ? 'var(--green-deep)' : d >= 1.0 ? 'var(--amber)' : 'var(--coral)';
+  const multColor = v => v == null ? '' : v >= 1.5 ? 'var(--green-deep)' : v >= 1.0 ? 'var(--amber)' : 'var(--coral)';
+
+  const rows = [
+    { idx: 0, text: pct(m.irr_5yr),         color: pctColor(m.irr_5yr) },
+    { idx: 1, text: pct(m.irr_10yr),        color: pctColor(m.irr_10yr) },
+    { idx: 2, text: pctNoSign(m.coc),       color: pctColor(m.coc) },
+    { idx: 3, text: pctNoSign(m.cap_rate),  color: pctColor(m.cap_rate) },
+    { idx: 4, text: multX(m.dscr),          color: dscrColor(m.dscr) },
+    { idx: 5, text: multX(m.equity_mult_5yr), color: multColor(m.equity_mult_5yr) },
+  ];
+  for (const r of rows) {
+    const el = cards[r.idx]?.querySelector('.metric-value');
+    if (!el) continue;
+    el.textContent = r.text;
+    el.style.color = r.color;
+  }
 }
 
 // ── Cost breakdown ────────────────────────────────────────────────────────
