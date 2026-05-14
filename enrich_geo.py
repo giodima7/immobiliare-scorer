@@ -561,14 +561,39 @@ def _parse_street(address: str) -> tuple[str, str]:
     return ", ".join(street_parts[:2]).strip(", "), "Milano"
 
 
+def _is_in_milan(lat: float, lon: float) -> bool:
+    """
+    True iff the point falls *inside* one of the 43 OMI zone polygons that
+    cover the Milan municipality. Using polygon containment (not a bounding
+    box) prevents the geocoders from drifting into adjacent municipalities
+    that share street names — e.g. there's a "Via Antonio Fogazzaro" both in
+    Milan (Cadore zone, postcode 20135) and in Peschiera Borromeo (postcode
+    20068, 9 km east of Milan): the bbox check passed the wrong one.
+    The omi_lookup module already loads the polygons; reuse it.
+    """
+    if not _OMI_AVAILABLE:
+        # Fallback: keep the old loose Milan bbox so we don't accidentally
+        # block ALL geocoding when omi_lookup is missing.
+        return 45.38 <= lat <= 45.56 and 9.02 <= lon <= 9.32
+    try:
+        _zone, src = _omi_lookup.lookup(lat, lon)
+        # src is one of 'polygon' (inside a zone) / 'centroid' (nearest
+        # centroid outside polygons) / 'failed'. Only 'polygon' is in-Milan.
+        return src == "polygon"
+    except Exception:
+        return False
+
+
 def _photon_geocode(address: str) -> Optional[tuple[float, float]]:
     """
     Geocode via Photon (photon.komoot.io).  No enforced rate limit —
     runs fully in parallel with other threads.  Returns (lat, lng) or None.
 
     Always appends Milano to the query so results are city-scoped.
-    The returned coordinate is validated against the Milan bounding box
-    (lat 45.38–45.56, lon 9.02–9.32) so out-of-city results are rejected.
+    Pulls up to 5 candidates and accepts the first one whose coordinates
+    fall inside a Milan OMI polygon. Photon's top-ranked match isn't always
+    the correct city — e.g. "Via Antonio Fogazzaro 11 Milano" returns
+    Peschiera Borromeo as #1 and the real Milan address as #2.
     """
     if not address:
         return None
@@ -577,14 +602,10 @@ def _photon_geocode(address: str) -> Optional[tuple[float, float]]:
     if not street:
         return None
 
-    # Milan bounding box for result validation
-    _LAT_MIN, _LAT_MAX = 45.38, 45.56
-    _LON_MIN, _LON_MAX =  9.02,  9.32
-
     def _photon_req(q: str) -> Optional[tuple[float, float]]:
         # Photon: commas in q cause 400; lang=it is unsupported — strip both
         q_clean = q.replace(",", " ")
-        params = urllib.parse.urlencode({"q": q_clean, "limit": "1"})
+        params = urllib.parse.urlencode({"q": q_clean, "limit": "5"})
         url = f"https://photon.komoot.io/api/?{params}"
         req = urllib.request.Request(url,
                                      headers={"User-Agent": "immobiliare-scorer/1.0"})
@@ -592,11 +613,13 @@ def _photon_geocode(address: str) -> Optional[tuple[float, float]]:
             with urllib.request.urlopen(req, timeout=8) as resp:
                 data = json.loads(resp.read())
             features = data.get("features") or []
-            if features:
-                lon, lat = features[0]["geometry"]["coordinates"]
+            # Iterate candidates and return the first in-Milan one (not just
+            # the top result — Photon's top hit is sometimes a same-name
+            # street in an adjacent municipality).
+            for feat in features:
+                lon, lat = feat["geometry"]["coordinates"]
                 lat, lon = float(lat), float(lon)
-                # Reject results outside Milan
-                if _LAT_MIN <= lat <= _LAT_MAX and _LON_MIN <= lon <= _LON_MAX:
+                if _is_in_milan(lat, lon):
                     return lat, lon
         except Exception as exc:
             print(f"  [geo] Photon error: {exc}", file=sys.stderr)
@@ -621,15 +644,29 @@ def _nominatim_geocode(address: str) -> Optional[tuple[float, float]]:
     """
     Geocode via Nominatim (fallback).  Serialised to 1 req/sec globally.
     Returns (lat, lng) or None.
+
+    Like Photon, pulls up to 5 candidates and returns the first one whose
+    coordinates fall inside a Milan OMI polygon. Also passes a Milan bbox
+    via `viewbox` + `bounded=1` so Nominatim biases toward city results;
+    that alone isn't enough (the bbox is loose) so we still validate every
+    returned candidate against the polygon set.
     """
     if not address:
         return None
 
     street, city = _parse_street(address)
 
+    # Milan bbox (lon_min, lat_max, lon_max, lat_min — Nominatim's order).
+    # Slightly wider than the OMI polygon set so Nominatim has room to
+    # return alternatives we then validate via _is_in_milan.
+    _VIEWBOX = "9.02,45.56,9.30,45.38"
+
     def _nom_req(params: dict) -> Optional[tuple[float, float]]:
-        q = urllib.parse.urlencode({"format": "json", "limit": "1",
-                                    "countrycodes": "it", **params})
+        q = urllib.parse.urlencode({"format": "json", "limit": "5",
+                                    "countrycodes": "it",
+                                    "viewbox": _VIEWBOX,
+                                    "bounded": "1",
+                                    **params})
         url = f"https://nominatim.openstreetmap.org/search?{q}"
         req = urllib.request.Request(url,
                                      headers={"User-Agent": "immobiliare-scorer/1.0"})
@@ -638,8 +675,14 @@ def _nominatim_geocode(address: str) -> Optional[tuple[float, float]]:
                 with urllib.request.urlopen(req, timeout=10) as resp:
                     results = json.loads(resp.read())
                 time.sleep(1.0)
-                if results:
-                    return float(results[0]["lat"]), float(results[0]["lon"])
+                # Return first candidate inside the Milan polygon set
+                for r in results:
+                    try:
+                        lat, lon = float(r["lat"]), float(r["lon"])
+                    except (KeyError, TypeError, ValueError):
+                        continue
+                    if _is_in_milan(lat, lon):
+                        return lat, lon
             except Exception as exc:
                 print(f"  [geo] Nominatim error: {exc}", file=sys.stderr)
                 time.sleep(1.0)
@@ -695,7 +738,14 @@ def enrich(listing: dict, _skip_osrm: bool = False) -> dict:
     lat = lng = None
     geocoded = False
 
-    # Priority 1+2: stored coordinates
+    # Priority 1+2: stored coordinates.
+    # If the listing carries a prior `omi_source` that landed outside the
+    # Milan polygons (centroid fallback), the stored coords were geocoded
+    # to the wrong municipality — discard them so the geocoder reruns with
+    # the new polygon-validated logic and resolves the right Milan match.
+    _prior_src = (listing.get("omi_source") or "").lower()
+    _stored_coords_suspect = _prior_src in ("centroid", "nominatim+centroid")
+
     for lat_key, lng_key in (("lat", "lng"), ("latitude", "longitude")):
         raw_lat = listing.get(lat_key)
         raw_lng = listing.get(lng_key)
@@ -703,6 +753,9 @@ def enrich(listing: dict, _skip_osrm: bool = False) -> dict:
             try:
                 _lat, _lng = float(raw_lat), float(raw_lng)
                 if _lat != 0.0 and _lng != 0.0:
+                    if _stored_coords_suspect and not _is_in_milan(_lat, _lng):
+                        # Force re-geocoding by leaving lat/lng unset
+                        continue
                     lat, lng = _lat, _lng
                     break
             except (TypeError, ValueError):
@@ -764,6 +817,9 @@ def enrich(listing: dict, _skip_osrm: bool = False) -> dict:
     # (Idealista sometimes omits the address on search results cards).
     # Geocoding the neighbourhood name gives a centroid-level coordinate that is
     # accurate enough for OMI zone lookup and approximate POI distances.
+    # _geocode itself already validates via _is_in_milan(), so a stray
+    # Peschiera/Cernusco neighbourhood that shares a Milan name won't slip
+    # through here.
     if lat is None:
         neighbourhood = listing.get("neighbourhood", "").strip()
         # Skip obvious non-names (Idealista's own placeholder text)

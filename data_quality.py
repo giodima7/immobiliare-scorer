@@ -71,7 +71,14 @@ def _make_weights(fields: dict) -> tuple[dict, int, list]:
 _WEIGHTS, _WEIGHT_TOTAL, _ALL_FIELDS = _make_weights(FIELDS)
 _SALE_WEIGHTS, _SALE_WEIGHT_TOTAL, _SALE_ALL_FIELDS = _make_weights(SALE_FIELDS)
 
-_BAD_OMI_SOURCES = {"keyword_fallback", "no_coordinates", "failed"}
+_BAD_OMI_SOURCES = {
+    "keyword_fallback", "no_coordinates", "failed",
+    # Geocoded coordinates that landed *outside* every Milan OMI polygon —
+    # the listing's location is unreliable (likely a same-named street in
+    # an adjacent municipality). Force re-enrichment so enrich_geo can
+    # retry with the new polygon-validated geocoder.
+    "centroid", "nominatim+centroid",
+}
 _ZERO_FIELDS = {"rent_mo", "sqm", "ask_psqm", "price"}
 
 
