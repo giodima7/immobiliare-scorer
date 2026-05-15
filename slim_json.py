@@ -21,17 +21,20 @@ from pathlib import Path
 BASE_DIR = Path(__file__).parent
 DASH_DIR = BASE_DIR / "dashboard"
 
-# Fields the dashboard reads. Anything else gets dropped.
+# Fields the dashboard ACTUALLY reads. Anything else gets dropped.
+# This list is deliberately tight — the JSONs ship to the public dashboard
+# and have to fit under Cloudflare Pages' 25 MiB per-file cap.
 # Underscore-prefixed flags are kept because card render functions read
 # them directly (e.g. _room_efficiency_flag).
 KEEP_FIELDS: frozenset[str] = frozenset({
     # Identity
     "id", "source",
     # Display
-    "title", "address", "neighbourhood", "url", "thumbnail", "photos",
-    # Price
-    "price", "ask_psqm", "ask_psqm_rent", "ask_psqm_effective",
-    "rent_mo", "effective_rent_mo",
+    "address", "neighbourhood", "url", "thumbnail", "photos",
+    # Price (canonical fields only — duplicates like ask_psqm_effective /
+    # effective_rent_mo dropped; the dashboard's _rentPsqm() falls back
+    # to ask_psqm / rent_mo correctly)
+    "price", "ask_psqm", "ask_psqm_rent", "rent_mo",
     # Physical
     "sqm", "rooms", "bedrooms", "floor", "floor_n", "floor_label",
     "elevator", "has_balcony", "has_parking", "furnished", "condition",
@@ -40,32 +43,31 @@ KEEP_FIELDS: frozenset[str] = frozenset({
     "heating_type", "is_external", "is_below_ground", "is_ground_floor",
     "is_auction", "is_nuda_proprieta",
     # Location
-    "latitude", "longitude", "city", "city_key",
+    "latitude", "longitude", "city",
     "omi_zona", "omi_fascia", "omi_descr",
     "metro_walk_min", "metro_nearest_name", "metro_nearest_line",
-    "metro_nearest_dist_m", "metro_walk_routed",
+    "metro_nearest_dist_m",
     "park_nearest_dist_m", "supermarket_nearest_dist_m",
     "university_nearest_dist_m", "tram_nearest_dist_m",
     "geo_score", "score_geo",
-    # OMI benchmarks
+    # OMI benchmarks (only what's referenced in templates)
     "omi_compr_mid", "omi_compr_min", "omi_compr_max",
-    "omi_loc_mid", "omi_loc_min", "omi_loc_max",
-    "omi_rmin", "omi_rmax",
+    "omi_loc_mid",   "omi_loc_min",   "omi_loc_max",
     "omi_source", "omi_fallback",
-    "vs_omi_label", "vs_omi_pct", "vs_omi_rent_pct",
-    # Scoring
+    "vs_omi_label", "vs_omi_pct",
+    # Scoring (drop legacy aliases score_value / score_fascia / score_rent
+    # and the comps bookkeeping fields not actually rendered)
     "score_total", "score_price", "score_property",
-    "score_location", "score_penalty", "score_physical", "score_rent",
-    "score_value", "score_fascia", "score_reasons", "score_was_capped",
+    "score_location", "score_penalty", "score_physical",
+    "score_reasons", "score_was_capped",
     "ldi_score", "ldi_bonus",
-    "comps_delta_pct", "comps_n", "comps_median", "comps_p40", "comps_p60",
+    "comps_delta_pct", "comps_n", "comps_median",
     "comps_confidence", "comps_conf_label", "comps_source", "comps_label",
-    "comps_radius_m", "comps_condition_group", "comps_adjusted",
-    "comps_sale_median", "comps_sale_p40", "comps_sale_p60",
-    "comps_sale_n", "comps_sale_radius_m", "comps_sale_source",
-    "comps_sale_confidence", "comps_sale_conf_label",
-    "comps_sale_delta_pct", "comps_sale_label",
-    "comps_sale_condition_group", "comps_sale_adjusted",
+    "comps_adjusted",
+    "comps_sale_median", "comps_sale_n",
+    "comps_sale_source", "comps_sale_confidence",
+    "comps_sale_conf_label", "comps_sale_delta_pct", "comps_sale_label",
+    "comps_sale_adjusted",
     "comps_sale_comp_ids", "comps_ids",
     "hidden_gem", "good_value",
     "boosted_price_score", "is_corporate_rental",
@@ -80,14 +82,16 @@ KEEP_FIELDS: frozenset[str] = frozenset({
     # Staleness
     "first_seen_date", "last_seen_date",
     "is_stale", "days_since_seen", "days_on_market",
-    "fetched_at", "published_date",
-    # Agency
+    "published_date",
+    # Agency (used by Stats leaderboard + agency-pin filter)
     "agency_id", "agency_name", "agency_type", "agency_url",
     # Photo metadata
     "photo_count",
-    # Area tracking (used by area-stale-removal logic)
-    "_fetched_area",
 })
+
+# Photo arrays larger than this are truncated. The detail-page gallery
+# only renders 1 hero + 7 thumbs so beyond 8 is wasted bytes.
+PHOTOS_CAP = 4
 
 FILES = [DASH_DIR / "rentals_latest.json", DASH_DIR / "sales_latest.json"]
 
@@ -103,6 +107,13 @@ def slim_one(path: Path) -> tuple[float, float, int, int]:
     fields_before = sum(len(l) for l in data) if data else 0
     slimmed       = [{k: v for k, v in l.items() if k in KEEP_FIELDS} for l in data]
     fields_after  = sum(len(l) for l in slimmed) if slimmed else 0
+
+    # Truncate the photos array — the gallery only ever shows a hero +
+    # a handful of thumbs, beyond PHOTOS_CAP is wasted JSON bytes. This
+    # alone saves ~1 MB on rentals_latest.json.
+    for l in slimmed:
+        if isinstance(l.get("photos"), list) and len(l["photos"]) > PHOTOS_CAP:
+            l["photos"] = l["photos"][:PHOTOS_CAP]
 
     # Compact JSON — no whitespace. ~5-10% smaller than indented form.
     path.write_text(
