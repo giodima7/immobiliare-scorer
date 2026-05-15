@@ -4585,13 +4585,14 @@ const SupabaseClient = {
    */
   async fetchAll(listingType, opts = {}) {
     if (!this.configured) return null;
-    // PostgREST caps a single response at 1000 rows by default. We page
-    // through with limit+offset until a partial page comes back. `order`
-    // is fixed (no nullslast modifier — it makes the query 5x slower on
-    // an unindexed sort) so the cursor is stable across pages.
+    // PostgREST caps a single response at 1000 rows. We page with
+    // limit+offset until a partial page comes back. Per-page console
+    // logs make pagination bugs visible — if the loop ever stops early
+    // in production we want a clear breadcrumb trail rather than a
+    // mysterious "loaded 1000".
     const { order = 'score_total.desc' } = opts;
     const PAGE_SIZE = 1000;
-    let offset = 0;
+    let offset  = 0;
     let allRows = [];
 
     while (true) {
@@ -4603,60 +4604,52 @@ const SupabaseClient = {
         limit:        String(PAGE_SIZE),
         offset:       String(offset),
       });
-      const url = `${this._base}/listings?${params}`;
+      let page = null;
       try {
-        const resp = await fetch(url, {
+        const resp = await fetch(`${this._base}/listings?${params}`, {
           headers: {
             'apikey':        SUPABASE_ANON_KEY,
             'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
             'Accept':        'application/json',
-            // Skip the exact-count query PostgREST adds by default — it
+            // Skip the exact-count query PostgREST adds by default —
             // doubles the round-trip cost and we don't read the count.
             'Prefer':        'count=none',
           },
           signal: AbortSignal.timeout(30000),
         });
         if (!resp.ok) {
-          console.warn(`[supabase] HTTP ${resp.status} for ${listingType}s at offset ${offset}`);
-          // Partial data is still useful — return what we have rather than
-          // wiping the grid because page 7 of 12 timed out.
-          return allRows.length ? allRows : null;
+          console.warn(`[supabase] HTTP ${resp.status} at offset ${offset} for ${listingType}s`);
+          break;  // keep whatever pages we've collected so far
         }
-        const page = await resp.json();
-        allRows = allRows.concat(page);
-        if (page.length < PAGE_SIZE) break;  // last page
-        offset += PAGE_SIZE;
+        page = await resp.json();
       } catch (err) {
-        console.warn(`[supabase] fetch failed at offset ${offset} (${err.message})`);
-        return allRows.length ? allRows : null;
+        console.warn(`[supabase] fetch error at offset ${offset}: ${err.message}`);
+        break;
       }
+
+      console.log(`[supabase] ${listingType}s page @ offset ${offset}: ${page.length} rows`);
+      // Reassignment is critical — Array.prototype.concat returns a new
+      // array, mutating allRows in place would silently lose pages.
+      allRows = allRows.concat(page);
+      if (page.length < PAGE_SIZE) break;   // last page
+      offset += PAGE_SIZE;
     }
 
-    console.log(`[supabase] loaded ${allRows.length} ${listingType}s`);
+    console.log(`[supabase] loaded ${allRows.length} ${listingType}s total`);
+
     // Re-shape DB rows into the dict shape the rest of the dashboard expects:
     //   - underscore-prefixed flags (Postgres can't name a column "_foo")
     //   - rent_mo as an alias for the unified `price` column on rentals
-    //   - ask_psqm_rent falling back to ask_psqm when only one is populated
+    //   - ask_psqm_rent / spese_condominiali alias from the DB column names
     const isRental = listingType === 'rental';
-    for (const r of allRows) {
-      if ('room_efficiency_flag' in r) {
-        r._room_efficiency_flag = r.room_efficiency_flag;
-      }
-      if ('absolute_value_gate_applied' in r) {
-        r._absolute_value_gate_applied = r.absolute_value_gate_applied;
-      }
-      if (isRental) {
-        if (r.rent_mo == null && r.price != null) r.rent_mo = r.price;
-        if (r.ask_psqm_rent == null && r.ask_psqm != null) r.ask_psqm_rent = r.ask_psqm;
-      }
-      // `spese_condominiali` is the Italian field name the dashboard JS
-      // reads (e.g. card "+ €X cond fees" line). DB stores it under the
-      // unified `condominium_fees` column — alias it back here.
-      if (r.spese_condominiali == null && r.condominium_fees != null) {
-        r.spese_condominiali = r.condominium_fees;
-      }
-    }
-    return allRows;
+    return allRows.map(r => ({
+      ...r,
+      _room_efficiency_flag:        r.room_efficiency_flag,
+      _absolute_value_gate_applied: r.absolute_value_gate_applied,
+      rent_mo:                      isRental ? (r.rent_mo ?? r.price)                    : r.rent_mo,
+      ask_psqm_rent:                isRental ? (r.ask_psqm_rent ?? r.ask_psqm)           : r.ask_psqm_rent,
+      spese_condominiali:           r.spese_condominiali ?? r.condominium_fees,
+    }));
   },
 };
 SupabaseClient.init();
