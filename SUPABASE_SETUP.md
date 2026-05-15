@@ -31,7 +31,10 @@ Three values you'll need:
 
 ## 3. Create the schema (SQL editor)
 
-Run this **once** in the Supabase SQL editor:
+Run this **once** in the Supabase SQL editor for a fresh project. For
+existing projects that were provisioned before migration 002, run
+`supabase_migration_002.sql` instead — it `ADD COLUMN IF NOT EXISTS`-es
+every field that was missing from the original schema.
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
@@ -41,18 +44,26 @@ CREATE TABLE IF NOT EXISTS listings (
   source           TEXT NOT NULL,
   listing_type     TEXT NOT NULL CHECK (listing_type IN ('rental', 'sale')),
 
+  -- Display
   title            TEXT,
   address          TEXT,
   neighbourhood    TEXT,
+  city             TEXT,
   url              TEXT,
   thumbnail        TEXT,
+  photos           TEXT[],
+  photo_count      INTEGER,
 
+  -- Price
   price            INTEGER,
   ask_psqm         NUMERIC(10,2),
   ask_psqm_rent    NUMERIC(10,2),
 
+  -- Physical
   sqm              INTEGER,
   rooms            NUMERIC(4,1),
+  bedrooms         INTEGER,
+  floor            TEXT,
   floor_n          INTEGER,
   floor_label      TEXT,
   elevator         BOOLEAN,
@@ -68,7 +79,10 @@ CREATE TABLE IF NOT EXISTS listings (
   is_external      BOOLEAN,
   is_below_ground  BOOLEAN,
   is_ground_floor  BOOLEAN,
+  is_auction       BOOLEAN,
+  is_nuda_proprieta BOOLEAN,
 
+  -- Location / proximity
   latitude         NUMERIC(10,7),
   longitude        NUMERIC(10,7),
   omi_zona         TEXT,
@@ -82,7 +96,9 @@ CREATE TABLE IF NOT EXISTS listings (
   supermarket_nearest_dist_m INTEGER,
   university_nearest_dist_m  INTEGER,
   tram_nearest_dist_m        INTEGER,
+  geo_score        INTEGER,
 
+  -- OMI benchmarks
   omi_compr_mid    NUMERIC(10,2),
   omi_compr_min    NUMERIC(10,2),
   omi_compr_max    NUMERIC(10,2),
@@ -91,42 +107,79 @@ CREATE TABLE IF NOT EXISTS listings (
   omi_loc_max      NUMERIC(10,2),
   omi_source       TEXT,
   omi_fallback     BOOLEAN,
+  vs_omi_pct       NUMERIC(8,2),
+  vs_omi_label     TEXT,
 
+  -- Scoring
   score_total      INTEGER,
   score_price      INTEGER,
   score_property   INTEGER,
+  score_physical   INTEGER,
   score_location   INTEGER,
   score_penalty    INTEGER,
+  score_geo        INTEGER,
+  score_reasons    TEXT[],
+  score_was_capped BOOLEAN,
   ldi_score        NUMERIC(6,2),
+  ldi_bonus        NUMERIC(6,2),
+
+  -- Rental comps
   comps_delta_pct  NUMERIC(8,2),
   comps_n          INTEGER,
   comps_median     NUMERIC(10,2),
   comps_confidence INTEGER,
+  comps_conf_label TEXT,
   comps_source     TEXT,
+  comps_label      TEXT,
+  comps_adjusted   BOOLEAN,
   comps_ids        TEXT[],
-  hidden_gem       BOOLEAN DEFAULT false,
-  good_value       BOOLEAN DEFAULT false,
-  vs_omi_pct       NUMERIC(8,2),
+
+  -- Sale comps
+  comps_sale_median     NUMERIC(10,2),
+  comps_sale_n          INTEGER,
+  comps_sale_source     TEXT,
+  comps_sale_confidence INTEGER,
+  comps_sale_conf_label TEXT,
+  comps_sale_delta_pct  NUMERIC(8,2),
+  comps_sale_label      TEXT,
+  comps_sale_adjusted   BOOLEAN,
+  comps_sale_comp_ids   TEXT[],
+
+  -- Flags
+  hidden_gem          BOOLEAN DEFAULT false,
+  good_value          BOOLEAN DEFAULT false,
   boosted_price_score INTEGER,
   is_corporate_rental BOOLEAN,
-  suggested_rent_mo   INTEGER,
-  suggested_rent_psqm NUMERIC(8,2),
-
-  room_efficiency_flag TEXT,
+  room_efficiency_flag        TEXT,
   absolute_value_gate_applied BOOLEAN,
 
-  estimated_rent_mo    INTEGER,
-  estimated_rent_psqm  NUMERIC(8,2),
-  estimated_yield_pct  NUMERIC(6,2),
+  -- Pricing suggestions / investor estimate
+  suggested_rent_mo         INTEGER,
+  suggested_rent_psqm       NUMERIC(8,2),
+  estimated_rent_mo         INTEGER,
+  estimated_rent_psqm       NUMERIC(8,2),
+  estimated_yield_pct       NUMERIC(6,2),
+  estimated_rent_n_comps    INTEGER,
+  estimated_rent_confidence INTEGER,
+  estimated_rent_method     TEXT,
+  estimated_rent_comp_ids   TEXT[],
 
-  first_seen_date DATE,
-  last_seen_date  DATE,
-  is_stale        BOOLEAN DEFAULT false,
-  days_since_seen INTEGER,
-  days_on_market  INTEGER,
+  -- Agency (Stats-tab leaderboard + agency-pin filter)
+  agency_id        TEXT,
+  agency_name      TEXT,
+  agency_type      TEXT,
+  agency_url       TEXT,
 
-  scan_date       TIMESTAMPTZ DEFAULT NOW(),
-  updated_at      TIMESTAMPTZ DEFAULT NOW()
+  -- Lifecycle
+  first_seen_date  DATE,
+  last_seen_date   DATE,
+  published_date   TEXT,
+  is_stale         BOOLEAN DEFAULT false,
+  days_since_seen  INTEGER,
+  days_on_market   INTEGER,
+
+  scan_date        TIMESTAMPTZ DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX idx_listings_type_score  ON listings(listing_type, score_total DESC) WHERE is_stale = false;
@@ -136,8 +189,10 @@ CREATE INDEX idx_listings_price       ON listings(price)        WHERE is_stale =
 CREATE INDEX idx_listings_gem         ON listings(hidden_gem)   WHERE hidden_gem = true AND is_stale = false;
 CREATE INDEX idx_listings_coords      ON listings(latitude, longitude) WHERE latitude IS NOT NULL;
 CREATE INDEX idx_listings_updated     ON listings(updated_at DESC);
+CREATE INDEX idx_listings_city        ON listings(city);
 CREATE INDEX idx_listings_address_trgm ON listings USING gin(address gin_trgm_ops);
 CREATE INDEX idx_listings_nbhd_trgm    ON listings USING gin(neighbourhood gin_trgm_ops);
+CREATE INDEX idx_listings_agency_name_trgm ON listings USING gin(agency_name gin_trgm_ops);
 
 CREATE OR REPLACE FUNCTION update_updated_at()
 RETURNS TRIGGER AS $$ BEGIN NEW.updated_at = NOW(); RETURN NEW; END; $$ LANGUAGE plpgsql;

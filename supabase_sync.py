@@ -55,32 +55,60 @@ FIELD_RENAME: dict[str, str] = {
 # Anything else gets dropped on the way in so Supabase doesn't reject the
 # upsert with "column does not exist".
 SCHEMA_COLUMNS: frozenset[str] = frozenset({
+    # ── Identity ────────────────────────────────────────────────────────
     "id", "source", "listing_type",
-    "title", "address", "neighbourhood", "url", "thumbnail",
+    # ── Display ─────────────────────────────────────────────────────────
+    "title", "address", "neighbourhood", "city",
+    "url", "thumbnail", "photos", "photo_count",
+    # ── Price ───────────────────────────────────────────────────────────
     "price", "ask_psqm", "ask_psqm_rent",
-    "sqm", "rooms", "floor_n", "floor_label", "elevator",
-    "has_balcony", "has_parking", "furnished", "condition",
+    # ── Physical ────────────────────────────────────────────────────────
+    "sqm", "rooms", "bedrooms", "floor", "floor_n", "floor_label",
+    "elevator", "has_balcony", "has_parking", "furnished", "condition",
     "year_built", "energy_class", "bathrooms", "condominium_fees",
     "heating_type", "is_external", "is_below_ground", "is_ground_floor",
+    "is_auction", "is_nuda_proprieta",
+    # ── Location / proximity ────────────────────────────────────────────
     "latitude", "longitude",
     "omi_zona", "omi_fascia", "omi_descr",
     "metro_walk_min", "metro_nearest_name", "metro_nearest_line",
     "metro_nearest_dist_m",
     "park_nearest_dist_m", "supermarket_nearest_dist_m",
     "university_nearest_dist_m", "tram_nearest_dist_m",
+    "geo_score",
+    # ── OMI benchmarks ──────────────────────────────────────────────────
     "omi_compr_mid", "omi_compr_min", "omi_compr_max",
     "omi_loc_mid",   "omi_loc_min",   "omi_loc_max",
     "omi_source", "omi_fallback",
-    "score_total", "score_price", "score_property",
-    "score_location", "score_penalty",
-    "ldi_score", "comps_delta_pct", "comps_n", "comps_median",
-    "comps_confidence", "comps_source", "comps_ids",
+    "vs_omi_pct", "vs_omi_label",
+    # ── Scoring ─────────────────────────────────────────────────────────
+    "score_total", "score_price", "score_property", "score_physical",
+    "score_location", "score_penalty", "score_geo",
+    "score_reasons", "score_was_capped",
+    "ldi_score", "ldi_bonus",
+    # ── Comps (rentals) ─────────────────────────────────────────────────
+    "comps_delta_pct", "comps_n", "comps_median",
+    "comps_confidence", "comps_conf_label", "comps_source", "comps_label",
+    "comps_adjusted", "comps_ids",
+    # ── Comps (sales) ───────────────────────────────────────────────────
+    "comps_sale_median", "comps_sale_n",
+    "comps_sale_source", "comps_sale_confidence",
+    "comps_sale_conf_label", "comps_sale_delta_pct", "comps_sale_label",
+    "comps_sale_adjusted", "comps_sale_comp_ids",
+    # ── Flags ───────────────────────────────────────────────────────────
     "hidden_gem", "good_value",
-    "vs_omi_pct", "boosted_price_score", "is_corporate_rental",
-    "suggested_rent_mo", "suggested_rent_psqm",
+    "boosted_price_score", "is_corporate_rental",
     "room_efficiency_flag", "absolute_value_gate_applied",
+    # ── Pricing suggestions ─────────────────────────────────────────────
+    "suggested_rent_mo", "suggested_rent_psqm",
+    # ── Investor metrics (sales) ────────────────────────────────────────
     "estimated_rent_mo", "estimated_rent_psqm", "estimated_yield_pct",
-    "first_seen_date", "last_seen_date",
+    "estimated_rent_n_comps", "estimated_rent_confidence",
+    "estimated_rent_method", "estimated_rent_comp_ids",
+    # ── Agency (rentals leaderboard) ────────────────────────────────────
+    "agency_id", "agency_name", "agency_type", "agency_url",
+    # ── Staleness / lifecycle ───────────────────────────────────────────
+    "first_seen_date", "last_seen_date", "published_date",
     "is_stale", "days_since_seen", "days_on_market",
 })
 
