@@ -110,8 +110,25 @@ def _http_post(url: str, body_bytes: bytes, headers: dict) -> tuple[int, str]:
         return 0, str(exc)
 
 
+def _normalise_batch_keys(rows: list[dict]) -> list[dict]:
+    """
+    PostgREST requires every object in a bulk POST to share the same key set
+    (PGRST102: "All object keys must match"). Different listings in the JSON
+    have different fields populated — e.g. one might carry `year_built`
+    while the next omits it. Build the union of keys across the batch and
+    rebuild each row with the same shape, filling absent keys with None.
+    """
+    if not rows:
+        return rows
+    all_keys: set[str] = set()
+    for r in rows:
+        all_keys.update(r.keys())
+    return [{k: r.get(k) for k in all_keys} for r in rows]
+
+
 def upsert_batch(rows: list[dict], idx: int, total: int) -> bool:
     """POST a batch to /rest/v1/listings with merge-duplicates semantics."""
+    rows = _normalise_batch_keys(rows)
     headers = {
         "Content-Type":  "application/json",
         "apikey":        SUPABASE_KEY,
