@@ -9718,30 +9718,30 @@ function renderRentals() {
 
 // ── Rentals — data loading ────────────────────────────────────────────────────
 async function loadRentals() {
-  // Two paths:
-  //   • Local dev (IS_LIVE)  → Flask /rentals route
-  //   • Deployed (!IS_LIVE) → Supabase REST (sole data source)
-  //
-  // There is no JSON-snapshot fallback anymore — if Supabase is unreachable on
-  // the deployed dashboard the grid renders an empty state and the meta line
-  // surfaces the failure so the user knows to refresh.
+  // Three paths, tried in priority order:
+  //   1. Local dev (IS_LIVE) — Flask /rentals serves the freshest scanner
+  //      output from dashboard/rentals_latest.json. Best for testing a
+  //      just-run scan before sync. Skipped if Flask returns [] (the
+  //      local JSON was never written, or got cleaned up after sync).
+  //   2. Supabase REST — sole source on the deployed dashboard, and the
+  //      local fallback when Flask has nothing to serve.
+  //   3. Empty grid + diagnostic meta line — Supabase isn't configured.
+  const _supabaseReady = typeof SupabaseClient !== 'undefined' && SupabaseClient.configured;
   let raw = null;
   if (IS_LIVE) {
     try {
       const resp = await fetch('/rentals');
-      if (!resp.ok) throw new Error('HTTP ' + resp.status);
-      raw = await resp.json();
-    } catch {
-      raw = [];
-    }
-  } else if (typeof SupabaseClient !== 'undefined' && SupabaseClient.configured) {
+      if (resp.ok) raw = await resp.json();
+    } catch { /* fall through to Supabase */ }
+  }
+  if ((!raw || !raw.length) && _supabaseReady) {
     raw = await SupabaseClient.fetchAll('rental');
     if (!raw) {
       const meta = document.getElementById('meta');
       if (meta) meta.textContent = 'Couldn’t reach Supabase — try refreshing.';
       raw = [];
     }
-  } else {
+  } else if (!raw) {
     const meta = document.getElementById('meta');
     if (meta) meta.textContent = 'Supabase not configured — listings unavailable.';
     raw = [];
@@ -13536,23 +13536,20 @@ function renderSales() {
 
 // ── Sales — data loading ──────────────────────────────────────────────────────
 async function loadSales() {
-  // Mirror of loadRentals — Flask locally, Supabase on the deployed dashboard.
-  // No JSON-snapshot fallback: an empty grid is the failure state.
+  // Mirror of loadRentals — Flask first when local, then Supabase as a
+  // fallback (or sole source on deployed). Empty grid is the failure state.
+  const _supabaseReady = typeof SupabaseClient !== 'undefined' && SupabaseClient.configured;
   let raw = null;
   if (IS_LIVE) {
     try {
       const resp = await fetch('/sales');
-      if (!resp.ok) throw new Error('HTTP ' + resp.status);
-      raw = await resp.json();
-    } catch {
-      raw = [];
-    }
-  } else if (typeof SupabaseClient !== 'undefined' && SupabaseClient.configured) {
-    raw = await SupabaseClient.fetchAll('sale');
-    if (!raw) raw = [];
-  } else {
-    raw = [];
+      if (resp.ok) raw = await resp.json();
+    } catch { /* fall through to Supabase */ }
   }
+  if ((!raw || !raw.length) && _supabaseReady) {
+    raw = await SupabaseClient.fetchAll('sale');
+  }
+  if (!raw) raw = [];
   ALL_SALE = _dedupListings(raw, false);
   saleFasciaRanges = computeSaleFasciaRanges(ALL_SALE);
   _populateSaleOmiZoneFilter(ALL_SALE);
