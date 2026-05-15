@@ -4576,44 +4576,64 @@ const SupabaseClient = {
    */
   async fetchAll(listingType, opts = {}) {
     if (!this.configured) return null;
-    const { limit = 15000, order = 'score_total.desc.nullslast' } = opts;
-    const params = new URLSearchParams({
-      select:       '*',
-      listing_type: `eq.${listingType}`,
-      is_stale:     'eq.false',
-      order,
-      limit:        String(limit),
-    });
-    const url = `${this._base}/listings?${params}`;
-    try {
-      const resp = await fetch(url, {
-        headers: {
-          'apikey':        SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-          'Accept':        'application/json',
-        },
-        signal: AbortSignal.timeout(15000),
+    // PostgREST caps a single response at 1000 rows by default. We page
+    // through with limit+offset until a partial page comes back. `order`
+    // is fixed (no nullslast modifier — it makes the query 5x slower on
+    // an unindexed sort) so the cursor is stable across pages.
+    const { order = 'score_total.desc' } = opts;
+    const PAGE_SIZE = 1000;
+    let offset = 0;
+    let allRows = [];
+
+    while (true) {
+      const params = new URLSearchParams({
+        select:       '*',
+        listing_type: `eq.${listingType}`,
+        is_stale:     'eq.false',
+        order,
+        limit:        String(PAGE_SIZE),
+        offset:       String(offset),
       });
-      if (!resp.ok) {
-        console.warn(`[supabase] HTTP ${resp.status} for ${listingType}s`);
-        return null;
-      }
-      const rows = await resp.json();
-      console.log(`[supabase] loaded ${rows.length} ${listingType}s`);
-      // Restore the underscore-prefixed flag names the dashboard uses.
-      for (const r of rows) {
-        if ('room_efficiency_flag' in r) {
-          r._room_efficiency_flag = r.room_efficiency_flag;
+      const url = `${this._base}/listings?${params}`;
+      try {
+        const resp = await fetch(url, {
+          headers: {
+            'apikey':        SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Accept':        'application/json',
+            // Skip the exact-count query PostgREST adds by default — it
+            // doubles the round-trip cost and we don't read the count.
+            'Prefer':        'count=none',
+          },
+          signal: AbortSignal.timeout(30000),
+        });
+        if (!resp.ok) {
+          console.warn(`[supabase] HTTP ${resp.status} for ${listingType}s at offset ${offset}`);
+          // Partial data is still useful — return what we have rather than
+          // wiping the grid because page 7 of 12 timed out.
+          return allRows.length ? allRows : null;
         }
-        if ('absolute_value_gate_applied' in r) {
-          r._absolute_value_gate_applied = r.absolute_value_gate_applied;
-        }
+        const page = await resp.json();
+        allRows = allRows.concat(page);
+        if (page.length < PAGE_SIZE) break;  // last page
+        offset += PAGE_SIZE;
+      } catch (err) {
+        console.warn(`[supabase] fetch failed at offset ${offset} (${err.message})`);
+        return allRows.length ? allRows : null;
       }
-      return rows;
-    } catch (err) {
-      console.warn(`[supabase] fetch failed (${err.message})`);
-      return null;
     }
+
+    console.log(`[supabase] loaded ${allRows.length} ${listingType}s`);
+    // Restore the underscore-prefixed flag names the dashboard uses.
+    for (const r of allRows) {
+      if ('room_efficiency_flag' in r) {
+        r._room_efficiency_flag = r.room_efficiency_flag;
+      }
+      if ('absolute_value_gate_applied' in r) {
+        r._absolute_value_gate_applied = r.absolute_value_gate_applied;
+      }
+    }
+    return allRows;
   },
 };
 SupabaseClient.init();
@@ -5201,7 +5221,7 @@ function saveFilters() {
 <header>
   <!-- Lume wordmark — flame dot + lowercase wordmark -->
   <div class="logo-wordmark" aria-label="Lume — see through the listings">
-    <svg width="auto" height="28" viewBox="0 0 130 28" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <svg width="130" height="28" viewBox="0 0 130 28" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
       <defs>
         <radialGradient id="lume-glow-header" cx="50%" cy="50%" r="50%">
           <stop offset="40%" stop-color="#2A7A5A"/>
@@ -6510,10 +6530,19 @@ function _scoreBreakdownHtml(bdWrap) {
 // the tooltip work on touch devices where there's no hover.
 let _gtPinnedAnchor = null;
 
+// Document-level delegated handlers fire for EVERY event in the page, not
+// just our card markup. e.target can be the document itself (text-node
+// event after a Range selection), an SVG element on Safari/Firefox where
+// `closest` historically wasn't on SVGElement, or any other non-Element
+// target. Guarding once here keeps every delegation site safe without
+// scattering `typeof` checks through the call sites.
+const _safeClosest = (target, selector) =>
+  (target && typeof target.closest === 'function') ? target.closest(selector) : null;
+
 // Delegate tooltip triggers off document (works for dynamically created cards)
 document.addEventListener('mouseenter', e => {
   // Score badge wrap → score breakdown tooltip
-  const bdWrap = e.target.closest('.score-badge-wrap[data-sc-rent], .score-ring-wrap[data-sc-rent]');
+  const bdWrap = _safeClosest(e.target, '.score-badge-wrap[data-sc-rent], .score-ring-wrap[data-sc-rent]');
   if (bdWrap) {
     // If a different score is pinned, leave it pinned — hover doesn't unpin
     if (_gtPinnedAnchor && _gtPinnedAnchor !== bdWrap) return;
@@ -6521,13 +6550,13 @@ document.addEventListener('mouseenter', e => {
     return;
   }
   // OMI zone pill (item 5)
-  const omiPill = e.target.closest('.omi-zone-pill[data-omi-title]');
+  const omiPill = _safeClosest(e.target, '.omi-zone-pill[data-omi-title]');
   if (omiPill) {
     _gtShow(`<div class="gt-title">${omiPill.dataset.omiCode || 'OMI Zone'}</div>${omiPill.dataset.omiTitle}`, omiPill, 'anchor');
     return;
   }
   // Geo tooltip wrap
-  const geoWrap = e.target.closest('.geo-tooltip-wrap[data-geo-lines]');
+  const geoWrap = _safeClosest(e.target, '.geo-tooltip-wrap[data-geo-lines]');
   if (geoWrap) {
     try {
       const lines = JSON.parse(decodeURIComponent(geoWrap.dataset.geoLines || '[]'));
@@ -6541,9 +6570,9 @@ document.addEventListener('mouseenter', e => {
 document.addEventListener('mouseleave', e => {
   // Don't hide a pinned (clicked) score-breakdown tooltip on hover-out.
   if (_gtPinnedAnchor) return;
-  if (e.target.closest('.score-badge-wrap[data-sc-rent], .score-ring-wrap[data-sc-rent]') ||
-      e.target.closest('.geo-tooltip-wrap[data-geo-lines]') ||
-      e.target.closest('.omi-zone-pill[data-omi-title]')) {
+  if (_safeClosest(e.target, '.score-badge-wrap[data-sc-rent], .score-ring-wrap[data-sc-rent]') ||
+      _safeClosest(e.target, '.geo-tooltip-wrap[data-geo-lines]') ||
+      _safeClosest(e.target, '.omi-zone-pill[data-omi-title]')) {
     _gtHide();
   }
 }, true);
@@ -6551,7 +6580,7 @@ document.addEventListener('mouseleave', e => {
 // Click pins / unpins the score-breakdown tooltip. Clicking outside the
 // score badge (anywhere else on the page) unpins and hides it.
 document.addEventListener('click', e => {
-  const bdWrap = e.target.closest('.score-badge-wrap[data-sc-rent], .score-ring-wrap[data-sc-rent]');
+  const bdWrap = _safeClosest(e.target, '.score-badge-wrap[data-sc-rent], .score-ring-wrap[data-sc-rent]');
   if (bdWrap) {
     if (_gtPinnedAnchor === bdWrap) {
       // Tap again on the pinned badge → close
@@ -6577,7 +6606,7 @@ document.addEventListener('click', e => {
 }, true);
 
 document.addEventListener('mousemove', e => {
-  const hoverTarget = e.target.closest('.score-badge-wrap[data-sc-rent], .score-ring-wrap[data-sc-rent], .geo-tooltip-wrap[data-geo-lines]');
+  const hoverTarget = _safeClosest(e.target, '.score-badge-wrap[data-sc-rent], .score-ring-wrap[data-sc-rent], .geo-tooltip-wrap[data-geo-lines]');
   if (hoverTarget && _gtEl.style.display !== 'none') {
     _gtPosition(e);
   }
@@ -15812,7 +15841,7 @@ async function _dqClearSingle(id, btn) {
 }
 
 document.addEventListener('click', e => {
-  const th = e.target.closest('[data-dqsort]');
+  const th = _safeClosest(e.target, '[data-dqsort]');
   if (!th) return;
   const key = th.dataset.dqsort;
   if (_dqSortKey === key) _dqSortDir = _dqSortDir === 'asc' ? 'desc' : 'asc';
@@ -15937,7 +15966,7 @@ function _dqSaleRenderTable(rows) {
 }
 
 document.addEventListener('click', e => {
-  const th = e.target.closest('[data-dqssort]');
+  const th = _safeClosest(e.target, '[data-dqssort]');
   if (!th) return;
   const key = th.dataset.dqssort;
   if (_dqSaleSortKey === key) _dqSaleSortDir = _dqSaleSortDir === 'asc' ? 'desc' : 'asc';
