@@ -7,9 +7,12 @@
 # just forwards every env var to it.
 #
 # Cloudflare Pages settings → Build configuration:
-#   Build command:           bash build.sh
+#   Build command:           npm run build
 #   Build output directory:  dashboard
 #   Environment variables:   SUPABASE_URL, SUPABASE_ANON_KEY
+#
+# Listings come from Supabase at runtime — there are no JSON snapshots
+# to slim or ship anymore.
 
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

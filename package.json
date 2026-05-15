@@ -1,0 +1,9 @@
+{
+  "name": "lume-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cloudflare Pages entry point. The presence of this file makes Pages run `npm run build` instead of `pip install -r requirements.txt` (which would fail because there's nothing Python-shaped to install at deploy time). The actual build is the bash script.",
+  "scripts": {
+    "build": "bash build.sh"
+  }
+}

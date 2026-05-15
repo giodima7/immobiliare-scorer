@@ -2,11 +2,12 @@
 
 The code in this commit is ready, but Supabase has to be provisioned by hand
 once. Steps below are the sequence you have to follow in the browser. After
-they're done, the daily GitHub Actions scan will start populating Supabase
-and the deployed Cloudflare Pages dashboard will start reading from it.
+they're done, the daily GitHub Actions scan will keep Supabase up to date and
+the deployed Cloudflare Pages dashboard will read from it on every visit.
 
-If any of these steps fail, **the dashboard keeps working** — `loadRentals`
-and `loadSales` fall back to the static JSON snapshot automatically.
+Supabase is the **sole** data source for the deployed dashboard — there is no
+JSON-snapshot fallback. If Supabase is unreachable the grid renders empty and
+the header shows a "Couldn't reach Supabase" notice.
 
 ---
 
@@ -182,8 +183,12 @@ Pages project → **Settings → Builds & deployments**:
 
 | Setting | Value |
 |---|---|
-| Build command | `bash build.sh` |
+| Build command | `npm run build` |
 | Build output directory | `dashboard` |
+
+The root `package.json` exists solely so Cloudflare's build detector picks
+the Node toolchain and runs `npm run build` (which forwards to `bash build.sh`)
+instead of trying `pip install -r requirements.txt`.
 
 There are two `build.sh` files — both committed:
 
@@ -194,8 +199,8 @@ There are two `build.sh` files — both committed:
 - `dashboard/build.sh` is the real script. It substitutes
   `%%SUPABASE_URL%%` / `%%SUPABASE_ANON_KEY%%` in `dashboard/index.html`
   at build time. If the env vars aren't set the script exits 0 with a
-  warning and the placeholders stay in place — the dashboard then uses
-  the static JSON fallback.
+  warning — the deploy succeeds but the dashboard cannot load any
+  listings until the credentials are configured.
 
 ## 6. First-run sync (optional)
 
@@ -215,16 +220,17 @@ Should print `~57 batches succeeded` for rentals + `~18 batches` for sales.
 After Cloudflare's next build:
 
 1. Open https://immobiliare-scorer.pages.dev/
-2. Look at the header — there's a small **⚡ Live** badge next to the CI pill
-3. Open DevTools → Network — first XHR should hit `xxxx.supabase.co/rest/v1/listings`
-4. If something goes wrong with Supabase, the badge changes to **📄 Cached**
-   and the dashboard quietly falls back to the JSON snapshot
+2. Open DevTools → Network — the first XHRs should hit
+   `xxxx.supabase.co/rest/v1/listings` (one per page until the cursor exhausts).
+3. The grid populates within a couple of seconds. If it stays empty and the
+   header shows "Couldn't reach Supabase", check the env vars and the
+   `Sync listings to Supabase` step of the most recent Actions run.
 
 ## 8. Failure-mode test
 
 Temporarily set `SUPABASE_ANON_KEY` to garbage in Cloudflare Pages env vars,
-re-deploy, reload the site. Console should log
-`[supabase] HTTP 401 for rentals` followed by `JSON fallback` — the listings
-load, badge switches to **📄 Cached**, no error visible to the user.
+re-deploy, reload the site. Console should log `[supabase] HTTP 401 for
+rentals`, the grid renders empty, and the header shows the "Couldn't reach
+Supabase" notice.
 
 Restore the real key and re-deploy when done.

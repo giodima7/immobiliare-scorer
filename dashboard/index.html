@@ -4001,25 +4001,6 @@ body.detail-page-active .filter-bar { display: none !important; }
 .ci-pill.ci-running { color: #F4A261; }
 @keyframes ci-pulse { to { opacity: 0.4; } }
 
-/* Data-source badge — ⚡ Live (Supabase) vs 📄 Cached (static JSON) */
-.data-source-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 3px 8px;
-  border-radius: var(--radius-full, 999px);
-  background: var(--bg-muted, #F2EFE9);
-  color: var(--text-muted, #A09990);
-  white-space: nowrap;
-}
-.data-source-badge.live   { color: var(--green-deep); }
-.data-source-badge.cached { color: var(--text-muted, #A09990); }
-@media (max-width: 768px) {
-  .data-source-badge { display: none !important; }
-}
-
 /* ── Mobile layout ── */
 @media (max-width: 768px) {
   /* Fixed mobile header */
@@ -4556,7 +4537,8 @@ body.detail-page-active .filter-bar { display: none !important; }
 // build.sh substitutes the %% placeholders at Cloudflare Pages build time
 // from the SUPABASE_URL / SUPABASE_ANON_KEY env vars. If the substitution
 // hasn't happened (local dev, or env vars unset), the placeholder strings
-// remain and SupabaseClient.configured stays false → JSON fallback path.
+// remain and SupabaseClient.configured stays false — the deployed dashboard
+// then renders empty because Supabase is its sole data source.
 //
 // The anon key is safe to embed in HTML — Row Level Security restricts it
 // to read-only access on non-stale listings.
@@ -4567,7 +4549,7 @@ const SupabaseClient = {
   _base: null,
   init() {
     if (!SUPABASE_URL || SUPABASE_URL.startsWith('%%')) {
-      console.log('[supabase] not configured — JSON fallback in effect');
+      console.warn('[supabase] not configured — dashboard cannot load listings');
       return;
     }
     this._base = `${SUPABASE_URL}/rest/v1`;
@@ -4576,7 +4558,7 @@ const SupabaseClient = {
   get configured() { return !!this._base; },
   /**
    * Fetch all non-stale listings of a given type from Supabase.
-   * Returns null on any failure so callers fall through to JSON.
+   * Returns null on any failure (callers render empty + a notice).
    * Re-maps DB column names with a leading underscore back to the
    * legacy listing-dict shape the rest of the dashboard expects.
    */
@@ -4617,31 +4599,12 @@ const SupabaseClient = {
       }
       return rows;
     } catch (err) {
-      console.warn(`[supabase] fetch failed (${err.message}) — JSON fallback`);
+      console.warn(`[supabase] fetch failed (${err.message})`);
       return null;
     }
   },
 };
 SupabaseClient.init();
-
-// dataSource gets set to 'supabase' or 'json' by loadRentals/loadSales so
-// the header badge can show the user which source is in use.
-window.dataSource = null;
-
-function updateDataSourceBadge() {
-  const el = document.getElementById('data-source-badge');
-  if (!el || !window.dataSource) return;
-  if (window.dataSource === 'supabase') {
-    el.textContent  = '⚡ Live';
-    el.title        = 'Loaded from Supabase (refreshed by every scan)';
-    el.className    = 'data-source-badge live';
-  } else {
-    el.textContent  = '📄 Cached';
-    el.title        = 'Loaded from the static JSON snapshot (daily refresh)';
-    el.className    = 'data-source-badge cached';
-  }
-  el.style.display = 'inline-flex';
-}
 
 const Auth = (() => {
   const isLocal = ['localhost','127.0.0.1'].includes(location.hostname);
@@ -5247,10 +5210,6 @@ function saveFilters() {
     <span class="status-dot"></span>
     <span id="statusPillLabel">Snapshot</span>
   </span>
-  <!-- Data-source badge: ⚡ Live (Supabase) vs 📄 Cached (static JSON).
-       Hidden until loadRentals/loadSales sets window.dataSource. -->
-  <span id="data-source-badge" class="data-source-badge" style="display:none"
-        title="Where the dashboard is reading listings from"></span>
   <!-- GitHub Actions CI status — shown only in static/Cloudflare Pages mode -->
   <a class="ci-pill" id="ciPill" target="_blank" rel="noopener"
      href="https://github.com/giodima7/immobiliare-scorer/actions/workflows/daily_scan.yml"
@@ -7098,18 +7057,10 @@ async function applyStaticMode() {
     pill.style.display = '';  // visible on desktop
   }
 
-  // Show last-scan time from the JSON file's Last-Modified HTTP header
-  try {
-    const head = await fetch('./rentals_latest.json', { method: 'HEAD' });
-    const lastMod = head.headers.get('Last-Modified');
-    if (lastMod) {
-      const d = new Date(lastMod);
-      const fmt = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-                + ', ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) + ' UTC';
-      const meta = document.getElementById('meta');
-      if (meta) meta.textContent = 'Last updated: ' + fmt;
-    }
-  } catch { /* ignore — HEAD may not be available in file:// dev */ }
+  // Last-scan time used to come from the JSON snapshot's Last-Modified
+  // header. Supabase doesn't expose a per-table mtime, but renderRentals()
+  // sets the meta line to "{N} listings · {today}" once data lands, which
+  // covers the same UX need (a freshness signal in the header).
 
   // Show CI status pill and start polling the GitHub Actions API
   _startCiPoll();
@@ -7254,10 +7205,9 @@ async function init() {
     }
   }
 
-  // Load initial data now that IS_LIVE is settled — avoids race where the
-  // standalone loadRentals() call at the bottom of the script fires before
-  // this async init completes and picks the wrong URL (./rentals_latest.json
-  // instead of /rentals), getting a Flask 404 and showing an empty grid.
+  // Load initial data now that IS_LIVE is settled — avoids a race where a
+  // standalone loadRentals() call fires before init() and picks the wrong
+  // path (Supabase REST in deployed mode vs Flask /rentals locally).
   await loadRentals();
   loadCacheStats();
 
@@ -9698,26 +9648,35 @@ function renderRentals() {
 
 // ── Rentals — data loading ────────────────────────────────────────────────────
 async function loadRentals() {
-  // Try Supabase first when available — only on the deployed (static)
-  // dashboard, since local dev uses Flask routes /rentals and /sales.
+  // Two paths:
+  //   • Local dev (IS_LIVE)  → Flask /rentals route
+  //   • Deployed (!IS_LIVE) → Supabase REST (sole data source)
+  //
+  // There is no JSON-snapshot fallback anymore — if Supabase is unreachable on
+  // the deployed dashboard the grid renders an empty state and the meta line
+  // surfaces the failure so the user knows to refresh.
   let raw = null;
-  if (!IS_LIVE && typeof SupabaseClient !== 'undefined' && SupabaseClient.configured) {
-    raw = await SupabaseClient.fetchAll('rental');
-    if (raw) window.dataSource = 'supabase';
-  }
-  if (!raw) {
+  if (IS_LIVE) {
     try {
-      const url  = IS_LIVE ? '/rentals' : './rentals_latest.json';
-      const resp = await fetch(url);
+      const resp = await fetch('/rentals');
       if (!resp.ok) throw new Error('HTTP ' + resp.status);
       raw = await resp.json();
-      if (window.dataSource !== 'supabase') window.dataSource = 'json';
-    } catch (e) {
+    } catch {
       raw = [];
     }
+  } else if (typeof SupabaseClient !== 'undefined' && SupabaseClient.configured) {
+    raw = await SupabaseClient.fetchAll('rental');
+    if (!raw) {
+      const meta = document.getElementById('meta');
+      if (meta) meta.textContent = 'Couldn’t reach Supabase — try refreshing.';
+      raw = [];
+    }
+  } else {
+    const meta = document.getElementById('meta');
+    if (meta) meta.textContent = 'Supabase not configured — listings unavailable.';
+    raw = [];
   }
   ALL_RENT = _dedupListings(raw, true);
-  if (typeof updateDataSourceBadge === 'function') updateDataSourceBadge();
   rentFasciaRanges = computeRentFasciaRanges(ALL_RENT);
   _populateOmiZoneFilter(ALL_RENT);
   renderRentals();
@@ -13499,26 +13458,24 @@ function renderSales() {
 
 // ── Sales — data loading ──────────────────────────────────────────────────────
 async function loadSales() {
-  // Mirror of loadRentals — Supabase first on the deployed dashboard,
-  // JSON fallback locally and on any failure.
+  // Mirror of loadRentals — Flask locally, Supabase on the deployed dashboard.
+  // No JSON-snapshot fallback: an empty grid is the failure state.
   let raw = null;
-  if (!IS_LIVE && typeof SupabaseClient !== 'undefined' && SupabaseClient.configured) {
-    raw = await SupabaseClient.fetchAll('sale');
-    if (raw) window.dataSource = 'supabase';
-  }
-  if (!raw) {
+  if (IS_LIVE) {
     try {
-      const url  = IS_LIVE ? '/sales' : 'sales_latest.json';
-      const resp = await fetch(url);
+      const resp = await fetch('/sales');
       if (!resp.ok) throw new Error('HTTP ' + resp.status);
       raw = await resp.json();
-      if (window.dataSource !== 'supabase') window.dataSource = 'json';
     } catch {
       raw = [];
     }
+  } else if (typeof SupabaseClient !== 'undefined' && SupabaseClient.configured) {
+    raw = await SupabaseClient.fetchAll('sale');
+    if (!raw) raw = [];
+  } else {
+    raw = [];
   }
   ALL_SALE = _dedupListings(raw, false);
-  if (typeof updateDataSourceBadge === 'function') updateDataSourceBadge();
   saleFasciaRanges = computeSaleFasciaRanges(ALL_SALE);
   _populateSaleOmiZoneFilter(ALL_SALE);
   // Sales just (re)loaded — drop the cache flag. ensureSalesAnalysis() will

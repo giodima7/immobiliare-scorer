@@ -39,8 +39,9 @@ venv/
 # Node (icon generation tooling)
 node_modules/
 package-lock.json
-package.json
 generate_icons.js
+# package.json IS tracked — Cloudflare Pages uses it to skip pip install
+# and to run `npm run build` → bash build.sh.
 
 # Generated PWA icons (build from source elsewhere)
 icon-192.png
@@ -52,11 +53,14 @@ milan_pois.json
 # AI workspace
 .claude/
 
-# Keep data files tracked (updated by GitHub Actions daily scan)
+# Keep state files tracked (updated by GitHub Actions daily scan).
+# Listing data lives in Supabase now — never commit the JSON snapshots.
 !enriched_cache.json
 !seen_ids.json
-!dashboard/rentals_latest.json
-!dashboard/sales_latest.json
+rentals_latest.json
+sales_latest.json
+dashboard/rentals_latest.json
+dashboard/sales_latest.json
 
 # wrangler files
 .wrangler
