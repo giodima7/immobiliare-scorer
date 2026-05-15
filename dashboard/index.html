@@ -448,6 +448,131 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--green-deep); }
 }
 .btn-save-digest:disabled { opacity: 0.6; cursor: not-allowed; }
 
+/* ── Save Alert modal ─────────────────────────────────────────────────────
+   Centred modal opened by saveDigestFilters(). Lets the user review the
+   pre-filled rentals-tab filter state before submitting to Supabase.
+   Backdrop click + Esc close. Mobile: full-screen with scrolling body. */
+.save-alert-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(20, 22, 25, 0.45);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+  overflow-y: auto;
+}
+.save-alert-backdrop[hidden] { display: none; }
+.save-alert-modal {
+  background: #FFFFFF;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 640px;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+  font-family: var(--font);
+  padding: 28px;
+  animation: saveAlertIn 180ms ease-out;
+}
+@keyframes saveAlertIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+.save-alert-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 12px; margin-bottom: 8px;
+}
+.save-alert-header h2 {
+  margin: 0; font-size: 20px; font-weight: 700; color: var(--text);
+  letter-spacing: -0.2px;
+}
+.save-alert-close {
+  background: transparent; border: none; cursor: pointer;
+  font-size: 28px; line-height: 1; color: var(--muted);
+  padding: 0 6px; border-radius: 6px;
+  transition: color 120ms ease, background 120ms ease;
+}
+.save-alert-close:hover { color: var(--text); background: var(--surf2); }
+.save-alert-subtitle {
+  margin: 0 0 24px; color: var(--muted); font-size: 13px; line-height: 1.55;
+}
+.save-alert-section { margin-bottom: 22px; }
+.save-alert-section-title {
+  font-size: 11px; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.08em;
+  margin: 0 0 10px;
+}
+.save-alert-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 14px;
+}
+.save-alert-field {
+  display: flex; flex-direction: column; gap: 5px;
+  font-size: 13px; color: var(--text);
+}
+.save-alert-field > span { font-weight: 600; color: var(--text-secondary, #555); font-size: 12px; }
+.save-alert-field input[type="number"],
+.save-alert-field input[type="time"],
+.save-alert-field select {
+  padding: 9px 11px;
+  border: 1px solid var(--border, #E0DBD4);
+  border-radius: 8px;
+  background: #FFFFFF;
+  font-size: 13px; font-family: var(--font); color: var(--text);
+}
+.save-alert-field input:focus,
+.save-alert-field select:focus {
+  outline: none; border-color: #2A7A5A;
+  box-shadow: 0 0 0 3px rgba(42, 122, 90, 0.12);
+}
+.save-alert-field input[type="range"] { width: 100%; margin-top: 4px; }
+.save-alert-rangeval {
+  font-weight: 700; color: var(--text); font-size: 13px; text-align: right;
+  margin-top: -2px;
+}
+.save-alert-field-wide { grid-column: 1 / -1; }
+.save-alert-field-checkbox {
+  flex-direction: row; align-items: center; gap: 8px;
+  grid-column: 1 / -1; padding: 8px 0;
+}
+.save-alert-field-checkbox > span { font-weight: 600; font-size: 13px; }
+.save-alert-hint {
+  color: var(--muted); font-size: 11px; line-height: 1.4; margin-top: 2px;
+}
+.save-alert-footer {
+  display: flex; justify-content: flex-end; gap: 10px;
+  margin-top: 24px; padding-top: 16px;
+  border-top: 1px solid var(--border, #E0DBD4);
+}
+.save-alert-btn {
+  padding: 10px 18px;
+  border-radius: 999px;
+  font-size: 13px; font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font);
+  border: 1px solid transparent;
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+.save-alert-btn-secondary {
+  background: var(--surf2); color: var(--text-secondary, #555);
+  border-color: var(--border, #E0DBD4);
+}
+.save-alert-btn-secondary:hover { background: var(--border, #E0DBD4); color: var(--text); }
+.save-alert-btn-primary {
+  background: #2A7A5A; color: #FFFFFF;
+}
+.save-alert-btn-primary:hover { background: #226346; }
+.save-alert-btn-primary:disabled { background: #8AB7A0; cursor: not-allowed; }
+.save-alert-error {
+  background: #FDEEEC; color: #C0392B; border-radius: 8px;
+  padding: 10px 12px; margin-top: 12px;
+  font-size: 12px; line-height: 1.5;
+}
+@media (max-width: 600px) {
+  .save-alert-modal { padding: 20px; }
+  .save-alert-grid  { grid-template-columns: 1fr; }
+}
+
 /* "Show expired" toggle in the filter bar — opens stale listings (off-market) */
 .stale-toggle {
   display: inline-flex;
@@ -6605,6 +6730,19 @@ const STRINGS = {
     'toast.alert_saved':'Daily alert saved — you\'ll get an email with matching new listings each day',
     'toast.alert_paused':'Alert paused','toast.alert_resumed':'Alert resumed',
     'toast.sign_in_required':'Sign in to save alerts',
+    // Save-alert modal — opened from the rentals filter bar Save alert pill.
+    'alert_modal.title':'🔔 Daily email alert',
+    'alert_modal.subtitle':'Review the filters below — Lume will email you each day with new listings (and price drops) that match.',
+    'alert_modal.close':'Close',
+    'alert_modal.section_filters':'Filters',
+    'alert_modal.section_delivery':'Delivery',
+    'alert_modal.send_time':'Send time (your local)',
+    'alert_modal.send_time_hint':'Hourly resolution. Stored as UTC.',
+    'alert_modal.min_matches':'Min matches to send',
+    'alert_modal.min_matches_hint':'Skip email if fewer matches that day.',
+    'alert_modal.cancel':'Cancel',
+    'alert_modal.save':'💾 Save alert',
+    'alert_modal.error':'Could not save alert:',
   },
   it: {
     // Tabs
@@ -6741,6 +6879,19 @@ const STRINGS = {
     'toast.alert_saved':'Avviso salvato — riceverai una email ogni giorno con i nuovi annunci corrispondenti',
     'toast.alert_paused':'Avviso messo in pausa','toast.alert_resumed':'Avviso ripreso',
     'toast.sign_in_required':'Accedi per salvare gli avvisi',
+    // Save-alert modal
+    'alert_modal.title':'🔔 Avviso email giornaliero',
+    'alert_modal.subtitle':'Controlla i filtri qui sotto — Lume ti invierà una email ogni giorno con i nuovi annunci (e cali di prezzo) corrispondenti.',
+    'alert_modal.close':'Chiudi',
+    'alert_modal.section_filters':'Filtri',
+    'alert_modal.section_delivery':'Consegna',
+    'alert_modal.send_time':'Ora di invio (ora locale)',
+    'alert_modal.send_time_hint':'Risoluzione oraria. Salvato come UTC.',
+    'alert_modal.min_matches':'Min corrispondenze per inviare',
+    'alert_modal.min_matches_hint':'Salta l\'email se ci sono meno corrispondenze.',
+    'alert_modal.cancel':'Annulla',
+    'alert_modal.save':'💾 Salva avviso',
+    'alert_modal.error':'Impossibile salvare l\'avviso:',
   },
 };
 
@@ -8772,6 +8923,9 @@ function _readActiveFilterState() {
   };
 }
 
+// Entry point for the 🔔 Save alert button. Opens a modal pre-filled with
+// the rentals filter state + existing saved-alert preferences (if any) so
+// the user can review and adjust before committing to a recurring email.
 async function saveDigestFilters() {
   const user = (typeof Auth !== 'undefined') ? Auth.user : null;
   if (!user) {
@@ -8779,23 +8933,157 @@ async function saveDigestFilters() {
     showToast(t('toast.sign_in_required') || 'Sign in to save alerts');
     return;
   }
-  const btn = document.getElementById('save-digest-btn');
-  const _orig = btn ? btn.textContent : '';
-  if (btn) { btn.disabled = true; btn.textContent = t('filter.saving') || '⏳ Saving…'; }
+  // Pull existing row so the modal shows their saved time / threshold,
+  // not the static defaults — lets editing feel like editing, not a wipe.
+  const existing = await _fetchDigestFilters(user.id);
+  await openSaveAlertModal(existing);
+}
 
-  const email = user.primaryEmailAddress?.emailAddress
-             || user.emailAddresses?.[0]?.emailAddress
-             || '';
-  const payload = Object.assign({
-    clerk_user_id: user.id,
+function _setSelectValue(id, value) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.value = (value == null ? '' : String(value));
+}
+
+// Convert a UTC HH:MM string to the user's local HH:MM for the time picker.
+// PostgreSQL stores send_time_utc as TEXT 'HH:MM'; we keep storage in UTC
+// so the cron-driven worker doesn't have to think about timezones, but the
+// picker speaks the user's local time for sanity.
+function _utcStringToLocalTime(utcHHMM) {
+  if (!utcHHMM || !/^\d{1,2}:\d{2}$/.test(utcHHMM)) return '07:00';
+  const [h, m] = utcHHMM.split(':').map(Number);
+  const d = new Date();
+  d.setUTCHours(h, m, 0, 0);
+  return d.toTimeString().slice(0, 5);   // "HH:MM" in local TZ
+}
+
+function _localTimeToUtcString(localHHMM) {
+  if (!localHHMM || !/^\d{1,2}:\d{2}$/.test(localHHMM)) return '07:00';
+  const [h, m] = localHHMM.split(':').map(Number);
+  const d = new Date();
+  d.setHours(h, m, 0, 0);
+  return String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0');
+}
+
+async function openSaveAlertModal(existing) {
+  // Pre-fill with existing row if present, else with the live rentals
+  // filter state (so first-time save mirrors what's on screen).
+  const liveState = _readActiveFilterState();
+  const seed = existing || {};
+
+  const pick = (key, fallback) => {
+    const v = seed[key];
+    return (v == null || v === '') ? fallback : v;
+  };
+
+  _setSelectValue('amMaxRent',   pick('max_rent',      liveState.max_rent));
+  _setSelectValue('amMinSqm',    pick('min_sqm',       liveState.min_sqm));
+  _setSelectValue('amMinRooms',  pick('min_rooms',     liveState.min_rooms));
+  _setSelectValue('amMaxMetro',  pick('max_metro_min', liveState.max_metro_min));
+  _setSelectValue('amMinFloor',  pick('min_floor',     liveState.min_floor));
+  _setSelectValue('amMinEnergy', pick('min_energy',    liveState.min_energy));
+  // fascia / omi_zona are stored as arrays but the dashboard's filter is
+  // single-select — take the first entry for prefill.
+  _setSelectValue('amFascia', (seed.fascia && seed.fascia[0]) || (liveState.fascia && liveState.fascia[0]) || '');
+  _setSelectValue('amGems',    seed.gems_filter   || liveState.gems_filter   || 'all');
+  _setSelectValue('amSource',  seed.source_filter || liveState.source_filter || 'all');
+
+  const score = pick('min_score', liveState.min_score || 0);
+  _setSelectValue('amScore', score);
+  const scoreLabel = document.getElementById('amScoreVal');
+  if (scoreLabel) scoreLabel.textContent = score;
+
+  const elev = document.getElementById('amElevator');
+  if (elev) elev.checked = (seed.require_elevator != null ? !!seed.require_elevator : !!liveState.require_elevator);
+
+  const sendTime = _utcStringToLocalTime(seed.send_time_utc || '07:00');
+  _setSelectValue('amSendTime', sendTime);
+
+  // Surface the local-timezone label in the hint so the user knows what
+  // "local" means without having to guess.
+  const hint = document.getElementById('amSendTimeHint');
+  if (hint) {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'local';
+    hint.textContent = (t('alert_modal.send_time_hint') || 'Hourly resolution. Stored as UTC.')
+                       + ` (${tz})`;
+  }
+
+  _setSelectValue('amMinMatches', seed.min_new_listings || 1);
+
+  const err = document.getElementById('amError');
+  if (err) { err.hidden = true; err.textContent = ''; }
+
+  const back = document.getElementById('saveAlertBackdrop');
+  if (!back) return;
+  back.hidden = false;
+  // Re-translate every data-i18n inside in case the user changed languages
+  // since last open. Cheap; only ~30 elements.
+  back.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+  back.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.dataset.i18nPlaceholder); });
+  // Focus the first input so keyboard-only users land in a useful place.
+  setTimeout(() => { document.getElementById('amMaxRent')?.focus(); }, 50);
+  // Esc to close.
+  document.addEventListener('keydown', _saveAlertEscHandler);
+}
+
+function closeSaveAlertModal(ev) {
+  // Only close on backdrop clicks if the click ORIGINATED on the backdrop
+  // itself (event delegation guards against accidental dismissals from
+  // input clicks bubbling up through stopPropagation gaps).
+  if (ev && ev.target && ev.currentTarget && ev.target !== ev.currentTarget) return;
+  const back = document.getElementById('saveAlertBackdrop');
+  if (back) back.hidden = true;
+  document.removeEventListener('keydown', _saveAlertEscHandler);
+}
+
+function _saveAlertEscHandler(ev) {
+  if (ev.key === 'Escape') closeSaveAlertModal();
+}
+
+async function submitSaveAlert() {
+  const user = (typeof Auth !== 'undefined') ? Auth.user : null;
+  if (!user) {
+    if (typeof Auth !== 'undefined') Auth.openSignIn();
+    return;
+  }
+  const submitBtn = document.getElementById('amSubmitBtn');
+  const errEl = document.getElementById('amError');
+  if (errEl) { errEl.hidden = true; errEl.textContent = ''; }
+
+  // Read modal field values
+  const num  = id => { const v = parseFloat(document.getElementById(id)?.value); return Number.isFinite(v) ? v : null; };
+  const str  = id => document.getElementById(id)?.value || null;
+  const bool = id => !!document.getElementById(id)?.checked;
+
+  const fascia = str('amFascia');
+  const email  = user.primaryEmailAddress?.emailAddress
+              || user.emailAddresses?.[0]?.emailAddress
+              || '';
+
+  const payload = {
+    clerk_user_id:    user.id,
     email,
-    display_name: user.fullName || [user.firstName, user.lastName].filter(Boolean).join(' ') || '',
-    active: true,
-  }, _readActiveFilterState());
+    display_name:     user.fullName || [user.firstName, user.lastName].filter(Boolean).join(' ') || '',
+    max_rent:         num('amMaxRent')   || null,
+    min_sqm:          num('amMinSqm')    || null,
+    min_rooms:        num('amMinRooms')  || null,
+    max_metro_min:    num('amMaxMetro')  || null,
+    min_score:        num('amScore')     || 0,
+    min_floor:        num('amMinFloor')  || null,
+    require_elevator: bool('amElevator'),
+    min_energy:       str('amMinEnergy') || null,
+    fascia:           fascia ? [fascia] : [],
+    omi_zona:         [],
+    gems_filter:      str('amGems')   || 'all',
+    source_filter:    str('amSource') || 'all',
+    send_time_utc:    _localTimeToUtcString(str('amSendTime') || '07:00'),
+    min_new_listings: Math.max(1, Math.min(50, parseInt(num('amMinMatches')) || 1)),
+    active:           true,
+  };
+
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = t('filter.saving') || '⏳ Saving…'; }
 
   try {
-    // PostgREST upsert: clerk_user_id is the unique key (see migration 004),
-    // so on_conflict + merge-duplicates lets one POST handle insert OR update.
     const resp = await fetch(`${SUPABASE_URL}/rest/v1/digest_filters?on_conflict=clerk_user_id`, {
       method: 'POST',
       headers: {
@@ -8808,17 +9096,22 @@ async function saveDigestFilters() {
     });
     if (!resp.ok) {
       const detail = await resp.text();
-      throw new Error(`HTTP ${resp.status} ${detail.slice(0, 200)}`);
+      throw new Error(`HTTP ${resp.status} ${detail.slice(0, 240)}`);
     }
-    if (btn) { btn.textContent = t('filter.alert_saved') || '✓ Alert saved'; }
-    showToast(t('toast.alert_saved') || 'Daily alert saved — you\'ll get an email with matching new listings each day');
-    setTimeout(() => {
-      if (btn) { btn.textContent = _orig || (t('filter.save_alert') || '🔔 Save alert'); btn.disabled = false; }
-    }, 2000);
+    showToast(t('toast.alert_saved') || 'Daily alert saved.');
+    closeSaveAlertModal();
+    // Refresh the Settings tab section if it's currently visible so the
+    // chip list reflects the just-saved filters.
+    const wrap = document.getElementById('digestSettingsWrap');
+    if (wrap) renderDigestSettingsSection().then(html => { wrap.innerHTML = html; });
   } catch (err) {
     console.warn('[digest] save failed:', err);
-    if (btn) { btn.textContent = _orig || (t('filter.save_alert') || '🔔 Save alert'); btn.disabled = false; }
-    showToast(`Could not save alert: ${err.message}`);
+    if (errEl) {
+      errEl.hidden = false;
+      errEl.textContent = `${t('alert_modal.error') || 'Could not save alert:'} ${err.message}`;
+    }
+  } finally {
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = t('alert_modal.save') || '💾 Save alert'; }
   }
 }
 
@@ -17342,6 +17635,146 @@ function resetValuation() {
 // ── Boot Auth ─────────────────────────────────────────────────────────────────
 Auth.init();
 </script>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SAVE-ALERT MODAL — opened by saveDigestFilters() on the Rentals
+     filter bar. Lets the user review the current filter state, tweak
+     individual fields, set the digest delivery time, and the minimum
+     number of matches that triggers an email. Submit upserts to
+     Supabase digest_filters. Hidden until openSaveAlertModal() is
+     called; closed via backdrop click, Esc, or the Cancel button.
+═══════════════════════════════════════════════════════════════ -->
+<div id="saveAlertBackdrop" class="save-alert-backdrop" hidden onclick="closeSaveAlertModal(event)">
+  <div class="save-alert-modal" onclick="event.stopPropagation()" role="dialog" aria-labelledby="saveAlertTitle" aria-modal="true">
+    <div class="save-alert-header">
+      <h2 id="saveAlertTitle" data-i18n="alert_modal.title">🔔 Daily email alert</h2>
+      <button type="button" class="save-alert-close" onclick="closeSaveAlertModal()" aria-label="Close" data-i18n-title="alert_modal.close">×</button>
+    </div>
+    <p class="save-alert-subtitle" data-i18n="alert_modal.subtitle">
+      Review the filters below — Lume will email you each day with new listings (and price drops) that match.
+    </p>
+
+    <form id="saveAlertForm" onsubmit="event.preventDefault(); submitSaveAlert();">
+      <!-- ── Filters section ── -->
+      <div class="save-alert-section">
+        <div class="save-alert-section-title" data-i18n="alert_modal.section_filters">Filters</div>
+        <div class="save-alert-grid">
+
+          <label class="save-alert-field">
+            <span data-i18n="filter.max_rent">Max rent €/mo</span>
+            <input type="number" id="amMaxRent" min="0" step="50" placeholder="any" data-i18n-placeholder="filter.any">
+          </label>
+
+          <label class="save-alert-field">
+            <span data-i18n="filter.min_sqm">Min m²</span>
+            <input type="number" id="amMinSqm" min="0" step="5" placeholder="any" data-i18n-placeholder="filter.any">
+          </label>
+
+          <label class="save-alert-field">
+            <span data-i18n="filter.min_rooms">Min rooms</span>
+            <input type="number" id="amMinRooms" min="1" max="10" step="1" placeholder="any" data-i18n-placeholder="filter.any">
+          </label>
+
+          <label class="save-alert-field">
+            <span data-i18n="filter.max_metro">Max metro</span>
+            <select id="amMaxMetro">
+              <option value="" data-i18n="filter.any">Any</option>
+              <option value="500">≤500m</option>
+              <option value="800">≤800m</option>
+              <option value="1200">≤1200m</option>
+            </select>
+          </label>
+
+          <label class="save-alert-field">
+            <span data-i18n="filter.min_floor">Min floor</span>
+            <select id="amMinFloor">
+              <option value="" data-i18n="filter.any">Any</option>
+              <option value="2">2+</option>
+              <option value="4">4+</option>
+              <option value="6">6+</option>
+            </select>
+          </label>
+
+          <label class="save-alert-field">
+            <span data-i18n="filter.min_energy">Min energy</span>
+            <select id="amMinEnergy">
+              <option value="" data-i18n="filter.any">Any</option>
+              <option value="C">C+</option>
+              <option value="B">B+</option>
+              <option value="A">A</option>
+            </select>
+          </label>
+
+          <label class="save-alert-field">
+            <span data-i18n="filter.fascia">Fascia</span>
+            <select id="amFascia">
+              <option value="" data-i18n="filter.all">All</option>
+              <option value="B">B — Centrale</option>
+              <option value="C">C — Semicentrale</option>
+              <option value="D">D — Periferica</option>
+              <option value="E">E — Periferica outer</option>
+            </select>
+          </label>
+
+          <label class="save-alert-field">
+            <span data-i18n="filter.min_score">Min score</span>
+            <input type="range" id="amScore" min="0" max="100" value="0" step="5" oninput="document.getElementById('amScoreVal').textContent = this.value">
+            <span class="save-alert-rangeval" id="amScoreVal">0</span>
+          </label>
+
+          <label class="save-alert-field save-alert-field-wide">
+            <span data-i18n="filter.gems">Gems</span>
+            <select id="amGems">
+              <option value="all" data-i18n="filter.all">All</option>
+              <option value="hidden" data-i18n="filter.hidden">✦ Hidden</option>
+              <option value="great_value" data-i18n="filter.great_value">Great Value</option>
+            </select>
+          </label>
+
+          <label class="save-alert-field save-alert-field-wide">
+            <span data-i18n="filter.source">Source</span>
+            <select id="amSource">
+              <option value="all" data-i18n="filter.all">All</option>
+              <option value="immobiliare">Immobiliare</option>
+              <option value="idealista">Idealista</option>
+            </select>
+          </label>
+
+          <label class="save-alert-field save-alert-field-checkbox">
+            <input type="checkbox" id="amElevator">
+            <span data-i18n="filter.elevator">Elevator</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- ── Delivery section ── -->
+      <div class="save-alert-section">
+        <div class="save-alert-section-title" data-i18n="alert_modal.section_delivery">Delivery</div>
+        <div class="save-alert-grid">
+
+          <label class="save-alert-field">
+            <span data-i18n="alert_modal.send_time">Send time (your local)</span>
+            <input type="time" id="amSendTime" step="3600" value="07:00">
+            <small class="save-alert-hint" id="amSendTimeHint" data-i18n="alert_modal.send_time_hint">Hourly resolution. Times are stored as UTC.</small>
+          </label>
+
+          <label class="save-alert-field">
+            <span data-i18n="alert_modal.min_matches">Min matches to send</span>
+            <input type="number" id="amMinMatches" min="1" max="50" step="1" value="1">
+            <small class="save-alert-hint" data-i18n="alert_modal.min_matches_hint">Skip email if fewer matches that day.</small>
+          </label>
+        </div>
+      </div>
+
+      <!-- ── Buttons ── -->
+      <div class="save-alert-footer">
+        <button type="button" class="save-alert-btn save-alert-btn-secondary" onclick="closeSaveAlertModal()" data-i18n="alert_modal.cancel">Cancel</button>
+        <button type="submit" class="save-alert-btn save-alert-btn-primary" id="amSubmitBtn" data-i18n="alert_modal.save">💾 Save alert</button>
+      </div>
+      <div class="save-alert-error" id="amError" hidden></div>
+    </form>
+  </div>
+</div>
 
 </div><!-- /app-root -->
 </body>

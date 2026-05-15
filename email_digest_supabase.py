@@ -56,8 +56,14 @@ GMAIL_USER    = _require("GMAIL_USER")
 GMAIL_PASS    = _require("GMAIL_APP_PASSWORD")
 DASHBOARD_URL = os.environ.get("DASHBOARD_URL", "https://immobiliare-scorer.pages.dev").rstrip("/")
 DRY_RUN       = os.environ.get("DIGEST_DRY_RUN") == "1"
+FORCE_ALL     = os.environ.get("DIGEST_FORCE_ALL") == "1"
 
-TODAY = datetime.date.today().isoformat()
+# Workflow fires hourly; we deliver to users whose send_time_utc hour
+# matches the current UTC hour. `force_all_users` (workflow_dispatch
+# input) bypasses this — useful for manual end-to-end testing.
+NOW_UTC      = datetime.datetime.now(datetime.timezone.utc)
+TODAY        = NOW_UTC.date().isoformat()
+CURRENT_HOUR = NOW_UTC.hour   # 0–23
 
 HEADERS = {
     "apikey":        SUPABASE_KEY,
@@ -89,9 +95,29 @@ def supabase_get(path: str) -> list:
     return rows
 
 
+def _matches_current_hour(send_time_utc: str | None) -> bool:
+    """
+    send_time_utc is stored as 'HH:MM'. We deliver when its HOUR matches
+    the current UTC hour (minute precision is meaningless against an
+    hourly cron). Missing / malformed values default to 07:00 UTC.
+    """
+    raw = (send_time_utc or "07:00").strip()
+    try:
+        hh = int(raw.split(":", 1)[0])
+    except (ValueError, IndexError):
+        hh = 7
+    return hh == CURRENT_HOUR
+
+
 def fetch_all_digest_users() -> list[dict]:
-    """All users who've saved filters AND haven't paused their alert."""
-    return supabase_get("digest_filters?active=eq.true&select=*")
+    """All active users; filtered by send-hour unless force_all is set."""
+    users = supabase_get("digest_filters?active=eq.true&select=*")
+    if FORCE_ALL:
+        print(f"[digest] FORCE_ALL=1 — ignoring send_time_utc, processing all {len(users)} active users")
+        return users
+    matched = [u for u in users if _matches_current_hour(u.get("send_time_utc"))]
+    print(f"[digest] UTC hour {CURRENT_HOUR:02d}:00 — {len(matched)} of {len(users)} active users scheduled for now")
+    return matched
 
 
 def fetch_new_listings_for_user(filters: dict) -> list[dict]:

@@ -13,11 +13,20 @@ name: Daily Email Digest
 
 on:
   schedule:
-    - cron: '0 7 * * *'   # 07:00 UTC = 09:00 CEST / 08:00 CET
+    # Hourly — the script filters to users whose send_time_utc matches the
+    # current UTC hour, so each user gets exactly one email per day at the
+    # time they picked in the Save-alert modal.
+    - cron: '0 * * * *'
   workflow_dispatch:       # manual trigger for testing
     inputs:
       dry_run:
         description: 'Build emails but don''t actually send (debug)'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+      force_all_users:
+        description: 'Ignore send_time_utc and email every active user (testing)'
         required: false
         default: 'false'
         type: choice
@@ -48,4 +57,5 @@ jobs:
           GMAIL_APP_PASSWORD:   ${{ secrets.GMAIL_APP_PASSWORD }}
           DASHBOARD_URL:        ${{ secrets.DASHBOARD_URL }}
           DIGEST_DRY_RUN:       ${{ inputs.dry_run == 'true' && '1' || '' }}
+          DIGEST_FORCE_ALL:     ${{ inputs.force_all_users == 'true' && '1' || '' }}
         run: python3 email_digest_supabase.py
