@@ -419,7 +419,10 @@ def score_reasons(listing: dict) -> list[dict]:
                 "Limited standout features for the asking price")
 
     # LOCATION fallback ─────────────────────────────────────────────────
-    loc_score = listing.get("score_location") or listing.get("score_geo")
+    # `or` would skip score_location when it's 0; use explicit None checks.
+    loc_score = listing.get("score_location")
+    if loc_score is None:
+        loc_score = listing.get("score_geo")
     if loc_score is not None and loc_score <= 55 and "Location" not in existing_neg:
         weak_items = []
         if metro_min is not None and metro_min >= 10:
@@ -434,7 +437,12 @@ def score_reasons(listing: dict) -> list[dict]:
         if weak_items:
             add("Location", "negative", 4,
                 "Below-average location — " + ", ".join(weak_items[:2]))
-        else:
+        elif metro_min is None or metro_min > 5:
+            # Only claim "less-connected pocket" when the listing isn't
+            # within easy walking distance of the metro. A 3-min walk to
+            # an M1 station in the historic centre (Vetra, Duomo, Cairoli)
+            # is the OPPOSITE of "less-connected" — staying silent is far
+            # better than emitting a contradiction.
             add("Location", "negative", 3,
                 "Quieter / less-connected pocket of the city")
 

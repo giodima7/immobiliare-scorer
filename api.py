@@ -344,6 +344,12 @@ def _flush_geo(data: list, path: Path, scoring_mod):
     global _dq_cache
     _dq_cache = None  # invalidate data-quality cache after new data is written
     scored = scoring_mod.score_all(list(data))
+    # Refresh score_reasons too — without this the bullets stay anchored
+    # to the previous scan's scores and can contradict the new ones (e.g.
+    # "Quieter / less-connected pocket" on a listing whose location score
+    # just got recomputed to 80+ after geo enrichment landed).
+    from explain import explain_all
+    explain_all(scored)
     clean  = [{k: v for k, v in l.items() if k != "omi"} for l in scored]
     tmp = path.with_suffix(".tmp")
     from dashboard_io import write_snapshot
@@ -915,6 +921,8 @@ def apply_omi_now():
         _ecache.load()
         updated = _apply_omi_polygon(data, _ecache)
         scored  = _scoring.score_all(data)
+        from explain import explain_all
+        explain_all(scored)
         clean   = [{k: v for k, v in l.items() if k != "omi"} for l in scored]
         from dashboard_io import write_snapshot
         write_snapshot(rent_path, clean)
@@ -1086,6 +1094,8 @@ def _rescore_with_new_mappings():
 
     import scoring as _scoring
     scored = _scoring.score_all(data)
+    from explain import explain_all
+    explain_all(scored)
     clean  = [{k: v for k, v in l.items() if k != "omi"} for l in scored]
     from dashboard_io import write_snapshot
     write_snapshot(rent_path, clean)
@@ -1584,6 +1594,8 @@ def _rescore_existing_json():
 
         import scoring as _scoring
         scored = _scoring.score_all(data)
+        from explain import explain_all
+        explain_all(scored)
         clean  = [{k: v for k, v in l.items() if k != 'omi'} for l in scored]
         from dashboard_io import write_snapshot
         write_snapshot(rent_path, clean)
