@@ -9438,6 +9438,29 @@ async function deleteDigestAlert(alertId, displayName) {
   }
 }
 
+// One delegator that handles every per-alert action (edit / toggle /
+// delete). Attached to document once; the buttons themselves carry the
+// data-* attributes the handlers need. Avoids inline onclick string
+// concatenation that breaks on names containing quotes.
+if (!window._digestActionDelegatorBound) {
+  window._digestActionDelegatorBound = true;
+  document.addEventListener('click', (e) => {
+    const btn = _safeClosest(e.target, '[data-digest-action]');
+    if (!btn) return;
+    const wrap = _safeClosest(btn, '.digest-alert-actions');
+    if (!wrap) return;
+    const id     = wrap.dataset.alertId;
+    const name   = wrap.dataset.alertName || '';
+    const active = wrap.dataset.alertActive === '1';
+    if (!id) return;
+    switch (btn.dataset.digestAction) {
+      case 'edit':   editDigestAlert(id);            break;
+      case 'toggle': toggleDigestActive(id, active); break;
+      case 'delete': deleteDigestAlert(id, name);    break;
+    }
+  });
+}
+
 // Build chip labels summarising one saved alert. Order matches the modal's
 // field order so reading the chips left-to-right mirrors filling the form.
 function _digestChipsForAlert(f) {
@@ -9515,9 +9538,13 @@ async function renderDigestSettingsSection() {
     const sendLocal = formatSendTime(f.send_time_utc);
     const minMatch  = f.min_new_listings || 1;
 
-    // confirm() needs the name escaped for safe template embedding.
-    const nameForJs = JSON.stringify(displayName);
-
+    // Action buttons read everything from data-* attributes instead of
+    // inline JS arguments — embedding the name via JSON.stringify into
+    // an inline onclick (e.g. `onclick="...('${id}', ${JSON.stringify
+    // (name)})"`) breaks the HTML attribute as soon as the name has a
+    // double quote in it, killing the entire <script> tail with
+    // "Unexpected end of input". escapeHtml on the data values is
+    // enough; the click delegator parses them back safely.
     return `
       <div class="digest-alert-card">
         <div class="digest-alert-row1">
@@ -9537,12 +9564,18 @@ async function renderDigestSettingsSection() {
             ? chips.map(c => `<span class="digest-alert-chip">${escapeHtml(c)}</span>`).join('')
             : `<span style="color:var(--muted);font-size:12px">${escapeHtml(summary)}</span>`}
         </div>
-        <div class="digest-alert-actions">
-          <button type="button" onclick="editDigestAlert('${escapeHtml(f.id)}')">${escapeHtml(t('settings.update_filters') || '✏️ Edit')}</button>
-          <button type="button" onclick="toggleDigestActive('${escapeHtml(f.id)}', ${f.active})">${escapeHtml(f.active
-            ? (t('settings.pause_alert')  || '⏸ Pause')
-            : (t('settings.resume_alert') || '▶ Resume'))}</button>
-          <button type="button" class="digest-alert-delete" onclick="deleteDigestAlert('${escapeHtml(f.id)}', ${nameForJs})">${escapeHtml(t('settings.delete_alert') || '🗑 Delete')}</button>
+        <div class="digest-alert-actions"
+             data-alert-id="${escapeHtml(f.id)}"
+             data-alert-name="${escapeHtml(displayName)}"
+             data-alert-active="${f.active ? '1' : '0'}">
+          <button type="button"
+                  data-digest-action="edit">${escapeHtml(t('settings.update_filters') || '✏️ Edit')}</button>
+          <button type="button"
+                  data-digest-action="toggle">${escapeHtml(f.active
+                    ? (t('settings.pause_alert')  || '⏸ Pause')
+                    : (t('settings.resume_alert') || '▶ Resume'))}</button>
+          <button type="button" class="digest-alert-delete"
+                  data-digest-action="delete">${escapeHtml(t('settings.delete_alert') || '🗑 Delete')}</button>
         </div>
       </div>`;
   }).join('');
