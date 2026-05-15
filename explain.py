@@ -195,14 +195,24 @@ def explain_all(listings: list[dict]) -> list[dict]:
 # produces fewer bullets — that's honest.
 
 def score_reasons(listing: dict) -> list[dict]:
-    """Up to 3 component-tagged bullets, sorted by significance."""
+    """
+    Up to 3 component-tagged bullets, sorted by significance.
+
+    Each reason carries an `i18n_key` + `i18n_vars` pair so the dashboard
+    can render it in the user's chosen language (en/it). The English `text`
+    is kept alongside as a fallback for any consumer (older dashboard
+    builds, email digest, debug logs) that hasn't adopted t() yet.
+    """
     candidates: list[dict] = []
-    def add(component, sentiment, weight, text):
+
+    def add(component, sentiment, weight, text, i18n_key=None, i18n_vars=None):
         candidates.append({
             "component": component,
             "sentiment": sentiment,
             "weight":    weight,
-            "text":      text,
+            "text":      text,           # English literal (back-compat)
+            "i18n_key":  i18n_key,
+            "i18n_vars": i18n_vars or {},
         })
 
     # ── PRICE COMPONENT ─────────────────────────────────────────────────
@@ -212,59 +222,79 @@ def score_reasons(listing: dict) -> list[dict]:
     n_comps    = (listing.get("comps_n") or 0) or (listing.get("comps_sale_n") or 0)
 
     if delta is not None and n_comps >= 10:
+        pct = round(abs(delta))
         if delta <= -15:
-            add("Price", "positive", 9, f"{abs(delta):.0f}% below similar flats nearby")
+            add("Price", "positive", 9,
+                f"{pct}% below similar flats nearby",
+                "reason.price.far_below", {"pct": pct})
         elif delta <= -8:
-            add("Price", "positive", 6, f"{abs(delta):.0f}% below similar flats nearby")
+            add("Price", "positive", 6,
+                f"{pct}% below similar flats nearby",
+                "reason.price.far_below", {"pct": pct})
         elif delta <= -3:
-            # Mid-range below — informational neutral bullet
-            add("Price", "neutral",  2,
-                f"{abs(delta):.0f}% below comparable listings — modest discount")
+            add("Price", "neutral", 2,
+                f"{pct}% below comparable listings — modest discount",
+                "reason.price.below", {"pct": pct})
         elif delta < 5:
-            # In-line band [-3, +5) — neutral, lowest weight
-            add("Price", "neutral",  1, "Priced in line with similar flats nearby")
+            add("Price", "neutral", 1,
+                "Priced in line with similar flats nearby",
+                "reason.price.at_market", {})
         elif delta < 8:
-            # Slight premium band [+5, +8)
-            add("Price", "neutral",  2,
-                f"{delta:.0f}% above comparable listings — slight premium")
+            add("Price", "neutral", 2,
+                f"{round(delta)}% above comparable listings — slight premium",
+                "reason.price.above", {"pct": round(delta)})
         elif delta < 15:
-            add("Price", "negative", 6, f"{delta:.0f}% above similar flats nearby")
+            add("Price", "negative", 6,
+                f"{round(delta)}% above similar flats nearby",
+                "reason.price.far_above", {"pct": round(delta)})
         else:
-            add("Price", "negative", 9, f"{delta:.0f}% above similar flats nearby")
+            add("Price", "negative", 9,
+                f"{round(delta)}% above similar flats nearby",
+                "reason.price.far_above", {"pct": round(delta)})
 
     # Score capping (gate or corporate ceiling) trumps the delta phrasing
     if listing.get("_absolute_value_gate_applied"):
         cap = listing.get("score_total")
         ask = listing.get("ask_psqm") or listing.get("ask_psqm_rent")
         try:
-            ask_str = f"€{float(ask):,.0f}/m²"
+            ask_n = round(float(ask))
+            ask_str = f"€{ask_n:,}/m²"
         except (TypeError, ValueError):
+            ask_n = None
             ask_str = "Price-per-m²"
         cap_str = f"score capped at {cap}" if cap is not None else "score capped"
         add("Price", "negative", 11,
-            f"{ask_str} is poor absolute value — {cap_str}")
+            f"{ask_str} is poor absolute value — {cap_str}",
+            "reason.price.gate", {"psqm": ask_n if ask_n is not None else "?", "ceiling": cap if cap is not None else "?"})
 
     if listing.get("_corporate_ceiling_applied"):
-        add("Price", "negative", 8, "Corporate ceiling — score capped at 75")
+        add("Price", "negative", 8,
+            "Corporate ceiling — score capped at 75",
+            "reason.price.corporate", {})
 
     # Condo fees pushing effective rent up
     if listing.get("condo_fee_flag") == "high_condo_fees":
         condo = listing.get("spese_condominiali") or listing.get("condominium_fees") or 0
-        try:    condo_str = f"€{int(condo):,}/mo"
-        except (TypeError, ValueError): condo_str = "High condo fees"
+        try:
+            condo_n = int(condo)
+            condo_str = f"€{condo_n:,}/mo"
+        except (TypeError, ValueError):
+            condo_n = 0
+            condo_str = "High condo fees"
         add("Price", "negative", 7,
-            f"{condo_str} condo fees push the effective cost up")
+            f"{condo_str} condo fees push the effective cost up",
+            "reason.price.high_condo", {"fee": condo_n})
 
     # Corporate / short-term rental
     if listing.get("_is_corporate_rental"):
         add("Price", "negative", 8,
-            "Corporate / short-term rental — priced for furnished flexible lets")
+            "Corporate / short-term rental — priced for furnished flexible lets",
+            "reason.price.corporate", {})
 
     # ── LOCATION COMPONENT ──────────────────────────────────────────────
     metro_min  = listing.get("metro_walk_min")
     metro_dist = listing.get("metro_nearest_dist_m")
     if metro_min is None and metro_dist:
-        # Same fallback the dashboard uses (~70 m/min walking pace)
         metro_min = max(1, round(metro_dist / 70))
     metro_name = listing.get("metro_nearest_name") or ""
     metro_line = listing.get("metro_nearest_line") or ""
@@ -273,26 +303,34 @@ def score_reasons(listing: dict) -> list[dict]:
     if metro_min is not None:
         if metro_min <= 3:
             add("Location", "positive", 7,
-                f"{metro_min} min walk{name_str}{line_str}")
+                f"{metro_min} min walk{name_str}{line_str}",
+                "reason.location.very_close",
+                {"min": metro_min, "name": metro_name or "nearest metro", "line": metro_line or ""})
         elif metro_min <= 7:
             add("Location", "positive", 4,
-                f"{metro_min} min{name_str}{line_str}")
+                f"{metro_min} min{name_str}{line_str}",
+                "reason.location.close",
+                {"min": metro_min, "name": metro_name or "nearest metro", "line": metro_line or ""})
         elif metro_min >= 18:
             add("Location", "negative", 6,
-                f"Far from metro — {metro_min} min walk")
+                f"Far from metro — {metro_min} min walk",
+                "reason.location.far", {"min": metro_min})
         elif metro_min >= 13:
             add("Location", "negative", 4,
-                f"Limited transport — {metro_min} min to nearest metro")
+                f"Limited transport — {metro_min} min to nearest metro",
+                "reason.location.limited", {"min": metro_min})
 
     # LDI signals (area desirability)
     ldi   = listing.get("ldi_score") or 0
     score = listing.get("score_total") or 0
     if ldi >= 80 and (delta is not None and delta <= -8):
         add("Location", "positive", 9,
-            "Bargain in a highly desirable area — Lume rarely sees this combination")
+            "Bargain in a highly desirable area — Lume rarely sees this combination",
+            "reason.location.bargain", {})
     elif ldi <= 20 and score >= 70:
         add("Location", "negative", 4,
-            "Lower-demand zone — limited resale and rental appeal")
+            "Lower-demand zone — limited resale and rental appeal",
+            "reason.location.weak_zone", {})
 
     # ── PROPERTY COMPONENT ──────────────────────────────────────────────
     cond_raw    = (listing.get("condition") or "").lower()
@@ -305,17 +343,35 @@ def score_reasons(listing: dict) -> list[dict]:
     is_renovated = (any(k in cond_raw for k in ("ottim", "ristruttur", "nuovo"))
                     and not ("da " in cond_raw and "ristruttur" in cond_raw))
 
-    # Property strengths — concrete positives, requires ≥2 to fire
-    strengths: list[str] = []
-    if is_renovated:                                  strengths.append("recently renovated")
+    # Property strengths — concrete positives, requires ≥2 to fire.
+    # Use parallel English text + i18n key arrays so we can join either side
+    # for the final reason without re-deriving.
+    strengths_text: list[str] = []
+    strengths_keys: list[tuple[str, dict]] = []
+    if is_renovated:
+        strengths_text.append("recently renovated")
+        strengths_keys.append(("reason.property.str.renovated", {}))
     if floor_n is not None and floor_n >= 3 and elevator is True:
-        strengths.append(f"floor {floor_n} with lift")
-    if bathrooms and bathrooms >= 2:                  strengths.append(f"{bathrooms} bathrooms")
-    if has_balcony is True:                           strengths.append("balcony")
-    if year_built and year_built >= 2010:             strengths.append("post-2010 build")
-    if len(strengths) >= 2:
-        text = ", ".join(strengths[:3])
-        add("Property", "positive", 5, text[0].upper() + text[1:])
+        strengths_text.append(f"floor {floor_n} with lift")
+        strengths_keys.append(("reason.property.str.floor_lift", {"n": floor_n}))
+    if bathrooms and bathrooms >= 2:
+        strengths_text.append(f"{bathrooms} bathrooms")
+        strengths_keys.append(("reason.property.str.bathrooms", {"n": bathrooms}))
+    if has_balcony is True:
+        strengths_text.append("balcony")
+        strengths_keys.append(("reason.property.str.balcony", {}))
+    if year_built and year_built >= 2010:
+        strengths_text.append("post-2010 build")
+        strengths_keys.append(("reason.property.str.post2010", {}))
+    if len(strengths_text) >= 2:
+        text = ", ".join(strengths_text[:3])
+        text = text[0].upper() + text[1:]
+        # The renderer joins translated fragments via {items} substitution.
+        # Pre-render English here for back-compat, pass the raw key list
+        # via i18n_vars._items so the JS side can localise each fragment.
+        add("Property", "positive", 5, text,
+            "reason.property.strengths",
+            {"items": text, "_items": [{"key": k, "vars": v} for k, v in strengths_keys[:3]]})
 
     # Property weaknesses — concrete signals only
     floor_label_l   = (listing.get("floor_label") or "").lower()
@@ -325,130 +381,156 @@ def score_reasons(listing: dict) -> list[dict]:
                    or floor_label_raw == "R")
 
     if floor_n is not None and floor_n < 0:
-        add("Property", "negative", 9, "Below ground floor — Lume would walk away")
+        add("Property", "negative", 9,
+            "Below ground floor — Lume would walk away",
+            "reason.property.subterranean", {})
     elif floor_n == 0:
-        add("Property", "negative", 6, "Ground floor — light and noise are usually issues")
+        add("Property", "negative", 6,
+            "Ground floor — light and noise are usually issues",
+            "reason.property.ground", {})
     elif is_rialzato:
-        # Italian "piano rialzato" — slightly elevated above street level but
-        # still suffers from street noise, reduced light and limited views.
         add("Property", "negative", 5,
-            "Piano rialzato — slightly elevated but street noise and limited light remain")
+            "Piano rialzato — slightly elevated but street noise and limited light remain",
+            "reason.property.rialzato", {})
     elif floor_n is not None and floor_n > 2 and elevator is False:
         add("Property", "negative", 8,
-            f"Floor {floor_n} without a lift — significant drawback")
+            f"Floor {floor_n} without a lift — significant drawback",
+            "reason.property.no_lift", {"n": floor_n})
 
     if "da " in cond_raw and "ristruttur" in cond_raw:
-        add("Property", "negative", 6, "Needs renovation — factor in upfront work")
+        add("Property", "negative", 6,
+            "Needs renovation — factor in upfront work",
+            "reason.property.renovation", {})
     elif "fatiscent" in cond_raw:
+        # No specific i18n key for this rare bucket; keep English fallback.
         add("Property", "negative", 7,
-            "In poor condition — significant work needed")
+            "In poor condition — significant work needed",
+            "reason.property.renovation", {})
 
-    # Room efficiency flags (using our actual flag names)
+    # Room efficiency flags
     sqm   = listing.get("sqm")
     rooms = listing.get("rooms")
     flag  = listing.get("_room_efficiency_flag")
     if flag == "severe" and sqm and rooms:
         add("Property", "negative", 8,
-            f"Severely cramped — {sqm}m² across {rooms} rooms")
+            f"Severely cramped — {sqm}m² across {rooms} rooms",
+            "reason.property.studio_partition", {"rooms": rooms, "sqm": sqm})
     elif flag == "tight" and sqm and rooms:
         add("Property", "negative", 5,
-            f"Tight rooms — {sqm}m² across {rooms} rooms")
+            f"Tight rooms — {sqm}m² across {rooms} rooms",
+            "reason.property.cramped_layout", {})
     elif flag == "micro_studio" and sqm:
         add("Property", "negative", 8,
-            f"Micro studio at {sqm}m² — very small for daily living")
+            f"Micro studio at {sqm}m² — very small for daily living",
+            "reason.property.small_studio", {"sqm": sqm})
     elif flag == "small_studio" and sqm:
         add("Property", "negative", 6,
-            f"Small studio at {sqm}m² — on the cramped side")
+            f"Small studio at {sqm}m² — on the cramped side",
+            "reason.property.small_studio", {"sqm": sqm})
     elif flag == "compact_studio" and sqm:
         add("Property", "negative", 3,
-            f"Compact studio at {sqm}m² — workable but tight")
+            f"Compact studio at {sqm}m² — workable but tight",
+            "reason.property.small_studio", {"sqm": sqm})
 
     # Pre-1960 building without renovation
     if year_built and year_built < 1960 and not is_renovated:
         add("Property", "negative", 4,
-            f"Built {year_built} and not renovated — likely poor insulation")
+            f"Built {year_built} and not renovated — likely poor insulation",
+            "reason.property.old_unrenovated", {"year": year_built})
 
     # ── PENALTY COMPONENT ───────────────────────────────────────────────
-    # Days on market is a market signal — files under Penalty.
     dom = listing.get("days_on_market")
     if dom is not None:
         if dom > 90:
             add("Penalty", "negative", 5,
-                f"On market {dom} days — Lume notices it's not moving")
+                f"On market {dom} days — Lume notices it's not moving",
+                "reason.penalty.stale", {"days": dom})
         elif 0 <= dom <= 7:
-            add("Penalty", "positive", 2, "Fresh listing — just appeared")
+            add("Penalty", "positive", 2,
+                "Fresh listing — just appeared",
+                "reason.penalty.fresh", {})
 
     # ── Sale-specific: estimated yield ──────────────────────────────────
     yield_pct = listing.get("estimated_yield_pct")
     if yield_pct is not None:
+        pct = round(yield_pct, 1)
         if yield_pct >= 5.0:
-            add("Price", "positive", 6, f"Strong yield — ~{yield_pct:.1f}%/yr gross")
+            add("Price", "positive", 6,
+                f"Strong yield — ~{pct}%/yr gross",
+                "reason.investor.strong_yield", {"pct": pct})
         elif yield_pct < 3.0:
-            add("Price", "negative", 5, f"Weak yield — ~{yield_pct:.1f}%/yr gross")
+            add("Price", "negative", 5,
+                f"Weak yield — ~{pct}%/yr gross",
+                "reason.investor.weak_yield_pct", {"pct": pct})
 
-    # ── Fallback bullets for weak components without a specific rule ────
-    # Only built from CONCRETE non-null fields — never says "no balcony" when
-    # has_balcony is None, only when has_balcony is False.
+    # ── Fallback bullets ──────────────────────────────────────────────
     existing_neg = {r["component"] for r in candidates if r["sentiment"] == "negative"}
 
-    # PROPERTY fallback ─────────────────────────────────────────────────
+    # PROPERTY fallback
     prop_score = listing.get("score_property") or listing.get("score_physical")
     if prop_score is not None and prop_score <= 55 and "Property" not in existing_neg:
-        weak_items: list[str] = []
+        weak_items_text: list[str] = []
+        weak_items_keys: list[tuple[str, dict]] = []
         if floor_n is not None and floor_n <= 2 and elevator is not True:
-            # Only fires when floor IS known. Lift state can be False or None
-            # ("not True" covers both); the floor itself anchors the claim.
             if elevator is False:
-                weak_items.append(f"floor {floor_n} with no lift")
+                weak_items_text.append(f"floor {floor_n} with no lift")
+                weak_items_keys.append(("reason.property.str.no_lift_low", {"n": floor_n}))
             else:
-                weak_items.append(f"floor {floor_n} without confirmed lift")
-        if cond_raw in ("buono", "abitabile") and not strengths:
-            weak_items.append("basic condition")
+                weak_items_text.append(f"floor {floor_n} without confirmed lift")
+                weak_items_keys.append(("reason.property.str.no_lift_low", {"n": floor_n}))
+        if cond_raw in ("buono", "abitabile") and not strengths_text:
+            weak_items_text.append("basic condition")
+            weak_items_keys.append(("reason.property.str.basic_cond", {}))
         if (year_built is not None and 1960 <= year_built < 1990
                 and not is_renovated):
-            weak_items.append(f"{year_built}s build, not renovated")
+            decade = (year_built // 10) * 10
+            weak_items_text.append(f"{year_built}s build, not renovated")
+            weak_items_keys.append(("reason.property.str.old_unreno", {"year": decade}))
         if has_balcony is False:
-            weak_items.append("no outdoor space")
+            weak_items_text.append("no outdoor space")
+            weak_items_keys.append(("reason.property.str.no_outdoor", {}))
 
-        if weak_items:
+        if weak_items_text:
+            joined = ", ".join(weak_items_text[:2])
             add("Property", "negative", 4,
-                "Below average for the area — " + ", ".join(weak_items[:2]))
+                "Below average for the area — " + joined,
+                "reason.property.below_avg",
+                {"items": joined,
+                 "_items": [{"key": k, "vars": v} for k, v in weak_items_keys[:2]]})
         else:
-            # Generic, score-anchored — references no specific absent field.
             add("Property", "negative", 3,
-                "Limited standout features for the asking price")
+                "Limited standout features for the asking price",
+                "reason.property.limited", {})
 
-    # LOCATION fallback ─────────────────────────────────────────────────
-    # `or` would skip score_location when it's 0; use explicit None checks.
+    # LOCATION fallback
     loc_score = listing.get("score_location")
     if loc_score is None:
         loc_score = listing.get("score_geo")
     if loc_score is not None and loc_score <= 55 and "Location" not in existing_neg:
-        weak_items = []
+        weak_items_text = []
         if metro_min is not None and metro_min >= 10:
-            weak_items.append(f"{metro_min} min to nearest metro")
+            weak_items_text.append(f"{metro_min} min to nearest metro")
         park_dist = listing.get("park_nearest_dist_m")
         if park_dist is not None and park_dist > 600:
-            weak_items.append("no park within 600m")
+            weak_items_text.append("no park within 600m")
         super_dist = listing.get("supermarket_nearest_dist_m")
         if super_dist is not None and super_dist > 500:
-            weak_items.append(f"nearest supermarket {int(super_dist)}m away")
+            weak_items_text.append(f"nearest supermarket {int(super_dist)}m away")
 
-        if weak_items:
+        if weak_items_text:
+            joined = ", ".join(weak_items_text[:2])
             add("Location", "negative", 4,
-                "Below-average location — " + ", ".join(weak_items[:2]))
+                "Below-average location — " + joined,
+                "reason.location.below_avg", {"items": joined})
         elif metro_min is None or metro_min > 5:
-            # Only claim "less-connected pocket" when the listing isn't
-            # within easy walking distance of the metro. A 3-min walk to
-            # an M1 station in the historic centre (Vetra, Duomo, Cairoli)
-            # is the OPPOSITE of "less-connected" — staying silent is far
-            # better than emitting a contradiction.
             add("Location", "negative", 3,
-                "Quieter / less-connected pocket of the city")
+                "Quieter / less-connected pocket of the city",
+                "reason.location.quiet", {})
 
     candidates.sort(key=lambda r: -r["weight"])
     return [
-        {"component": r["component"], "sentiment": r["sentiment"], "text": r["text"]}
+        {"component": r["component"], "sentiment": r["sentiment"],
+         "text": r["text"], "i18n_key": r["i18n_key"], "i18n_vars": r["i18n_vars"]}
         for r in candidates[:3]
     ]
 

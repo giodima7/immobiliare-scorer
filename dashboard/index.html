@@ -3975,6 +3975,39 @@ body.detail-page-active .filter-bar { display: none !important; }
 .logo-text .logo-scorer { color: var(--accent); }
 
 /* ── Live / Snapshot status pill (header) ── */
+/* ── Language toggle (EN / IT) — header pill ── */
+.lang-toggle {
+  display: inline-flex;
+  background: var(--surf2, #F2EFE9);
+  border-radius: 999px;
+  padding: 2px;
+  gap: 1px;
+  flex-shrink: 0;
+}
+.lang-btn {
+  padding: 4px 9px;
+  border: none;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  background: transparent;
+  color: var(--muted, #8a8478);
+  transition: background 120ms ease, color 120ms ease;
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+.lang-btn:hover { color: var(--text); }
+.lang-btn.active {
+  background: #FFFFFF;
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+@media (max-width: 768px) {
+  .lang-btn { padding: 4px 7px; font-size: 10px; }
+}
+
 .status-pill {
   display: inline-flex; align-items: center; gap: 5px;
   font-size: 10px; font-weight: 600; color: var(--muted);
@@ -5265,14 +5298,19 @@ function saveFilters() {
     <span class="ci-dot"></span>
     <span id="ciPillLabel">CI –</span>
   </a>
-  <div class="meta" id="meta">Lume is reading the listings…</div>
-  <button class="btn-fetch-toggle" id="btnFetchToggle">▶ Run Lume now</button>
-  <a class="fav-link" href="/zone-mappings" id="zonesLink" title="Fix unmatched OMI zones">🗺 Zones <span class="fav-badge" id="unmatchedBadge" style="display:none"></span></a>
+  <div class="meta" id="meta" data-i18n="loading.listings">Lume is reading the listings…</div>
+  <button class="btn-fetch-toggle" id="btnFetchToggle" data-i18n="header.run_lume">▶ Run Lume now</button>
+  <a class="fav-link" href="/zone-mappings" id="zonesLink" title="Fix unmatched OMI zones">🗺 <span data-i18n="header.zones">Zones</span> <span class="fav-badge" id="unmatchedBadge" style="display:none"></span></a>
   <a class="fav-link fav-btn" href="/favourites" id="favLink">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-    <span class="fav-label"> Favourites</span>
+    <span class="fav-label" data-i18n="header.favourites"> Favourites</span>
     <span class="fav-badge" id="favBadge"></span>
   </a>
+  <!-- Language toggle (EN / IT). State synced with currentLang via updateLangToggle(). -->
+  <div class="lang-toggle" role="group" aria-label="Language">
+    <button class="lang-btn" data-lang="en" type="button" onclick="setLang('en')">EN</button>
+    <button class="lang-btn" data-lang="it" type="button" onclick="setLang('it')">IT</button>
+  </div>
   <!-- Mobile-only filter trigger -->
   <button class="mobile-filter-btn" id="mobileFilterBtn" aria-label="Open filters" title="Filters">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -5289,12 +5327,12 @@ function saveFilters() {
 
 <!-- ── Tab bar ── -->
 <nav class="tab-bar">
-  <button class="tab-btn" id="tabSales" data-tab="sales" onclick="switchTab('sales')">🏡 Sales</button>
-  <button class="tab-btn active" id="tabRentals" data-tab="rentals" onclick="switchTab('rentals')">🔑 Rentals</button>
-  <button class="tab-btn" id="tabMap" data-tab="map" onclick="switchTab('map')">🗺 Map</button>
-  <button class="tab-btn" id="tabInsights" data-tab="insights" onclick="switchTab('insights')">📊 Stats</button>
-  <button class="tab-btn" id="tabValuation" data-tab="valuation" onclick="switchTab('valuation')">🏷 Valuation</button>
-  <button class="tab-btn" id="tabSettings" data-tab="settings" onclick="switchTab('settings')">⚙ Settings</button>
+  <button class="tab-btn" id="tabSales" data-tab="sales" onclick="switchTab('sales')">🏡 <span data-i18n="tab.sales">Sales</span></button>
+  <button class="tab-btn active" id="tabRentals" data-tab="rentals" onclick="switchTab('rentals')">🔑 <span data-i18n="tab.rentals">Rentals</span></button>
+  <button class="tab-btn" id="tabMap" data-tab="map" onclick="switchTab('map')">🗺 <span data-i18n="tab.map">Map</span></button>
+  <button class="tab-btn" id="tabInsights" data-tab="insights" onclick="switchTab('insights')">📊 <span data-i18n="tab.stats">Stats</span></button>
+  <button class="tab-btn" id="tabValuation" data-tab="valuation" onclick="switchTab('valuation')">🏷 <span data-i18n="tab.valuation">Valuation</span></button>
+  <button class="tab-btn" id="tabSettings" data-tab="settings" onclick="switchTab('settings')">⚙ <span data-i18n="tab.settings">Settings</span></button>
 </nav>
 
 <!-- ══════════════════════════════════════════════════════════════
@@ -5411,9 +5449,9 @@ function saveFilters() {
   </div>
   <div class="filter-sep"></div>
   <div class="filter-group">
-    <label>Fascia</label>
+    <label data-i18n="filter.fascia">Fascia</label>
     <select id="sFascia">
-      <option value="">All</option>
+      <option value="" data-i18n="filter.all">All</option>
       <option value="B">B — Centrale</option>
       <option value="C">C — Semicentrale</option>
       <option value="D">D — Periferica</option>
@@ -5422,31 +5460,31 @@ function saveFilters() {
   </div>
   <div class="filter-sep"></div>
   <div class="filter-group">
-    <label>OMI Zone</label>
+    <label data-i18n="filter.omi_zone">OMI Zone</label>
     <select id="sOmiZone">
-      <option value="">All zones</option>
+      <option value="" data-i18n="filter.all_areas">All zones</option>
     </select>
   </div>
   <div class="filter-sep"></div>
   <div class="filter-group">
-    <label>Max price €</label>
-    <input type="number" id="sMaxPrice" placeholder="any" min="0" step="50000" style="width:110px">
+    <label data-i18n="filter.max_price">Max price €</label>
+    <input type="number" id="sMaxPrice" placeholder="any" data-i18n-placeholder="filter.any" min="0" step="50000" style="width:110px">
   </div>
   <div class="filter-sep"></div>
   <div class="filter-group">
-    <label>Min m²</label>
-    <input type="number" id="sMinSqm" placeholder="any" min="0" step="5" style="width:70px">
+    <label data-i18n="filter.min_sqm">Min m²</label>
+    <input type="number" id="sMinSqm" placeholder="any" data-i18n-placeholder="filter.any" min="0" step="5" style="width:70px">
   </div>
   <div class="filter-sep"></div>
   <div class="filter-group">
-    <label>Min rooms</label>
-    <input type="number" id="sMinRooms" placeholder="any" min="1" max="10" step="1" style="width:65px">
+    <label data-i18n="filter.min_rooms">Min rooms</label>
+    <input type="number" id="sMinRooms" placeholder="any" data-i18n-placeholder="filter.any" min="1" max="10" step="1" style="width:65px">
   </div>
   <div class="filter-sep"></div>
   <div class="filter-group">
-    <label>Max metro</label>
+    <label data-i18n="filter.max_metro">Max metro</label>
     <select id="sMaxMetro">
-      <option value="">Any</option>
+      <option value="" data-i18n="filter.any">Any</option>
       <option value="500">≤500m</option>
       <option value="800">≤800m</option>
       <option value="1200">≤1200m</option>
@@ -5454,9 +5492,9 @@ function saveFilters() {
   </div>
   <div class="filter-sep"></div>
   <div class="filter-group">
-    <label>Min floor</label>
+    <label data-i18n="filter.min_floor">Min floor</label>
     <select id="sMinFloor">
-      <option value="">Any</option>
+      <option value="" data-i18n="filter.any">Any</option>
       <option value="2">2+</option>
       <option value="4">4+</option>
       <option value="6">6+</option>
@@ -5466,7 +5504,7 @@ function saveFilters() {
   <div class="filter-group">
     <label style="display:flex;align-items:center;gap:5px;cursor:pointer;user-select:none">
       <input type="checkbox" id="sElevator" style="accent-color:var(--accent);cursor:pointer">
-      Elevator
+      <span data-i18n="filter.elevator">Elevator</span>
     </label>
   </div>
   <div class="filter-sep"></div>
@@ -5474,21 +5512,21 @@ function saveFilters() {
     <label style="display:flex;align-items:center;gap:5px;cursor:pointer;user-select:none"
            title="Auctions are judicial sales — much cheaper but with major legal complications">
       <input type="checkbox" id="sShowAuctions" style="accent-color:var(--accent);cursor:pointer">
-      Show auctions
+      <span data-i18n="filter.show_auctions">Show auctions</span>
     </label>
   </div>
   <div class="filter-group">
     <label style="display:flex;align-items:center;gap:5px;cursor:pointer;user-select:none"
            title="Nuda proprietà = bare ownership; the seller keeps usufruct (right to live there for life)">
       <input type="checkbox" id="sShowNuda" style="accent-color:var(--accent);cursor:pointer">
-      Show nuda proprietà
+      <span data-i18n="filter.show_nuda">Show nuda proprietà</span>
     </label>
   </div>
   <div class="filter-sep"></div>
   <div class="filter-group">
-    <label>Min energy</label>
+    <label data-i18n="filter.min_energy">Min energy</label>
     <select id="sMinEnergy">
-      <option value="">Any</option>
+      <option value="" data-i18n="filter.any">Any</option>
       <option value="C">C+</option>
       <option value="B">B+</option>
       <option value="A">A</option>
@@ -5496,15 +5534,15 @@ function saveFilters() {
   </div>
   <div class="filter-sep"></div>
   <div class="filter-group">
-    <label>Min score</label>
+    <label data-i18n="filter.min_score">Min score</label>
     <input type="range" id="sScore" min="0" max="100" value="0" step="5">
     <span class="range-val" id="sScoreVal">0</span>
   </div>
   <div class="filter-sep"></div>
   <div class="filter-group">
-    <label>Source</label>
+    <label data-i18n="filter.source">Source</label>
     <div class="sort-tabs" id="sSourceFilter">
-      <button class="sort-tab active" data-ssource="">All</button>
+      <button class="sort-tab active" data-ssource="" data-i18n="filter.all">All</button>
       <button class="sort-tab" data-ssource="sale">Immobiliare</button>
       <button class="sort-tab" data-ssource="idealista_sale">Idealista</button>
     </div>
@@ -5524,19 +5562,19 @@ function saveFilters() {
   <div class="filter-group">
     <label>Sort</label>
     <div class="sort-tabs" id="sSortTabs">
-      <button class="sort-tab active" data-ssort="score_total">Score</button>
-      <button class="sort-tab" data-ssort="comps_sale_delta_pct">vs Comps</button>
-      <button class="sort-tab investor-only" data-ssort="_yield">Yield ↓</button>
-      <button class="sort-tab investor-only" data-ssort="_cashflow">Cash flow ↓</button>
-      <button class="sort-tab" data-ssort="price">Price ↑</button>
+      <button class="sort-tab active" data-ssort="score_total" data-i18n="sort.score">Score</button>
+      <button class="sort-tab" data-ssort="comps_sale_delta_pct" data-i18n="sort.vs_omi">vs Comps</button>
+      <button class="sort-tab investor-only" data-ssort="_yield" data-i18n="sort.yield">Yield ↓</button>
+      <button class="sort-tab investor-only" data-ssort="_cashflow" data-i18n="sort.cashflow">Cash flow ↓</button>
+      <button class="sort-tab" data-ssort="price" data-i18n="sort.price_asc">Price ↑</button>
     </div>
   </div>
   <div class="filter-sep"></div>
   <div class="filter-group">
-    <label>Gems</label>
+    <label data-i18n="filter.gems">Gems</label>
     <div id="sGemFilterBar" style="display:flex;gap:4px">
-      <button class="gem-tab active" data-sgem="">All</button>
-      <button class="gem-tab" data-sgem="hidden">✦ Hidden</button>
+      <button class="gem-tab active" data-sgem="" data-i18n="filter.all">All</button>
+      <button class="gem-tab" data-sgem="hidden" data-i18n="filter.hidden">✦ Hidden</button>
       <button class="gem-tab" data-sgem="good">Great Value</button>
     </div>
   </div>
@@ -5740,9 +5778,9 @@ function saveFilters() {
     </div>
     <div class="filter-sep"></div>
     <div class="filter-group">
-      <label>Fascia</label>
+      <label data-i18n="filter.fascia">Fascia</label>
       <select id="rFascia">
-        <option value="">All</option>
+        <option value="" data-i18n="filter.all">All</option>
         <option value="B">B — Centrale</option>
         <option value="C">C — Semicentrale</option>
         <option value="D">D — Periferica</option>
@@ -5751,40 +5789,40 @@ function saveFilters() {
     </div>
     <div class="filter-sep"></div>
     <div class="filter-group">
-      <label>OMI Zone</label>
+      <label data-i18n="filter.omi_zone">OMI Zone</label>
       <select id="rOmiZone" onchange="renderRentals()">
-        <option value="">All zones</option>
+        <option value="" data-i18n="filter.all_areas">All zones</option>
       </select>
     </div>
     <div class="filter-sep"></div>
     <div class="filter-group">
-      <label>Max rent €/mo</label>
-      <input type="number" id="rMaxRent" placeholder="any" min="0" step="50" style="width:90px">
+      <label data-i18n="filter.max_rent">Max rent €/mo</label>
+      <input type="number" id="rMaxRent" placeholder="any" data-i18n-placeholder="filter.any" min="0" step="50" style="width:90px">
     </div>
     <div class="filter-sep"></div>
     <div class="filter-group">
-      <label>Min m²</label>
-      <input type="number" id="rMinSqm" placeholder="any" min="0" step="5" style="width:70px">
+      <label data-i18n="filter.min_sqm">Min m²</label>
+      <input type="number" id="rMinSqm" placeholder="any" data-i18n-placeholder="filter.any" min="0" step="5" style="width:70px">
     </div>
     <div class="filter-sep"></div>
     <div class="filter-group">
-      <label>Min rooms</label>
-      <input type="number" id="rMinRooms" placeholder="any" min="1" max="10" step="1" style="width:65px">
+      <label data-i18n="filter.min_rooms">Min rooms</label>
+      <input type="number" id="rMinRooms" placeholder="any" data-i18n-placeholder="filter.any" min="1" max="10" step="1" style="width:65px">
     </div>
     <div class="filter-sep"></div>
     <div class="filter-group">
-      <label>Source</label>
+      <label data-i18n="filter.source">Source</label>
       <div class="sort-tabs" id="rSourceFilter">
-        <button class="sort-tab active" data-rsource="">All</button>
+        <button class="sort-tab active" data-rsource="" data-i18n="filter.all">All</button>
         <button class="sort-tab" data-rsource="immobiliare">Immobiliare</button>
         <button class="sort-tab" data-rsource="idealista">Idealista</button>
       </div>
     </div>
     <div class="filter-sep"></div>
     <div class="filter-group">
-      <label>Max metro</label>
+      <label data-i18n="filter.max_metro">Max metro</label>
       <select id="rMaxMetro">
-        <option value="">Any</option>
+        <option value="" data-i18n="filter.any">Any</option>
         <option value="500">≤500m</option>
         <option value="800">≤800m</option>
         <option value="1200">≤1200m</option>
@@ -5792,9 +5830,9 @@ function saveFilters() {
     </div>
     <div class="filter-sep"></div>
     <div class="filter-group">
-      <label>Min floor</label>
+      <label data-i18n="filter.min_floor">Min floor</label>
       <select id="rMinFloor">
-        <option value="">Any</option>
+        <option value="" data-i18n="filter.any">Any</option>
         <option value="2">2+</option>
         <option value="4">4+</option>
         <option value="6">6+</option>
@@ -5804,14 +5842,14 @@ function saveFilters() {
     <div class="filter-group">
       <label style="display:flex;align-items:center;gap:5px;cursor:pointer;user-select:none">
         <input type="checkbox" id="rElevator" style="accent-color:var(--accent);cursor:pointer">
-        Elevator
+        <span data-i18n="filter.elevator">Elevator</span>
       </label>
     </div>
     <div class="filter-sep"></div>
     <div class="filter-group">
-      <label>Min energy</label>
+      <label data-i18n="filter.min_energy">Min energy</label>
       <select id="rMinEnergy">
-        <option value="">Any</option>
+        <option value="" data-i18n="filter.any">Any</option>
         <option value="C">C+</option>
         <option value="B">B+</option>
         <option value="A">A</option>
@@ -5819,24 +5857,24 @@ function saveFilters() {
     </div>
     <div class="filter-sep"></div>
     <div class="filter-group">
-      <label>Min score</label>
+      <label data-i18n="filter.min_score">Min score</label>
       <input type="range" id="rScore" min="0" max="100" value="0" step="5">
       <span class="range-val" id="rScoreVal">0</span>
     </div>
     <div class="filter-sep"></div>
     <div class="filter-group">
-      <label>Sort</label>
+      <label data-i18n="filter.sort">Sort</label>
       <div class="sort-tabs" id="rentSortTabs">
-        <button class="sort-tab active" data-rsort="score_total">Score</button>
-        <button class="sort-tab" data-rsort="vs_omi_rent_pct">vs OMI</button>
-        <button class="sort-tab" data-rsort="rent_mo">Rent ↑</button>
+        <button class="sort-tab active" data-rsort="score_total" data-i18n="sort.score">Score</button>
+        <button class="sort-tab" data-rsort="vs_omi_rent_pct" data-i18n="sort.vs_omi">vs OMI</button>
+        <button class="sort-tab" data-rsort="rent_mo" data-i18n="sort.rent_asc">Rent ↑</button>
       </div>
     </div>
     <div class="filter-sep"></div>
     <div class="filter-group">
-      <label>Listed</label>
+      <label data-i18n="filter.listed">Listed</label>
       <select id="rListed">
-        <option value="">Any</option>
+        <option value="" data-i18n="filter.any">Any</option>
         <option value="today">Today</option>
         <option value="7">Last 7 days</option>
         <option value="14">Last 14 days</option>
@@ -5845,17 +5883,17 @@ function saveFilters() {
     </div>
     <div class="filter-sep"></div>
     <div class="filter-group">
-      <label>Gems</label>
+      <label data-i18n="filter.gems">Gems</label>
       <div id="rGemFilter" style="display:flex;gap:4px">
-        <button class="gem-tab active" data-gem="">All</button>
-        <button class="gem-tab" data-gem="hidden">✦ Hidden</button>
-        <button class="gem-tab" data-gem="good">Great Value</button>
+        <button class="gem-tab active" data-gem="" data-i18n="filter.all">All</button>
+        <button class="gem-tab" data-gem="hidden" data-i18n="filter.hidden">✦ Hidden</button>
+        <button class="gem-tab" data-gem="good" data-i18n="filter.great_value">Great Value</button>
       </div>
     </div>
-    <button class="btn-reset" id="rBtnReset">Start fresh</button>
+    <button class="btn-reset" id="rBtnReset" data-i18n="filter.start_fresh">Start fresh</button>
     <label class="stale-toggle" title="Show listings not seen by the scanner in 7+ days">
       <input type="checkbox" id="rShowStale">
-      <span>Show expired</span>
+      <span data-i18n="filter.show_expired">Show expired</span>
     </label>
   </div>
 
@@ -6372,6 +6410,350 @@ function saveFilters() {
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
 <script>
+// ─── Internationalisation ─────────────────────────────────────────────────────
+// Two-language UI (en / it). Static labels carry data-i18n="key" attributes
+// so rerenderUI() can swap them without touching surrounding markup. Dynamic
+// strings call t(key, vars) inline. Score reasons emitted by the Python
+// scorer carry an i18n_key + i18n_vars structure (see explain.py); the
+// dashboard translates them on render — same mechanism as inline strings.
+//
+// Keys use dot notation: 'category.subcategory.key'.
+// Placeholders use {name}: t('reason.price.far_below', {pct: 12.3}).
+//
+// Add new strings here as the UI grows. Both en + it are required for any
+// new key — t() falls back to en if it is missing, then to the raw key.
+const STRINGS = {
+  en: {
+    // Tabs
+    'tab.sales':'Sales','tab.rentals':'Rentals','tab.map':'Map','tab.stats':'Stats',
+    'tab.valuation':'Valuation','tab.settings':'Settings',
+    // Header
+    'header.listings_count':'{n} listings · {date}',
+    'header.favourites':'Favourites','header.sign_in':'Sign in',
+    'header.sign_out':'Sign out','header.live':'Live','header.snapshot':'Snapshot',
+    'header.run_lume':'▶ Run Lume now','header.zones':'Zones',
+    // Filters
+    'filter.area':'Area','filter.fascia':'Fascia','filter.omi_zone':'OMI Zone',
+    'filter.max_rent':'Max rent €/mo','filter.max_price':'Max price €',
+    'filter.min_sqm':'Min m²','filter.min_rooms':'Min rooms',
+    'filter.max_metro':'Max metro','filter.min_floor':'Min floor',
+    'filter.elevator':'Elevator','filter.min_energy':'Min energy',
+    'filter.min_score':'Min score','filter.source':'Source',
+    'filter.listed':'Listed','filter.gems':'Gems','filter.sort':'Sort',
+    'filter.all_areas':'All areas','filter.all':'All','filter.any':'Any',
+    'filter.show_expired':'Show expired','filter.start_fresh':'Start fresh',
+    'filter.hidden':'✦ Hidden','filter.great_value':'Great Value',
+    'filter.show_auctions':'Show auctions','filter.show_nuda':'Show nuda proprietà',
+    // Sort buttons
+    'sort.score':'Score','sort.vs_omi':'vs OMI','sort.rent_asc':'Rent ↑',
+    'sort.price_asc':'Price ↑','sort.yield':'Yield ↓','sort.cashflow':'Cash flow ↓',
+    // Summary bar
+    'summary.showing':'Showing {n} listings',
+    'summary.avg_score':'Avg score {score} / 100',
+    'summary.avg_rent':'Avg rent €{rent}/mo','summary.avg_price':'Avg price €{price}',
+    'summary.hidden_gems':'Hidden Gems {n}','summary.geo':'Geo:',
+    'summary.rescore':'Rescore','summary.enrich':'Enrich',
+    // Gem badges
+    'badge.hidden_gem':'✦ Hidden Gem','badge.great_value':'💰 Great Value',
+    'badge.new':'New','badge.expired':'Expired',
+    // Card footer
+    'card.view':'↗ View','card.fav':'♡ Fav','card.share':'Share',
+    'card.how_lume_scored':'How Lume scored this',
+    'card.full_analysis':'📊 Full investment analysis',
+    // Confidence labels
+    'conf.high':'Lume is confident','conf.medium':'Lume is fairly sure',
+    'conf.low':'Lume is uncertain','conf.thin':'Lume isn\'t sure — thin data',
+    // Callout headlines
+    'callout.hidden_gem':'Hidden Gem — {pct}% below similar flats nearby ({psqm} · {conf}).',
+    'callout.great_value':'Great Value — {pct}% below similar flats nearby ({psqm} · {conf}).',
+    'callout.below_market':'{pct}% below similar flats nearby ({psqm} · {conf}).',
+    'callout.at_market':'In line with similar flats nearby ({psqm} · {conf}).',
+    'callout.above_market':'{pct}% above similar flats nearby ({psqm} · {conf}).',
+    // Comps suggest
+    'comps.suggest':'⚠ Comps suggest:','comps.diff_rent':'(+€{diff} vs {n} similar flats nearby)',
+    'comps.diff_psqm':'(+€{diff}/m² vs {n} nearby sales)',
+    // Score reason components (badges in card)
+    'reason.component.price':'PRICE','reason.component.property':'PROPERTY',
+    'reason.component.location':'LOCATION','reason.component.penalty':'PENALTY',
+    'reason.component.yield':'YIELD','reason.component.demand':'DEMAND',
+    'reason.component.costs':'COSTS','reason.component.returns':'RETURNS',
+    'reason.component.upside':'UPSIDE','reason.component.liquidity':'LIQUIDITY',
+    // Score reasons — Price
+    'reason.price.far_below':'{pct}% below similar flats nearby',
+    'reason.price.below':'{pct}% below comparable listings — modest discount',
+    'reason.price.at_market':'Priced in line with similar flats nearby',
+    'reason.price.above':'{pct}% above comparable listings — slight premium',
+    'reason.price.far_above':'{pct}% above similar flats nearby',
+    'reason.price.gate':'€{psqm}/m² is poor absolute value — score capped at {ceiling}',
+    'reason.price.high_condo':'€{fee}/mo condo fees push the effective cost up',
+    'reason.price.corporate':'Corporate / short-term rental — priced for furnished flexible lets',
+    'reason.price.strong_entry':'{pct}% below similar flats — strong entry point',
+    // Score reasons — Location
+    'reason.location.very_close':'{min} min walk to {name} ({line})',
+    'reason.location.close':'{min} min to {name} ({line})',
+    'reason.location.far':'Far from metro — {min} min walk',
+    'reason.location.limited':'Limited transport — {min} min to nearest metro',
+    'reason.location.bargain':'Bargain in a highly desirable area — Lume rarely sees this combination',
+    'reason.location.weak_zone':'Lower-demand zone — limited resale and rental appeal',
+    'reason.location.below_avg':'Below-average location — {items}',
+    'reason.location.quiet':'Quieter / less-connected pocket of the city',
+    // Score reasons — Property
+    'reason.property.subterranean':'Below ground floor — Lume would walk away',
+    'reason.property.ground':'Ground floor — light and noise are usually issues',
+    'reason.property.rialzato':'Piano rialzato — slightly elevated but street noise and limited light remain',
+    'reason.property.no_lift':'Floor {n} without a lift — significant drawback',
+    'reason.property.renovation':'Needs renovation — factor in upfront work',
+    'reason.property.strengths':'{items}',
+    'reason.property.below_avg':'Below average for the area — {items}',
+    'reason.property.limited':'Limited standout features for the asking price',
+    'reason.property.studio_partition':'{rooms} rooms in {sqm}m² — likely a studio with partition',
+    'reason.property.cramped_bilo':'Tight for a bilocale at {sqm}m²',
+    'reason.property.cramped_layout':'Cramped layout for the room count',
+    'reason.property.small_studio':'Small studio at {sqm}m²',
+    'reason.property.old_unrenovated':'Built {year} and not renovated — likely poor insulation',
+    'reason.property.recently_renovated':'Recently renovated, floor {n} with lift',
+    'reason.property.recently_renovated_baths':'Recently renovated, floor {n} with lift, {b} bathrooms',
+    'reason.property.str.renovated':'recently renovated',
+    'reason.property.str.floor_lift':'floor {n} with lift',
+    'reason.property.str.bathrooms':'{n} bathrooms',
+    'reason.property.str.balcony':'balcony',
+    'reason.property.str.post2010':'post-2010 build',
+    'reason.property.str.no_outdoor':'no outdoor space',
+    'reason.property.str.basic_cond':'basic condition',
+    'reason.property.str.no_lift_low':'floor {n} without confirmed lift',
+    'reason.property.str.old_unreno':'{year}s build, not renovated',
+    // Score reasons — Penalty
+    'reason.penalty.stale':'On market {days} days — Lume notices it\'s not moving',
+    'reason.penalty.fresh':'Fresh listing — just appeared',
+    // Score reasons — Investor / Yield
+    'reason.returns.neg_cf_normal':'Negative cash flow normal for Milan — {pct}% annualised over 5yr including appreciation',
+    'reason.returns.neg_cf_weak':'Even with appreciation, projected 5yr return is weak ({pct}% annualised)',
+    'reason.investor.high_yield':'{pct}% gross yield — above Milan average',
+    'reason.investor.low_yield':'{pct}% gross yield — below typical Milan investment threshold',
+    'reason.investor.typical_yield':'{pct}% gross yield — typical for the area',
+    'reason.investor.strong_demand':'Strong rental demand — desirable area, close to metro',
+    'reason.investor.weak_demand':'Lower-demand zone — longer vacancies, weaker rent growth',
+    'reason.investor.high_condo':'High condo fees (€{fee}/mo) — drag on net yield',
+    'reason.investor.stale_negotiate':'On market {days} days — seller may negotiate',
+    'reason.investor.low_conf':'Rent estimate based on limited comps — verify before offer',
+    'reason.investor.strong_yield':'Strong yield — ~{pct}%/yr gross',
+    'reason.investor.weak_yield_pct':'Weak yield — ~{pct}%/yr gross',
+    // Empty / loading
+    'empty.no_results':'Nothing matches yet.',
+    'empty.loosen':'Loosen up a filter.',
+    'loading.listings':'Lume is reading the listings…',
+    'error.supabase':'Couldn\'t reach Supabase — try refreshing.',
+    'error.supabase_unconfigured':'Supabase not configured — listings unavailable.',
+  },
+  it: {
+    // Tabs
+    'tab.sales':'Vendita','tab.rentals':'Affitti','tab.map':'Mappa','tab.stats':'Statistiche',
+    'tab.valuation':'Valutazione','tab.settings':'Impostazioni',
+    // Header
+    'header.listings_count':'{n} annunci · {date}',
+    'header.favourites':'Preferiti','header.sign_in':'Accedi',
+    'header.sign_out':'Esci','header.live':'Live','header.snapshot':'Snapshot',
+    'header.run_lume':'▶ Avvia Lume','header.zones':'Zone',
+    // Filters
+    'filter.area':'Area','filter.fascia':'Fascia','filter.omi_zone':'Zona OMI',
+    'filter.max_rent':'Affitto max €/me','filter.max_price':'Prezzo max €',
+    'filter.min_sqm':'Min m²','filter.min_rooms':'Min locali',
+    'filter.max_metro':'Max metro','filter.min_floor':'Piano min',
+    'filter.elevator':'Ascensore','filter.min_energy':'Energia min',
+    'filter.min_score':'Score min','filter.source':'Fonte',
+    'filter.listed':'Inserito','filter.gems':'Opportunità','filter.sort':'Ordina',
+    'filter.all_areas':'Tutte le aree','filter.all':'Tutti','filter.any':'Qualsiasi',
+    'filter.show_expired':'Mostra scaduti','filter.start_fresh':'Azzera filtri',
+    'filter.hidden':'✦ Gemme','filter.great_value':'Ottimo valore',
+    'filter.show_auctions':'Mostra aste','filter.show_nuda':'Mostra nuda proprietà',
+    // Sort buttons
+    'sort.score':'Score','sort.vs_omi':'vs OMI','sort.rent_asc':'Affitto ↑',
+    'sort.price_asc':'Prezzo ↑','sort.yield':'Rendimento ↓','sort.cashflow':'Flusso cassa ↓',
+    // Summary bar
+    'summary.showing':'Mostra {n} annunci',
+    'summary.avg_score':'Score medio {score} / 100',
+    'summary.avg_rent':'Affitto medio €{rent}/me','summary.avg_price':'Prezzo medio €{price}',
+    'summary.hidden_gems':'Gemme nascoste {n}','summary.geo':'Geo:',
+    'summary.rescore':'Ricalcola','summary.enrich':'Arricchisci',
+    // Gem badges
+    'badge.hidden_gem':'✦ Gemma Nascosta','badge.great_value':'💰 Ottimo Valore',
+    'badge.new':'Nuovo','badge.expired':'Scaduto',
+    // Card footer
+    'card.view':'↗ Vedi','card.fav':'♡ Preferito','card.share':'Condividi',
+    'card.how_lume_scored':'Come ha valutato Lume',
+    'card.full_analysis':'📊 Analisi investimento completa',
+    // Confidence labels
+    'conf.high':'Lume è sicuro','conf.medium':'Lume è abbastanza sicuro',
+    'conf.low':'Lume non è certo','conf.thin':'Lume non è sicuro — dati scarsi',
+    // Callout headlines
+    'callout.hidden_gem':'Gemma Nascosta — {pct}% sotto annunci simili ({psqm} · {conf}).',
+    'callout.great_value':'Ottimo Valore — {pct}% sotto annunci simili ({psqm} · {conf}).',
+    'callout.below_market':'{pct}% sotto annunci simili ({psqm} · {conf}).',
+    'callout.at_market':'In linea con annunci simili ({psqm} · {conf}).',
+    'callout.above_market':'{pct}% sopra annunci simili ({psqm} · {conf}).',
+    // Comps suggest
+    'comps.suggest':'⚠ Comparabili suggeriscono:',
+    'comps.diff_rent':'(+€{diff} vs {n} annunci simili nella zona)',
+    'comps.diff_psqm':'(+€{diff}/m² vs {n} vendite vicine)',
+    // Score reason components (badges in card)
+    'reason.component.price':'PREZZO','reason.component.property':'IMMOBILE',
+    'reason.component.location':'POSIZIONE','reason.component.penalty':'PENALITÀ',
+    'reason.component.yield':'RENDIMENTO','reason.component.demand':'DOMANDA',
+    'reason.component.costs':'COSTI','reason.component.returns':'RENDIMENTO',
+    'reason.component.upside':'POTENZIALE','reason.component.liquidity':'LIQUIDITÀ',
+    // Score reasons — Price
+    'reason.price.far_below':'{pct}% sotto annunci simili nella zona',
+    'reason.price.below':'{pct}% sotto i comparabili — sconto moderato',
+    'reason.price.at_market':'In linea con gli annunci simili nella zona',
+    'reason.price.above':'{pct}% sopra i comparabili — leggero sovrapprezzo',
+    'reason.price.far_above':'{pct}% sopra annunci simili nella zona',
+    'reason.price.gate':'€{psqm}/m² ha scarso valore assoluto — score limitato a {ceiling}',
+    'reason.price.high_condo':'Spese condominiali €{fee}/me aumentano il costo effettivo',
+    'reason.price.corporate':'Affitto corporate/breve termine — prezzo per contratti flessibili arredati',
+    'reason.price.strong_entry':'{pct}% sotto annunci simili — ottimo punto di ingresso',
+    // Score reasons — Location
+    'reason.location.very_close':'{min} min a piedi da {name} ({line})',
+    'reason.location.close':'{min} min da {name} ({line})',
+    'reason.location.far':'Lontano dalla metro — {min} min a piedi',
+    'reason.location.limited':'Trasporti limitati — {min} min dalla metro più vicina',
+    'reason.location.bargain':'Affare in una zona molto desiderabile — Lume lo vede raramente',
+    'reason.location.weak_zone':'Zona a bassa domanda — rivendita e locazione difficili',
+    'reason.location.below_avg':'Posizione sotto la media — {items}',
+    'reason.location.quiet':'Zona più tranquilla / meno collegata della città',
+    // Score reasons — Property
+    'reason.property.subterranean':'Piano interrato — Lume non lo consiglierebbe',
+    'reason.property.ground':'Piano terra — problemi di luce e rumore tipici',
+    'reason.property.rialzato':'Piano rialzato — rumore stradale e luce limitata rimangono un problema',
+    'reason.property.no_lift':'Piano {n} senza ascensore — svantaggio significativo',
+    'reason.property.renovation':'Da ristrutturare — considera i costi iniziali',
+    'reason.property.strengths':'{items}',
+    'reason.property.below_avg':'Sotto la media per la zona — {items}',
+    'reason.property.limited':'Caratteristiche limitate per il prezzo richiesto',
+    'reason.property.studio_partition':'{rooms} locali in {sqm}m² — probabilmente monolocale con divisori',
+    'reason.property.cramped_bilo':'Spazio ristretto per un bilocale a {sqm}m²',
+    'reason.property.cramped_layout':'Layout stretto per il numero di locali',
+    'reason.property.small_studio':'Monolocale piccolo a {sqm}m²',
+    'reason.property.old_unrenovated':'Costruito nel {year} e non ristrutturato — probabilmente scarsa coibentazione',
+    'reason.property.recently_renovated':'Recentemente ristrutturato, piano {n} con ascensore',
+    'reason.property.recently_renovated_baths':'Recentemente ristrutturato, piano {n} con ascensore, {b} bagni',
+    'reason.property.str.renovated':'recentemente ristrutturato',
+    'reason.property.str.floor_lift':'piano {n} con ascensore',
+    'reason.property.str.bathrooms':'{n} bagni',
+    'reason.property.str.balcony':'balcone',
+    'reason.property.str.post2010':'costruzione post-2010',
+    'reason.property.str.no_outdoor':'nessuno spazio esterno',
+    'reason.property.str.basic_cond':'condizioni base',
+    'reason.property.str.no_lift_low':'piano {n} senza ascensore confermato',
+    'reason.property.str.old_unreno':'costruzione anni {year}, non ristrutturata',
+    // Score reasons — Penalty
+    'reason.penalty.stale':'In vendita da {days} giorni — Lume nota che non si muove',
+    'reason.penalty.fresh':'Annuncio fresco — appena pubblicato',
+    // Score reasons — Investor / Yield
+    'reason.returns.neg_cf_normal':'Flusso di cassa negativo normale a Milano — {pct}% annualizzato in 5 anni inclusa rivalutazione',
+    'reason.returns.neg_cf_weak':'Anche con la rivalutazione, il rendimento a 5 anni è debole ({pct}% annualizzato)',
+    'reason.investor.high_yield':'{pct}% rendimento lordo — sopra la media milanese',
+    'reason.investor.low_yield':'{pct}% rendimento lordo — sotto la soglia tipica per investimenti a Milano',
+    'reason.investor.typical_yield':'{pct}% rendimento lordo — nella media della zona',
+    'reason.investor.strong_demand':'Forte domanda locatizia — zona desiderabile, vicino alla metro',
+    'reason.investor.weak_demand':'Zona a bassa domanda — vacancy più lunga, crescita affitti più lenta',
+    'reason.investor.high_condo':'Spese condominiali elevate (€{fee}/me) — impatto negativo sul rendimento netto',
+    'reason.investor.stale_negotiate':'In vendita da {days} giorni — il venditore potrebbe trattare',
+    'reason.investor.low_conf':'Stima affitto basata su pochi comparabili — verifica prima dell\'offerta',
+    'reason.investor.strong_yield':'Rendimento solido — ~{pct}%/anno lordo',
+    'reason.investor.weak_yield_pct':'Rendimento debole — ~{pct}%/anno lordo',
+    // Empty / loading
+    'empty.no_results':'Nessun risultato corrisponde.',
+    'empty.loosen':'Allenta qualche filtro.',
+    'loading.listings':'Lume sta leggendo gli annunci…',
+    'error.supabase':'Impossibile raggiungere Supabase — ricarica la pagina.',
+    'error.supabase_unconfigured':'Supabase non configurato — annunci non disponibili.',
+  },
+};
+
+let currentLang = (function () {
+  try {
+    const saved = localStorage.getItem('lume_lang');
+    if (saved && STRINGS[saved]) return saved;
+  } catch (_) {}
+  return (navigator.language || 'en').toLowerCase().startsWith('it') ? 'it' : 'en';
+})();
+
+function t(key, vars) {
+  const dict = STRINGS[currentLang] || STRINGS.en;
+  let s = (key in dict) ? dict[key] : (STRINGS.en[key] !== undefined ? STRINGS.en[key] : key);
+  if (vars) {
+    for (const k of Object.keys(vars)) {
+      s = s.replace(new RegExp('\\{' + k + '\\}', 'g'), vars[k] == null ? '' : String(vars[k]));
+    }
+  }
+  return s;
+}
+
+// Translate a score-reason object emitted by the Python explainer.
+// Defined further down in the file as reasonTextLocalised() — this stub
+// is here just so any early caller (none today, but room to grow) gets a
+// graceful undefined-safe behaviour before the main script block parses.
+function reasonText(r) {
+  if (typeof reasonTextLocalised === 'function') return reasonTextLocalised(r);
+  if (!r) return '';
+  if (r.i18n_key) return t(r.i18n_key, r.i18n_vars || {});
+  return r.text || '';
+}
+
+function setLang(lang) {
+  if (!STRINGS[lang] || lang === currentLang) {
+    if (STRINGS[lang]) updateLangToggle();
+    return;
+  }
+  currentLang = lang;
+  try { localStorage.setItem('lume_lang', lang); } catch (_) {}
+  updateLangToggle();
+  rerenderUI();
+}
+
+function updateLangToggle() {
+  document.querySelectorAll('.lang-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.lang === currentLang);
+  });
+  document.documentElement.setAttribute('lang', currentLang);
+}
+
+function rerenderUI() {
+  // Static labels — anything tagged data-i18n / data-i18n-placeholder /
+  // data-i18n-title gets the matching string from the active language.
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    el.textContent = t(el.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    el.placeholder = t(el.dataset.i18nPlaceholder);
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => {
+    el.title = t(el.dataset.i18nTitle);
+  });
+  // Dynamic content — re-run the renderers for whatever's on screen.
+  if (typeof renderRentals === 'function' && Array.isArray(ALL_RENT) && ALL_RENT.length) renderRentals();
+  if (typeof renderSales === 'function'   && Array.isArray(ALL_SALE) && ALL_SALE.length) renderSales();
+}
+
+// Locale-aware date — Italian: "15 mag 2026", English: "15 May 2026".
+function fmtDate(dateLike, opts) {
+  if (!dateLike) return '';
+  const d = (dateLike instanceof Date) ? dateLike : new Date(dateLike);
+  if (Number.isNaN(d.getTime())) return '';
+  const locale = currentLang === 'it' ? 'it-IT' : 'en-GB';
+  return d.toLocaleDateString(locale, opts || { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+// Locale-aware number — Italian: "1.234,56", English: "1,234.56".
+function fmtNum(n, decimals) {
+  if (n == null || Number.isNaN(Number(n))) return '–';
+  const locale = currentLang === 'it' ? 'it-IT' : 'en-GB';
+  const d = decimals == null ? 0 : decimals;
+  return Number(n).toLocaleString(locale, {
+    minimumFractionDigits: d, maximumFractionDigits: d,
+  });
+}
+
 // ── Global state ──────────────────────────────────────────────────────────────
 let ALL          = [];
 let fasciaRanges = {};   // { A: {min, max}, B: {min, max}, C: {min, max} }
@@ -6842,7 +7224,7 @@ function renderCard(l) {
               title="${isFavourite(l.id) ? 'Remove from favourites' : 'Add to favourites'}">
         ${isFavourite(l.id) ? '♥' : '♡'} Fav
       </button>
-      <a class="link-btn" href="${l.url}" target="_blank" rel="noopener">↗ View</a>
+      <a class="link-btn" href="${l.url}" target="_blank" rel="noopener">${escapeHtml(t('card.view'))}</a>
     </div>
   `;
 
@@ -7283,6 +7665,15 @@ async function init() {
 requestAnimationFrame(_updateStickyTops);
 // Wire up the filter-bar "is-stuck" shadow detector
 requestAnimationFrame(_wireFilterBarStickyShadow);
+// Apply current language to all data-i18n labels + light up the EN/IT pill.
+// Runs once on initial paint; setLang() handles every subsequent toggle.
+requestAnimationFrame(() => {
+  updateLangToggle();
+  // Apply translations to any data-i18n labels already in the DOM.
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.dataset.i18nPlaceholder); });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.dataset.i18nTitle); });
+});
 
 // ── Sales event listeners ─────────────────────────────────────────────────────
 document.getElementById('sScore').addEventListener('input', function () {
@@ -8860,15 +9251,44 @@ function reasonsBulletsHtml(l) {
     const icon      = _reasonIconMap[sentiment];
     const component = (r.component || '').toString();
     const cKey      = component.toLowerCase();
+    // Translate the component badge ("PRICE" → "PREZZO" in Italian) and
+    // the body text. reasonText() prefers r.i18n_key/i18n_vars when present,
+    // falling back to the English r.text for older synced rows.
+    const compKey   = 'reason.component.' + cKey;
+    const compLabel = component ? t(compKey) : '';
     return `
       <li class="callout-reason callout-reason-${sentiment}">
         <span class="reason-icon">${icon}</span>
         ${component
-          ? `<span class="reason-component reason-component-${escapeHtml(cKey)}">${escapeHtml(component)}</span>`
+          ? `<span class="reason-component reason-component-${escapeHtml(cKey)}">${escapeHtml(compLabel)}</span>`
           : ''}
-        <span class="reason-text">${escapeHtml(r.text || '')}</span>
+        <span class="reason-text">${escapeHtml(reasonTextLocalised(r))}</span>
       </li>`;
   }).join('')}</ul>`;
+}
+
+// Translate a score-reason emitted by Python's explain.py.
+//   - {i18n_key, i18n_vars} → t() lookup with placeholder substitution
+//   - i18n_vars._items (used by reason.property.strengths and friends) is
+//     a list of {key, vars} pairs that get individually translated and
+//     joined with ", " — gives Italian users localised sub-fragments
+//     like "recentemente ristrutturato, piano 5 con ascensore".
+//   - Old rows lacking i18n_key fall back to the English r.text verbatim.
+function reasonTextLocalised(r) {
+  if (!r) return '';
+  if (r.i18n_key) {
+    const vars = Object.assign({}, r.i18n_vars || {});
+    const sub  = vars._items;
+    if (Array.isArray(sub) && sub.length) {
+      vars.items = sub.map(s => t(s.key, s.vars || {})).join(', ');
+      // Capitalise the first character of the joined fragments (matches
+      // the Python side's `text[0].upper() + text[1:]` formatting).
+      vars.items = vars.items.charAt(0).toUpperCase() + vars.items.slice(1);
+    }
+    delete vars._items;
+    return t(r.i18n_key, vars);
+  }
+  return r.text || '';
 }
 
 // Combined specs pill: 🛏 N · 🛁 N · Xm²
@@ -9122,7 +9542,7 @@ function renderRentalCard(l) {
     return `<div class="dg-row"><span class="dg-lbl">${lbl}</span><span class="dg-val${cs}">${dv}</span></div>`;
   };
   const detailsHtml = `
-    <button class="btn-details-toggle" data-details-toggle>How Lume scored this <span class="details-caret">▾</span></button>
+    <button class="btn-details-toggle" data-details-toggle>${escapeHtml(t('card.how_lume_scored'))} <span class="details-caret">▾</span></button>
     <div class="card-details" data-details-panel>
       <div class="details-section-title">🏠 Physical</div>
       <div class="details-grid">
@@ -9190,9 +9610,9 @@ function renderRentalCard(l) {
     const diff = rentMo - compsSugRent;
     if (diff <= 0) return '';
     return `<div class="suggested-rent-row sug-warn">
-      <span class="sug-label">⚠ Comps suggest:</span>
+      <span class="sug-label">${escapeHtml(t('comps.suggest'))}</span>
       <span class="sug-val" style="color:var(--yellow);font-weight:700">€${fmt(compsSugRent)}/mo</span>
-      <span class="sug-label">(+€${fmt(diff)} vs ${l.comps_n || 0} similar flats nearby)</span>
+      <span class="sug-label">${escapeHtml(t('comps.diff_rent', {diff: fmt(diff), n: l.comps_n || 0}))}</span>
     </div>`;
   })();
 
@@ -9245,15 +9665,15 @@ function renderRentalCard(l) {
 
   // Gem chip on photo (replaces header badge)
   const gemPhotoChip = l.hidden_gem
-    ? `<div class="gem-photo-chip chip-hidden"><span style="font-size:13px">💎</span><span>Hidden Gem</span></div>`
+    ? `<div class="gem-photo-chip chip-hidden"><span style="font-size:13px">💎</span><span>${escapeHtml(t('badge.hidden_gem').replace(/^✦\s*/, ''))}</span></div>`
     : l.good_value
-    ? `<div class="gem-photo-chip chip-good"><span style="font-size:13px">💰</span><span>Great Value</span></div>`
+    ? `<div class="gem-photo-chip chip-good"><span style="font-size:13px">💰</span><span>${escapeHtml(t('badge.great_value').replace(/^💰\s*/, ''))}</span></div>`
     : '';
 
   // Photo section
   // New badge as photo overlay (Fix 3)
   const newOverlayHtml = isNew(l)
-    ? '<div class="card-photo-new-badge">New</div>'
+    ? `<div class="card-photo-new-badge">${escapeHtml(t('badge.new'))}</div>`
     : '';
   const photoSection = (l.thumbnail || gemPhotoChip || newOverlayHtml)
     ? `<div class="card-photo-wrap">${l.thumbnail ? `<img class="card-thumb" src="${l.thumbnail}" alt="" loading="lazy">` : ''}${gemPhotoChip}${newOverlayHtml}</div>`
@@ -9302,25 +9722,37 @@ function renderRentalCard(l) {
      </div>`
   ).join('');
 
-  // Single "why" sentence — Lume voice, neighbours framing
+  // Single "why" sentence — Lume voice, neighbours framing.
+  // STRINGS keys: callout.{hidden_gem,great_value,below_market,at_market,above_market}
+  // and conf.{high,medium,low,thin} carry the en/it phrasing.
   const whySentence = (() => {
     const dp  = l.comps_delta_pct;
     const n   = l.comps_n || 0;
     const med = l.comps_median;
     const confRaw = (l.comps_conf_label || '').toLowerCase();
-    const confL = confRaw === 'high' ? 'Lume is confident'
-                : confRaw === 'medium' ? 'Lume is fairly sure'
-                : confRaw === 'low' ? "Lume isn't sure — thin data"
+    const confL = confRaw === 'high'   ? t('conf.high')
+                : confRaw === 'medium' ? t('conf.medium')
+                : confRaw === 'low'    ? t('conf.thin')
                 : '';
     if (dp == null && !omiMid) return null;
     if (dp != null && med != null) {
       const abs   = Math.abs(dp).toFixed(1);
-      const cpart = `€${med}/m²/mo · ${confL}`;
-      if (l.hidden_gem)  return `<strong>Hidden Gem</strong> — ${abs}% below similar flats nearby (${cpart}).`;
-      if (l.good_value)  return `<strong>Great Value</strong> — ${abs}% below similar flats nearby (${cpart}).`;
-      if (dp <= -3)      return `${abs}% below similar flats nearby (${cpart}).`;
-      if (dp >= 5)       return `${dp.toFixed(1)}% above similar flats nearby (${cpart}) — above market rate.`;
-      return `In line with similar flats nearby, ${n} similar flats nearby (${cpart}).`;
+      const psqm  = `€${med}/m²/mo`;
+      const vars  = { pct: abs, psqm: `${psqm} · ${confL}`, conf: confL, n };
+      // Wrap the badge name in <strong> in the templated output.
+      // The translated headline contains placeholders, not literal HTML, so
+      // we substitute the variable, then bold the leading badge phrase.
+      if (l.hidden_gem) {
+        const s = t('callout.hidden_gem', vars);
+        return s.replace(/^([^—]+)—/, '<strong>$1</strong>—');
+      }
+      if (l.good_value) {
+        const s = t('callout.great_value', vars);
+        return s.replace(/^([^—]+)—/, '<strong>$1</strong>—');
+      }
+      if (dp <= -3)      return t('callout.below_market', vars);
+      if (dp >= 5)       return t('callout.above_market', { ...vars, pct: dp.toFixed(1) });
+      return t('callout.at_market', vars);
     }
     return omiMid
       ? `No local flats to compare — Lume benchmarked against OMI ${l.omi_zona || 'zone'} (€${omiMid}/m²/mo).`
@@ -9413,7 +9845,7 @@ function renderRentalCard(l) {
               title="${isRentFav(l.id) ? 'Remove from favourites' : 'Add to favourites'}">
         ${isRentFav(l.id) ? '♥' : '♡'} Fav
       </button>
-      <a class="link-btn" href="${l.url}" target="_blank" rel="noopener">↗ View</a>
+      <a class="link-btn" href="${l.url}" target="_blank" rel="noopener">${escapeHtml(t('card.view'))}</a>
     </div>
     ${detailsHtml}
     ${staleBannerHtml(l)}
@@ -9711,12 +10143,12 @@ async function loadRentals() {
     raw = await SupabaseClient.fetchAll('rental');
     if (!raw) {
       const meta = document.getElementById('meta');
-      if (meta) meta.textContent = 'Couldn’t reach Supabase — try refreshing.';
+      if (meta) meta.textContent = t('error.supabase');
       raw = [];
     }
   } else if (!raw) {
     const meta = document.getElementById('meta');
-    if (meta) meta.textContent = 'Supabase not configured — listings unavailable.';
+    if (meta) meta.textContent = t('error.supabase_unconfigured');
     raw = [];
   }
   ALL_RENT = _dedupListings(raw, true);
@@ -9726,11 +10158,13 @@ async function loadRentals() {
   _updateUnmatchedBadge();
   // Replace the "Lume is reading the listings…" placeholder with the real
   // count. Skipped on the failure paths above — those already wrote a
-  // diagnostic into #meta and we don't want to clobber it.
+  // diagnostic into #meta and we don't want to clobber it. fmtDate() picks
+  // the locale ("15 mag 2026" in Italian, "15 May 2026" in English).
   const _meta = document.getElementById('meta');
   if (_meta && ALL_RENT.length) {
-    const _ts = new Date().toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' });
-    _meta.textContent = `${ALL_RENT.length} listings · ${_ts}`;
+    _meta.textContent = t('header.listings_count', {
+      n: ALL_RENT.length, date: fmtDate(new Date()),
+    });
   }
   // Rentals just changed — invalidate every sales-side cache that depends
   // on rental data. We MUST clear `_cached_*` per sale: a previous
@@ -13225,7 +13659,7 @@ function renderSaleCard(l) {
     return `<div class="dg-row"><span class="dg-lbl">${lbl}</span><span class="dg-val${cs}">${dv}</span></div>`;
   };
   const detailsHtml = `
-    <button class="btn-details-toggle" data-details-toggle>How Lume scored this <span class="details-caret">▾</span></button>
+    <button class="btn-details-toggle" data-details-toggle>${escapeHtml(t('card.how_lume_scored'))} <span class="details-caret">▾</span></button>
     <div class="card-details" data-details-panel>
       <div class="details-section-title">🏠 Physical</div>
       <div class="details-grid">
@@ -13334,7 +13768,7 @@ function renderSaleCard(l) {
               title="${isFavourite(l.id) ? 'Remove from favourites' : 'Add to favourites'}">
         ${isFavourite(l.id) ? '♥' : '♡'} Fav
       </button>
-      <a class="link-btn" href="${l.url}" target="_blank" rel="noopener">↗ View</a>
+      <a class="link-btn" href="${l.url}" target="_blank" rel="noopener">${escapeHtml(t('card.view'))}</a>
     </div>
     ${detailsHtml}
     ${staleBannerHtml(l)}
