@@ -513,6 +513,7 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--green-deep); }
 .save-alert-field > span { font-weight: 600; color: var(--text-secondary, #555); font-size: 12px; }
 .save-alert-field input[type="number"],
 .save-alert-field input[type="time"],
+.save-alert-field input[type="text"],
 .save-alert-field select {
   padding: 9px 11px;
   border: 1px solid var(--border, #E0DBD4);
@@ -567,6 +568,70 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--green-deep); }
   background: #FDEEEC; color: #C0392B; border-radius: 8px;
   padding: 10px 12px; margin-top: 12px;
   font-size: 12px; line-height: 1.5;
+}
+
+/* ── Daily-alerts list (Settings tab) ─────────────────────────────────
+   One card per saved digest_filters row. Editable via the same modal. */
+.settings-alert-new-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--border, #E0DBD4);
+  border-radius: 999px;
+  background: #FFFFFF;
+  color: var(--text);
+  font-size: 12px; font-weight: 600;
+  cursor: pointer; font-family: var(--font);
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.settings-alert-new-btn:hover {
+  background: #E6F4ED; border-color: #2A7A5A; color: #2A7A5A;
+}
+.digest-alert-card {
+  background: #FFFFFF;
+  border: 1px solid var(--border, #E0DBD4);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+}
+.digest-alert-row1 { display: flex; align-items: flex-start; gap: 12px; }
+.digest-alert-name {
+  font-size: 15px; font-weight: 700; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.digest-alert-meta {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  font-size: 12px; color: var(--muted); margin-top: 3px;
+  align-items: center;
+}
+.digest-alert-meta strong { color: var(--text); font-weight: 600; }
+.digest-alert-chips {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  margin: 10px 0;
+}
+.digest-alert-chip {
+  background: var(--surf2, #F2EFE9);
+  padding: 4px 10px; border-radius: 999px;
+  font-size: 12px; font-weight: 500; color: var(--text-secondary, #555);
+}
+.digest-alert-actions {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--surf2, #F2EFE9);
+}
+.digest-alert-actions button {
+  padding: 6px 12px;
+  border: 1px solid var(--border, #E0DBD4);
+  border-radius: 999px;
+  background: #FFFFFF;
+  color: var(--text-secondary, #555);
+  font-size: 12px; font-weight: 600;
+  cursor: pointer; font-family: var(--font);
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.digest-alert-actions button:hover {
+  background: var(--surf2, #F2EFE9); color: var(--text);
+}
+.digest-alert-actions .digest-alert-delete:hover {
+  background: #FDEEEC; border-color: #C0392B; color: #C0392B;
 }
 @media (max-width: 600px) {
   .save-alert-modal { padding: 20px; }
@@ -6743,6 +6808,21 @@ const STRINGS = {
     'alert_modal.cancel':'Cancel',
     'alert_modal.save':'💾 Save alert',
     'alert_modal.error':'Could not save alert:',
+    'alert_modal.title_edit':'✏️ Edit alert',
+    'alert_modal.save_changes':'💾 Save changes',
+    'alert_modal.section_name':'Alert name',
+    'alert_modal.name_placeholder':'e.g. Centro 2-bed under €1500',
+    'alert_modal.name_hint':'Optional — helps you tell multiple alerts apart in Settings.',
+    'alert_modal.delete_confirm':'Delete this alert? You won\'t receive its emails anymore.',
+    // Settings — daily alerts list
+    'settings.alerts':'Daily alerts',
+    'settings.new_alert':'+ New alert',
+    'settings.alert_unnamed':'Unnamed alert',
+    'settings.alert_all':'All listings (no filters)',
+    'settings.alert_sends_at':'Sends at',
+    'settings.alert_min_n':'min {n}',
+    'settings.delete_alert':'🗑 Delete',
+    'toast.alert_deleted':'Alert deleted',
   },
   it: {
     // Tabs
@@ -6892,6 +6972,20 @@ const STRINGS = {
     'alert_modal.cancel':'Annulla',
     'alert_modal.save':'💾 Salva avviso',
     'alert_modal.error':'Impossibile salvare l\'avviso:',
+    'alert_modal.title_edit':'✏️ Modifica avviso',
+    'alert_modal.save_changes':'💾 Salva modifiche',
+    'alert_modal.section_name':'Nome avviso',
+    'alert_modal.name_placeholder':'es. Centro bilocale sotto €1500',
+    'alert_modal.name_hint':'Opzionale — utile per distinguere più avvisi nelle Impostazioni.',
+    'alert_modal.delete_confirm':'Eliminare questo avviso? Non riceverai più le sue email.',
+    'settings.alerts':'Avvisi giornalieri',
+    'settings.new_alert':'+ Nuovo avviso',
+    'settings.alert_unnamed':'Avviso senza nome',
+    'settings.alert_all':'Tutti gli annunci (nessun filtro)',
+    'settings.alert_sends_at':'Invia alle',
+    'settings.alert_min_n':'min {n}',
+    'settings.delete_alert':'🗑 Elimina',
+    'toast.alert_deleted':'Avviso eliminato',
   },
 };
 
@@ -8923,9 +9017,11 @@ function _readActiveFilterState() {
   };
 }
 
-// Entry point for the 🔔 Save alert button. Opens a modal pre-filled with
-// the rentals filter state + existing saved-alert preferences (if any) so
-// the user can review and adjust before committing to a recurring email.
+// Entry point for the 🔔 Save alert button. Always opens in CREATE mode
+// pre-filled from the current rentals filter state — users can now have
+// multiple alerts in parallel, so this never overwrites an existing one.
+// To edit an existing alert, the Settings tab cards call
+// openSaveAlertModal(existing) directly with mode='edit'.
 async function saveDigestFilters() {
   const user = (typeof Auth !== 'undefined') ? Auth.user : null;
   if (!user) {
@@ -8933,10 +9029,7 @@ async function saveDigestFilters() {
     showToast(t('toast.sign_in_required') || 'Sign in to save alerts');
     return;
   }
-  // Pull existing row so the modal shows their saved time / threshold,
-  // not the static defaults — lets editing feel like editing, not a wipe.
-  const existing = await _fetchDigestFilters(user.id);
-  await openSaveAlertModal(existing);
+  await openSaveAlertModal(null);  // null → create mode, seed from rentals filter bar
 }
 
 function _setSelectValue(id, value) {
@@ -8966,16 +9059,35 @@ function _localTimeToUtcString(localHHMM) {
 }
 
 async function openSaveAlertModal(existing) {
-  // Pre-fill with existing row if present, else with the live rentals
-  // filter state (so first-time save mirrors what's on screen).
-  const liveState = _readActiveFilterState();
-  const seed = existing || {};
+  // Two modes:
+  //   • CREATE — existing == null. Seed from the live rentals filter bar
+  //     so the alert mirrors what the user is currently looking at.
+  //   • EDIT  — existing is a digest_filters row. Seed every field from
+  //     that row; submit will PATCH instead of INSERT.
+  const isEdit   = !!(existing && existing.id);
+  const liveState = isEdit ? {} : _readActiveFilterState();
+  const seed      = existing || {};
+
+  // Track the editing id on the form so submit knows which mode it's in.
+  const editingIdEl = document.getElementById('amEditingId');
+  if (editingIdEl) editingIdEl.value = isEdit ? existing.id : '';
+
+  // Update title + primary button label to reflect mode.
+  const titleEl = document.getElementById('saveAlertTitle');
+  if (titleEl) titleEl.textContent = isEdit
+    ? (t('alert_modal.title_edit')   || '✏️ Edit alert')
+    : (t('alert_modal.title')        || '🔔 Daily email alert');
+  const submitBtnEl = document.getElementById('amSubmitBtn');
+  if (submitBtnEl) submitBtnEl.textContent = isEdit
+    ? (t('alert_modal.save_changes') || '💾 Save changes')
+    : (t('alert_modal.save')         || '💾 Save alert');
 
   const pick = (key, fallback) => {
     const v = seed[key];
     return (v == null || v === '') ? fallback : v;
   };
 
+  _setSelectValue('amName',      seed.name || '');
   _setSelectValue('amMaxRent',   pick('max_rent',      liveState.max_rent));
   _setSelectValue('amMinSqm',    pick('min_sqm',       liveState.min_sqm));
   _setSelectValue('amMinRooms',  pick('min_rooms',     liveState.min_rooms));
@@ -9020,8 +9132,8 @@ async function openSaveAlertModal(existing) {
   // since last open. Cheap; only ~30 elements.
   back.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
   back.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.dataset.i18nPlaceholder); });
-  // Focus the first input so keyboard-only users land in a useful place.
-  setTimeout(() => { document.getElementById('amMaxRent')?.focus(); }, 50);
+  // Focus the alert-name input so keyboard-only users land in a useful place.
+  setTimeout(() => { document.getElementById('amName')?.focus(); }, 50);
   // Esc to close.
   document.addEventListener('keydown', _saveAlertEscHandler);
 }
@@ -9055,15 +9167,18 @@ async function submitSaveAlert() {
   const str  = id => document.getElementById(id)?.value || null;
   const bool = id => !!document.getElementById(id)?.checked;
 
-  const fascia = str('amFascia');
-  const email  = user.primaryEmailAddress?.emailAddress
-              || user.emailAddresses?.[0]?.emailAddress
-              || '';
+  const editingId = (document.getElementById('amEditingId')?.value || '').trim();
+  const isEdit    = !!editingId;
+  const fascia    = str('amFascia');
+  const email     = user.primaryEmailAddress?.emailAddress
+                 || user.emailAddresses?.[0]?.emailAddress
+                 || '';
 
-  const payload = {
-    clerk_user_id:    user.id,
-    email,
-    display_name:     user.fullName || [user.firstName, user.lastName].filter(Boolean).join(' ') || '',
+  // Build the row body. clerk_user_id + email + display_name only matter on
+  // INSERT (we don't want a PATCH to e.g. silently overwrite display_name
+  // with stale Clerk state), so they're added conditionally below.
+  const filterBody = {
+    name:             (str('amName') || '').trim() || null,
     max_rent:         num('amMaxRent')   || null,
     min_sqm:          num('amMinSqm')    || null,
     min_rooms:        num('amMinRooms')  || null,
@@ -9084,16 +9199,39 @@ async function submitSaveAlert() {
   if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = t('filter.saving') || '⏳ Saving…'; }
 
   try {
-    const resp = await fetch(`${SUPABASE_URL}/rest/v1/digest_filters?on_conflict=clerk_user_id`, {
-      method: 'POST',
-      headers: {
-        'apikey':        SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'Content-Type':  'application/json',
-        'Prefer':        'resolution=merge-duplicates,return=minimal',
-      },
-      body: JSON.stringify(payload),
-    });
+    let resp;
+    if (isEdit) {
+      // PATCH the row by primary key. clerk_user_id is preserved by
+      // omission (Supabase doesn't change unspecified columns).
+      resp = await fetch(`${SUPABASE_URL}/rest/v1/digest_filters?id=eq.${encodeURIComponent(editingId)}`, {
+        method: 'PATCH',
+        headers: {
+          'apikey':        SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type':  'application/json',
+          'Prefer':        'return=minimal',
+        },
+        body: JSON.stringify(filterBody),
+      });
+    } else {
+      // INSERT a brand-new alert. clerk_user_id / email / display_name
+      // attach the row to this user.
+      const insertBody = Object.assign({
+        clerk_user_id: user.id,
+        email,
+        display_name:  user.fullName || [user.firstName, user.lastName].filter(Boolean).join(' ') || '',
+      }, filterBody);
+      resp = await fetch(`${SUPABASE_URL}/rest/v1/digest_filters`, {
+        method: 'POST',
+        headers: {
+          'apikey':        SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type':  'application/json',
+          'Prefer':        'return=minimal',
+        },
+        body: JSON.stringify(insertBody),
+      });
+    }
     if (!resp.ok) {
       const detail = await resp.text();
       throw new Error(`HTTP ${resp.status} ${detail.slice(0, 240)}`);
@@ -9101,7 +9239,7 @@ async function submitSaveAlert() {
     showToast(t('toast.alert_saved') || 'Daily alert saved.');
     closeSaveAlertModal();
     // Refresh the Settings tab section if it's currently visible so the
-    // chip list reflects the just-saved filters.
+    // list reflects the just-saved row.
     const wrap = document.getElementById('digestSettingsWrap');
     if (wrap) renderDigestSettingsSection().then(html => { wrap.innerHTML = html; });
   } catch (err) {
@@ -9111,29 +9249,35 @@ async function submitSaveAlert() {
       errEl.textContent = `${t('alert_modal.error') || 'Could not save alert:'} ${err.message}`;
     }
   } finally {
-    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = t('alert_modal.save') || '💾 Save alert'; }
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = isEdit
+        ? (t('alert_modal.save_changes') || '💾 Save changes')
+        : (t('alert_modal.save')         || '💾 Save alert');
+    }
   }
 }
 
+// Fetch ALL saved alerts for a user (migration 005 dropped the unique
+// constraint, so a user may now have several). Returns [] on any failure.
 async function _fetchDigestFilters(userId) {
-  if (!userId) return null;
+  if (!userId) return [];
   try {
     const resp = await fetch(
-      `${SUPABASE_URL}/rest/v1/digest_filters?clerk_user_id=eq.${encodeURIComponent(userId)}&select=*&limit=1`,
+      `${SUPABASE_URL}/rest/v1/digest_filters?clerk_user_id=eq.${encodeURIComponent(userId)}&select=*&order=created_at.desc`,
       { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
     );
-    if (!resp.ok) return null;
-    const rows = await resp.json();
-    return rows[0] || null;
-  } catch (_) { return null; }
+    if (!resp.ok) return [];
+    return await resp.json();
+  } catch (_) { return []; }
 }
 
-async function toggleDigestActive(currentlyActive) {
+async function toggleDigestActive(alertId, currentlyActive) {
   const user = (typeof Auth !== 'undefined') ? Auth.user : null;
-  if (!user) return;
+  if (!user || !alertId) return;
   try {
     await fetch(
-      `${SUPABASE_URL}/rest/v1/digest_filters?clerk_user_id=eq.${encodeURIComponent(user.id)}`,
+      `${SUPABASE_URL}/rest/v1/digest_filters?id=eq.${encodeURIComponent(alertId)}`,
       {
         method: 'PATCH',
         headers: {
@@ -9148,80 +9292,151 @@ async function toggleDigestActive(currentlyActive) {
     showToast(currentlyActive
       ? (t('toast.alert_paused')  || 'Alert paused')
       : (t('toast.alert_resumed') || 'Alert resumed'));
-    if (typeof renderDigestSettingsSection === 'function') {
-      const wrap = document.getElementById('digestSettingsWrap');
-      if (wrap) wrap.innerHTML = await renderDigestSettingsSection();
-    }
+    const wrap = document.getElementById('digestSettingsWrap');
+    if (wrap) wrap.innerHTML = await renderDigestSettingsSection();
   } catch (err) {
     console.warn('[digest] toggle failed:', err);
   }
 }
 
-// Renders a settings card showing the user's saved alert. Returns an HTML
-// string (not a DOM node) so the Settings tab can drop it in directly.
-async function renderDigestSettingsSection() {
+async function editDigestAlert(alertId) {
   const user = (typeof Auth !== 'undefined') ? Auth.user : null;
-  if (!user) {
-    return `<div class="settings-section-title">${escapeHtml(t('settings.alert') || 'Daily alert')}</div>
-            <p style="font-size:13px;color:var(--muted);margin:0">
-              Sign in to save alert filters and receive a daily email of matching listings.
-            </p>`;
-  }
-  const f = await _fetchDigestFilters(user.id);
-  if (!f) {
-    return `<div class="settings-section-title">${escapeHtml(t('settings.alert') || 'Daily alert')}</div>
-            <p style="font-size:13px;color:var(--muted);margin:0;line-height:1.6">
-              ${escapeHtml(t('settings.alert_none') || 'No alert set up yet. Go to Rentals, set your filters, and click 🔔 Save alert.')}
-            </p>`;
-  }
+  if (!user || !alertId) return;
+  const rows = await _fetchDigestFilters(user.id);
+  const row  = rows.find(r => r.id === alertId);
+  if (row) await openSaveAlertModal(row);
+}
 
-  // Render each non-default filter as a chip.
+async function deleteDigestAlert(alertId, displayName) {
+  const user = (typeof Auth !== 'undefined') ? Auth.user : null;
+  if (!user || !alertId) return;
+  const confirmMsg = (t('alert_modal.delete_confirm') || 'Delete this alert? You won\'t receive its emails anymore.')
+                   + (displayName ? `\n\n"${displayName}"` : '');
+  if (!confirm(confirmMsg)) return;
+  try {
+    await fetch(
+      `${SUPABASE_URL}/rest/v1/digest_filters?id=eq.${encodeURIComponent(alertId)}`,
+      {
+        method: 'DELETE',
+        headers: {
+          'apikey':        SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Prefer':        'return=minimal',
+        },
+      }
+    );
+    showToast(t('toast.alert_deleted') || 'Alert deleted');
+    const wrap = document.getElementById('digestSettingsWrap');
+    if (wrap) wrap.innerHTML = await renderDigestSettingsSection();
+  } catch (err) {
+    console.warn('[digest] delete failed:', err);
+  }
+}
+
+// Build chip labels summarising one saved alert. Order matches the modal's
+// field order so reading the chips left-to-right mirrors filling the form.
+function _digestChipsForAlert(f) {
   const chips = [];
-  if (f.max_rent)            chips.push(`Max €${f.max_rent}/mo`);
-  if (f.min_sqm)             chips.push(`≥${f.min_sqm} m²`);
-  if (f.min_rooms)           chips.push(`≥${f.min_rooms} rooms`);
-  if (f.max_metro_min)       chips.push(`Metro ≤${f.max_metro_min} min`);
+  if (f.max_rent)             chips.push(`Max €${f.max_rent}/mo`);
+  if (f.min_sqm)              chips.push(`≥${f.min_sqm} m²`);
+  if (f.min_rooms)            chips.push(`≥${f.min_rooms} rooms`);
+  if (f.max_metro_min)        chips.push(`Metro ≤${f.max_metro_min} min`);
   if (f.min_score && f.min_score > 0) chips.push(`Score ≥${f.min_score}`);
-  if (f.min_floor != null)   chips.push(`Floor ≥${f.min_floor}`);
-  if (f.require_elevator)    chips.push('Elevator');
-  if (f.min_energy)          chips.push(`Energy ≥${f.min_energy}`);
-  if (f.fascia?.length)      chips.push(`Fascia ${f.fascia.join('/')}`);
-  if (f.omi_zona?.length)    chips.push(`Zone ${f.omi_zona.join('/')}`);
+  if (f.min_floor != null)    chips.push(`Floor ≥${f.min_floor}`);
+  if (f.require_elevator)     chips.push('Elevator');
+  if (f.min_energy)           chips.push(`Energy ≥${f.min_energy}`);
+  if (f.fascia?.length)       chips.push(`Fascia ${f.fascia.join('/')}`);
+  if (f.omi_zona?.length)     chips.push(`Zone ${f.omi_zona.join('/')}`);
   if (f.gems_filter && f.gems_filter !== 'all') {
     chips.push(f.gems_filter === 'hidden' ? '✦ Hidden Gems only' : '💰 Great Value+');
   }
   if (f.source_filter && f.source_filter !== 'all') chips.push(`Source ${f.source_filter}`);
+  return chips;
+}
 
-  const stateColor = f.active ? '#2A7A5A' : 'var(--muted)';
-  const stateLabel = f.active
-    ? (t('settings.alert_active') || 'Active')
-    : (t('settings.alert_paused') || 'Paused');
-
-  return `
-    <div class="settings-section-title" style="display:flex;align-items:center;gap:10px">
-      <span>${escapeHtml(t('settings.alert') || 'Daily alert')}</span>
-      <span style="color:${stateColor};font-weight:600;font-size:13px">● ${escapeHtml(stateLabel)}</span>
-    </div>
-    <p style="font-size:13px;color:var(--text-secondary, #555);margin:0 0 12px;line-height:1.6">
-      ${escapeHtml((t('settings.alert_sent_to') || 'Sent to {email} each morning with new listings matching:').replace('{email}', f.email))}
-    </p>
-    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
-      ${chips.length
-        ? chips.map(c => `<span style="background:var(--bg-muted);padding:4px 10px;border-radius:999px;font-size:12px;font-weight:500">${escapeHtml(c)}</span>`).join('')
-        : '<span style="color:var(--muted);font-size:13px">All listings (no filters saved)</span>'}
-    </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button onclick="toggleDigestActive(${f.active})"
-              style="padding:8px 16px;border:1px solid var(--border, #E0DBD4);border-radius:999px;font-size:13px;cursor:pointer;font-family:var(--font);background:var(--bg-card,#fff)">
-        ${escapeHtml(f.active
-          ? (t('settings.pause_alert')  || '⏸ Pause alert')
-          : (t('settings.resume_alert') || '▶ Resume alert'))}
-      </button>
-      <button onclick="document.querySelector('.tab-btn[data-tab=&quot;rentals&quot;]')?.click()"
-              style="padding:8px 16px;border:1px solid var(--border, #E0DBD4);border-radius:999px;font-size:13px;cursor:pointer;font-family:var(--font);background:var(--bg-card,#fff)">
-        ${escapeHtml(t('settings.update_filters') || '✏️ Update filters')}
-      </button>
+// Renders the Settings tab's Daily-alerts section. Returns an HTML string
+// (not a DOM node) so the caller can innerHTML-assign it. Each alert is
+// rendered as a card with Edit / Pause-Resume / Delete buttons.
+async function renderDigestSettingsSection() {
+  const user = (typeof Auth !== 'undefined') ? Auth.user : null;
+  if (!user) {
+    return `<div class="settings-section-title">${escapeHtml(t('settings.alerts') || 'Daily alerts')}</div>
+            <p style="font-size:13px;color:var(--muted);margin:0">
+              Sign in to save alert filters and receive a daily email of matching listings.
+            </p>`;
+  }
+  const rows = await _fetchDigestFilters(user.id);
+  const headerHtml = `<div class="settings-section-title" style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <span>${escapeHtml(t('settings.alerts') || 'Daily alerts')}</span>
+      <button onclick="saveDigestFilters()"
+              class="settings-alert-new-btn"
+              type="button">${escapeHtml(t('settings.new_alert') || '+ New alert')}</button>
     </div>`;
+
+  if (!rows.length) {
+    return headerHtml + `
+      <p style="font-size:13px;color:var(--muted);margin:0;line-height:1.6">
+        ${escapeHtml(t('settings.alert_none') || 'No alert set up yet. Go to Rentals, set your filters, and click 🔔 Save alert.')}
+      </p>`;
+  }
+
+  // Local time string for display — pure presentation, the stored value
+  // stays in UTC.
+  const formatSendTime = (utc) => {
+    if (!utc || !/^\d{1,2}:\d{2}$/.test(utc)) return '—';
+    const [h, m] = utc.split(':').map(Number);
+    const d = new Date();
+    d.setUTCHours(h, m, 0, 0);
+    return d.toLocaleTimeString(currentLang === 'it' ? 'it-IT' : 'en-GB',
+      { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const cardsHtml = rows.map(f => {
+    const chips = _digestChipsForAlert(f);
+    const stateColor = f.active ? '#2A7A5A' : 'var(--muted)';
+    const stateLabel = f.active
+      ? (t('settings.alert_active') || 'Active')
+      : (t('settings.alert_paused') || 'Paused');
+    const displayName = (f.name && f.name.trim())
+      || (t('settings.alert_unnamed') || 'Unnamed alert');
+    const summary = chips.length ? chips.join(' · ')
+                                 : (t('settings.alert_all') || 'All listings');
+    const sendLocal = formatSendTime(f.send_time_utc);
+    const minMatch  = f.min_new_listings || 1;
+
+    // confirm() needs the name escaped for safe template embedding.
+    const nameForJs = JSON.stringify(displayName);
+
+    return `
+      <div class="digest-alert-card">
+        <div class="digest-alert-row1">
+          <div style="flex:1;min-width:0">
+            <div class="digest-alert-name" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}</div>
+            <div class="digest-alert-meta">
+              <span style="color:${stateColor};font-weight:600">● ${escapeHtml(stateLabel)}</span>
+              <span>·</span>
+              <span>${escapeHtml(t('settings.alert_sends_at') || 'Sends at')} <strong>${escapeHtml(sendLocal)}</strong></span>
+              <span>·</span>
+              <span>${escapeHtml((t('settings.alert_min_n')  || 'min {n}').replace('{n}', minMatch))}</span>
+            </div>
+          </div>
+        </div>
+        <div class="digest-alert-chips">
+          ${chips.length
+            ? chips.map(c => `<span class="digest-alert-chip">${escapeHtml(c)}</span>`).join('')
+            : `<span style="color:var(--muted);font-size:12px">${escapeHtml(summary)}</span>`}
+        </div>
+        <div class="digest-alert-actions">
+          <button type="button" onclick="editDigestAlert('${escapeHtml(f.id)}')">${escapeHtml(t('settings.update_filters') || '✏️ Edit')}</button>
+          <button type="button" onclick="toggleDigestActive('${escapeHtml(f.id)}', ${f.active})">${escapeHtml(f.active
+            ? (t('settings.pause_alert')  || '⏸ Pause')
+            : (t('settings.resume_alert') || '▶ Resume'))}</button>
+          <button type="button" class="digest-alert-delete" onclick="deleteDigestAlert('${escapeHtml(f.id)}', ${nameForJs})">${escapeHtml(t('settings.delete_alert') || '🗑 Delete')}</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  return headerHtml + cardsHtml;
 }
 
 function formatRelativeTime(iso) {
@@ -17655,6 +17870,18 @@ Auth.init();
     </p>
 
     <form id="saveAlertForm" onsubmit="event.preventDefault(); submitSaveAlert();">
+      <!-- Hidden: when set, submitSaveAlert PATCHes that row instead of inserting. -->
+      <input type="hidden" id="amEditingId" value="">
+
+      <!-- ── Name section ── -->
+      <div class="save-alert-section">
+        <div class="save-alert-section-title" data-i18n="alert_modal.section_name">Alert name</div>
+        <label class="save-alert-field save-alert-field-wide">
+          <input type="text" id="amName" maxlength="60" placeholder="e.g. Centro 2-bed under €1500" data-i18n-placeholder="alert_modal.name_placeholder">
+          <small class="save-alert-hint" data-i18n="alert_modal.name_hint">Optional — helps you tell multiple alerts apart in Settings.</small>
+        </label>
+      </div>
+
       <!-- ── Filters section ── -->
       <div class="save-alert-section">
         <div class="save-alert-section-title" data-i18n="alert_modal.section_filters">Filters</div>

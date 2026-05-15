@@ -283,6 +283,10 @@ def listing_card_html(l: dict) -> str:
 def build_email_html(user_filters: dict, listings: list[dict]) -> str:
     name = (user_filters.get("display_name") or "").strip()
     first_name = name.split()[0] if name else "there"
+    # Alert label — user-supplied name (e.g. "Centro under €1500"). When
+    # blank we fall back to an empty string so the email body doesn't show
+    # a "(null)" placeholder.
+    alert_name = (user_filters.get("name") or "").strip()
 
     # Dedup (a listing showing up in both the new + price-drop arms of the
     # OR query would otherwise render twice).
@@ -331,6 +335,7 @@ def build_email_html(user_filters: dict, listings: list[dict]) -> str:
           <div style="font-size:20px;font-weight:700;color:#1A1A1A;margin-bottom:8px">
             Good morning, {first_name} 👋
           </div>
+          {f'<div style="color:#2A7A5A;font-size:13px;font-weight:600;margin-bottom:6px">🔔 {alert_name}</div>' if alert_name else ''}
           <div style="color:#6B6560;font-size:14px;line-height:1.6">
             Today Lume found {summary}.
           </div>
@@ -419,7 +424,11 @@ def main() -> int:
         subj_parts = []
         if new_count:  subj_parts.append(f"{new_count} new")
         if drop_count: subj_parts.append(f"{drop_count} price drop{'s' if drop_count != 1 else ''}")
-        subject = "🏠 Lume — " + " · ".join(subj_parts) + " matching your filters"
+        # Suffix the user-supplied alert name when present so the inbox
+        # subject row tells multiple alerts apart at a glance.
+        alert_name = (user.get("name") or "").strip()
+        suffix     = f" — {alert_name}" if alert_name else " matching your filters"
+        subject    = "🏠 Lume — " + " · ".join(subj_parts) + suffix
 
         try:
             html = build_email_html(user, list(unique.values()))
