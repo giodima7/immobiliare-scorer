@@ -2146,6 +2146,65 @@ def _parse_idealista_detail(dom: dict) -> dict:
     }
 
 
+def _supabase_autosync_watcher() -> None:
+    """
+    Background loop: when dashboard/{rentals,sales}_latest.json is rewritten
+    (a scanner cycle finished, or rescore/enrich mutated it), push the new
+    rows to Supabase so the deployed dashboard sees them on next reload.
+
+    Without this, locally-triggered scans only update the JSON on disk —
+    Supabase stays stale until the daily GitHub Actions sync runs.
+
+    Quietly no-ops when SUPABASE_URL / SUPABASE_SERVICE_KEY aren't set.
+    """
+    import os as _os
+    import time as _t
+    _load_env()
+    if not (_os.environ.get("SUPABASE_URL") and _os.environ.get("SUPABASE_SERVICE_KEY")):
+        print("  Autosync  → disabled (Supabase env not set)", flush=True)
+        return
+
+    paths = [
+        (DASHBOARD_DIR / "rentals_latest.json", "rental"),
+        (DASHBOARD_DIR / "sales_latest.json",   "sale"),
+    ]
+    # Prime baselines from current mtime so we don't re-push on startup.
+    last_mtime: dict[str, float] = {
+        str(p): (p.stat().st_mtime if p.exists() else 0.0) for p, _ in paths
+    }
+    print("  Autosync  → watching dashboard/*.json for scanner cycles", flush=True)
+
+    POLL_SEC    = 30
+    QUIET_SEC   = 10  # require file unchanged for this long before syncing
+                      # (avoids pushing mid-write while scoring is still flushing)
+    while True:
+        _t.sleep(POLL_SEC)
+        try:
+            from supabase_sync import push_local_json
+        except Exception as exc:
+            print(f"  [autosync] import failed, stopping: {exc}")
+            return
+
+        for path, kind in paths:
+            if not path.exists():
+                continue
+            mtime = path.stat().st_mtime
+            prev  = last_mtime.get(str(path), 0.0)
+            if mtime <= prev:
+                continue
+            # Wait until the file has been quiet for QUIET_SEC — avoids
+            # racing the scanner's atomic .tmp → final replace.
+            if _t.time() - mtime < QUIET_SEC:
+                continue
+            try:
+                ok = push_local_json(path, kind)
+                last_mtime[str(path)] = mtime
+                if ok:
+                    print(f"  [autosync] pushed {path.name} → Supabase", flush=True)
+            except Exception as exc:
+                print(f"  [autosync] push {path.name} failed: {exc}", flush=True)
+
+
 if __name__ == "__main__":
     # Load saved scan prefs (written by the dashboard whenever filters change)
     _prefs = {}
@@ -2158,6 +2217,10 @@ if __name__ == "__main__":
     # Rescore existing JSON with current formula before starting
     _rescore_existing_json()
     _rescore_existing_sales_json()
+
+    # Auto-push to Supabase whenever a scan cycle rewrites the local JSON.
+    # Background daemon — dies with the parent process on Ctrl+C.
+    threading.Thread(target=_supabase_autosync_watcher, daemon=True).start()
 
     print(f"\n  Immobiliare Scorer")
     print(f"  Dashboard  → http://localhost:8000/")
