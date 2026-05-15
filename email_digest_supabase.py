@@ -230,13 +230,18 @@ def listing_card_html(l: dict) -> str:
     else:
         status_tag = ""
 
-    # Compact meta line: metro · floor · vs comps. Each piece is plain
-    # inline text — no pills — so it wraps cleanly inside the narrow card.
+    # Compact meta line: metro · floor · vs comps. Tight phrasing — the
+    # 180px cell wraps anything longer onto two lines, which throws the
+    # card off the row's baseline. Examples kept short: "🚇 2 min",
+    # "🏢 3°" (drop "piano" — the icon is enough), "-12% comps".
     meta_bits = []
     if metro_min is not None and metro_name:
-        meta_bits.append(f"🚇 {metro_min} min")
+        meta_bits.append(f"🚇 {metro_min}min")
     if floor_lbl:
-        meta_bits.append(f"🏢 {floor_lbl}")
+        # Drop the trailing " piano" / "° piano" suffix — the icon plus
+        # the number / "T" / "R" speaks for itself in a narrow card.
+        short_floor = floor_lbl.split()[0] if floor_lbl else ""
+        meta_bits.append(f"🏢 {short_floor}")
     if delta is not None:
         delta_color = "#2A7A5A" if delta < 0 else "#E05C4B"
         meta_bits.append(f'<span style="color:{delta_color};font-weight:600">'
@@ -265,31 +270,43 @@ def listing_card_html(l: dict) -> str:
         f'vertical-align:middle">{score}</span>'
     )
 
-    # The card itself — single <table> sized to the parent cell. Outer
-    # margin handled by the grid's cellpadding, not margin (Outlook
-    # ignores margin on tables).
+    # The card itself — single <table> sized to the parent cell.
+    #
+    # Height equalization: every text section below has a FIXED height
+    # (via line-height + overflow:hidden) so cards line up across the
+    # row regardless of how long the address / meta is. Without this
+    # the View button drops below the row baseline whenever one card's
+    # meta wraps onto two lines.
+    #
+    # We don't use the "height='100%' on inner table" trick because
+    # Gmail web ignores it; fixed per-section heights work everywhere.
     return f'''
     <table width="100%" cellpadding="0" cellspacing="0" style="background:#FFFFFF;border-radius:10px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06)">
       <tr><td>{photo_html}</td></tr>
       <tr><td style="padding:10px 12px">
         <table width="100%" cellpadding="0" cellspacing="0">
           <tr>
-            <td valign="middle" style="font-size:0;line-height:0">
+            <td valign="middle" height="18" style="font-size:0;line-height:0;height:18px">
               {badge}{"<br>" if badge and status_tag else ""}{status_tag}
             </td>
             <td valign="middle" align="right" width="32" style="padding-left:6px">{score_badge}</td>
           </tr>
         </table>
-        <div style="font-weight:700;font-size:13px;color:#1A1A1A;margin-top:8px;line-height:1.3;
+        <div style="font-weight:700;font-size:13px;color:#1A1A1A;margin-top:8px;
+                    line-height:18px;height:18px;
                     white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{nbhd}</div>
-        <div style="color:#9E9791;font-size:11px;margin-top:1px;line-height:1.3;
+        <div style="color:#9E9791;font-size:11px;margin-top:1px;
+                    line-height:14px;height:14px;
                     white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{addr}</div>
-        <div style="margin-top:8px;line-height:1.2">
+        <div style="margin-top:8px;line-height:22px;height:22px">
           <span style="font-size:18px;font-weight:800;color:#1A1A1A">{_euro(price)}</span>
           <span style="color:#9E9791;font-size:11px;font-weight:600">/mo</span>
         </div>
-        <div style="color:#6B6560;font-size:11px;margin-top:2px">{sub_specs}</div>
-        <div style="color:#6B6560;font-size:11px;margin-top:6px;line-height:1.4">{meta_html or "&nbsp;"}</div>
+        <div style="color:#6B6560;font-size:11px;margin-top:2px;line-height:14px;height:14px;
+                    white-space:nowrap;overflow:hidden">{sub_specs}</div>
+        <div style="color:#6B6560;font-size:11px;margin-top:6px;
+                    line-height:16px;height:16px;
+                    white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{meta_html or "&nbsp;"}</div>
         <a href="{url}" style="display:block;background:#2A7A5A;color:#FFFFFF;text-align:center;
                                padding:8px;border-radius:6px;text-decoration:none;font-weight:600;
                                font-size:12px;margin-top:10px">View →</a>
