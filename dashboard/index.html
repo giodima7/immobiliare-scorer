@@ -6868,6 +6868,7 @@ const STRINGS = {
     'settings.alert_min_n':'min {n}',
     'settings.delete_alert':'🗑 Delete',
     'toast.alert_deleted':'Alert deleted',
+    'toast.alert_delete_failed':'Could not delete alert:',
     // Avatar dropdown menu — entries the user lands in via the avatar
     // pill in the header. The Settings tab is hidden on the deployed
     // dashboard, so the avatar menu is the canonical entry point for
@@ -7036,6 +7037,7 @@ const STRINGS = {
     'settings.alert_min_n':'min {n}',
     'settings.delete_alert':'🗑 Elimina',
     'toast.alert_deleted':'Avviso eliminato',
+    'toast.alert_delete_failed':'Impossibile eliminare l\'avviso:',
     'menu.my_alerts':'I miei avvisi',
   },
 };
@@ -9334,19 +9336,32 @@ async function toggleDigestActive(alertId, currentlyActive) {
   const user = (typeof Auth !== 'undefined') ? Auth.user : null;
   if (!user || !alertId) return;
   try {
-    await fetch(
-      `${SUPABASE_URL}/rest/v1/digest_filters?id=eq.${encodeURIComponent(alertId)}`,
+    const resp = await fetch(
+      `${SUPABASE_URL}/rest/v1/digest_filters?id=eq.${encodeURIComponent(alertId)}&select=id`,
       {
         method: 'PATCH',
         headers: {
           'apikey':        SUPABASE_ANON_KEY,
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
           'Content-Type':  'application/json',
-          'Prefer':        'return=minimal',
+          'Accept':        'application/json',
+          'Prefer':        'return=representation',
         },
         body: JSON.stringify({ active: !currentlyActive }),
       }
     );
+    if (!resp.ok) {
+      const detail = await resp.text();
+      throw new Error(`HTTP ${resp.status} ${detail.slice(0, 240)}`);
+    }
+    // Same RLS-silent-drop check as deleteDigestAlert — if Postgres
+    // filtered the row out, the PATCH succeeds with 0 rows and the UI
+    // would lie about toggling.
+    let rows = [];
+    try { rows = await resp.json(); } catch (_) {}
+    if (Array.isArray(rows) && rows.length === 0) {
+      throw new Error('PATCH returned no rows — likely blocked by RLS.');
+    }
     showToast(currentlyActive
       ? (t('toast.alert_paused')  || 'Alert paused')
       : (t('toast.alert_resumed') || 'Alert resumed'));
@@ -9359,6 +9374,7 @@ async function toggleDigestActive(alertId, currentlyActive) {
     }
   } catch (err) {
     console.warn('[digest] toggle failed:', err);
+    showToast('Could not update alert: ' + err.message);
   }
 }
 
@@ -9377,18 +9393,38 @@ async function deleteDigestAlert(alertId, displayName) {
                    + (displayName ? `\n\n"${displayName}"` : '');
   if (!confirm(confirmMsg)) return;
   try {
-    await fetch(
-      `${SUPABASE_URL}/rest/v1/digest_filters?id=eq.${encodeURIComponent(alertId)}`,
+    // Ask PostgREST to send back the deleted rows so we can detect the
+    // "RLS silently dropped your DELETE" failure mode that bit us before
+    // migration 006 added the anon DELETE policy. A successful delete
+    // returns one row; if Postgres filters via RLS we get [].
+    const resp = await fetch(
+      `${SUPABASE_URL}/rest/v1/digest_filters?id=eq.${encodeURIComponent(alertId)}&select=id`,
       {
         method: 'DELETE',
         headers: {
           'apikey':        SUPABASE_ANON_KEY,
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-          'Prefer':        'return=minimal',
+          'Accept':        'application/json',
+          'Prefer':        'return=representation',
         },
       }
     );
+    if (!resp.ok) {
+      const detail = await resp.text();
+      throw new Error(`HTTP ${resp.status} ${detail.slice(0, 240)}`);
+    }
+    // Verify a row actually came back. Without this check, an RLS-denied
+    // DELETE looks identical to a successful one to the user — the
+    // alert reappears on next refresh and trust evaporates.
+    let rows = [];
+    try { rows = await resp.json(); } catch (_) { /* return=minimal style */ }
+    if (Array.isArray(rows) && rows.length === 0) {
+      throw new Error('DELETE returned no rows — likely blocked by RLS. Run supabase_migration_006.sql.');
+    }
     showToast(t('toast.alert_deleted') || 'Alert deleted');
+    // Refresh wherever the list is currently visible. renderDigestSettingsSection
+    // also updates the avatar badge cache as a side-effect.
+    if (typeof _refreshDigestAlertBadge === 'function') _refreshDigestAlertBadge();
     const wrap = document.getElementById('digestSettingsWrap');
     if (wrap) wrap.innerHTML = await renderDigestSettingsSection();
     const mgrBody = document.getElementById('alertsManagerBody');
@@ -9398,6 +9434,7 @@ async function deleteDigestAlert(alertId, displayName) {
     }
   } catch (err) {
     console.warn('[digest] delete failed:', err);
+    showToast((t('toast.alert_delete_failed') || 'Could not delete alert:') + ' ' + err.message);
   }
 }
 
