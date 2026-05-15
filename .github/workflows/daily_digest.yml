@@ -1,48 +1,51 @@
 name: Daily Email Digest
 
+# Per-user personalised digest. Reads filters from the digest_filters
+# Supabase table and listings from the listings table — no local JSON
+# snapshots, no self-hosted runner needed.
+#
+# Required GitHub secrets:
+#   SUPABASE_URL          project URL
+#   SUPABASE_SERVICE_KEY  service-role key (read access to all tables)
+#   GMAIL_USER            sender Gmail address
+#   GMAIL_APP_PASSWORD    Gmail app password
+#   DASHBOARD_URL         public dashboard URL (e.g. https://immobiliare-scorer.pages.dev)
+
 on:
   schedule:
-    - cron: '0 7 * * *'   # 7:00 UTC = 9:00 CEST / 8:00 CET
-  workflow_dispatch:         # allows manual trigger for testing
+    - cron: '0 7 * * *'   # 07:00 UTC = 09:00 CEST / 08:00 CET
+  workflow_dispatch:       # manual trigger for testing
+    inputs:
+      dry_run:
+        description: 'Build emails but don''t actually send (debug)'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
 
 jobs:
   digest:
-    # GitHub-hosted — Mac does not need to be on for this job.
-    # Reads rentals_latest.json that was last pushed by the scan workflow.
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
     steps:
-      - name: Checkout repo
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Send digest
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # No `pip install` step — email_digest_supabase.py uses stdlib only
+      # (urllib, smtplib, email, json). Keeps the run under 10 seconds.
+
+      - name: Send digest emails
         env:
-          EMAIL_CONFIG: ${{ secrets.EMAIL_CONFIG }}
-        run: |
-          python3 - <<'EOF'
-          import json, os, sys
-          from pathlib import Path
-
-          # Write EMAIL_CONFIG secret to disk so email_digest.load_config() can find it
-          raw = os.environ.get("EMAIL_CONFIG", "").strip()
-          if not raw:
-              print("EMAIL_CONFIG secret is not set — skipping digest")
-              sys.exit(0)
-          Path("email_config.json").write_text(raw)
-
-          from email_digest import send_digest, load_config
-          from pathlib import Path as _Path
-
-          rentals_path = _Path("dashboard/rentals_latest.json")
-          if not rentals_path.exists():
-              print("rentals_latest.json not found — skipping digest")
-              sys.exit(0)
-
-          listings = json.loads(rentals_path.read_text())
-          config   = load_config()
-          config["enabled"] = True   # always send in CI regardless of local flag
-
-          print(f"Loaded {len(listings)} listings — sending digest...")
-          send_digest(listings, config)
-          EOF
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          GMAIL_USER:           ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD:   ${{ secrets.GMAIL_APP_PASSWORD }}
+          DASHBOARD_URL:        ${{ secrets.DASHBOARD_URL }}
+          DIGEST_DRY_RUN:       ${{ inputs.dry_run == 'true' && '1' || '' }}
+        run: python3 email_digest_supabase.py

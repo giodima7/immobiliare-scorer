@@ -421,6 +421,33 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--green-deep); }
 }
 .btn-reset:hover { background: var(--border-strong); color: var(--text-primary); }
 
+/* "🔔 Save alert" button — sits in the rentals filter bar after the
+   stale toggle. Hidden until the user signs in (toggled by Auth.user
+   events). Same pill geometry as the other filter pills, with a green
+   accent on hover to telegraph the save action. */
+.btn-save-digest {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: var(--bg-muted);
+  border: 1px solid var(--border, #E0DBD4);
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font);
+  color: var(--text-secondary);
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+  white-space: nowrap;
+}
+.btn-save-digest:hover {
+  background: #E6F4ED;
+  border-color: #2A7A5A;
+  color: #2A7A5A;
+}
+.btn-save-digest:disabled { opacity: 0.6; cursor: not-allowed; }
+
 /* "Show expired" toggle in the filter bar — opens stale listings (off-market) */
 .stale-toggle {
   display: inline-flex;
@@ -4791,6 +4818,10 @@ const Auth = (() => {
       try { localStorage.setItem('lume_clerk_user_id', user.id); } catch (_) {}
       updateUserAvatar();
       updateFavBadge?.();
+      // Show the "🔔 Save alert" button — saving a daily digest needs an
+      // identified user (clerk_user_id is the digest_filters PK).
+      const _saveBtn = document.getElementById('save-digest-btn');
+      if (_saveBtn) _saveBtn.style.display = 'inline-flex';
       // Re-render listings so favourite hearts reflect the user's saved set
       if (typeof renderRentals === 'function') try { renderRentals(); } catch (_) {}
       if (typeof renderSales   === 'function') try { renderSales();   } catch (_) {}
@@ -4799,6 +4830,8 @@ const Auth = (() => {
       try { localStorage.removeItem('lume_clerk_user_id'); } catch (_) {}
       updateUserAvatar();
       updateFavBadge?.();
+      const _saveBtn = document.getElementById('save-digest-btn');
+      if (_saveBtn) _saveBtn.style.display = 'none';
       if (typeof renderRentals === 'function') try { renderRentals(); } catch (_) {}
       if (typeof renderSales   === 'function') try { renderSales();   } catch (_) {}
     },
@@ -5895,6 +5928,15 @@ function saveFilters() {
       <input type="checkbox" id="rShowStale">
       <span data-i18n="filter.show_expired">Show expired</span>
     </label>
+    <!-- Save the current filter state as a daily email alert. Hidden until
+         the user signs in via Clerk (toggled by Auth._onLogin/_onLogout). -->
+    <button id="save-digest-btn"
+            class="btn-save-digest"
+            type="button"
+            onclick="saveDigestFilters()"
+            style="display:none"
+            title="Save current filters as your daily email alert"
+            data-i18n="filter.save_alert">🔔 Save alert</button>
   </div>
 
   <!-- Rentals stats bar -->
@@ -6191,6 +6233,12 @@ function saveFilters() {
      SETTINGS VIEW (item 10)
 ═══════════════════════════════════════════════════════════════ -->
 <div id="settingsView" hidden>
+
+  <!-- ── Daily email alert (Supabase digest_filters) ─────────────────
+       Populated by renderDigestSettingsSection() the first time the
+       Settings tab is shown after sign-in. Hidden when signed out (the
+       renderer returns an empty section heading + sign-in prompt). -->
+  <div id="digestSettingsWrap" style="margin-bottom:32px"></div>
 
   <!-- ── Scoring parameters ─────────────────────────────────────────── -->
   <div class="settings-section-title">Scoring Parameters</div>
@@ -8076,6 +8124,13 @@ function switchTab(tab, opts) {
     _settingsLoad();
     _loadScoreSettings();
     _dqLoad();
+    // Daily-alert section reads from Supabase digest_filters. Async so
+    // the rest of the Settings panel paints immediately; the wrap div
+    // gets filled in once the network round-trip completes.
+    const _digestWrap = document.getElementById('digestSettingsWrap');
+    if (_digestWrap && typeof renderDigestSettingsSection === 'function') {
+      renderDigestSettingsSection().then(html => { _digestWrap.innerHTML = html; });
+    }
   } else {
     stopScannerPoll();
     stopSaleFetchPoll();
@@ -8644,6 +8699,210 @@ function showToast(msg, ms = 2400) {
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c =>
     ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ── Digest filters (Supabase-backed daily email alerts) ──────────────────────
+// The 🔔 Save alert button in the rentals filter bar dumps the current filter
+// state into Supabase's digest_filters table; the daily_digest.yml workflow
+// then reads it next morning to send a per-user email of new + price-dropped
+// listings. Settings tab surfaces a pause/resume control.
+//
+// Filter element IDs (rentals tab): rMaxRent, rMinSqm, rMinRooms, rMaxMetro,
+// rMinFloor, rElevator, rMinEnergy, rScore, rFascia, rOmiZone. Source +
+// Gems are button groups read from .active state.
+function _readActiveFilterState() {
+  const num  = id => { const v = parseFloat(document.getElementById(id)?.value); return Number.isFinite(v) ? v : null; };
+  const str  = id => document.getElementById(id)?.value || null;
+  const bool = id => !!document.getElementById(id)?.checked;
+  const activeBtn = (sel, attr) => {
+    const b = document.querySelector(`${sel} .active`);
+    return b ? (b.dataset[attr] || '') : '';
+  };
+  // Single-value selects → arrays (so the schema mirrors the multi-select
+  // form the digest script + future UI both expect).
+  const fasciaVal = str('rFascia');
+  const omiVal    = str('rOmiZone');
+  const gemRaw    = activeBtn('#rGemFilter', 'gem');           // '' | 'hidden' | 'good'
+  const srcRaw    = activeBtn('#rSourceFilter', 'rsource');    // '' | 'immobiliare' | 'idealista'
+
+  return {
+    max_rent:        num('rMaxRent')   || null,
+    min_sqm:         num('rMinSqm')    || null,
+    min_rooms:       num('rMinRooms')  || null,
+    max_metro_min:   num('rMaxMetro')  || null,
+    min_score:       num('rScore')     || 0,
+    min_floor:       num('rMinFloor')  || null,
+    require_elevator: bool('rElevator'),
+    min_energy:      str('rMinEnergy') || null,
+    fascia:          fasciaVal ? [fasciaVal] : [],
+    omi_zona:        omiVal    ? [omiVal]    : [],
+    // Map dashboard's internal codes onto digest_filters' canonical values:
+    //   button data-gem ''       → 'all'
+    //                  'hidden'  → 'hidden'
+    //                  'good'    → 'great_value'
+    gems_filter:     gemRaw === 'hidden' ? 'hidden'
+                   : gemRaw === 'good'   ? 'great_value' : 'all',
+    source_filter:   srcRaw || 'all',
+  };
+}
+
+async function saveDigestFilters() {
+  const user = (typeof Auth !== 'undefined') ? Auth.user : null;
+  if (!user) {
+    if (typeof Auth !== 'undefined') Auth.openSignIn();
+    showToast(t('toast.sign_in_required') || 'Sign in to save alerts');
+    return;
+  }
+  const btn = document.getElementById('save-digest-btn');
+  const _orig = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = t('filter.saving') || '⏳ Saving…'; }
+
+  const email = user.primaryEmailAddress?.emailAddress
+             || user.emailAddresses?.[0]?.emailAddress
+             || '';
+  const payload = Object.assign({
+    clerk_user_id: user.id,
+    email,
+    display_name: user.fullName || [user.firstName, user.lastName].filter(Boolean).join(' ') || '',
+    active: true,
+  }, _readActiveFilterState());
+
+  try {
+    // PostgREST upsert: clerk_user_id is the unique key (see migration 004),
+    // so on_conflict + merge-duplicates lets one POST handle insert OR update.
+    const resp = await fetch(`${SUPABASE_URL}/rest/v1/digest_filters?on_conflict=clerk_user_id`, {
+      method: 'POST',
+      headers: {
+        'apikey':        SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type':  'application/json',
+        'Prefer':        'resolution=merge-duplicates,return=minimal',
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!resp.ok) {
+      const detail = await resp.text();
+      throw new Error(`HTTP ${resp.status} ${detail.slice(0, 200)}`);
+    }
+    if (btn) { btn.textContent = t('filter.alert_saved') || '✓ Alert saved'; }
+    showToast(t('toast.alert_saved') || 'Daily alert saved — you\'ll get an email with matching new listings each day');
+    setTimeout(() => {
+      if (btn) { btn.textContent = _orig || (t('filter.save_alert') || '🔔 Save alert'); btn.disabled = false; }
+    }, 2000);
+  } catch (err) {
+    console.warn('[digest] save failed:', err);
+    if (btn) { btn.textContent = _orig || (t('filter.save_alert') || '🔔 Save alert'); btn.disabled = false; }
+    showToast(`Could not save alert: ${err.message}`);
+  }
+}
+
+async function _fetchDigestFilters(userId) {
+  if (!userId) return null;
+  try {
+    const resp = await fetch(
+      `${SUPABASE_URL}/rest/v1/digest_filters?clerk_user_id=eq.${encodeURIComponent(userId)}&select=*&limit=1`,
+      { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
+    );
+    if (!resp.ok) return null;
+    const rows = await resp.json();
+    return rows[0] || null;
+  } catch (_) { return null; }
+}
+
+async function toggleDigestActive(currentlyActive) {
+  const user = (typeof Auth !== 'undefined') ? Auth.user : null;
+  if (!user) return;
+  try {
+    await fetch(
+      `${SUPABASE_URL}/rest/v1/digest_filters?clerk_user_id=eq.${encodeURIComponent(user.id)}`,
+      {
+        method: 'PATCH',
+        headers: {
+          'apikey':        SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type':  'application/json',
+          'Prefer':        'return=minimal',
+        },
+        body: JSON.stringify({ active: !currentlyActive }),
+      }
+    );
+    showToast(currentlyActive
+      ? (t('toast.alert_paused')  || 'Alert paused')
+      : (t('toast.alert_resumed') || 'Alert resumed'));
+    if (typeof renderDigestSettingsSection === 'function') {
+      const wrap = document.getElementById('digestSettingsWrap');
+      if (wrap) wrap.innerHTML = await renderDigestSettingsSection();
+    }
+  } catch (err) {
+    console.warn('[digest] toggle failed:', err);
+  }
+}
+
+// Renders a settings card showing the user's saved alert. Returns an HTML
+// string (not a DOM node) so the Settings tab can drop it in directly.
+async function renderDigestSettingsSection() {
+  const user = (typeof Auth !== 'undefined') ? Auth.user : null;
+  if (!user) {
+    return `<div class="settings-section-title">${escapeHtml(t('settings.alert') || 'Daily alert')}</div>
+            <p style="font-size:13px;color:var(--muted);margin:0">
+              Sign in to save alert filters and receive a daily email of matching listings.
+            </p>`;
+  }
+  const f = await _fetchDigestFilters(user.id);
+  if (!f) {
+    return `<div class="settings-section-title">${escapeHtml(t('settings.alert') || 'Daily alert')}</div>
+            <p style="font-size:13px;color:var(--muted);margin:0;line-height:1.6">
+              ${escapeHtml(t('settings.alert_none') || 'No alert set up yet. Go to Rentals, set your filters, and click 🔔 Save alert.')}
+            </p>`;
+  }
+
+  // Render each non-default filter as a chip.
+  const chips = [];
+  if (f.max_rent)            chips.push(`Max €${f.max_rent}/mo`);
+  if (f.min_sqm)             chips.push(`≥${f.min_sqm} m²`);
+  if (f.min_rooms)           chips.push(`≥${f.min_rooms} rooms`);
+  if (f.max_metro_min)       chips.push(`Metro ≤${f.max_metro_min} min`);
+  if (f.min_score && f.min_score > 0) chips.push(`Score ≥${f.min_score}`);
+  if (f.min_floor != null)   chips.push(`Floor ≥${f.min_floor}`);
+  if (f.require_elevator)    chips.push('Elevator');
+  if (f.min_energy)          chips.push(`Energy ≥${f.min_energy}`);
+  if (f.fascia?.length)      chips.push(`Fascia ${f.fascia.join('/')}`);
+  if (f.omi_zona?.length)    chips.push(`Zone ${f.omi_zona.join('/')}`);
+  if (f.gems_filter && f.gems_filter !== 'all') {
+    chips.push(f.gems_filter === 'hidden' ? '✦ Hidden Gems only' : '💰 Great Value+');
+  }
+  if (f.source_filter && f.source_filter !== 'all') chips.push(`Source ${f.source_filter}`);
+
+  const stateColor = f.active ? '#2A7A5A' : 'var(--muted)';
+  const stateLabel = f.active
+    ? (t('settings.alert_active') || 'Active')
+    : (t('settings.alert_paused') || 'Paused');
+
+  return `
+    <div class="settings-section-title" style="display:flex;align-items:center;gap:10px">
+      <span>${escapeHtml(t('settings.alert') || 'Daily alert')}</span>
+      <span style="color:${stateColor};font-weight:600;font-size:13px">● ${escapeHtml(stateLabel)}</span>
+    </div>
+    <p style="font-size:13px;color:var(--text-secondary, #555);margin:0 0 12px;line-height:1.6">
+      ${escapeHtml((t('settings.alert_sent_to') || 'Sent to {email} each morning with new listings matching:').replace('{email}', f.email))}
+    </p>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
+      ${chips.length
+        ? chips.map(c => `<span style="background:var(--bg-muted);padding:4px 10px;border-radius:999px;font-size:12px;font-weight:500">${escapeHtml(c)}</span>`).join('')
+        : '<span style="color:var(--muted);font-size:13px">All listings (no filters saved)</span>'}
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button onclick="toggleDigestActive(${f.active})"
+              style="padding:8px 16px;border:1px solid var(--border, #E0DBD4);border-radius:999px;font-size:13px;cursor:pointer;font-family:var(--font);background:var(--bg-card,#fff)">
+        ${escapeHtml(f.active
+          ? (t('settings.pause_alert')  || '⏸ Pause alert')
+          : (t('settings.resume_alert') || '▶ Resume alert'))}
+      </button>
+      <button onclick="document.querySelector('.tab-btn[data-tab=&quot;rentals&quot;]')?.click()"
+              style="padding:8px 16px;border:1px solid var(--border, #E0DBD4);border-radius:999px;font-size:13px;cursor:pointer;font-family:var(--font);background:var(--bg-card,#fff)">
+        ${escapeHtml(t('settings.update_filters') || '✏️ Update filters')}
+      </button>
+    </div>`;
 }
 
 function formatRelativeTime(iso) {

@@ -25,11 +25,13 @@ Dependencies: standard library only (urllib + json). No `supabase-py`.
 from __future__ import annotations
 
 import argparse
+import datetime
 import json
 import os
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -110,6 +112,11 @@ SCHEMA_COLUMNS: frozenset[str] = frozenset({
     # ── Staleness / lifecycle ───────────────────────────────────────────
     "first_seen_date", "last_seen_date", "published_date",
     "is_stale", "days_since_seen", "days_on_market",
+    # ── Price history (migration 004) ───────────────────────────────────
+    # Populated by detect_price_drops() during sync. previous_price is
+    # the asking price the listing carried on the prior visible day; the
+    # daily digest reads these to surface price-drop cards.
+    "previous_price", "price_changed_date",
 })
 
 # Postgres rejects empty strings for INTEGER / NUMERIC columns. Treat the
@@ -155,6 +162,81 @@ def _http_post(url: str, body_bytes: bytes, headers: dict) -> tuple[int, str]:
         return 0, str(exc)
 
 
+def fetch_current_prices(listing_ids: list[str]) -> dict[str, int | None]:
+    """
+    Fetch the currently-stored price for each ID via PostgREST's `id=in.(...)`
+    filter. Returns {id: price}. Missing IDs are absent (interpreted as
+    "first time we've seen this listing"). On any HTTP/network error we
+    return {} and the caller treats the batch as having no prior prices —
+    safer than misclassifying a fresh listing as a price drop.
+    """
+    if not listing_ids:
+        return {}
+    # Quote each ID so values containing commas / parentheses don't break
+    # the in-filter syntax (real listing IDs are numeric or "id_xxxxx", but
+    # this is cheap insurance).
+    quoted = ",".join(f'"{i}"' for i in listing_ids)
+    url    = (f"{SUPABASE_URL}/rest/v1/listings?"
+              f"select=id,price&id=in.({quoted})&limit={len(listing_ids)}")
+    req = urllib.request.Request(url, headers={
+        "apikey":        SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Accept":        "application/json",
+        "Prefer":        "count=none",
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            rows = json.loads(resp.read())
+        return {r["id"]: r.get("price") for r in rows if r.get("id")}
+    except Exception as exc:
+        print(f"  [price check] fetch failed: {exc}")
+        return {}
+
+
+def detect_price_drops(rows: list[dict]) -> list[dict]:
+    """
+    Compare each row's incoming price against the price currently stored
+    in Supabase. When the new price is strictly lower, annotate the row
+    with `previous_price` (the old value) and `price_changed_date` (today)
+    so the daily digest can surface the drop.
+
+    Drops only — increases are ignored. Landlords sometimes re-list at a
+    higher price after a market test; flagging that as a "change" would
+    spam users with non-actionable noise.
+    """
+    today = datetime.date.today().isoformat()
+    ids = [r["id"] for r in rows if r.get("id") and r.get("price") is not None]
+    if not ids:
+        return rows
+
+    current_prices = fetch_current_prices(ids)
+    drops = 0
+
+    for row in rows:
+        lid       = row.get("id")
+        new_price = row.get("price")
+        old_price = current_prices.get(lid)
+
+        if (old_price is not None and new_price is not None
+                and isinstance(old_price, (int, float))
+                and isinstance(new_price, (int, float))
+                and new_price < old_price):
+            row["previous_price"]     = int(old_price)
+            row["price_changed_date"] = today
+            drops += 1
+        else:
+            # Only set NULL placeholders when the row doesn't already
+            # carry price-history fields (preserves history written by an
+            # earlier run inside the same scan, in case rows are batched
+            # across passes).
+            row.setdefault("previous_price", None)
+            row.setdefault("price_changed_date", None)
+
+    if drops:
+        print(f"  [price drop] detected {drops} drop(s) in this batch")
+    return rows
+
+
 def _normalise_batch_keys(rows: list[dict]) -> list[dict]:
     """
     PostgREST requires every object in a bulk POST to share the same key set
@@ -173,6 +255,10 @@ def _normalise_batch_keys(rows: list[dict]) -> list[dict]:
 
 def upsert_batch(rows: list[dict], idx: int, total: int) -> bool:
     """POST a batch to /rest/v1/listings with merge-duplicates semantics."""
+    # Detect price drops BEFORE shape-normalising so the new
+    # previous_price / price_changed_date keys end up in the union of
+    # batch keys and survive the upsert.
+    rows = detect_price_drops(rows)
     rows = _normalise_batch_keys(rows)
     headers = {
         "Content-Type":  "application/json",
