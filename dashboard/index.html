@@ -4534,20 +4534,32 @@ body.detail-page-active .filter-bar { display: none !important; }
 //   Auth.openSignIn()   → open Clerk's hosted sign-in modal
 
 // ─── Supabase configuration ─────────────────────────────────────────────────
-// build.sh substitutes the %% placeholders at Cloudflare Pages build time
-// from the SUPABASE_URL / SUPABASE_ANON_KEY env vars. If the substitution
-// hasn't happened (local dev, or env vars unset), the placeholder strings
-// remain and SupabaseClient.configured stays false — the deployed dashboard
-// then renders empty because Supabase is its sole data source.
+// On Cloudflare Pages, build.sh substitutes the %% placeholders with the
+// real values from the SUPABASE_URL / SUPABASE_ANON_KEY env vars. Locally
+// (file://, `python3 api.py`, or any path that skips the build step) the
+// placeholders are never replaced — so we fall through to a hardcoded
+// project URL + publishable anon key.
 //
-// The anon key is safe to embed in HTML — Row Level Security restricts it
-// to read-only access on non-stale listings.
-const SUPABASE_URL      = '%%SUPABASE_URL%%';
-const SUPABASE_ANON_KEY = '%%SUPABASE_ANON_KEY%%';
+// The anon key is safe to commit — it's public, read-only, and Row Level
+// Security restricts it to non-stale listings. The service_role key (which
+// CAN write) lives only in GitHub Secrets and is never exposed to the
+// browser.
+const SUPABASE_URL = '%%SUPABASE_URL%%'.startsWith('%%')
+  ? 'https://sexbjvmedgappzqmcdjv.supabase.co'
+  : '%%SUPABASE_URL%%';
+
+const SUPABASE_ANON_KEY = '%%SUPABASE_ANON_KEY%%'.startsWith('%%')
+  ? 'sb_publishable_rxIMYBFh3IeQvNUgfAFEKQ_CUc_Rsba'
+  : '%%SUPABASE_ANON_KEY%%';
 
 const SupabaseClient = {
   _base: null,
   init() {
+    // SUPABASE_URL falls back to the hardcoded project URL when the build
+    // placeholder hasn't been substituted, so a leading '%%' here means
+    // both Cloudflare's sed AND the fallback failed — i.e. someone broke
+    // the constants above. Treat that as "not configured" rather than
+    // crashing later.
     if (!SUPABASE_URL || SUPABASE_URL.startsWith('%%')) {
       console.warn('[supabase] not configured — dashboard cannot load listings');
       return;
