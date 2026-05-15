@@ -9442,6 +9442,13 @@ async function deleteDigestAlert(alertId, displayName) {
 // delete). Attached to document once; the buttons themselves carry the
 // data-* attributes the handlers need. Avoids inline onclick string
 // concatenation that breaks on names containing quotes.
+//
+// CAPTURE PHASE (3rd arg = true) — the alerts-manager modal's inner
+// .save-alert-modal carries onclick="event.stopPropagation()" to keep
+// content-clicks from dismissing the backdrop. That call kills bubbling
+// in mid-flight, so a document-level BUBBLE listener never fires for
+// clicks inside the modal. Capture runs before bubble, so our delegator
+// receives the event before stopPropagation can swallow it.
 if (!window._digestActionDelegatorBound) {
   window._digestActionDelegatorBound = true;
   document.addEventListener('click', (e) => {
@@ -9458,7 +9465,7 @@ if (!window._digestActionDelegatorBound) {
       case 'toggle': toggleDigestActive(id, active); break;
       case 'delete': deleteDigestAlert(id, name);    break;
     }
-  });
+  }, true);
 }
 
 // Build chip labels summarising one saved alert. Order matches the modal's
