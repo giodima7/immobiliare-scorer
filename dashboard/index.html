@@ -9383,7 +9383,12 @@ async function editDigestAlert(alertId) {
   if (!user || !alertId) return;
   const rows = await _fetchDigestFilters(user.id);
   const row  = rows.find(r => r.id === alertId);
-  if (row) await openSaveAlertModal(row);
+  if (!row) return;
+  // Close the alerts-manager modal first so the edit form isn't rendered
+  // behind it. Without this, both modals stack and the save-alert form
+  // (with the prefilled values) is hidden under the manager card.
+  closeAlertsManager();
+  await openSaveAlertModal(row);
 }
 
 async function deleteDigestAlert(alertId, displayName) {
