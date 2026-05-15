@@ -182,10 +182,12 @@ Pages project → **Settings → Builds & deployments**:
 
 | Setting | Value |
 |---|---|
+| Root directory | `dashboard` |
 | Build command | `bash build.sh` |
-| Build output directory | `dashboard` |
+| Build output directory | `/` |
 
-`build.sh` substitutes `%%SUPABASE_URL%%` / `%%SUPABASE_ANON_KEY%%` in
+`build.sh` lives inside `dashboard/` (same folder Cloudflare deploys) and
+substitutes `%%SUPABASE_URL%%` / `%%SUPABASE_ANON_KEY%%` in
 `dashboard/index.html` at build time. If the env vars aren't set the script
 exits 0 with a warning and the placeholders stay in place — the dashboard
 then uses the static JSON fallback.
