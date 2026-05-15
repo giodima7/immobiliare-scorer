@@ -32,6 +32,14 @@ on:
         type: choice
         options: ['false', 'true']
 
+# Run all JavaScript-based actions (checkout@v4, setup-python@v5, etc.)
+# on Node 24 immediately, instead of waiting for GitHub's June 2026 default
+# flip. Node 20 is fully removed from the runner on 2026-09-16; this just
+# opts in early so we get any incompatibility surface NOW, not silently in
+# CI five months from now.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 jobs:
   digest:
     runs-on: ubuntu-latest

@@ -11,6 +11,13 @@ on:
         default: ''
         type: string
 
+# Opt JavaScript-based actions into Node 24 ahead of GitHub's
+# 2026-09-16 removal of Node 20 from the runner image. Harmless on the
+# self-hosted Mac (its own Node version is independent) and saves a
+# silent break later when the default flips.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 jobs:
   scan:
     # Runs on your local Mac via the GitHub Actions self-hosted runner.
