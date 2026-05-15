@@ -2984,6 +2984,35 @@ body.detail-page-active .filter-bar { display: none !important; }
   padding: 1px 8px;
   border-radius: var(--radius-full);
 }
+/* Active digest alerts get a coral pill; paused-only alerts use the
+   neutral .badge styling above. */
+.avatar-menu-item .badge.badge-alert {
+  background: #C0392B;
+  color: #FFFFFF;
+  font-weight: 700;
+}
+
+/* Red dot on the avatar — visible whenever the user has ≥1 active
+   digest alert. Pure visual signal; the count is only revealed once
+   the menu is opened. */
+.avatar-alert-dot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 10px;
+  height: 10px;
+  background: #C0392B;
+  border-radius: 50%;
+  border: 2px solid #FFFFFF;
+  pointer-events: none;
+  box-shadow: 0 0 0 0 rgba(192, 57, 43, 0.5);
+  animation: avatarDotPulse 2.4s ease-out infinite;
+}
+@keyframes avatarDotPulse {
+  0%   { box-shadow: 0 0 0 0   rgba(192, 57, 43, 0.45); }
+  60%  { box-shadow: 0 0 0 6px rgba(192, 57, 43, 0);    }
+  100% { box-shadow: 0 0 0 0   rgba(192, 57, 43, 0);    }
+}
 
 /* ── Collections drawer (slide in from right on desktop, bottom on mobile) ─ */
 .collections-drawer-backdrop {
@@ -5012,6 +5041,9 @@ const Auth = (() => {
       // identified user (clerk_user_id is the digest_filters PK).
       const _saveBtn = document.getElementById('save-digest-btn');
       if (_saveBtn) _saveBtn.style.display = 'inline-flex';
+      // Refresh the avatar's red dot from Supabase. Async fire-and-forget;
+      // the dot stays hidden until the fetch resolves.
+      if (typeof _refreshDigestAlertBadge === 'function') _refreshDigestAlertBadge();
       // Re-render listings so favourite hearts reflect the user's saved set
       if (typeof renderRentals === 'function') try { renderRentals(); } catch (_) {}
       if (typeof renderSales   === 'function') try { renderSales();   } catch (_) {}
@@ -5022,6 +5054,8 @@ const Auth = (() => {
       updateFavBadge?.();
       const _saveBtn = document.getElementById('save-digest-btn');
       if (_saveBtn) _saveBtn.style.display = 'none';
+      // Clear the alert dot — the now-anonymous user has no scoped alerts.
+      if (typeof _refreshDigestAlertBadge === 'function') _refreshDigestAlertBadge();
       if (typeof renderRentals === 'function') try { renderRentals(); } catch (_) {}
       if (typeof renderSales   === 'function') try { renderSales();   } catch (_) {}
     },
@@ -5112,7 +5146,12 @@ function hideApp() {
 }
 
 function updateUserAvatar() {
-  const el = document.getElementById('user-avatar');
+  const el   = document.getElementById('user-avatar');
+  const wrap = document.getElementById('user-avatar-wrap');
+  // Toggle the WRAPPER so the alert dot inherits visibility together
+  // with the avatar circle. Falls back gracefully if the wrap isn't in
+  // the DOM yet (very early call ordering).
+  if (wrap) wrap.style.display = 'flex';
   if (!el) return;
   if (typeof Auth !== 'undefined' && Auth.isSignedIn && Auth.isSignedIn()) {
     // Signed in — round avatar with initial, opens account menu
@@ -5541,11 +5580,17 @@ function saveFilters() {
     </svg>
   </button>
   <!-- User avatar (shown after auth) — opens dropdown menu -->
-  <div id="user-avatar" onclick="showUserMenu(event)" style="
-    display:none;width:32px;height:32px;border-radius:50%;
-    background:#2A7A5A;color:white;font-size:13px;font-weight:600;
-    align-items:center;justify-content:center;cursor:pointer;
-    flex-shrink:0;user-select:none" title="Account menu"></div>
+  <div id="user-avatar-wrap" style="position:relative;display:none;flex-shrink:0">
+    <div id="user-avatar" onclick="showUserMenu(event)" style="
+      width:32px;height:32px;border-radius:50%;
+      background:#2A7A5A;color:white;font-size:13px;font-weight:600;
+      display:flex;align-items:center;justify-content:center;cursor:pointer;
+      user-select:none" title="Account menu"></div>
+    <!-- Red dot — visible only when the user has ≥1 active digest alert.
+         Toggled by _refreshDigestAlertBadge() after sign-in + after every
+         save/pause/delete. -->
+    <span id="avatar-alert-dot" class="avatar-alert-dot" style="display:none"></span>
+  </div>
 </header>
 
 <!-- ── Tab bar ── -->
@@ -6823,6 +6868,11 @@ const STRINGS = {
     'settings.alert_min_n':'min {n}',
     'settings.delete_alert':'🗑 Delete',
     'toast.alert_deleted':'Alert deleted',
+    // Avatar dropdown menu — entries the user lands in via the avatar
+    // pill in the header. The Settings tab is hidden on the deployed
+    // dashboard, so the avatar menu is the canonical entry point for
+    // signed-in account actions.
+    'menu.my_alerts':'My alerts',
   },
   it: {
     // Tabs
@@ -6986,6 +7036,7 @@ const STRINGS = {
     'settings.alert_min_n':'min {n}',
     'settings.delete_alert':'🗑 Elimina',
     'toast.alert_deleted':'Avviso eliminato',
+    'menu.my_alerts':'I miei avvisi',
   },
 };
 
@@ -9238,10 +9289,17 @@ async function submitSaveAlert() {
     }
     showToast(t('toast.alert_saved') || 'Daily alert saved.');
     closeSaveAlertModal();
-    // Refresh the Settings tab section if it's currently visible so the
-    // list reflects the just-saved row.
+    // Refresh the Settings tab section AND the alerts-manager modal if
+    // either is currently in the DOM. renderDigestSettingsSection also
+    // updates the avatar dot, so a save always lights up the badge.
+    if (typeof _refreshDigestAlertBadge === 'function') _refreshDigestAlertBadge();
     const wrap = document.getElementById('digestSettingsWrap');
     if (wrap) renderDigestSettingsSection().then(html => { wrap.innerHTML = html; });
+    const mgrBody = document.getElementById('alertsManagerBody');
+    const mgrBack = document.getElementById('alertsManagerBackdrop');
+    if (mgrBody && mgrBack && !mgrBack.hidden) {
+      renderDigestSettingsSection().then(html => { mgrBody.innerHTML = html; });
+    }
   } catch (err) {
     console.warn('[digest] save failed:', err);
     if (errEl) {
@@ -9294,6 +9352,11 @@ async function toggleDigestActive(alertId, currentlyActive) {
       : (t('toast.alert_resumed') || 'Alert resumed'));
     const wrap = document.getElementById('digestSettingsWrap');
     if (wrap) wrap.innerHTML = await renderDigestSettingsSection();
+    const mgrBody = document.getElementById('alertsManagerBody');
+    const mgrBack = document.getElementById('alertsManagerBackdrop');
+    if (mgrBody && mgrBack && !mgrBack.hidden) {
+      mgrBody.innerHTML = await renderDigestSettingsSection();
+    }
   } catch (err) {
     console.warn('[digest] toggle failed:', err);
   }
@@ -9328,6 +9391,11 @@ async function deleteDigestAlert(alertId, displayName) {
     showToast(t('toast.alert_deleted') || 'Alert deleted');
     const wrap = document.getElementById('digestSettingsWrap');
     if (wrap) wrap.innerHTML = await renderDigestSettingsSection();
+    const mgrBody = document.getElementById('alertsManagerBody');
+    const mgrBack = document.getElementById('alertsManagerBackdrop');
+    if (mgrBody && mgrBack && !mgrBack.hidden) {
+      mgrBody.innerHTML = await renderDigestSettingsSection();
+    }
   } catch (err) {
     console.warn('[digest] delete failed:', err);
   }
@@ -9366,6 +9434,12 @@ async function renderDigestSettingsSection() {
             </p>`;
   }
   const rows = await _fetchDigestFilters(user.id);
+  // Update the avatar badge cache from this same fetch — saves a round-trip
+  // and keeps the badge in sync with whatever the user just saved/deleted.
+  window._digestTotalCount  = rows.length;
+  window._digestActiveCount = rows.filter(r => r.active).length;
+  const _dot = document.getElementById('avatar-alert-dot');
+  if (_dot) _dot.style.display = (window._digestActiveCount > 0) ? 'block' : 'none';
   const headerHtml = `<div class="settings-section-title" style="display:flex;align-items:center;justify-content:space-between;gap:10px">
       <span>${escapeHtml(t('settings.alerts') || 'Daily alerts')}</span>
       <button onclick="saveDigestFilters()"
@@ -9705,6 +9779,10 @@ function showUserMenu(ev) {
   const rect = avatar.getBoundingClientRect();
   const collectionsCount = Collections.getAll().length;
   const userName = (typeof Auth !== 'undefined' && Auth.userName) ? Auth.userName() : 'User';
+  // Alert counts come from the cached _digestActiveCount maintained by
+  // _refreshDigestAlertBadge(). Falls back to 0 before the first refresh.
+  const alertsActive = (typeof window._digestActiveCount === 'number') ? window._digestActiveCount : 0;
+  const alertsTotal  = (typeof window._digestTotalCount  === 'number') ? window._digestTotalCount  : 0;
 
   const menu = document.createElement('div');
   menu.className = 'avatar-menu';
@@ -9714,8 +9792,14 @@ function showUserMenu(ev) {
     <button class="avatar-menu-item" onclick="closeAvatarMenu(); openCollectionsDrawer();">
       📁 My collections <span class="badge">${collectionsCount}</span>
     </button>
+    <button class="avatar-menu-item" onclick="closeAvatarMenu(); openAlertsManager();">
+      🔔 ${escapeHtml(t('menu.my_alerts') || 'My alerts')}
+      ${alertsTotal > 0
+        ? `<span class="badge${alertsActive > 0 ? ' badge-alert' : ''}">${alertsTotal}</span>`
+        : ''}
+    </button>
     <button class="avatar-menu-item" onclick="closeAvatarMenu(); Auth.signOut();">
-      🚪 Sign out
+      🚪 ${escapeHtml(t('header.sign_out') || 'Sign out')}
     </button>`;
   document.body.appendChild(menu);
 
@@ -9726,6 +9810,83 @@ function showUserMenu(ev) {
     if (!menu.contains(e.target) && e.target !== avatar) closeAvatarMenu();
   };
   setTimeout(() => document.addEventListener('click', _avatarMenuOutside, true), 0);
+}
+
+// ── My alerts modal (avatar-menu entry) ───────────────────────────────────
+// Reuses the Settings-tab list renderer. Opens as a centered drawer the
+// user can dismiss via Esc, backdrop click, or the close button.
+async function openAlertsManager() {
+  const user = (typeof Auth !== 'undefined') ? Auth.user : null;
+  if (!user) {
+    if (typeof Auth !== 'undefined') Auth.openSignIn();
+    return;
+  }
+  let back = document.getElementById('alertsManagerBackdrop');
+  if (!back) {
+    back = document.createElement('div');
+    back.id = 'alertsManagerBackdrop';
+    back.className = 'save-alert-backdrop';     // reuse modal styling
+    back.onclick = (ev) => closeAlertsManager(ev);
+    back.innerHTML = `
+      <div class="save-alert-modal" onclick="event.stopPropagation()" role="dialog" aria-modal="true">
+        <div class="save-alert-header">
+          <h2 id="alertsManagerTitle">🔔 ${escapeHtml(t('menu.my_alerts') || 'My alerts')}</h2>
+          <button type="button" class="save-alert-close" onclick="closeAlertsManager()" aria-label="Close">×</button>
+        </div>
+        <div id="alertsManagerBody"></div>
+      </div>`;
+    document.body.appendChild(back);
+  }
+  // Always render with a fresh fetch — pause/delete actions invalidate
+  // the cached list, and re-opening the modal is the user's natural
+  // refresh signal.
+  const body = document.getElementById('alertsManagerBody');
+  if (body) body.innerHTML = `<p style="color:var(--muted);font-size:13px;margin:8px 0">${escapeHtml(t('loading.listings') || 'Loading…')}</p>`;
+  back.hidden = false;
+  document.addEventListener('keydown', _alertsManagerEscHandler);
+
+  const html = await renderDigestSettingsSection();
+  if (body) body.innerHTML = html;
+  // Re-translate any newly-injected data-i18n nodes (Settings list uses
+  // the same tags as the Settings tab itself).
+  body?.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+}
+
+function closeAlertsManager(ev) {
+  if (ev && ev.target && ev.currentTarget && ev.target !== ev.currentTarget) return;
+  const back = document.getElementById('alertsManagerBackdrop');
+  if (back) back.hidden = true;
+  document.removeEventListener('keydown', _alertsManagerEscHandler);
+}
+
+function _alertsManagerEscHandler(ev) {
+  if (ev.key === 'Escape') closeAlertsManager();
+}
+
+// ── Avatar badge: fetch the user's alerts and dot the avatar when any
+// are active. Called from Auth._onLogin (after sign-in) and again after
+// any save/pause/delete via the existing renderDigestSettingsSection
+// refresh callers — we hook in there to update the cache.
+async function _refreshDigestAlertBadge() {
+  const user = (typeof Auth !== 'undefined') ? Auth.user : null;
+  const dot = document.getElementById('avatar-alert-dot');
+  if (!user) {
+    window._digestActiveCount = 0;
+    window._digestTotalCount  = 0;
+    if (dot) dot.style.display = 'none';
+    return;
+  }
+  try {
+    const rows = await _fetchDigestFilters(user.id);
+    window._digestTotalCount  = rows.length;
+    window._digestActiveCount = rows.filter(r => r.active).length;
+    if (dot) {
+      dot.style.display = (window._digestActiveCount > 0) ? 'block' : 'none';
+    }
+  } catch (_) {
+    // Silent — the badge is informational. A failed fetch just leaves
+    // the avatar dotless until the next refresh.
+  }
 }
 
 // ── Collections drawer ────────────────────────────────────────────────────────
