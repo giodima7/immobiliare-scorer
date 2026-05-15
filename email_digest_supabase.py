@@ -176,6 +176,12 @@ def _euro(n) -> str:
 
 
 def listing_card_html(l: dict) -> str:
+    """Compact card sized for a 3-up email grid (~180px wide). Uses only
+    inline-safe CSS: no flexbox, no inline-flex, no `width` on inline
+    elements (Gmail strips both). The score badge uses inline-block +
+    line-height for vertical centering — the original inline-flex
+    version bled off the row in Gmail because the property was dropped
+    on parse and the span collapsed to its text width."""
     price      = l.get("price") or 0
     sqm        = l.get("sqm") or "?"
     rooms      = l.get("rooms")
@@ -186,7 +192,6 @@ def listing_card_html(l: dict) -> str:
     photo      = l.get("thumbnail") or ""
     metro_min  = l.get("metro_walk_min")
     metro_name = l.get("metro_nearest_name") or ""
-    metro_line = l.get("metro_nearest_line") or ""
     floor_lbl  = l.get("floor_label") or ""
     delta      = l.get("comps_delta_pct")
     is_gem     = bool(l.get("hidden_gem"))
@@ -198,86 +203,127 @@ def listing_card_html(l: dict) -> str:
     # Score colour matches the card-ring colour palette in dashboard CSS.
     score_color = "#2A7A5A" if score >= 80 else "#E8922A" if score >= 60 else "#E05C4B"
 
-    # Hidden Gem / Great Value badge
+    # Hidden Gem / Great Value badge — capped width so the row stays
+    # readable in a 180px-wide cell.
     if is_gem:
-        badge = ('<span style="background:#E6F4ED;color:#2A7A5A;padding:3px 10px;'
-                 'border-radius:20px;font-size:11px;font-weight:700">✦ Hidden Gem</span>')
+        badge = ('<span style="background:#E6F4ED;color:#2A7A5A;padding:2px 7px;'
+                 'border-radius:10px;font-size:10px;font-weight:700">✦ Gem</span>')
     elif is_good:
-        badge = ('<span style="background:#FFF3E0;color:#B85C00;padding:3px 10px;'
-                 'border-radius:20px;font-size:11px;font-weight:700">💰 Great Value</span>')
+        badge = ('<span style="background:#FFF3E0;color:#B85C00;padding:2px 7px;'
+                 'border-radius:10px;font-size:10px;font-weight:700">💰 Value</span>')
     else:
         badge = ""
 
-    # New / price-drop tag
+    # New / price-drop tag — kept short for narrow column.
     if is_drop and prev_price:
         try:
             drop_pct = round((prev_price - price) / prev_price * 100)
         except ZeroDivisionError:
             drop_pct = 0
-        status_tag = (f'<span style="background:#FDEEEC;color:#C0392B;padding:3px 10px;'
-                      f'border-radius:20px;font-size:11px;font-weight:700">'
-                      f'↓ Price dropped {drop_pct}% (was {_euro(prev_price)})</span>')
+        status_tag = (f'<span style="background:#FDEEEC;color:#C0392B;padding:2px 7px;'
+                      f'border-radius:10px;font-size:10px;font-weight:700;'
+                      f'display:inline-block;margin-top:3px">↓ -{drop_pct}%</span>')
     elif is_new:
-        status_tag = ('<span style="background:#EBF4FF;color:#1A5FA8;padding:3px 10px;'
-                      'border-radius:20px;font-size:11px;font-weight:700">New today</span>')
+        status_tag = ('<span style="background:#EBF4FF;color:#1A5FA8;padding:2px 7px;'
+                      'border-radius:10px;font-size:10px;font-weight:700;'
+                      'display:inline-block;margin-top:3px">New today</span>')
     else:
         status_tag = ""
 
-    # Comps delta
-    delta_html = ""
+    # Compact meta line: metro · floor · vs comps. Each piece is plain
+    # inline text — no pills — so it wraps cleanly inside the narrow card.
+    meta_bits = []
+    if metro_min is not None and metro_name:
+        meta_bits.append(f"🚇 {metro_min} min")
+    if floor_lbl:
+        meta_bits.append(f"🏢 {floor_lbl}")
     if delta is not None:
         delta_color = "#2A7A5A" if delta < 0 else "#E05C4B"
-        delta_html = (f'<span style="background:#F7F5F2;padding:4px 10px;border-radius:20px;'
-                      f'font-size:12px;color:{delta_color};font-weight:600">'
-                      f'{delta:+.1f}% vs comps</span>')
+        meta_bits.append(f'<span style="color:{delta_color};font-weight:600">'
+                         f'{delta:+.0f}% comps</span>')
+    meta_html = (' <span style="color:#C5BFB9">·</span> '.join(meta_bits)) if meta_bits else ''
 
-    metro_str = ""
-    if metro_min is not None and metro_name:
-        line = f" {metro_line}" if metro_line else ""
-        metro_str = (f'<span style="background:#F7F5F2;padding:4px 10px;border-radius:20px;'
-                     f'font-size:12px;color:#6B6560;margin-right:6px">'
-                     f'🚇 {metro_min} min · {metro_name}{line}</span>')
-    floor_str = (f'<span style="background:#F7F5F2;padding:4px 10px;border-radius:20px;'
-                 f'font-size:12px;color:#6B6560;margin-right:6px">🏢 {floor_lbl}</span>'
-                 if floor_lbl else "")
-
+    # Photo at 140px height — small enough to fit 3-up in a 600px container
+    # (each cell ~190px after gaps) without overwhelming the content below.
     photo_html = (
-        f'<img src="{photo}" width="100%" height="180" '
+        f'<img src="{photo}" width="100%" height="140" '
         f'style="object-fit:cover;display:block;border-radius:10px 10px 0 0" alt="">'
         if photo else
-        '<div style="height:120px;background:#F7F5F2;border-radius:10px 10px 0 0;'
-        'display:flex;align-items:center;justify-content:center;color:#C5BFB9;font-size:32px">🏠</div>'
+        '<div style="height:100px;background:#F7F5F2;border-radius:10px 10px 0 0;'
+        'text-align:center;line-height:100px;color:#C5BFB9;font-size:28px">🏠</div>'
     )
 
     rooms_str = f"{rooms} loc." if rooms else ""
     sub_specs = " · ".join(p for p in (f"{sqm}m²", rooms_str) if p)
 
+    # Score badge — inline-block + matching line-height vertically centers
+    # the number across every email client (Gmail strips display:inline-flex).
+    score_badge = (
+        f'<span style="background:{score_color};color:#FFFFFF;'
+        f'width:28px;height:28px;line-height:28px;border-radius:50%;'
+        f'display:inline-block;text-align:center;font-weight:800;font-size:12px;'
+        f'vertical-align:middle">{score}</span>'
+    )
+
+    # The card itself — single <table> sized to the parent cell. Outer
+    # margin handled by the grid's cellpadding, not margin (Outlook
+    # ignores margin on tables).
     return f'''
-    <table width="100%" cellpadding="0" cellspacing="0" style="background:white;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);margin-bottom:16px">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#FFFFFF;border-radius:10px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06)">
       <tr><td>{photo_html}</td></tr>
-      <tr><td style="padding:16px">
+      <tr><td style="padding:10px 12px">
         <table width="100%" cellpadding="0" cellspacing="0">
           <tr>
-            <td>{badge}{"&nbsp;" if badge and status_tag else ""}{status_tag}</td>
-            <td align="right">
-              <span style="background:{score_color};color:white;width:36px;height:36px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:14px">{score}</span>
+            <td valign="middle" style="font-size:0;line-height:0">
+              {badge}{"<br>" if badge and status_tag else ""}{status_tag}
             </td>
+            <td valign="middle" align="right" width="32" style="padding-left:6px">{score_badge}</td>
           </tr>
-          <tr><td colspan="2" style="padding-top:10px">
-            <div style="font-weight:700;font-size:16px;color:#1A1A1A">{nbhd}</div>
-            <div style="color:#6B6560;font-size:12px;margin-top:2px">{addr}</div>
-          </td></tr>
-          <tr><td colspan="2" style="padding-top:10px">
-            <span style="font-size:24px;font-weight:800;color:#1A1A1A">{_euro(price)}/mo</span>
-            <span style="color:#6B6560;font-size:13px;margin-left:8px">{sub_specs}</span>
-          </td></tr>
-          <tr><td colspan="2" style="padding-top:6px">{metro_str}{floor_str}{delta_html}</td></tr>
-          <tr><td colspan="2" style="padding-top:14px">
-            <a href="{url}" style="display:block;background:#2A7A5A;color:white;text-align:center;padding:12px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">View listing →</a>
-          </td></tr>
         </table>
+        <div style="font-weight:700;font-size:13px;color:#1A1A1A;margin-top:8px;line-height:1.3;
+                    white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{nbhd}</div>
+        <div style="color:#9E9791;font-size:11px;margin-top:1px;line-height:1.3;
+                    white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{addr}</div>
+        <div style="margin-top:8px;line-height:1.2">
+          <span style="font-size:18px;font-weight:800;color:#1A1A1A">{_euro(price)}</span>
+          <span style="color:#9E9791;font-size:11px;font-weight:600">/mo</span>
+        </div>
+        <div style="color:#6B6560;font-size:11px;margin-top:2px">{sub_specs}</div>
+        <div style="color:#6B6560;font-size:11px;margin-top:6px;line-height:1.4">{meta_html or "&nbsp;"}</div>
+        <a href="{url}" style="display:block;background:#2A7A5A;color:#FFFFFF;text-align:center;
+                               padding:8px;border-radius:6px;text-decoration:none;font-weight:600;
+                               font-size:12px;margin-top:10px">View →</a>
       </td></tr>
     </table>'''
+
+
+def _build_card_grid(cards: list[str], cols: int = 3) -> str:
+    """
+    Lay out the per-listing card HTML in a `cols`-up table grid. Each row
+    of `cols` cards becomes a <tr> with valign-top cells; the last row is
+    padded with empty cells so the column widths stay even.
+
+    Outer cellspacing creates the gutter between cards — email clients
+    (especially Outlook) don't honor margin on tables, so cellspacing is
+    the only reliable way to get gaps that work everywhere.
+    """
+    if not cards:
+        return ""
+    rows: list[str] = []
+    width_pct = round(100 / cols, 2)
+    for i in range(0, len(cards), cols):
+        chunk = cards[i:i + cols]
+        # Pad the last row with empty cells so the table stays rectangular.
+        while len(chunk) < cols:
+            chunk.append("")
+        cells = "".join(
+            f'<td valign="top" width="{width_pct}%" style="padding:0">{c}</td>'
+            for c in chunk
+        )
+        rows.append(f"<tr>{cells}</tr>")
+    return ('<table width="100%" cellpadding="0" cellspacing="8" '
+            'style="border-spacing:8px;border-collapse:separate">'
+            + "".join(rows) + "</table>")
 
 
 def build_email_html(user_filters: dict, listings: list[dict]) -> str:
@@ -309,7 +355,13 @@ def build_email_html(user_filters: dict, listings: list[dict]) -> str:
         summary_parts.append(f'<strong>{drop_count} price drop{"s" if drop_count != 1 else ""}</strong>')
     summary = " and ".join(summary_parts) + " matching your filters"
 
-    cards_html = "\n".join(listing_card_html(l) for l in unique[:20])
+    # 3-up grid. unique[:24] caps at 8 rows × 3 — keeps the email body
+    # under most clients' 102 KB clipping threshold even when every card
+    # has a photo URL.
+    cards_html = _build_card_grid(
+        [listing_card_html(l) for l in unique[:24]],
+        cols=3,
+    )
     today_str  = datetime.date.today().strftime("%-d %b %Y")
 
     return f'''<!DOCTYPE html>
