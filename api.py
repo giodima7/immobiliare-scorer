@@ -162,8 +162,17 @@ def _geo_enrich_worker():
 
         rent_path = DASHBOARD_DIR / "rentals_latest.json"
         if not rent_path.exists():
-            _geo_status["error"] = "rentals_latest.json not found"
-            return
+            # Scanner hasn't run on this machine yet — pull the current
+            # rows from Supabase so the user can still re-enrich without
+            # waiting for the next scan.
+            _load_env()
+            from supabase_sync import hydrate_local_json
+            if not hydrate_local_json(rent_path, "rental"):
+                _geo_status["error"] = (
+                    "rentals_latest.json not found — set SUPABASE_URL / "
+                    "SUPABASE_SERVICE_KEY in .env, or run a scan first"
+                )
+                return
 
         data = _json.loads(rent_path.read_text())
         _ecache.load()   # warm up in-memory cache
@@ -312,6 +321,15 @@ def _geo_enrich_worker():
         # Final flush — mark total complete so UI shows 100 %
         _geo_status["done"] = _geo_status["total"]
         _flush_geo(data, rent_path, _scoring)
+        # Push the enriched rows back to Supabase so the deployed
+        # dashboard sees the new geo fields without waiting for the
+        # next scan. Quiet failure if creds aren't set — the local
+        # JSON is already updated.
+        try:
+            from supabase_sync import push_local_json
+            push_local_json(rent_path, "rental")
+        except Exception as exc:
+            print(f"  [geo] supabase push after enrich failed: {exc}")
         print(f"  [geo] enrichment complete: {n_omi + done_count} done")
 
     except Exception as exc:
@@ -361,8 +379,14 @@ def _geo_enrich_sales_worker():
 
         sale_path = DASHBOARD_DIR / "sales_latest.json"
         if not sale_path.exists():
-            _geo_sale_status["error"] = "sales_latest.json not found"
-            return
+            _load_env()
+            from supabase_sync import hydrate_local_json
+            if not hydrate_local_json(sale_path, "sale"):
+                _geo_sale_status["error"] = (
+                    "sales_latest.json not found — set SUPABASE_URL / "
+                    "SUPABASE_SERVICE_KEY in .env, or run a scan first"
+                )
+                return
 
         data = _json.loads(sale_path.read_text())
         _ecache.load()
@@ -445,6 +469,11 @@ def _geo_enrich_sales_worker():
 
         _geo_sale_status["done"] = _geo_sale_status["total"]
         _flush_sale_geo(data, sale_path)
+        try:
+            from supabase_sync import push_local_json
+            push_local_json(sale_path, "sale")
+        except Exception as exc:
+            print(f"  [geo-sale] supabase push after enrich failed: {exc}")
         print(f"  [geo-sale] enrichment complete: {n_omi + done_count} done")
 
     except Exception as exc:
@@ -505,6 +534,9 @@ def favourites():
 def rentals():
     path = DASHBOARD_DIR / "rentals_latest.json"
     if not path.exists():
+        # Dashboard's loadRentals will fall through to Supabase on []
+        # (see SupabaseClient.fetchAll). We could hydrate here too, but
+        # an empty response is faster and the JS fallback is well-tested.
         return jsonify([])
     return send_file(path, mimetype="application/json")
 
@@ -875,7 +907,10 @@ def apply_omi_now():
         import scoring as _scoring
         rent_path = DASHBOARD_DIR / "rentals_latest.json"
         if not rent_path.exists():
-            return jsonify({"ok": False, "error": "rentals_latest.json not found"}), 404
+            _load_env()
+            from supabase_sync import hydrate_local_json
+            if not hydrate_local_json(rent_path, "rental"):
+                return jsonify({"ok": False, "error": "rentals_latest.json not found and Supabase hydrate failed"}), 404
         data = _json.loads(rent_path.read_text())
         _ecache.load()
         updated = _apply_omi_polygon(data, _ecache)
@@ -883,6 +918,11 @@ def apply_omi_now():
         clean   = [{k: v for k, v in l.items() if k != "omi"} for l in scored]
         from dashboard_io import write_snapshot
         write_snapshot(rent_path, clean)
+        try:
+            from supabase_sync import push_local_json
+            push_local_json(rent_path, "rental")
+        except Exception as exc:
+            print(f"[apply-omi] supabase push failed: {exc}")
         return jsonify({"ok": True, "updated": updated, "total": len(clean)})
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 500
@@ -937,7 +977,10 @@ def send_digest_now():
     cfg       = load_config()
     rent_path = DASHBOARD_DIR / "rentals_latest.json"
     if not rent_path.exists():
-        return jsonify({"error": "No rentals data yet"}), 404
+        _load_env()
+        from supabase_sync import hydrate_local_json
+        if not hydrate_local_json(rent_path, "rental"):
+            return jsonify({"error": "No rentals data yet"}), 404
     try:
         listings = _json.loads(rent_path.read_text())
     except Exception as e:
@@ -1022,7 +1065,10 @@ def _rescore_with_new_mappings():
 
     rent_path = DASHBOARD_DIR / "rentals_latest.json"
     if not rent_path.exists():
-        return 0
+        _load_env()
+        from supabase_sync import hydrate_local_json
+        if not hydrate_local_json(rent_path, "rental"):
+            return 0
     data = _json.loads(rent_path.read_text())
     if not data:
         return 0
@@ -1043,6 +1089,11 @@ def _rescore_with_new_mappings():
     clean  = [{k: v for k, v in l.items() if k != "omi"} for l in scored]
     from dashboard_io import write_snapshot
     write_snapshot(rent_path, clean)
+    try:
+        from supabase_sync import push_local_json
+        push_local_json(rent_path, "rental")
+    except Exception as exc:
+        print(f"[rescore-mappings] supabase push failed: {exc}")
     return len(clean)
 
 
@@ -1369,7 +1420,10 @@ def api_rescore():
     """Re-run scoring + explain on the current rentals_latest.json in-process."""
     rent_path = DASHBOARD_DIR / "rentals_latest.json"
     if not rent_path.exists():
-        return jsonify({"error": "rentals_latest.json not found"}), 404
+        _load_env()
+        from supabase_sync import hydrate_local_json
+        if not hydrate_local_json(rent_path, "rental"):
+            return jsonify({"error": "rentals_latest.json not found and Supabase hydrate failed"}), 404
     try:
         from scoring import score_all, _load_settings
         from explain import explain_all
@@ -1380,6 +1434,13 @@ def api_rescore():
         explain_all(scored)
         with open(rent_path, "w") as f:
             _json.dump(scored, f, indent=2)
+        # Push fresh scores back to Supabase so the deployed dashboard
+        # reflects them on next reload. Quiet failure if creds missing.
+        try:
+            from supabase_sync import push_local_json
+            push_local_json(rent_path, "rental")
+        except Exception as exc:
+            print(f"[rescore] supabase push failed: {exc}")
         return jsonify({"ok": True, "count": len(scored)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1391,7 +1452,10 @@ def api_rescore_sales():
     global _DQ_SALE_CACHE
     sale_path = DASHBOARD_DIR / "sales_latest.json"
     if not sale_path.exists():
-        return jsonify({"error": "sales_latest.json not found"}), 404
+        _load_env()
+        from supabase_sync import hydrate_local_json
+        if not hydrate_local_json(sale_path, "sale"):
+            return jsonify({"error": "sales_latest.json not found and Supabase hydrate failed"}), 404
     try:
         from scoring import score_all_sales, _load_settings
         from explain import explain_all_sales
@@ -1402,6 +1466,11 @@ def api_rescore_sales():
         explain_all_sales(scored)
         with open(sale_path, "w") as f:
             _json.dump(scored, f, indent=2)
+        try:
+            from supabase_sync import push_local_json
+            push_local_json(sale_path, "sale")
+        except Exception as exc:
+            print(f"[rescore-sales] supabase push failed: {exc}")
         _DQ_SALE_CACHE = None  # invalidate DQ cache
         return jsonify({"ok": True, "count": len(scored)})
     except Exception as e:
@@ -1552,7 +1621,10 @@ def data_quality():
         return jsonify(_dq_cache)
     path = DASHBOARD_DIR / "rentals_latest.json"
     if not path.exists():
-        return jsonify({"summary": {"total_listings": 0}, "listings": []})
+        _load_env()
+        from supabase_sync import hydrate_local_json
+        if not hydrate_local_json(path, "rental"):
+            return jsonify({"summary": {"total_listings": 0}, "listings": []})
     try:
         import data_quality as _dq
         listings = _json.loads(path.read_text())
@@ -1571,7 +1643,10 @@ def data_quality_sales():
         return jsonify(_DQ_SALE_CACHE)
     path = DASHBOARD_DIR / "sales_latest.json"
     if not path.exists():
-        return jsonify({"summary": {"total_listings": 0}, "listings": []})
+        _load_env()
+        from supabase_sync import hydrate_local_json
+        if not hydrate_local_json(path, "sale"):
+            return jsonify({"summary": {"total_listings": 0}, "listings": []})
     try:
         import data_quality as _dq
         listings = _json.loads(path.read_text())
@@ -1587,7 +1662,10 @@ def data_quality_sales():
 def data_quality_single(listing_id):
     path = DASHBOARD_DIR / "rentals_latest.json"
     if not path.exists():
-        return jsonify({"error": "no data"}), 404
+        _load_env()
+        from supabase_sync import hydrate_local_json
+        if not hydrate_local_json(path, "rental"):
+            return jsonify({"error": "no data"}), 404
     try:
         import data_quality as _dq
         listings = _json.loads(path.read_text())

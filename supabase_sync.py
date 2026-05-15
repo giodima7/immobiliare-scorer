@@ -212,6 +212,102 @@ def sync_file(path: Path, listing_type: str, batch_size: int = 200) -> bool:
     return failed == 0
 
 
+def _alias_for_local_use(row: dict, listing_type: str) -> dict:
+    """
+    Reverse the listing_to_row() column aliases so a row pulled from
+    Supabase looks like the dict shape the scanner / scoring code emit.
+    Mirrors the aliasing the dashboard's SupabaseClient.fetchAll() does
+    on the JS side.
+    """
+    is_rental = listing_type == "rental"
+    if is_rental:
+        if row.get("rent_mo") is None and row.get("price") is not None:
+            row["rent_mo"] = row["price"]
+        if row.get("ask_psqm_rent") is None and row.get("ask_psqm") is not None:
+            row["ask_psqm_rent"] = row["ask_psqm"]
+    if row.get("spese_condominiali") is None and row.get("condominium_fees") is not None:
+        row["spese_condominiali"] = row["condominium_fees"]
+    if row.get("_room_efficiency_flag") is None and row.get("room_efficiency_flag") is not None:
+        row["_room_efficiency_flag"] = row["room_efficiency_flag"]
+    if row.get("_absolute_value_gate_applied") is None and row.get("absolute_value_gate_applied") is not None:
+        row["_absolute_value_gate_applied"] = row["absolute_value_gate_applied"]
+    return row
+
+
+def hydrate_local_json(path: Path, listing_type: str, page_size: int = 1000) -> bool:
+    """
+    Materialise the local JSON snapshot from Supabase if it doesn't
+    already exist on disk. Used by api.py routes (geo-enrich, rescore,
+    data-quality, digest) so they keep working on a machine that hasn't
+    run a scan yet — Supabase is the system of record now.
+
+    Pages with limit+offset to bypass PostgREST's 1000-row default cap.
+    Falls back to the anon key when SUPABASE_SERVICE_KEY isn't set, which
+    works for non-stale reads (RLS allows them).
+
+    Returns True if `path` is now readable, False otherwise.
+    """
+    if path.exists():
+        return True
+
+    base = (os.environ.get("SUPABASE_URL") or SUPABASE_URL).rstrip("/")
+    key  = (os.environ.get("SUPABASE_SERVICE_KEY")
+            or os.environ.get("SUPABASE_ANON_KEY")
+            or SUPABASE_KEY)
+    if not base or not key:
+        print(f"[hydrate] SUPABASE_URL / key not set — can't fetch {path.name}")
+        return False
+
+    rows: list[dict] = []
+    offset = 0
+    while True:
+        params = (
+            f"select=*&listing_type=eq.{listing_type}"
+            f"&is_stale=eq.false&order=id&limit={page_size}&offset={offset}"
+        )
+        url = f"{base}/rest/v1/listings?{params}"
+        req = urllib.request.Request(url, headers={
+            "apikey":        key,
+            "Authorization": f"Bearer {key}",
+            "Accept":        "application/json",
+            "Prefer":        "count=none",
+        })
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                page = json.loads(resp.read())
+        except Exception as exc:
+            print(f"[hydrate] page @ offset {offset} failed: {exc}")
+            return False
+        rows.extend(page)
+        if len(page) < page_size:
+            break
+        offset += page_size
+
+    for r in rows:
+        _alias_for_local_use(r, listing_type)
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(rows, ensure_ascii=False))
+    print(f"[hydrate] wrote {len(rows)} {listing_type}s from Supabase → {path.name}")
+    return True
+
+
+def push_local_json(path: Path, listing_type: str) -> bool:
+    """Upsert the local JSON's contents back to Supabase. Wraps sync_file
+    so callers can refresh the DB after a local mutation (e.g. enrichment
+    appended geo fields, rescore recomputed scores)."""
+    if not path.exists():
+        return False
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        print("[push] SUPABASE_URL / SUPABASE_SERVICE_KEY not set — skipping push")
+        return False
+    try:
+        return sync_file(path, listing_type)
+    except Exception as exc:
+        print(f"[push] sync_file failed: {exc}")
+        return False
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--type", choices=["rental", "sale"],
