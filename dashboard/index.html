@@ -20,6 +20,15 @@
 -->
 <script>
   // Clerk publishable key — production (Cloudflare Pages) only. Local dev skips auth.
+  // ⚠ This is a `pk_test_…` (development) instance key. While it's in place
+  // Clerk shows a yellow "Development keys" banner in the browser console
+  // and rate-limits the auth API. To go to production:
+  //   1. dashboard.clerk.com → application → switch to the Production instance
+  //   2. API Keys → copy the `pk_live_…` publishable key
+  //   3. Replace the literal below (and update the value in any Cloudflare
+  //      Pages env var if/when this is moved out of the source).
+  // The pk_test_ key is harmless to commit — it's public — but Clerk treats
+  // any pk_live_ key as production-grade and you should treat it the same way.
   window.__CLERK_PUBLISHABLE_KEY = 'pk_test_aW5jbHVkZWQtY2hvdy0zMC5jbGVyay5hY2NvdW50cy5kZXYk';
   // Show the app immediately on every load — sign-in is now optional, only
   // required when saving favourites/collections. The login screen is no
@@ -4624,13 +4633,27 @@ const SupabaseClient = {
     }
 
     console.log(`[supabase] loaded ${allRows.length} ${listingType}s`);
-    // Restore the underscore-prefixed flag names the dashboard uses.
+    // Re-shape DB rows into the dict shape the rest of the dashboard expects:
+    //   - underscore-prefixed flags (Postgres can't name a column "_foo")
+    //   - rent_mo as an alias for the unified `price` column on rentals
+    //   - ask_psqm_rent falling back to ask_psqm when only one is populated
+    const isRental = listingType === 'rental';
     for (const r of allRows) {
       if ('room_efficiency_flag' in r) {
         r._room_efficiency_flag = r.room_efficiency_flag;
       }
       if ('absolute_value_gate_applied' in r) {
         r._absolute_value_gate_applied = r.absolute_value_gate_applied;
+      }
+      if (isRental) {
+        if (r.rent_mo == null && r.price != null) r.rent_mo = r.price;
+        if (r.ask_psqm_rent == null && r.ask_psqm != null) r.ask_psqm_rent = r.ask_psqm;
+      }
+      // `spese_condominiali` is the Italian field name the dashboard JS
+      // reads (e.g. card "+ €X cond fees" line). DB stores it under the
+      // unified `condominium_fees` column — alias it back here.
+      if (r.spese_condominiali == null && r.condominium_fees != null) {
+        r.spese_condominiali = r.condominium_fees;
       }
     }
     return allRows;
@@ -7092,19 +7115,25 @@ async function applyStaticMode() {
   const rentTab = document.getElementById('tabRentals');
   if (rentTab) rentTab.classList.add('active');
 
-  // Status pill: show "Snapshot" state (already default)
-  const pill = document.getElementById('statusPill');
-  if (pill) {
-    pill.style.display = '';  // visible on desktop
+  // The Snapshot pill and the CI pill expose self-hosted-runner state —
+  // useful when working locally against the scanner, meaningless to a
+  // visitor on immobiliare-scorer.pages.dev. Show both only on localhost.
+  const onLocalhost = ['localhost', '127.0.0.1', '0.0.0.0'].includes(location.hostname);
+  if (onLocalhost) {
+    const pill = document.getElementById('statusPill');
+    if (pill) pill.style.display = '';
+    _startCiPoll();
+  } else {
+    const pill   = document.getElementById('statusPill');
+    const ciPill = document.getElementById('ciPill');
+    if (pill)   pill.style.display   = 'none';
+    if (ciPill) ciPill.style.display = 'none';
   }
 
   // Last-scan time used to come from the JSON snapshot's Last-Modified
   // header. Supabase doesn't expose a per-table mtime, but renderRentals()
   // sets the meta line to "{N} listings · {today}" once data lands, which
   // covers the same UX need (a freshness signal in the header).
-
-  // Show CI status pill and start polling the GitHub Actions API
-  _startCiPoll();
 }
 
 // ── GitHub Actions CI status ──────────────────────────────────────────────────
@@ -9722,6 +9751,14 @@ async function loadRentals() {
   _populateOmiZoneFilter(ALL_RENT);
   renderRentals();
   _updateUnmatchedBadge();
+  // Replace the "Lume is reading the listings…" placeholder with the real
+  // count. Skipped on the failure paths above — those already wrote a
+  // diagnostic into #meta and we don't want to clobber it.
+  const _meta = document.getElementById('meta');
+  if (_meta && ALL_RENT.length) {
+    const _ts = new Date().toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' });
+    _meta.textContent = `${ALL_RENT.length} listings · ${_ts}`;
+  }
   // Rentals just changed — invalidate every sales-side cache that depends
   // on rental data. We MUST clear `_cached_*` per sale: a previous
   // ensureSalesAnalysis run may have completed with rents=[] (race at startup),

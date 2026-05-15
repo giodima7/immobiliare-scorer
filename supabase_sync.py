@@ -45,6 +45,10 @@ DASH_DIR = BASE_DIR / "dashboard"
 FIELD_RENAME: dict[str, str] = {
     "_room_efficiency_flag":        "room_efficiency_flag",
     "_absolute_value_gate_applied": "absolute_value_gate_applied",
+    # Italian source data uses `spese_condominiali`; the DB stores the
+    # unified `condominium_fees` column. The dashboard JS still reads
+    # `spese_condominiali`, so SupabaseClient.fetchAll aliases it back.
+    "spese_condominiali":           "condominium_fees",
 }
 
 # Columns the Supabase schema actually has (per the prompt's CREATE TABLE).
@@ -96,6 +100,19 @@ def listing_to_row(listing: dict, listing_type: str) -> dict:
         if col not in SCHEMA_COLUMNS:
             continue
         row[col] = _normalise(v)
+
+    # The DB has a single unified `price` column for both listing types, but
+    # rental scrapers store the monthly rent in `rent_mo`. Without this
+    # remap, every rental row lands with price=NULL and the dashboard's
+    # `listing.rent_mo` accesses come back undefined.
+    if listing_type == "rental":
+        if row.get("price") in (None, ""):
+            row["price"] = _normalise(listing.get("rent_mo"))
+        # Rentals' €/m²/mo column is `ask_psqm_rent`; some sources only
+        # populate `ask_psqm`, so fall back to it when needed.
+        if row.get("ask_psqm_rent") in (None, ""):
+            row["ask_psqm_rent"] = _normalise(listing.get("ask_psqm"))
+
     return row
 
 
