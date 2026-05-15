@@ -9196,30 +9196,11 @@ function renderRentalCard(l) {
     </div>`;
   })();
 
-  // OMI suggested rent — only shown when the listing is at least 1% above
-  // comps (i.e. expensive vs the local market). Same trigger window as the
-  // comps suggestion above; the OMI row adds an official-benchmark second
-  // opinion alongside the local comps signal.
-  const omiSugHtml = (() => {
-    const dp     = l.comps_delta_pct;
-    if (dp == null || dp < 1) return '';   // only when ≥1% above comps
-    const sug    = l.suggested_rent_mo;
-    const psqm   = l.suggested_rent_psqm;
-    const rentMo = l.rent_mo;
-    if (sug == null || !rentMo) return '';
-    const diff = rentMo - sug;
-    const pct  = sug > 0 ? (diff / sug) * 100 : 0;
-    const over = pct > 5;
-    const valColor = over ? 'var(--coral)' : 'var(--yellow)';
-    const tail = pct > 0
-      ? `(+€${fmt(Math.round(diff))} above OMI · ${pct.toFixed(1)}%)`
-      : `(${pct.toFixed(1)}% below OMI benchmark)`;
-    return `<div class="suggested-rent-row${over ? ' sug-warn' : ''}">
-      <span class="sug-label">OMI suggests:</span>
-      <span class="sug-val" style="color:${valColor};font-weight:700">€${fmt(sug)}/mo${psqm != null ? ' · €' + psqm.toFixed(1) + '/m²' : ''}</span>
-      <span class="sug-label">${tail}</span>
-    </div>`;
-  })();
+  // (The OMI-benchmark "OMI suggests:" row used to render here as a
+  // second opinion alongside compsSugHtml. Removed — comps reflect the
+  // actual local market and the OMI number was confusing duplication.
+  // The OMI mid is still surfaced in the score-breakdown tooltip and
+  // the detail page for users who want the official benchmark.)
 
   // ── Variant A: Calm Hierarchy ─────────────────────────────────────────────
   const score     = l.score_total ?? 0;
@@ -9407,7 +9388,6 @@ function renderRentalCard(l) {
     })()}
 
     ${compsSugHtml}
-    ${omiSugHtml}
     ${compsBarHtml}
 
     ${statPillsHtml(l, true)}
