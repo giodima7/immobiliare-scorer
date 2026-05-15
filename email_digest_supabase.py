@@ -203,30 +203,33 @@ def listing_card_html(l: dict) -> str:
     # Score colour matches the card-ring colour palette in dashboard CSS.
     score_color = "#2A7A5A" if score >= 80 else "#E8922A" if score >= 60 else "#E05C4B"
 
-    # Hidden Gem / Great Value badge — capped width so the row stays
-    # readable in a 180px-wide cell.
+    # Pills — side-by-side, all with white-space:nowrap so the emoji +
+    # label never breaks across two lines inside the pill (which made
+    # them render as misshapen blobs in the previous build). margin-right
+    # provides the inter-pill gap; display:inline-block so the
+    # background paints around the full pill instead of the text glyph
+    # only.
+    PILL_BASE = ('display:inline-block;padding:2px 7px;border-radius:10px;'
+                 'font-size:10px;font-weight:700;white-space:nowrap;'
+                 'margin-right:4px;line-height:14px')
+
     if is_gem:
-        badge = ('<span style="background:#E6F4ED;color:#2A7A5A;padding:2px 7px;'
-                 'border-radius:10px;font-size:10px;font-weight:700">✦ Gem</span>')
+        badge = f'<span style="{PILL_BASE};background:#E6F4ED;color:#2A7A5A">✦ Gem</span>'
     elif is_good:
-        badge = ('<span style="background:#FFF3E0;color:#B85C00;padding:2px 7px;'
-                 'border-radius:10px;font-size:10px;font-weight:700">💰 Value</span>')
+        badge = f'<span style="{PILL_BASE};background:#FFF3E0;color:#B85C00">💰 Value</span>'
     else:
         badge = ""
 
-    # New / price-drop tag — kept short for narrow column.
     if is_drop and prev_price:
         try:
             drop_pct = round((prev_price - price) / prev_price * 100)
         except ZeroDivisionError:
             drop_pct = 0
-        status_tag = (f'<span style="background:#FDEEEC;color:#C0392B;padding:2px 7px;'
-                      f'border-radius:10px;font-size:10px;font-weight:700;'
-                      f'display:inline-block;margin-top:3px">↓ -{drop_pct}%</span>')
+        status_tag = (f'<span style="{PILL_BASE};background:#FDEEEC;color:#C0392B">'
+                      f'↓ -{drop_pct}%</span>')
     elif is_new:
-        status_tag = ('<span style="background:#EBF4FF;color:#1A5FA8;padding:2px 7px;'
-                      'border-radius:10px;font-size:10px;font-weight:700;'
-                      'display:inline-block;margin-top:3px">New today</span>')
+        status_tag = (f'<span style="{PILL_BASE};background:#EBF4FF;color:#1A5FA8">'
+                      f'New</span>')
     else:
         status_tag = ""
 
@@ -286,8 +289,8 @@ def listing_card_html(l: dict) -> str:
       <tr><td style="padding:10px 12px">
         <table width="100%" cellpadding="0" cellspacing="0">
           <tr>
-            <td valign="middle" height="18" style="font-size:0;line-height:0;height:18px">
-              {badge}{"<br>" if badge and status_tag else ""}{status_tag}
+            <td valign="middle" height="18" style="line-height:18px;height:18px">
+              {badge}{status_tag}
             </td>
             <td valign="middle" align="right" width="32" style="padding-left:6px">{score_badge}</td>
           </tr>
@@ -387,7 +390,7 @@ def build_email_html(user_filters: dict, listings: list[dict]) -> str:
 <body style="margin:0;padding:0;background:#F7F5F2;font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif">
   <table width="100%" cellpadding="0" cellspacing="0">
     <tr><td align="center" style="padding:24px 16px">
-      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%">
+      <table width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%">
 
         <!-- Header -->
         <tr><td style="padding-bottom:24px">
