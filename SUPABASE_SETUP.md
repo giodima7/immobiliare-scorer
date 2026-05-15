@@ -182,15 +182,20 @@ Pages project → **Settings → Builds & deployments**:
 
 | Setting | Value |
 |---|---|
-| Root directory | `dashboard` |
 | Build command | `bash build.sh` |
-| Build output directory | `/` |
+| Build output directory | `dashboard` |
 
-`build.sh` lives inside `dashboard/` (same folder Cloudflare deploys) and
-substitutes `%%SUPABASE_URL%%` / `%%SUPABASE_ANON_KEY%%` in
-`dashboard/index.html` at build time. If the env vars aren't set the script
-exits 0 with a warning and the placeholders stay in place — the dashboard
-then uses the static JSON fallback.
+There are two `build.sh` files — both committed:
+
+- `build.sh` at the repo root is a one-line wrapper that forwards to
+  `dashboard/build.sh`. It exists because Cloudflare's build command
+  always runs from the repo root regardless of the Root directory
+  setting.
+- `dashboard/build.sh` is the real script. It substitutes
+  `%%SUPABASE_URL%%` / `%%SUPABASE_ANON_KEY%%` in `dashboard/index.html`
+  at build time. If the env vars aren't set the script exits 0 with a
+  warning and the placeholders stay in place — the dashboard then uses
+  the static JSON fallback.
 
 ## 6. First-run sync (optional)
 
