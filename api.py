@@ -480,8 +480,14 @@ def _geo_enrich_worker(city: str = "milano"):
             tmp.replace(rent_path)
             print(f"  [geo][{city}] {done_count}/{len(need_idx)} done")
 
-        # Final flush — mark total complete so UI shows 100 %
+        # Final flush — mark total complete so UI shows 100 %.
         _mark_progress(slot["total"], slot["total"])
+        # Skip the rescore + supabase push when nothing actually changed
+        # (n_omi was 0 AND no overpass batches ran). Otherwise we spend
+        # 10–30 s rescoring a city whose data is byte-identical to disk.
+        if n_omi == 0 and done_count == 0:
+            print(f"  [geo][{city}] nothing to enrich — skipping rescore")
+            return
         _flush_geo(data, rent_path, _scoring)
         # Push the enriched rows back to Supabase so the deployed
         # dashboard sees the new geo fields without waiting for the
@@ -662,6 +668,9 @@ def _geo_enrich_sales_worker(city: str = "milano"):
             print(f"  [geo-sale][{city}] {done_count}/{len(need_idx)} done")
 
         _mark_progress(slot["total"], slot["total"])
+        if n_omi == 0 and n_backfill == 0 and done_count == 0:
+            print(f"  [geo-sale][{city}] nothing to enrich — skipping rescore")
+            return
         _flush_sale_geo(data, sale_path)
         try:
             from supabase_sync import push_local_json
@@ -1114,6 +1123,11 @@ def _geo_orchestrator_worker(jobs: list[tuple[str, str]]):
     worker at a time. Each job's progress is observable via
     /scanner-status. A DELETE /geo-enrich aborts both the current worker
     and the queue.
+
+    Optimisation: jobs whose preview pending count is 0 are short-circuited
+    to "done" immediately. The per-city worker would otherwise still run
+    its end-of-job rescore + supabase push (10–30 s for a city the size of
+    Milan), which is pure waste when nothing actually got enriched.
     """
     _geo_queue_stop.clear()
     with _geo_queue_lock:
@@ -1129,6 +1143,27 @@ def _geo_orchestrator_worker(jobs: list[tuple[str, str]]):
                 if not _geo_queue or _geo_queue_stop.is_set():
                     break
                 city, kind = _geo_queue.pop(0)
+
+            # Skip jobs with zero pending listings — fast-path the slot
+            # straight to "done" so the user sees a ✓ immediately and the
+            # next job starts right away. We re-check the preview here
+            # rather than trusting the cached count, since enrichment of a
+            # previous job may have invalidated unrelated cache slots.
+            preview = _count_pending_for(city, kind)
+            if preview["count"] == 0 and not preview["stale"]:
+                slot = _geo_job(city, kind)
+                slot.update({
+                    "state":       "done",
+                    "running":     False,
+                    "done":        0,
+                    "total":       0,
+                    "error":       None,
+                    "started_at":  _time.time(),
+                    "finished_at": _time.time(),
+                })
+                print(f"  [geo-orch] {city}:{kind} skipped (0 pending)")
+                continue
+
             # The per-city worker also calls _geo_stop.clear() — but since
             # the orchestrator is the only producer here we don't need
             # any extra coordination.
