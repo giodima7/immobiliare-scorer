@@ -798,11 +798,13 @@ def sales():
 SCAN_PREFS_PATH      = BASE_DIR / "scan_prefs.json"
 SALE_PREFS_PATH      = BASE_DIR / "sale_fetch_prefs.json"
 
-def _build_scanner_cmd(body: dict) -> list:
+def _build_scanner_cmd(body: dict, city: str = "milano") -> list:
     """Build the fetch_rentals.py --daemon command from a prefs dict.
     Areas are NOT passed here — fetch_rentals.py reads active areas from
-    area_settings.json directly via _load_active_areas()."""
-    cmd = [sys.executable, "-u", str(BASE_DIR / "fetch_rentals.py"), "--daemon"]
+    area_settings_{city}.json (falling back to area_settings.json for
+    Milan) via _load_active_areas()."""
+    cmd = [sys.executable, "-u", str(BASE_DIR / "fetch_rentals.py"),
+           "--daemon", "--city", city]
     if body.get("max_rent"):
         cmd += ["--max-rent",  str(int(body["max_rent"]))]
     if body.get("min_rooms"):
@@ -814,15 +816,16 @@ def _build_scanner_cmd(body: dict) -> list:
     return cmd
 
 
-def _start_scanner_proc(prefs: dict) -> subprocess.Popen:
-    cmd    = _build_scanner_cmd(prefs)
+def _start_scanner_proc(prefs: dict, city: str = "milano") -> subprocess.Popen:
+    cmd    = _build_scanner_cmd(prefs, city)
     log_fh = open(BASE_DIR / "scanner.log", "a")
     return subprocess.Popen(cmd, cwd=str(BASE_DIR), stdout=log_fh, stderr=log_fh)
 
 
-def _start_idealista_proc(prefs: dict) -> subprocess.Popen:
-    cmd = [sys.executable, "-u", str(BASE_DIR / "fetch_idealista.py"), "--daemon"]
-    # Areas are driven by area_settings.json — not passed here.
+def _start_idealista_proc(prefs: dict, city: str = "milano") -> subprocess.Popen:
+    cmd = [sys.executable, "-u", str(BASE_DIR / "fetch_idealista.py"),
+           "--daemon", "--city", city]
+    # Areas are driven by area_settings_{city}.json — not passed here.
     if prefs.get("max_rent"):
         cmd += ["--max-rent",  str(int(prefs["max_rent"]))]
     if prefs.get("min_rooms"):
@@ -863,21 +866,46 @@ def save_sale_fetch_prefs():
 
 @app.route("/start-scanner", methods=["POST"])
 def start_scanner():
-    global _scanner_proc
+    """
+    Start the rentals scanner. Accepts:
+      pages, max_rent, min_rooms, email  → forwarded to fetch_rentals.py
+      cities: [list]                     → multi-city; defaults to ["milano"]
+                                           for back-compat with old POST bodies
+    The first city in `cities` is the one the persistent --daemon process
+    targets. Additional cities are spawned as separate processes that exit
+    once the scan completes — they don't loop on a 60-minute cadence.
+    """
+    global _scanner_proc, _idealista_proc
     with _scanner_lock:
         if _scanner_proc and _scanner_proc.poll() is None:
             return jsonify({"error": "already running", "pid": _scanner_proc.pid}), 409
-        body = request.get_json(silent=True) or {}
+        body   = request.get_json(silent=True) or {}
+        cities = body.get("cities") or ["milano"]
+        if not isinstance(cities, list) or not cities:
+            cities = ["milano"]
+        primary = cities[0]
         # Persist prefs (without areas — areas are owned by area_settings.json)
         prefs_to_save = {k: v for k, v in body.items() if k != "areas"}
         SCAN_PREFS_PATH.write_text(_json.dumps(prefs_to_save, indent=2))
-        _scanner_proc = _start_scanner_proc(body)
-        result = {"started": True, "pid": _scanner_proc.pid}
+        _scanner_proc = _start_scanner_proc(body, primary)
+        result = {"started": True, "pid": _scanner_proc.pid, "primary_city": primary}
         # Always start the Idealista daemon alongside Immobiliare.
         # (fetch_idealista.py uses browser automation — no API credentials needed)
-        global _idealista_proc
-        _idealista_proc = _start_idealista_proc(body)
+        _idealista_proc = _start_idealista_proc(body, primary)
         result["idealista_pid"] = _idealista_proc.pid
+        # Extra cities: one-shot subprocess each (no --daemon so they exit
+        # once their pass is done). These show up in scanner.log alongside
+        # the daemon. They run in parallel — fetch_rentals.py is mostly
+        # network-bound on Immobiliare, so 4 concurrent processes still
+        # fit comfortably under the site's rate limits.
+        extras = []
+        for c in cities[1:]:
+            try:
+                extras.append(_start_scanner_proc(body, c).pid)
+            except Exception as exc:
+                print(f"[start-scanner] {c} failed: {exc}")
+        if extras:
+            result["extra_pids"] = extras
         return jsonify(result)
 
 

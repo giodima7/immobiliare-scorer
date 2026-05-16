@@ -43,9 +43,8 @@
     // CSS below makes the hide unconditional and immediate.
     document.write(
       '<style>' +
-        '.scanner-panel,.email-panel,' +
-        '#btnFetchToggle,#zonesLink,#tabSettings,' +
-        '.server-note{display:none!important}' +
+        '.scanner-panel,.email-panel,#tabSettings,.server-note' +
+        '{display:none!important}' +
       '</style>'
     );
     // Production: load Clerk's browser SDK. Auth.init() waits for window.Clerk.
@@ -4184,6 +4183,210 @@ body.detail-page-active .filter-bar { display: none !important; }
 }
 .settings-section-title:first-child { margin-top: 0; }
 
+/* ── Warm-card Settings layout ─────────────────────────────────────────
+   Container + per-section card. Each section in Settings sits inside
+   a .settings-card so the page reads as a stack of focused panels
+   rather than a long form. Matches the listing card aesthetic. */
+.settings-page {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 24px 16px 80px;
+}
+.settings-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: 24px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+}
+.settings-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.settings-card-title {
+  font-size: 17px;
+  font-weight: 700;
+  margin: 0 0 4px 0;
+  color: var(--text-primary);
+}
+.settings-card-subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.5;
+}
+.settings-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+/* ── Scanner status indicator (right side of card header) ─────────────── */
+.scanner-status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.status-dot.status-idle    { background: var(--text-muted); }
+.status-dot.status-running {
+  background: var(--green-deep);
+  animation: settings-pulse 1.2s ease-in-out infinite;
+}
+@keyframes settings-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+/* ── City scan grid (Scanner card) ──────────────────────────────────── */
+.city-scan-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+@media (max-width: 500px) {
+  .city-scan-grid { grid-template-columns: 1fr; }
+}
+.city-scan-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--bg-muted);
+  border-radius: var(--radius-md);
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease;
+  user-select: none;
+}
+.city-scan-card:hover { border-color: var(--border-strong); }
+.city-scan-card.city-scan-card-on {
+  background: var(--green-light);
+  border-color: var(--green-deep);
+}
+.city-scan-card input[type=checkbox] { display: none; }
+.city-scan-icon { font-size: 20px; flex-shrink: 0; }
+.city-scan-name {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.toggle-track {
+  width: 36px;
+  height: 20px;
+  background: var(--border-strong);
+  border-radius: 10px;
+  position: relative;
+  transition: background 150ms ease;
+  flex-shrink: 0;
+}
+.toggle-track.toggle-on { background: var(--green-deep); }
+.toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  transition: left 150ms ease;
+}
+.toggle-track.toggle-on .toggle-thumb { left: 18px; }
+
+/* ── Scan settings row (number inputs) ──────────────────────────────── */
+.scan-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+@media (max-width: 500px) {
+  .scan-settings-grid { grid-template-columns: 1fr; }
+}
+.scan-setting { display: flex; flex-direction: column; gap: 6px; }
+.scan-setting-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.scan-setting-input {
+  padding: 9px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-family: var(--font);
+  background: var(--bg-muted);
+  color: var(--text-primary);
+  outline: none;
+  transition: border 150ms ease, background 150ms ease;
+  width: 100%;
+  box-sizing: border-box;
+}
+.scan-setting-input:focus {
+  border-color: var(--green-deep);
+  background: white;
+}
+.scan-last-run {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 14px;
+  min-height: 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.scan-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.btn-scan-start,
+.btn-scan-stop,
+.btn-scan-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border: none;
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font);
+  transition: background 150ms ease, border-color 150ms ease;
+}
+.btn-scan-start  { background: var(--green-deep); color: white; }
+.btn-scan-start:hover:not(:disabled)  { background: #235F47; }
+.btn-scan-stop   { background: var(--coral); color: white; }
+.btn-scan-stop:hover:not(:disabled)   { background: #C04535; }
+.btn-scan-start:disabled,
+.btn-scan-stop:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn-scan-secondary {
+  background: var(--bg-muted);
+  border: 1.5px solid var(--border);
+  color: var(--text-primary);
+}
+.btn-scan-secondary:hover { border-color: var(--border-strong); background: var(--bg-card); }
+
 /* ── Enrichment panel ────────────────────────────────────────────────────
    Per-city × per-kind progress rows, rendered in #enrichmentPanelBody by
    _renderEnrichmentPanel() on every /scanner-status tick. The "Run all"
@@ -4516,8 +4719,8 @@ body.detail-page-active .filter-bar { display: none !important; }
   #mapFilterBtn { display: flex !important; }
   /* Area MSD in scroll bar hidden on mobile — drawer chips are used instead */
   #mapAreaFilterGroup, #mapAreaFilterGroup + .filter-sep { display: none; }
-  /* Hide server-note, zonesLink, btnFetchToggle in header on mobile */
-  .server-note, #zonesLink, #btnFetchToggle { display: none !important; }
+  /* Hide server-note in header on mobile */
+  .server-note { display: none !important; }
   /* Hide meta (listing count) from header on mobile */
   header .meta { display: none !important; }
   /* Status pill — hide on mobile */
@@ -5045,16 +5248,17 @@ const SupabaseClient = {
     const PAGE_SIZE = 1000;
     let offset  = 0;
     let allRows = [];
+    // Snapshot the city at call time so a setCity() mid-pagination doesn't
+    // splice in rows from two cities. Read freshly here (NOT at module
+    // load) so each fetchAll call honours the user's current selection.
+    const _city = (typeof currentCity === 'string' && currentCity) || 'milano';
 
     while (true) {
       const params = new URLSearchParams({
         select:       '*',
         listing_type: `eq.${listingType}`,
-        // Multi-city scope (migration 007). Defaults to 'milano' on first
-        // page load so users with no saved preference get the same
-        // behaviour as before. setCity() updates currentCity + triggers
-        // a re-fetch.
-        city:         `eq.${(typeof currentCity === 'string' && currentCity) || 'milano'}`,
+        // Multi-city scope (migration 007).
+        city:         `eq.${_city}`,
         is_stale:     'eq.false',
         order,
         limit:        String(PAGE_SIZE),
@@ -5083,7 +5287,9 @@ const SupabaseClient = {
         break;
       }
 
-      console.log(`[supabase] ${listingType}s page @ offset ${offset}: ${page.length} rows`);
+      // Per-city prefix so switching to Roma/Napoli/etc shows up in the log
+      // and the user can verify the city filter is actually being applied.
+      console.log(`[supabase] ${_city} ${listingType}s page @ offset ${offset}: ${page.length} rows`);
       // Reassignment is critical — Array.prototype.concat returns a new
       // array, mutating allRows in place would silently lose pages.
       allRows = allRows.concat(page);
@@ -5091,7 +5297,7 @@ const SupabaseClient = {
       offset += PAGE_SIZE;
     }
 
-    console.log(`[supabase] loaded ${allRows.length} ${listingType}s total`);
+    console.log(`[supabase] loaded ${allRows.length} ${_city} ${listingType}s total`);
 
     // Re-shape DB rows into the dict shape the rest of the dashboard expects:
     //   - underscore-prefixed flags (Postgres can't name a column "_foo")
@@ -5753,8 +5959,10 @@ function saveFilters() {
     <span id="ciPillLabel">CI –</span>
   </a>
   <div class="meta" id="meta" data-i18n="loading.listings">Lume is reading the listings…</div>
-  <button class="btn-fetch-toggle" id="btnFetchToggle" data-i18n="header.run_lume">▶ Run Lume now</button>
-  <a class="fav-link" href="/zone-mappings" id="zonesLink" title="Fix unmatched OMI zones">🗺 <span data-i18n="header.zones">Zones</span> <span class="fav-badge" id="unmatchedBadge" style="display:none"></span></a>
+  <!-- "Run Lume now" + "Zones" removed (consolidation): the scanner now lives
+       in Settings → Scanner, and the OMI-zone fixer was for one-off Milan
+       cleanup that's no longer needed now that update_omi.py runs per-city. -->
+  <span id="unmatchedBadge" style="display:none"></span>
   <a class="fav-link fav-btn" href="/favourites" id="favLink">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
     <span class="fav-label" data-i18n="header.favourites"> Favourites</span>
@@ -6084,147 +6292,14 @@ function saveFilters() {
 ═══════════════════════════════════════════════════════════════ -->
 <div id="rentalsView">
 
-  <!-- Scanner panel -->
-  <div class="scanner-panel">
-    <div class="fetch-section-title">Lume — rental scan</div>
-    <div class="scanner-row">
-      <div class="scanner-status-wrap">
-        <div class="scanner-dot" id="scannerDot"></div>
-        <span class="scanner-label" id="scannerLabel">Lume idle</span>
-      </div>
-      <span class="scanner-meta" id="scannerLastRun"></span>
-      <span class="scanner-new-badge" id="scannerNewBadge"></span>
-      <button id="scannerSkippedWarn" style="display:none;border:none;background:rgba(217,119,6,0.12);color:#92400E;border-radius:6px;padding:2px 10px;font-size:11px;font-weight:600;cursor:pointer;margin-left:4px" title="Some areas were skipped on the last scan"></button>
-      <div style="flex:1"></div>
-      <button class="btn-scanner btn-start" id="btnStartScanner">▶ Start Lume</button>
-      <button class="btn-scanner btn-stop"  id="btnStopScanner"  disabled>■ Stop Lume</button>
-    </div>
-    <div class="scanner-row" style="margin-bottom:0">
-      <div class="fetch-group">
-        <label class="fetch-lbl" for="sScanPages">Pages per run</label>
-        <input class="fetch-input" type="number" id="sScanPages" min="1" max="20" value="3" style="width:58px">
-      </div>
-      <div class="fetch-group">
-        <label class="fetch-lbl" for="sScanMaxRent">Max monthly rent €</label>
-        <input class="fetch-input" type="number" id="sScanMaxRent" placeholder="any" style="width:110px">
-      </div>
-      <div class="fetch-group">
-        <label class="fetch-lbl" for="sScanMinRooms">Min rooms</label>
-        <input class="fetch-input" type="number" id="sScanMinRooms" placeholder="any" min="1" max="10" style="width:70px">
-      </div>
-      <div class="fetch-group">
-        <span class="fetch-lbl">Areas to scan <span style="font-weight:400;opacity:.6;font-size:11px">(set in Settings)</span></span>
-        <div class="msd-wrap" id="scanAreaWrap">
-          <button type="button" class="msd-trigger" id="scanAreaTrigger">All Milano <span class="msd-caret">▾</span></button>
-          <div class="msd-panel" id="scanAreaPanel">
-            <input class="msd-search-input" id="scanAreaSearch" placeholder="Search areas…" type="text" autocomplete="off">
-            <div class="msd-list" id="scanAreaList"></div>
-            <div class="msd-footer">
-              <button type="button" class="msd-footer-btn msd-footer-clear" id="scanAreaClear">Clear</button>
-              <button type="button" class="msd-footer-btn"                  id="scanAreaDone">Done ✓</button>
-            </div>
-          </div>
-        </div>
-      </div>
-      <span class="fetch-warn">Opens Edge · ~30 s/page · reruns every 60 min</span>
-    </div>
-    <div class="scanner-row" id="idealistaStatusRow" style="margin-bottom:0;display:none">
-      <div class="scanner-status-wrap">
-        <div class="scanner-dot" id="idealistaDot"></div>
-        <span class="scanner-label" id="idealistaLabel" style="color:var(--muted)">Idealista — Lume idle</span>
-      </div>
-      <span class="scanner-meta" id="idealistaLastRun"></span>
-      <span class="scanner-new-badge" id="idealistaNewBadge"></span>
-    </div>
-    <div class="scanner-row" style="margin-bottom:0;margin-top:4px" id="cacheRow">
-      <div class="cache-indicator">
-        📦 Cache: <span class="cache-count" id="cacheCount">–</span>
-        <span id="cacheNewest"></span>
-        <button class="btn-cache-clear" id="btnCacheClear" title="Delete Lume's memory — all listings will be re-enriched on the next scan">Clear Lume's memory</button>
-      </div>
-    </div>
-  </div>
+  <!-- Scanner moved to Settings → Scanner. Empty placeholder so the
+       Rentals tab opens directly on the filter bar. -->
 
-  <!-- Email digest panel -->
-  <div class="email-panel">
-    <div class="email-panel-header" id="emailPanelHeader">
-      <span>📧</span>
-      <h3>What Lume sends</h3>
-      <label class="email-toggle" title="Enable daily email digest" onclick="event.stopPropagation()">
-        <input type="checkbox" id="emailEnabled">
-        <span class="email-slider"></span>
-      </label>
-      <span id="emailEnabledLabel" class="email-status" style="margin-right:auto"></span>
-      <span class="email-status" id="emailLastSent"></span>
-      <span class="email-panel-caret" id="emailPanelCaret">▼</span>
-    </div>
-    <div class="email-panel-body" id="emailPanelBody">
 
-      <div class="email-section-sep">SMTP / Gmail settings</div>
-      <div class="email-row">
-        <div class="email-group">
-          <label class="email-lbl" for="emailSmtpUser">Gmail address (sender)</label>
-          <input class="email-input" type="email" id="emailSmtpUser" placeholder="you@gmail.com" style="width:220px">
-        </div>
-        <div class="email-group">
-          <label class="email-lbl" for="emailSmtpPass">
-            App password
-            <a href="https://myaccount.google.com/apppasswords" target="_blank"
-               style="color:var(--accent);font-size:10px;margin-left:4px">get one ↗</a>
-          </label>
-          <input class="email-input" type="password" id="emailSmtpPass" placeholder="xxxx xxxx xxxx xxxx" style="width:200px">
-        </div>
-        <div class="email-group">
-          <label class="email-lbl" for="emailToAddr">Send to</label>
-          <input class="email-input" type="email" id="emailToAddr" placeholder="you@gmail.com" style="width:220px">
-        </div>
-        <div class="email-group">
-          <label class="email-lbl" for="emailDigestHour">Daily send time</label>
-          <div style="display:flex;align-items:center;gap:4px">
-            <input class="email-input" type="number" id="emailDigestHour" min="0" max="23" value="8" style="width:55px">
-            <span style="color:var(--muted);font-size:13px">:00</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="email-section-sep">Digest filters <span style="font-weight:400;text-transform:none">(applied on top of scanner output — only listings matching these will be emailed)</span></div>
-      <div class="email-row">
-        <div class="email-group">
-          <label class="email-lbl" for="emailMinScore">Min score</label>
-          <input class="email-input" type="number" id="emailMinScore" placeholder="any" min="0" max="100" style="width:75px">
-        </div>
-        <div class="email-group">
-          <label class="email-lbl" for="emailMaxRent">Max rent €/mo</label>
-          <input class="email-input" type="number" id="emailMaxRent" placeholder="any" style="width:110px">
-        </div>
-        <div class="email-group">
-          <label class="email-lbl" for="emailMinRooms">Min rooms</label>
-          <input class="email-input" type="number" id="emailMinRooms" placeholder="any" min="1" max="10" style="width:75px">
-        </div>
-        <div class="email-group">
-          <span class="email-lbl">Areas (blank = all)</span>
-          <div class="msd-wrap" id="emailAreaWrap">
-            <button type="button" class="msd-trigger" id="emailAreaTrigger" style="min-width:160px">All areas <span class="msd-caret">▾</span></button>
-            <div class="msd-panel" id="emailAreaPanel">
-              <input class="msd-search-input" id="emailAreaSearch" placeholder="Search areas…" type="text" autocomplete="off">
-              <div class="msd-list" id="emailAreaList"></div>
-              <div class="msd-footer">
-                <button type="button" class="msd-footer-btn msd-footer-clear" id="emailAreaClear">Clear</button>
-                <button type="button" class="msd-footer-btn"                  id="emailAreaDone">Done ✓</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="email-row" style="margin-top:4px">
-        <button class="btn-email btn-email-save" id="btnEmailSave">💾 Save settings</button>
-        <button class="btn-email btn-email-send" id="btnEmailSendNow">📤 Send now</button>
-        <span class="email-status" id="emailSaveStatus"></span>
-      </div>
-
-    </div>
-  </div>
+  <!-- "What Lume sends" email panel removed (consolidation): the dashboard's
+       daily-digest config now lives in Settings → Daily Alerts (Supabase
+       digest_filters table). Local SMTP config lived here too, but is now
+       owned by GitHub Secrets / .env on the deployment side. -->
 
   <!-- Rentals filter bar -->
   <div class="filters">
@@ -6675,11 +6750,115 @@ function saveFilters() {
 ═══════════════════════════════════════════════════════════════ -->
 <div id="settingsView" hidden>
 
+  <div class="settings-page">
+
+  <!-- ── Scanner card (multi-city) ─────────────────────────────────
+       Localhost-only. Owns the "Start Lume" / "Stop Lume" workflow,
+       per-city toggles, and the scan params (pages/max-rent/min-rooms)
+       persisted in scan_prefs.json + localStorage. The existing
+       handlers below (btnStartScanner, btnStopScanner, sScanPages,
+       sScanMaxRent, sScanMinRooms, scannerDot, scannerLabel,
+       scannerLastRun, scannerNewBadge, idealistaStatusRow, cacheRow)
+       still find their elements here, so no event-handler rewiring
+       was needed when the panel moved out of the Rentals tab. -->
+  <div class="settings-card scanner-card" id="scannerCard" hidden>
+    <div class="settings-card-header">
+      <div>
+        <h2 class="settings-card-title">🔍 Scanner</h2>
+        <p class="settings-card-subtitle">
+          Configure which cities Lume scans and how aggressively.
+          Multi-city: tick more than one box to scan them sequentially.
+        </p>
+      </div>
+      <div class="scanner-status-indicator">
+        <span class="status-dot status-idle" id="scannerDot"></span>
+        <span class="status-label" id="scannerLabel">Lume idle</span>
+      </div>
+    </div>
+
+    <!-- Cities to scan -->
+    <div class="settings-section-label">Cities to scan</div>
+    <div class="city-scan-grid" id="cityScanGrid">
+      <!-- populated by _renderCityScanGrid() so it stays in sync with
+           availableCities + the user's localStorage selection. -->
+    </div>
+
+    <!-- Scan settings -->
+    <div class="settings-section-label" style="margin-top:20px">Scan settings</div>
+    <div class="scan-settings-grid">
+      <div class="scan-setting">
+        <label class="scan-setting-label" for="sScanPages">Pages per area</label>
+        <input class="scan-setting-input" type="number" id="sScanPages" min="1" max="20" value="3">
+      </div>
+      <div class="scan-setting">
+        <label class="scan-setting-label" for="sScanMaxRent">Max rent €/mo</label>
+        <input class="scan-setting-input" type="number" id="sScanMaxRent" placeholder="any">
+      </div>
+      <div class="scan-setting">
+        <label class="scan-setting-label" for="sScanMinRooms">Min rooms</label>
+        <input class="scan-setting-input" type="number" id="sScanMinRooms" placeholder="any" min="1" max="10">
+      </div>
+    </div>
+
+    <!-- Last run / meta -->
+    <div class="scan-last-run">
+      <span class="scanner-meta" id="scannerLastRun"></span>
+      <span class="scanner-new-badge" id="scannerNewBadge"></span>
+      <button id="scannerSkippedWarn" style="display:none;border:none;background:rgba(217,119,6,0.12);color:#92400E;border-radius:6px;padding:2px 10px;font-size:11px;font-weight:600;cursor:pointer;margin-left:4px" title="Some areas were skipped on the last scan"></button>
+    </div>
+
+    <!-- Action buttons -->
+    <div class="scan-actions">
+      <button class="btn-scan-start" id="btnStartScanner">▶ Start Lume</button>
+      <button class="btn-scan-stop"  id="btnStopScanner" disabled>■ Stop Lume</button>
+    </div>
+
+    <!-- Idealista status (hidden by default; surfaces when the
+         Idealista API is configured) -->
+    <div id="idealistaStatusRow" style="display:none;margin-top:12px;
+         display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)">
+      <div class="status-dot status-idle" id="idealistaDot"></div>
+      <span class="status-label" id="idealistaLabel">Idealista — Lume idle</span>
+      <span class="scanner-meta" id="idealistaLastRun"></span>
+      <span class="scanner-new-badge" id="idealistaNewBadge"></span>
+    </div>
+
+    <!-- Cache row (deletes enrichment cache so the next scan re-enriches) -->
+    <div id="cacheRow" style="margin-top:12px;display:flex;align-items:center;gap:10px;
+         font-size:12px;color:var(--muted)">
+      <div class="cache-indicator">
+        📦 Cache: <span class="cache-count" id="cacheCount">–</span>
+        <span id="cacheNewest"></span>
+      </div>
+      <button class="btn-scan-secondary" id="btnCacheClear"
+              title="Delete Lume's memory — all listings will be re-enriched on the next scan"
+              style="padding:6px 12px;font-size:12px">Clear Lume's memory</button>
+    </div>
+
+    <!-- Hidden legacy fields the existing handlers reference but we don't
+         surface in the new UI. scanAreaWrap drove the area multi-select
+         (now per-city via city checkboxes); keeping the elements present
+         prevents the multi-select init code from throwing. -->
+    <div style="display:none">
+      <div class="msd-wrap" id="scanAreaWrap">
+        <button type="button" class="msd-trigger" id="scanAreaTrigger">All <span class="msd-caret">▾</span></button>
+        <div class="msd-panel" id="scanAreaPanel">
+          <input class="msd-search-input" id="scanAreaSearch" type="text" autocomplete="off">
+          <div class="msd-list" id="scanAreaList"></div>
+          <div class="msd-footer">
+            <button type="button" class="msd-footer-btn msd-footer-clear" id="scanAreaClear">Clear</button>
+            <button type="button" class="msd-footer-btn" id="scanAreaDone">Done ✓</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ── Daily email alert (Supabase digest_filters) ─────────────────
        Populated by renderDigestSettingsSection() the first time the
        Settings tab is shown after sign-in. Hidden when signed out (the
        renderer returns an empty section heading + sign-in prompt). -->
-  <div id="digestSettingsWrap" style="margin-bottom:32px"></div>
+  <div id="digestSettingsWrap" class="settings-card" style="margin-bottom:16px"></div>
 
   <!-- ── Geo enrichment (multi-city) ─────────────────────────────────
        Single source of truth for the "fill in metro/POI/walk-score
@@ -6688,14 +6867,16 @@ function saveFilters() {
        backend orchestrator handles the rest. Rows update live from
        /scanner-status (1 s poll) so the user can step away without
        wondering whether something hung. Hidden in static mode. -->
-  <div id="enrichmentPanel" style="margin-bottom:32px" hidden>
-    <div class="settings-section-title">Data Enrichment</div>
-    <p style="font-size:12px;color:var(--muted);margin:0 0 6px;line-height:1.6">
-      Fill in missing geo data (metro distance, walk score, POIs, OMI zones)
-      for every city's listings. Click <strong>Run for all cities</strong> to
-      queue every city × both rentals + sales — they run one after the other
-      so you only click once.
-    </p>
+  <div id="enrichmentPanel" class="settings-card" style="margin-bottom:16px" hidden>
+    <div class="settings-card-header">
+      <div>
+        <h2 class="settings-card-title">📍 Data Enrichment</h2>
+        <p class="settings-card-subtitle">
+          Fill in missing geo data (metro distance, walk score, POIs, OMI zones)
+          for every city's listings. One click queues every city × rentals + sales.
+        </p>
+      </div>
+    </div>
     <div class="enrich-toolbar">
       <button class="btn-run-all" type="button" id="btnEnrichAll">
         ▶ Run for all cities
@@ -6910,16 +7091,24 @@ function saveFilters() {
   </div>
 
   <!-- ── Access (Clerk allowlist) ──────────────────────────────────── -->
-  <div class="settings-section" style="margin-top:16px">
-    <h3 style="font-size:14px;font-weight:600;margin-bottom:8px">Access</h3>
-    <p style="font-size:13px;color:#6B7280;margin:0">
-      To invite a friend: go to your
-      <a href="https://dashboard.clerk.com" target="_blank" style="color:#2D6A4F">
+  <div class="settings-card">
+    <div class="settings-card-header">
+      <div>
+        <h2 class="settings-card-title">🔐 Access</h2>
+        <p class="settings-card-subtitle">Invite a friend to Lume.</p>
+      </div>
+    </div>
+    <p style="font-size:13px;color:var(--text-secondary);margin:0;line-height:1.6">
+      Open the
+      <a href="https://dashboard.clerk.com" target="_blank" style="color:var(--green-deep);font-weight:600">
         Clerk dashboard
       </a>
-      → User &amp; Authentication → Restrictions → Allowlist → add their email.
+      → <em>User &amp; Authentication</em> → <em>Restrictions</em> → <em>Allowlist</em> and
+      add the email you want to grant access to.
     </p>
   </div>
+
+  </div><!-- /.settings-page -->
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -7477,6 +7666,10 @@ function setCity(code) {
   // forces a re-fetch on the next switchTab('sales') for free.
   if (typeof ALL_RENT !== 'undefined') ALL_RENT = [];
   if (typeof ALL_SALE !== 'undefined') ALL_SALE = [];
+  // Investor analysis caches (yields, mortgage, projections) are computed
+  // against the previous city's rentals — invalidate so the next sales
+  // render rebuilds them from the new city's data.
+  if (typeof salesAnalysisReady !== 'undefined') salesAnalysisReady = false;
   if (typeof loadRentals === 'function') loadRentals();
   if (activeTab === 'sales' && typeof loadSales === 'function') {
     loadSales().then(() => {
@@ -8297,14 +8490,12 @@ async function applyStaticMode() {
     if (el) el.style.display = 'none';
   });
 
-  // Header: fetch button + local-server badge + zones admin link
-  hide('btnFetchToggle', 'zonesLink');
+  // Header: local-server badge (Run-Lume + Zones buttons removed entirely).
   document.querySelectorAll('.server-note').forEach(el => el.style.display = 'none');
 
-  // Scanner + email panels (querySelectorAll — there are two .scanner-panel elements)
+  // Scanner panels (querySelectorAll — there are two .scanner-panel elements).
+  // The .email-panel was removed in the UI consolidation.
   document.querySelectorAll('.scanner-panel').forEach(p => p.style.display = 'none');
-  const emailPanel = document.querySelector('.email-panel');
-  if (emailPanel) emailPanel.style.display = 'none';
 
   // Rentals-tab action controls
   hide('btnApplyOmi', 'applyOmiStatus', 'btnEnrichGeo', 'btnDownloadPois', 'geoCoverage', 'cacheRow',
@@ -8923,6 +9114,14 @@ function switchTab(tab, opts) {
     _settingsLoad();
     _loadScoreSettings();
     _dqLoad();
+    // Scanner card is localhost-only (the Cloudflare deployment doesn't
+    // have api.py running). Re-render the city grid each time we open
+    // Settings so it picks up any localStorage edits made elsewhere.
+    const _scannerCard = document.getElementById('scannerCard');
+    if (_scannerCard) {
+      _scannerCard.hidden = !IS_LIVE;
+      if (IS_LIVE && typeof _renderCityScanGrid === 'function') _renderCityScanGrid();
+    }
     // Daily-alert section reads from Supabase digest_filters. Async so
     // the rest of the Settings panel paints immediately; the wrap div
     // gets filled in once the network round-trip completes.
@@ -15982,16 +16181,83 @@ function _renderEnrichmentPanel(st) {
   });
 })();
 
+// ── Scanner: city selector ───────────────────────────────────────────────────
+// Per-user selection of which cities the local scanner targets. Persisted
+// in localStorage so a reload remembers the choice. The Settings card
+// reads this both when rendering the checkboxes AND when POSTing to
+// /start-scanner so the user can scan 1+ cities in one click.
+const SCAN_CITIES_KEY = 'lume_scan_cities';
+function _readScanCities() {
+  try {
+    const raw = localStorage.getItem(SCAN_CITIES_KEY);
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr) && arr.length) return arr;
+    }
+  } catch (_) {}
+  return ['milano'];   // default = Milan only (matches pre-multi-city behaviour)
+}
+
+const _SCAN_CITY_META = {
+  milano:       { flag: '🏙️',  label: 'Milano' },
+  roma:         { flag: '🏛️',  label: 'Roma' },
+  napoli:       { flag: '🌋',  label: 'Napoli' },
+  la_maddalena: { flag: '🏝️',  label: 'La Maddalena' },
+};
+
+function toggleScanCity(code, enabled) {
+  const current = _readScanCities();
+  const next = enabled
+    ? Array.from(new Set([...current, code]))
+    : current.filter(c => c !== code);
+  // Guarantee at least one city so the Start button never fires an empty list.
+  if (!next.length) next.push('milano');
+  try { localStorage.setItem(SCAN_CITIES_KEY, JSON.stringify(next)); } catch (_) {}
+  const card  = document.getElementById(`cityScan_${code}`);
+  const track = card?.querySelector('.toggle-track');
+  if (card)  card.classList.toggle('city-scan-card-on', enabled);
+  if (track) track.classList.toggle('toggle-on', enabled);
+}
+
+function _renderCityScanGrid() {
+  const grid = document.getElementById('cityScanGrid');
+  if (!grid) return;
+  const enabled = new Set(_readScanCities());
+  // Use availableCities (loaded from Supabase) when present so the grid
+  // matches the city pill exactly; fall back to the fixed _SCAN_CITY_META
+  // ordering for first-paint before Supabase resolves.
+  const order = (typeof availableCities !== 'undefined' && availableCities.length)
+    ? availableCities.map(c => c.code)
+    : Object.keys(_SCAN_CITY_META);
+  grid.innerHTML = order.map(code => {
+    const meta = _SCAN_CITY_META[code] || { flag: '📍', label: code };
+    const on   = enabled.has(code);
+    return `
+      <label class="city-scan-card ${on ? 'city-scan-card-on' : ''}"
+             id="cityScan_${code}">
+        <input type="checkbox" data-city="${code}" ${on ? 'checked' : ''}
+               onchange="toggleScanCity('${code}', this.checked)">
+        <div class="city-scan-icon">${meta.flag}</div>
+        <div class="city-scan-name">${escapeHtml(meta.label)}</div>
+        <div class="toggle-track ${on ? 'toggle-on' : ''}">
+          <div class="toggle-thumb"></div>
+        </div>
+      </label>`;
+  }).join('');
+}
+
 // ── Scanner start/stop buttons ────────────────────────────────────────────────
 document.getElementById('btnStartScanner').addEventListener('click', async () => {
   saveScanPrefs();
+  const cities = _readScanCities();
   const body = {
-    pages: parseInt(document.getElementById('sScanPages').value) || 3,
+    pages:  parseInt(document.getElementById('sScanPages').value) || 3,
+    cities: cities,
   };
   const maxRent  = document.getElementById('sScanMaxRent').value;
   const minRooms = document.getElementById('sScanMinRooms').value;
-  // Areas are driven by area_settings.json (Settings tab) — not sent here.
-  // fetch_rentals.py reads active areas from area_settings.json directly.
+  // Areas are driven by area_settings_{city}.json (Settings tab) — not
+  // sent here. fetch_rentals.py reads them per-city directly.
   if (maxRent)  body.max_rent  = parseInt(maxRent);
   if (minRooms) body.min_rooms = parseInt(minRooms);
 
@@ -16074,142 +16340,10 @@ document.getElementById('rBtnReset').addEventListener('click', () => {
   renderRentals();
 });
 
-// ── Email digest panel ─────────────────────────────────────────────────────────
-let emailAreaMsd;
-let emailSelectedAreas = [];
-
-// Collapsible panel toggle
-document.getElementById('emailPanelHeader').addEventListener('click', () => {
-  const body  = document.getElementById('emailPanelBody');
-  const caret = document.getElementById('emailPanelCaret');
-  const open  = body.classList.toggle('is-open');
-  caret.classList.toggle('open', open);
-  if (open) loadEmailConfig();
-});
-
-// Build the email areas multi-select
-emailAreaMsd = buildMultiSelect({
-  wrapId:    'emailAreaWrap',
-  triggerId: 'emailAreaTrigger',
-  panelId:   'emailAreaPanel',
-  searchId:  'emailAreaSearch',
-  listId:    'emailAreaList',
-  clearId:   'emailAreaClear',
-  doneId:    'emailAreaDone',
-  allLabel:  'All areas',
-  onChange(sel) {
-    emailSelectedAreas = sel;
-  },
-});
-
-// Load config from server and populate fields
-async function loadEmailConfig() {
-  try {
-    const r   = await fetch('/email-config');
-    const cfg = await r.json();
-
-    document.getElementById('emailEnabled').checked    = !!cfg.enabled;
-    document.getElementById('emailSmtpUser').value     = cfg.smtp_user  || '';
-    document.getElementById('emailSmtpPass').value     = cfg.smtp_pass  || '';   // shows •••• if set
-    document.getElementById('emailToAddr').value       = (cfg.to_addrs  || [])[0] || '';
-    document.getElementById('emailDigestHour').value   = cfg.digest_hour ?? 8;
-
-    const f = cfg.filters || {};
-    document.getElementById('emailMinScore').value  = f.min_score || '';
-    document.getElementById('emailMaxRent').value   = f.max_rent  || '';
-    document.getElementById('emailMinRooms').value  = f.min_rooms || '';
-
-    emailSelectedAreas = f.areas || [];
-    if (emailSelectedAreas.length) {
-      emailAreaMsd.setSelected(emailSelectedAreas);
-    } else {
-      emailAreaMsd.clear();
-    }
-    updateEmailEnabledLabel();
-
-    if (cfg.last_sent) {
-      const d = new Date(cfg.last_sent);
-      document.getElementById('emailLastSent').textContent =
-        'Last sent: ' + d.toLocaleDateString('it-IT') + ' ' + d.toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'});
-    }
-  } catch(e) {
-    console.warn('loadEmailConfig failed', e);
-  }
-}
-
-function updateEmailEnabledLabel() {
-  const on  = document.getElementById('emailEnabled').checked;
-  const lbl = document.getElementById('emailEnabledLabel');
-  lbl.textContent    = on ? '● Active' : '○ Disabled';
-  lbl.style.color    = on ? 'var(--green)' : 'var(--muted)';
-}
-document.getElementById('emailEnabled').addEventListener('change', updateEmailEnabledLabel);
-
-// Save config
-document.getElementById('btnEmailSave').addEventListener('click', async () => {
-  const toAddr = document.getElementById('emailToAddr').value.trim();
-  const pass   = document.getElementById('emailSmtpPass').value.trim();
-  const body   = {
-    enabled:     document.getElementById('emailEnabled').checked,
-    smtp_user:   document.getElementById('emailSmtpUser').value.trim(),
-    to_addrs:    toAddr ? [toAddr] : [],
-    digest_hour: parseInt(document.getElementById('emailDigestHour').value) || 8,
-    filters: {
-      min_score:  parseInt(document.getElementById('emailMinScore').value)  || 0,
-      max_rent:   parseInt(document.getElementById('emailMaxRent').value)   || 0,
-      min_rooms:  parseInt(document.getElementById('emailMinRooms').value)  || 0,
-      areas:      emailSelectedAreas,
-    },
-  };
-  // Only send password if the user typed something (not the masked placeholder)
-  if (pass && pass !== '••••••••') body.smtp_pass = pass;
-
-  const statusEl = document.getElementById('emailSaveStatus');
-  statusEl.textContent = 'Saving…';
-  try {
-    const r = await fetch('/email-config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    const j = await r.json();
-    statusEl.textContent    = j.saved ? '✓ Saved' : '✗ Error';
-    statusEl.style.color    = j.saved ? 'var(--green)' : 'var(--red)';
-    setTimeout(() => { statusEl.textContent = ''; }, 3000);
-    updateEmailEnabledLabel();
-  } catch(e) {
-    statusEl.textContent = '✗ ' + e.message;
-    statusEl.style.color = 'var(--red)';
-  }
-});
-
-// Send now (test)
-document.getElementById('btnEmailSendNow').addEventListener('click', async () => {
-  const statusEl = document.getElementById('emailSaveStatus');
-  // Save current settings first
-  document.getElementById('btnEmailSave').click();
-  await new Promise(r => setTimeout(r, 500));
-
-  statusEl.textContent = 'Sending…';
-  statusEl.style.color = 'var(--muted)';
-  try {
-    const r = await fetch('/send-digest-now', { method: 'POST' });
-    let j;
-    try { j = await r.json(); }
-    catch { throw new Error('Server returned non-JSON — please restart api.py'); }
-    if (j.error) throw new Error(j.error);
-    if (!document.getElementById('emailSmtpUser').value.trim()) {
-      statusEl.textContent = '✓ Printed to terminal (SMTP not configured)';
-    } else {
-      statusEl.textContent = `✓ Sent (${j.count} listings)`;
-    }
-    statusEl.style.color = 'var(--green)';
-    setTimeout(() => { statusEl.textContent = ''; }, 5000);
-  } catch(e) {
-    statusEl.textContent = '✗ ' + e.message;
-    statusEl.style.color = 'var(--red)';
-  }
-});
+// "What Lume sends" panel + its handlers were removed during UI
+// consolidation. Daily-digest config now lives in Settings → Daily Alerts
+// (Supabase digest_filters). The local /email-config + /send-digest-now
+// endpoints still exist for back-compat with one-off CLI invocations.
 
 // ── Scanner filter persistence ─────────────────────────────────────────────────
 const SCAN_PREFS_KEY = 'immo_scan_prefs';
