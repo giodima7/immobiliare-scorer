@@ -7323,11 +7323,22 @@ function setCity(code) {
   updateCityToggleUI();
   updateFiltersForCurrentCity();
   // Reload listings — drop the cached arrays so loadRentals/Sales re-fetch.
+  // Always reload rentals (the rentals filter bar + meta line read from it
+  // even when sales is the active tab) and also reload sales when its tab
+  // is currently visible — otherwise the grid keeps the previous city's
+  // cards until the user manually switches tabs. Empty ALL_SALE also
+  // forces a re-fetch on the next switchTab('sales') for free.
   if (typeof ALL_RENT !== 'undefined') ALL_RENT = [];
   if (typeof ALL_SALE !== 'undefined') ALL_SALE = [];
   if (typeof loadRentals === 'function') loadRentals();
-  // Sales tab loads lazily on first switch; clearing ALL_SALE forces a
-  // re-fetch the next time it's selected.
+  if (activeTab === 'sales' && typeof loadSales === 'function') {
+    loadSales().then(() => {
+      if (typeof ensureSalesAnalysis === 'function') ensureSalesAnalysis();
+    });
+  } else if (activeTab === 'map' && typeof loadSales === 'function'
+             && _mapDataType === 'sales') {
+    loadSales().then(() => { if (typeof _mapRender === 'function') _mapRender(); });
+  }
 
   // Recentre an already-initialised map on the new city. Skipped when
   // _map hasn't been built yet (first paint will pick up the right
