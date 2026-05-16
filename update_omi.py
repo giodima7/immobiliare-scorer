@@ -2,41 +2,64 @@
 """
 update_omi.py
 ─────────────
-Ingest a new OMI semester release and stage it for omi_lookup.py.
+Build per-city OMI JSON files that omi_lookup.py consumes.
+
+For each city, writes two files into omi_data/:
+
+  omi_data/{city}_polygons.json   list of {zona, geometry: GeoJSON Polygon}
+                                  Always built from the KML (geometry-only).
+
+  omi_data/{city}_zones.json      {zona: {fascia, descr, compr_*, loc_*}}
+                                  Built from the VALORI + ZONE CSVs when
+                                  present. If the CSVs are missing the file
+                                  is omitted — omi_lookup falls back to
+                                  geometry-only mode for that city.
+
+Data sources:
+  - KMLs: project's OMI/ folder ({COMUNE_CODE}.kml, all of Italy, ~7,900
+    files at ~404 MB total). Symlinked / referenced — NOT committed.
+  - CSVs: omi_data/QIP_*_VALORI.csv + QIP_*_ZONE.csv. Downloaded from
+    Agenzia delle Entrate per comune. The CSV filename embeds the
+    comune's internal database ID (e.g. QIP_1376358 for Milan), so
+    auto-discovery uses the Comune_amm column to match instead of the
+    filename — works whether you've downloaded one comune or fifty.
 
 Usage:
-    python3 update_omi.py omi_data/QIP_*_VALORI.csv omi_data/QIP_*_ZONE.csv
-
-What it does:
-  1. Validates the two CSVs are a matching pair (same Comune code, semester).
-  2. Parses every "Abitazioni civili / NORMALE" row, falling back to OTTIMO
-     when NORMALE is absent for a zone.
-  3. Compares the resulting ZONES dict against what omi_lookup.py currently
-     ships — printing added zones, removed zones, and value diffs.
-  4. Prints the exact two-line patch you'd apply to omi_lookup.py to
-     activate the new release (just bump ZONE_PATH / VALORI_PATH).
-
-Important: this script does NOT mutate omi_lookup.py automatically. The
-ZONES dict is built at import time from the CSV path, so swapping the
-release is a one-line edit (the patch printed at the end). Past semesters
-remain in omi_data/ for audit trail — never delete.
-
-OMI publishes new data twice yearly. Download from:
-  agenziaentrate.gov.it → OMI → Quotazioni immobiliari → Ricerca testuale
-Filter: Comune = MILANO (F205), Tipologia = Abitazioni civili.
+  python3 update_omi.py                 # process every city in CITY_MAP
+  python3 update_omi.py --city roma     # one city
+  python3 update_omi.py --list          # show what data is available
 """
 
 from __future__ import annotations
 
+import argparse
 import csv
 import io
+import json
 import re
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
+BASE_DIR     = Path(__file__).parent
+OMI_DATA_DIR = BASE_DIR / "omi_data"
+KML_DIR      = BASE_DIR / "OMI"          # 7,887-file bulk download (gitignored)
+OMI_DATA_DIR.mkdir(exist_ok=True)
 
+# city code → ISTAT comune code. Mirrors the Supabase cities table.
+CITY_MAP: dict[str, str] = {
+    "milano":       "F205",
+    "roma":         "H501",
+    "napoli":       "F839",
+    "la_maddalena": "E425",
+}
+
+KML_NS = "{http://www.opengis.net/kml/2.2}"
+
+
+# ── CSV helpers ──────────────────────────────────────────────────────────────
 def _read_csv(path: Path) -> list[dict]:
-    """OMI CSVs have a title line first, then the headered table — skip line 0."""
+    """OMI CSVs lead with a title row, then the header. Skip line 0."""
     with open(path, encoding="latin-1") as fh:
         lines = fh.readlines()
     return list(csv.DictReader(io.StringIO("".join(lines[1:])), delimiter=";"))
@@ -51,14 +74,50 @@ def _parse_num(s: str) -> float | None:
         return None
 
 
-def _semester_from_path(p: Path) -> str:
-    """QIP_1376358_1_20252_VALORI.csv  →  '2025/2'."""
-    m = re.search(r"_(\d{4})(\d)_", p.name)
-    return f"{m.group(1)}/{m.group(2)}" if m else "unknown"
+def _find_csvs_for_comune(comune_code: str) -> tuple[Path | None, Path | None]:
+    """
+    Find the VALORI + ZONE CSVs that contain rows for the given Comune_amm.
+    Returns (valori_path, zone_path) or (None, None) when no matching files
+    exist in omi_data/.
+    """
+    valori_match: Path | None = None
+    zone_match:   Path | None = None
+    for p in OMI_DATA_DIR.glob("QIP_*_VALORI.csv"):
+        try:
+            for r in _read_csv(p):
+                if r.get("Comune_amm", "").strip() == comune_code:
+                    valori_match = p
+                    break
+        except Exception:
+            continue
+        if valori_match:
+            break
+    for p in OMI_DATA_DIR.glob("QIP_*_ZONE.csv"):
+        try:
+            for r in _read_csv(p):
+                if r.get("Comune_amm", "").strip() == comune_code:
+                    zone_match = p
+                    break
+        except Exception:
+            continue
+        if zone_match:
+            break
+    return valori_match, zone_match
 
 
-def _build_zones(valori_rows: list[dict], zone_rows: list[dict]) -> dict[str, dict]:
-    """Mirror omi_lookup._parse_valori_csv: civili NORMALE first, then OTTIMO."""
+# ── Build zones.json from VALORI + ZONE CSVs ─────────────────────────────────
+def build_zones_json(comune_code: str, valori_path: Path, zone_path: Path,
+                     city: str) -> dict:
+    """
+    Build {city}_zones.json. Mirrors the legacy parser:
+      Priority 1 — Abitazioni civili (Cod_Tip=20) NORMALE
+      Priority 2 — Cod_Tip=20 OTTIMO (only if NORMALE missing)
+    """
+    valori_rows = [r for r in _read_csv(valori_path)
+                   if r.get("Comune_amm", "").strip() == comune_code]
+    zone_rows   = [r for r in _read_csv(zone_path)
+                   if r.get("Comune_amm", "").strip() == comune_code]
+
     metadata: dict[str, dict] = {}
     for r in zone_rows:
         code = r.get("Zona", "").strip()
@@ -69,7 +128,6 @@ def _build_zones(valori_rows: list[dict], zone_rows: list[dict]) -> dict[str, di
             }
 
     values: dict[str, dict] = {}
-
     def _store_once(row: dict) -> None:
         code = row.get("Zona", "").strip()
         if not code or code in values:
@@ -86,105 +144,185 @@ def _build_zones(valori_rows: list[dict], zone_rows: list[dict]) -> dict[str, di
             _store_once(r)
     for r in valori_rows:
         if r.get("Cod_Tip", "").strip() == "20" and r.get("Stato", "").strip() == "OTTIMO":
-            _store_once(r)   # only stored if NORMALE row was absent
+            _store_once(r)
 
-    zones: dict[str, dict] = {}
+    result: dict[str, dict] = {}
     for code, v in values.items():
         md = metadata.get(code, {})
-        compr_min, compr_max = v["compr_min"], v["compr_max"]
-        loc_min,   loc_max   = v["loc_min"],   v["loc_max"]
-        zones[code] = {
-            "fascia":    md.get("fascia", code[:1]),
-            "descr":     md.get("descr", ""),
-            "compr_min": compr_min,
-            "compr_max": compr_max,
-            "compr_mid": round((compr_min + compr_max) / 2) if compr_min and compr_max else None,
-            "loc_min":   loc_min,
-            "loc_max":   loc_max,
-            "loc_mid":   round((loc_min + loc_max) / 2, 2) if loc_min and loc_max else None,
+        cmin, cmax = v["compr_min"], v["compr_max"]
+        lmin, lmax = v["loc_min"],   v["loc_max"]
+        result[code] = {
+            "zona":       code,
+            "fascia":     md.get("fascia", code[:1]),
+            "descr":      md.get("descr", ""),
+            "compr_min":  cmin,
+            "compr_max":  cmax,
+            "compr_mid":  round((cmin + cmax) / 2) if cmin and cmax else None,
+            "loc_min":    lmin,
+            "loc_max":    lmax,
+            "loc_mid":    round((lmin + lmax) / 2, 2) if lmin and lmax else None,
         }
-    return zones
+
+    out = OMI_DATA_DIR / f"{city}_zones.json"
+    out.write_text(json.dumps(result, ensure_ascii=False, indent=2))
+    print(f"  [{city}] {len(result):>3} zones (with prices) → {out.name}")
+    return result
 
 
-def _diff_against_current(new_zones: dict[str, dict]) -> None:
-    """Print added / removed / changed zones vs whatever omi_lookup currently loads."""
-    try:
-        import omi_lookup
-    except Exception as exc:
-        print(f"  [diff] could not import omi_lookup: {exc}", file=sys.stderr)
+# ── Build polygons.json from KML ─────────────────────────────────────────────
+def _parse_coord_block(text: str) -> list[list[float]]:
+    pts: list[list[float]] = []
+    for tok in text.strip().split():
+        parts = tok.split(",")
+        if len(parts) < 2:
+            continue
+        try:
+            pts.append([float(parts[0]), float(parts[1])])  # [lng, lat]
+        except ValueError:
+            continue
+    return pts
+
+
+def _placemark_zona_code(pm) -> str | None:
+    """
+    Extract the OMI zone code from a Placemark. The pattern across all
+    7,887 files is `<name>COMUNE - Zona OMI <CODE></name>`. Fall back to
+    the description CDATA table (which carries Zona too) if the name
+    pattern doesn't match.
+    """
+    name_el = pm.find(f"{KML_NS}name")
+    if name_el is not None and name_el.text:
+        m = re.search(r"Zona OMI\s+(\S+)", name_el.text)
+        if m:
+            return m.group(1).strip()
+    desc_el = pm.find(f"{KML_NS}description")
+    if desc_el is not None and desc_el.text:
+        m = re.search(r"Zona OMI</b></td><td>\s*(\S+?)\s*<", desc_el.text)
+        if m:
+            return m.group(1).strip()
+    return None
+
+
+def build_polygons_json(comune_code: str, city: str) -> int:
+    """
+    Parse the comune's KML (OMI/{comune_code}.kml) and write
+    omi_data/{city}_polygons.json as a list of {zona, geometry: Polygon}.
+
+    Handles both single-Polygon and MultiGeometry Placemarks (some zones
+    are split across multiple disjoint polygons in the source KML).
+    """
+    kml_path = KML_DIR / f"{comune_code}.kml"
+    if not kml_path.exists():
+        # Milan has a separate F205.kml at the project root for back-compat
+        # with the legacy code path. Fall back to it when needed.
+        alt = BASE_DIR / f"{comune_code}.kml"
+        if alt.exists():
+            kml_path = alt
+        else:
+            print(f"  [{city}] KML not found: {kml_path}", file=sys.stderr)
+            return 0
+
+    tree = ET.parse(str(kml_path))
+    root = tree.getroot()
+
+    out: list[dict] = []
+    for pm in root.iter(f"{KML_NS}Placemark"):
+        zona = _placemark_zona_code(pm)
+        if not zona:
+            continue
+
+        polygons: list[list[list[list[float]]]] = []  # GeoJSON: list of rings
+        for poly_el in pm.findall(f".//{KML_NS}Polygon"):
+            outer_el = poly_el.find(f".//{KML_NS}outerBoundaryIs//{KML_NS}coordinates")
+            if outer_el is None or not outer_el.text:
+                continue
+            outer = _parse_coord_block(outer_el.text)
+            if len(outer) < 3:
+                continue
+            holes_coords: list[list[list[float]]] = []
+            for inner_el in poly_el.findall(f".//{KML_NS}innerBoundaryIs//{KML_NS}coordinates"):
+                if inner_el is not None and inner_el.text:
+                    inner = _parse_coord_block(inner_el.text)
+                    if len(inner) >= 3:
+                        holes_coords.append(inner)
+            polygons.append([outer] + holes_coords)
+
+        if not polygons:
+            continue
+        if len(polygons) == 1:
+            geom = {"type": "Polygon", "coordinates": polygons[0]}
+        else:
+            geom = {"type": "MultiPolygon", "coordinates": polygons}
+        out.append({"zona": zona, "geometry": geom})
+
+    out_path = OMI_DATA_DIR / f"{city}_polygons.json"
+    out_path.write_text(json.dumps(out, ensure_ascii=False))
+    print(f"  [{city}] {len(out):>3} polygons → {out_path.name}")
+    return len(out)
+
+
+# ── Orchestration ────────────────────────────────────────────────────────────
+def process_city(city: str) -> None:
+    if city not in CITY_MAP:
+        print(f"[update_omi] unknown city '{city}' — known: {list(CITY_MAP)}",
+              file=sys.stderr)
+        return
+    comune_code = CITY_MAP[city]
+    print(f"\n[update_omi] {city} ({comune_code}):")
+
+    n_polys = build_polygons_json(comune_code, city)
+    if n_polys == 0:
+        print(f"  [{city}] no polygons → skipping zones step")
         return
 
-    cur = omi_lookup.ZONES
-    new_set, cur_set = set(new_zones), set(cur)
-
-    added   = sorted(new_set - cur_set)
-    removed = sorted(cur_set - new_set)
-    shared  = sorted(cur_set & new_set)
-
-    print(f"\nDiff vs currently-loaded release ({len(cur)} zones):")
-    if added:   print(f"  added:    {added}")
-    if removed: print(f"  removed:  {removed}")
-    if not added and not removed:
-        print("  (no zone added or removed)")
-
-    changes = []
-    for z in shared:
-        n, o = new_zones[z], cur[z]
-        for f in ("loc_min", "loc_max", "compr_min", "compr_max"):
-            on, oo = n.get(f), o.get(f)
-            if on != oo:
-                changes.append((z, f, oo, on))
-    if changes:
-        print(f"  value changes in shared zones: {len(changes)}")
-        for z, f, oo, on in changes[:15]:
-            print(f"    {z:>4} {f:<10} {oo} → {on}")
-        if len(changes) > 15:
-            print(f"    … +{len(changes) - 15} more")
+    valori, zone = _find_csvs_for_comune(comune_code)
+    if valori and zone:
+        build_zones_json(comune_code, valori, zone, city)
     else:
-        print("  (no value changes in shared zones)")
+        # No CSVs yet — leave zones.json absent. omi_lookup synthesises stubs
+        # from the polygons so listings still get a zona code.
+        zones_path = OMI_DATA_DIR / f"{city}_zones.json"
+        if zones_path.exists():
+            print(f"  [{city}] no CSVs found — keeping existing {zones_path.name}")
+        else:
+            print(f"  [{city}] no VALORI/ZONE CSV with Comune_amm={comune_code} — "
+                  f"geometry-only mode")
+
+
+def list_status() -> None:
+    print(f"\nKML source: {KML_DIR} "
+          f"({sum(1 for _ in KML_DIR.glob('*.kml'))} files)" if KML_DIR.exists()
+          else f"\nKML source: {KML_DIR} (MISSING)")
+    print(f"Output dir: {OMI_DATA_DIR}\n")
+    print(f"{'city':<14}{'comune':<8}{'kml':<6}{'csvs':<6}{'polygons.json':<18}{'zones.json':<12}")
+    print("-" * 70)
+    for city, code in CITY_MAP.items():
+        kml_exists = (KML_DIR / f"{code}.kml").exists() or (BASE_DIR / f"{code}.kml").exists()
+        valori, zone = _find_csvs_for_comune(code)
+        poly_out = OMI_DATA_DIR / f"{city}_polygons.json"
+        zone_out = OMI_DATA_DIR / f"{city}_zones.json"
+        print(f"{city:<14}{code:<8}"
+              f"{'✓' if kml_exists else '✗':<6}"
+              f"{'✓' if (valori and zone) else '✗':<6}"
+              f"{'✓' if poly_out.exists() else '✗':<18}"
+              f"{'✓' if zone_out.exists() else '✗':<12}")
 
 
 def main() -> None:
-    if len(sys.argv) != 3:
-        print("Usage: python3 update_omi.py VALORI.csv ZONE.csv")
-        sys.exit(1)
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--city", choices=list(CITY_MAP), help="single city")
+    ap.add_argument("--list", action="store_true",
+                    help="print availability matrix, don't build")
+    args = ap.parse_args()
 
-    valori_path = Path(sys.argv[1]).expanduser().resolve()
-    zone_path   = Path(sys.argv[2]).expanduser().resolve()
-    for p in (valori_path, zone_path):
-        if not p.exists():
-            print(f"file not found: {p}", file=sys.stderr)
-            sys.exit(1)
+    if args.list:
+        list_status()
+        return
 
-    # Sanity: both files should belong to the same Comune + same semester
-    sem_v = _semester_from_path(valori_path)
-    sem_z = _semester_from_path(zone_path)
-    if sem_v != sem_z:
-        print(f"warning: semester mismatch — VALORI={sem_v}, ZONE={sem_z}", file=sys.stderr)
-
-    valori = _read_csv(valori_path)
-    zones  = _read_csv(zone_path)
-
-    # Strict filter to Comune F205 (Milano) to defend against accidentally
-    # loading a national-scope file.
-    valori = [r for r in valori if r.get("Comune_amm", "").strip() in ("", "F205")]
-
-    built = _build_zones(valori, zones)
-    print(f"Parsed {len(built)} zones from semester {sem_v}.")
-    sample = sorted(built.keys())[:8]
-    for code in sample:
-        z = built[code]
-        print(f"  {code:<4} {z['fascia']}  loc {z['loc_min']}-{z['loc_max']} (mid {z['loc_mid']})  "
-              f"compr {z['compr_min']}-{z['compr_max']} (mid {z['compr_mid']})  {z['descr'][:40]}")
-
-    _diff_against_current(built)
-
-    # Patch hint
-    print("\nTo activate this release, edit omi_lookup.py:")
-    rel_v = valori_path.relative_to(Path.cwd()) if valori_path.is_relative_to(Path.cwd()) else valori_path
-    rel_z = zone_path.relative_to(Path.cwd())   if zone_path.is_relative_to(Path.cwd())   else zone_path
-    print(f"  ZONE_PATH   = OMI_DATA / \"{rel_z.name}\"")
-    print(f"  VALORI_PATH = OMI_DATA / \"{rel_v.name}\"")
+    cities = [args.city] if args.city else list(CITY_MAP)
+    for city in cities:
+        process_city(city)
+    print("\n[update_omi] done")
 
 
 if __name__ == "__main__":

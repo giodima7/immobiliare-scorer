@@ -50,6 +50,17 @@ icon-512.png
 # Local POI cache (large, can be re-downloaded via dashboard Settings)
 milan_pois.json
 
+# OMI multi-city expansion
+# OMI/ — full Italian KML dump (~7,900 files, 404 MB). Reference data
+#       processed into omi_data/*.json by update_omi.py; never commit.
+# omi_data/QIP_*.csv, omi_data/*.kml — raw Agenzia delle Entrate downloads
+#       (large; processed into per-city JSON).
+# The processed per-city JSON files (omi_data/*_zones.json /
+# *_polygons.json) ARE tracked — they're the actual runtime input.
+OMI/
+omi_data/QIP_*.csv
+omi_data/*.kml
+
 # AI workspace
 .claude/
 
