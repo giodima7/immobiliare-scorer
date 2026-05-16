@@ -1165,29 +1165,41 @@ def get_sale_fetch_status():
 
 @app.route("/api/download-pois", methods=["POST"])
 def download_pois():
-    """Download all Milan POIs in one bulk Overpass query → milan_pois.json."""
+    """Download all POIs for ?city= (default milano) in one bulk Overpass
+    query → {city}_pois.json. After this lands, enrichment for that city
+    skips per-listing Overpass calls entirely."""
+    city = (request.args.get("city") or "milano").lower()
     try:
-        from enrich_geo import download_milan_pois
-        pois = download_milan_pois()
+        from enrich_geo import download_city_pois
+        pois = download_city_pois(city)
         counts = {k: len(v) for k, v in pois.items() if isinstance(v, list)}
-        return jsonify({"ok": True, **counts})
+        return jsonify({"ok": True, "city": city, **counts})
     except Exception as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 500
+        return jsonify({"ok": False, "city": city, "error": str(exc)}), 500
 
 
 @app.route("/api/pois-status", methods=["GET"])
 def pois_status():
-    """Return whether milan_pois.json exists and its element counts."""
-    from pathlib import Path as _Path
-    path = BASE_DIR / "milan_pois.json"
-    if not path.exists():
-        return jsonify({"exists": False})
-    try:
-        data = _json.loads(path.read_text())
-        counts = {k: len(v) for k, v in data.items() if isinstance(v, list)}
-        return jsonify({"exists": True, "downloaded_at": data.get("downloaded_at"), **counts})
-    except Exception as exc:
-        return jsonify({"exists": False, "error": str(exc)})
+    """Return whether the city's POI file exists + its element counts.
+    Without ?city= returns a summary for every supported city."""
+    from enrich_geo import _pois_path, _CITY_BBOXES
+
+    def _city_info(city: str) -> dict:
+        path = _pois_path(city)
+        if not path.exists():
+            return {"city": city, "exists": False}
+        try:
+            data   = _json.loads(path.read_text())
+            counts = {k: len(v) for k, v in data.items() if isinstance(v, list)}
+            return {"city": city, "exists": True,
+                    "downloaded_at": data.get("downloaded_at"), **counts}
+        except Exception as exc:
+            return {"city": city, "exists": False, "error": str(exc)}
+
+    city = request.args.get("city")
+    if city:
+        return jsonify(_city_info(city.lower()))
+    return jsonify({"cities": [_city_info(c) for c in _CITY_BBOXES]})
 
 
 @app.route("/geo-enrich", methods=["POST"])
@@ -1304,6 +1316,28 @@ def _geo_orchestrator_worker(jobs: list[tuple[str, str]]):
                 })
                 print(f"  [geo-orch] {city}:{kind} skipped (0 pending)")
                 continue
+
+            # Auto-download the city's POI dataset BEFORE running the
+            # worker (only when missing). Without this the worker would
+            # fall through to per-listing Overpass queries — 8 parallel
+            # workers × hundreds of listings instantly trips Overpass's
+            # 429 rate limit, and the whole pass stalls in retry loops.
+            # One bulk query per city is the right granularity.
+            #
+            # Only do this once per city in this queue run (not per kind):
+            # rentals + sales for the same city reuse the same file.
+            try:
+                from enrich_geo import _pois_path, download_city_pois
+                if not _pois_path(city).exists():
+                    cur_slot = _geo_job(city, kind)
+                    _geo_set_phase(cur_slot, "polygon",
+                                   f"Downloading {city} POI dataset (one-time)")
+                    cur_slot["running"] = True
+                    print(f"  [geo-orch] downloading {city} POIs (no local file)…")
+                    download_city_pois(city)
+            except Exception as exc:
+                print(f"  [geo-orch] {city} POI bulk download failed: {exc} — "
+                      f"falling back to per-listing Overpass (slow + rate-limited)")
 
             # The per-city worker also calls _geo_stop.clear() — but since
             # the orchestrator is the only producer here we don't need
