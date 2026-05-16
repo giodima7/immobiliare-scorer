@@ -536,6 +536,72 @@ header h1 span { color: var(--accent); }
 }
 .filters.filters-grid .score-number-input:focus { border-color: var(--green-deep); }
 
+/* Toggle-pill: a checkbox styled to match the rest of the .filter-control
+   row — 36 px tall, muted background, rounded border, with a dot that
+   turns green when checked. Clicking anywhere on the pill flips the
+   underlying checkbox; existing JS reading .checked keeps working. */
+.filters.filters-grid .filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  background: var(--bg-muted);
+}
+.filters.filters-grid .filter-toggle:hover { border-color: var(--border-strong); }
+.filters.filters-grid .filter-toggle-input {
+  /* Hidden but still focusable + readable by JS */
+  position: absolute;
+  opacity: 0;
+  width: 0; height: 0;
+  margin: 0;
+  pointer-events: none;
+}
+.filters.filters-grid .filter-toggle-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  border: 1.5px solid var(--border-strong);
+  background: var(--bg-card);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.filters.filters-grid .filter-toggle-input:checked ~ .filter-toggle-dot {
+  background: var(--green-deep);
+  border-color: var(--green-deep);
+}
+/* Checkmark drawn in CSS so we don't need an svg asset */
+.filters.filters-grid .filter-toggle-input:checked ~ .filter-toggle-dot::after {
+  content: '';
+  width: 4px;
+  height: 8px;
+  border-right: 2px solid white;
+  border-bottom: 2px solid white;
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+.filters.filters-grid .filter-toggle-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.filters.filters-grid .filter-toggle-input:checked ~ .filter-toggle-label {
+  color: var(--green-deep);
+}
+.filters.filters-grid .filter-toggle:has(.filter-toggle-input:checked) {
+  border-color: var(--green-deep);
+}
+/* Keyboard-focus ring (the input is visually hidden so we surface focus
+   on the pill itself) */
+.filters.filters-grid .filter-toggle:focus-within {
+  border-color: var(--green-deep);
+  box-shadow: 0 0 0 3px rgba(45, 106, 79, 0.15);
+}
+
 /* Flex spacer pushes Save-alert + Clear-filters to the right edge of row 3. */
 .filters.filters-grid .filter-spacer { flex: 1 1 auto; min-width: 8px; }
 
@@ -6660,10 +6726,17 @@ function saveFilters() {
           <button class="filter-pill sort-tab" data-rsource="idealista">Idealista</button>
         </div>
       </div>
-      <div class="filter-group filter-group-check">
-        <label class="filter-label filter-label-inline" title="Listings with elevator only">
-          <input type="checkbox" id="rElevator" class="filter-checkbox">
-          <span data-i18n="filter.elevator">Elevator</span>
+      <div class="filter-group">
+        <label class="filter-label" data-i18n="filter.elevator">Elevator</label>
+        <!-- Toggle pill that visually matches every other .filter-control:
+             same 36px height, muted background, rounded border. Clicking
+             anywhere on the pill flips the hidden checkbox so existing
+             handlers reading getElementById('rElevator').checked keep
+             working. -->
+        <label class="filter-control filter-toggle" for="rElevator">
+          <input type="checkbox" id="rElevator" class="filter-toggle-input">
+          <span class="filter-toggle-dot"></span>
+          <span class="filter-toggle-label" data-i18n="filter.elevator">Elevator</span>
         </label>
       </div>
       <div class="filter-group">
@@ -6717,10 +6790,13 @@ function saveFilters() {
           <button class="filter-pill gem-tab"        data-gem="good"   data-i18n="filter.great_value">Great Value</button>
         </div>
       </div>
-      <div class="filter-group filter-group-check">
-        <label class="filter-label filter-label-inline" title="Show listings not seen by the scanner in 7+ days">
-          <input type="checkbox" id="rShowStale" class="filter-checkbox">
-          <span data-i18n="filter.show_expired">Show expired</span>
+      <div class="filter-group">
+        <label class="filter-label" data-i18n="filter.show_expired">Show expired</label>
+        <label class="filter-control filter-toggle" for="rShowStale"
+               title="Show listings not seen by the scanner in 7+ days">
+          <input type="checkbox" id="rShowStale" class="filter-toggle-input">
+          <span class="filter-toggle-dot"></span>
+          <span class="filter-toggle-label" data-i18n="filter.show_expired">Show expired</span>
         </label>
       </div>
       <!-- Spacer pushes Save-alert + Clear-filters to the right edge. -->
