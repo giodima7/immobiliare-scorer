@@ -755,7 +755,16 @@ def api_ping():
 
 @app.route("/")
 def index():
-    return send_file(DASHBOARD_DIR / "index.html")
+    # Force the browser to re-fetch the dashboard on every navigation so
+    # users always see the latest layout. Safari in particular caches
+    # localhost responses aggressively even on Cmd+Shift+R, which made
+    # post-deploy UI changes look "missing" until the browser cache was
+    # manually purged.
+    resp = send_file(DASHBOARD_DIR / "index.html")
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    resp.headers["Pragma"]        = "no-cache"
+    resp.headers["Expires"]       = "0"
+    return resp
 
 
 @app.route("/listings")

@@ -7711,6 +7711,10 @@ function setCity(code) {
   // against the previous city's rentals — invalidate so the next sales
   // render rebuilds them from the new city's data.
   if (typeof salesAnalysisReady !== 'undefined') salesAnalysisReady = false;
+  // Instant feedback: blank the count out of the meta line so the user
+  // sees the new city name immediately, before loadRentals resolves.
+  const _mNow = document.getElementById('meta');
+  if (_mNow) _mNow.textContent = t('loading.listings') || 'Loading listings…';
   if (typeof loadRentals === 'function') loadRentals();
   if (activeTab === 'sales' && typeof loadSales === 'function') {
     loadSales().then(() => {
@@ -17731,7 +17735,11 @@ function _toAreaId(name) {
 }
 
 async function _settingsLoad() {
-  if (_settingsLoaded) return;
+  // Treat "loaded with the local API actually available" as the cache
+  // key — otherwise an early call (before applyStaticMode set IS_LIVE)
+  // would mark this loaded with the "no Flask" placeholder, and the
+  // user would see that hint forever even after Flask came up.
+  if (_settingsLoaded && IS_LIVE) return;
   const loadEl   = document.getElementById('settingsLoading');
   const pickerEl = document.getElementById('areaPickerUI');
   if (!IS_LIVE) {
