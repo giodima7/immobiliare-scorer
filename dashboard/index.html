@@ -461,12 +461,18 @@ header h1 span { color: var(--accent); }
   gap: 8px;
 }
 
-/* Pill groups (Source, Sort, Gems): replace the old .sort-tabs row with a
-   single rounded pill rail so the three options read as one control. */
+/* Pill groups (Source, Sort, Gems): a single rounded rail with one
+   "thumb" that slides between options. The thumb is a ::before pseudo
+   on the group, positioned via two CSS custom properties (--thumb-left,
+   --thumb-width) that JS updates whenever the active pill changes. The
+   pills themselves are transparent — only the thumb has a background —
+   so the transition reads as a single shape sliding, not multiple
+   colour swaps. */
 .filters.filters-grid .filter-pill-group {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 0;
   padding: 3px;
   background: var(--bg-muted);
   border: 1.5px solid var(--border);
@@ -474,7 +480,24 @@ header h1 span { color: var(--accent); }
   height: 36px;
   box-sizing: border-box;
 }
+.filters.filters-grid .filter-pill-group::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: var(--thumb-left, 3px);
+  width: var(--thumb-width, 0);
+  background: var(--bg-card);
+  border-radius: var(--radius-full);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  transition: left 220ms cubic-bezier(.4, 0, .2, 1),
+              width 220ms cubic-bezier(.4, 0, .2, 1);
+  z-index: 0;
+  pointer-events: none;
+}
 .filters.filters-grid .filter-pill {
+  position: relative;
+  z-index: 1;
   padding: 0 12px;
   height: 28px;
   border: none;
@@ -485,14 +508,23 @@ header h1 span { color: var(--accent); }
   font-family: var(--font);
   background: transparent;
   color: var(--text-muted);
-  transition: background 120ms ease, color 120ms ease, box-shadow 120ms ease;
+  transition: color 180ms ease;
   white-space: nowrap;
 }
 .filters.filters-grid .filter-pill:hover { color: var(--text-primary); }
 .filters.filters-grid .filter-pill.active {
-  background: var(--bg-card);
+  /* Background comes from the sliding ::before thumb, so the pill stays
+     transparent + just shifts text colour. */
+  background: transparent;
   color: var(--green-deep);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+  box-shadow: none;
+}
+/* Kill the default browser focus ring on click. Keyboard users still
+   get a visible ring via :focus-visible. */
+.filters.filters-grid .filter-pill:focus { outline: none; }
+.filters.filters-grid .filter-pill:focus-visible {
+  outline: 2px solid var(--green-deep);
+  outline-offset: 2px;
 }
 
 /* Score control: slider + editable number input glued together. The
@@ -9514,6 +9546,13 @@ function switchTab(tab, opts) {
     stopSaleFetchPoll();
     startScannerPoll();
     if (!ALL_RENT.length) loadRentals();
+    // First-paint of the filter bar happens with display:none on the
+    // rentalsView container — getBoundingClientRect returns zeros and
+    // the pill-thumbs land at 0/0. Recompute now that the bar is laid
+    // out so the thumbs snap to the correct positions immediately.
+    if (typeof _updateAllPillThumbs === 'function') {
+      requestAnimationFrame(_updateAllPillThumbs);
+    }
   } else if (tab === 'map') {
     stopScannerPoll();
     stopSaleFetchPoll();
@@ -16741,6 +16780,58 @@ document.querySelectorAll('#rGemFilter .gem-tab').forEach(btn =>
     renderRentals();
   }));
 
+// ── Pill-group sliding thumb ───────────────────────────────────────────────
+// Each .filter-pill-group has a single absolutely-positioned ::before
+// pseudo-element acting as the "thumb" — its left + width are driven by
+// two CSS custom properties that we update here. The CSS transition on
+// those properties does the sliding animation; no JS-side animation
+// frame work required.
+function _updatePillThumb(group) {
+  if (!group) return;
+  const active = group.querySelector('.filter-pill.active');
+  if (!active) {
+    group.style.removeProperty('--thumb-width');
+    return;
+  }
+  const groupRect = group.getBoundingClientRect();
+  const btnRect   = active.getBoundingClientRect();
+  // Subtract the group's padding-start so the thumb sits flush inside
+  // the rail's 3 px inner gutter at left:0 + 3px.
+  const left = btnRect.left - groupRect.left;
+  group.style.setProperty('--thumb-left',  `${left}px`);
+  group.style.setProperty('--thumb-width', `${btnRect.width}px`);
+}
+function _updateAllPillThumbs() {
+  document.querySelectorAll('.filter-pill-group').forEach(_updatePillThumb);
+}
+
+// Hook into every existing pill-click. The .active class flip already
+// happens inside each handler above; we just need to recompute the thumb
+// once the DOM has settled. Capture-phase listener wins the race against
+// the per-group click handlers without needing to reorder them.
+document.addEventListener('click', e => {
+  const pill = e.target.closest('.filter-pill');
+  if (!pill) return;
+  const group = pill.closest('.filter-pill-group');
+  if (!group) return;
+  // Defer one tick so the .active class change made by the handler is
+  // already applied when we measure.
+  requestAnimationFrame(() => _updatePillThumb(group));
+}, true);
+
+// Initial paint + responsive recompute. The filter-bar wraps on narrow
+// viewports so the thumb width can change without any click.
+requestAnimationFrame(_updateAllPillThumbs);
+window.addEventListener('resize', () => {
+  // Throttle: one rAF coalesces multiple resize events into a single
+  // measurement pass.
+  if (window._pillThumbRaf) return;
+  window._pillThumbRaf = requestAnimationFrame(() => {
+    window._pillThumbRaf = null;
+    _updateAllPillThumbs();
+  });
+});
+
 // Score slider ↔ number-input sync. Slider stays the source of truth so
 // getRentFilters() + every other reader of rScore.value keeps working.
 // rScoreVal (the old text mirror) is now a hidden node — preserved so
@@ -16811,6 +16902,12 @@ document.getElementById('rBtnReset').addEventListener('click', () => {
   rentSortKey = 'score_total';
   document.querySelectorAll('#rentSortTabs .sort-tab').forEach(t =>
     t.classList.toggle('active', t.dataset.rsort === 'score_total'));
+  // Reset moved the .active class on the pill groups → recompute thumbs
+  // so the indicator snaps back to position 1 (All / Score) instead of
+  // staying parked under the previously-selected option.
+  if (typeof _updateAllPillThumbs === 'function') {
+    requestAnimationFrame(_updateAllPillThumbs);
+  }
   renderRentals();
 });
 
