@@ -7376,11 +7376,13 @@ function rebuildZoneFilter() {
 
 function rebuildAreaFilter() {
   // Area MSDs (rentals + sales) lazy-build on first use; rebuilding here
-  // keeps their option lists scoped to the active city. The MSDs read from
-  // ALL_RENT / ALL_SALE via their own rebuild hooks, so just nudging
-  // renderRentals/renderSales is enough when a build is already in place.
-  if (typeof renderRentals === 'function' && Array.isArray(ALL_RENT) && ALL_RENT.length) renderRentals();
-  if (typeof renderSales   === 'function' && Array.isArray(ALL_SALE) && ALL_SALE.length) renderSales();
+  // keeps their option lists scoped to the active city. The MSDs read
+  // from ALL_RENT / ALL_SALE on their next render call — loadRentals()
+  // and loadSales() each call renderRentals()/renderSales() right after
+  // onDataLoaded(), so we deliberately do NOT trigger another render
+  // here. (An earlier version did, which fired renderRentals BEFORE
+  // loadRentals had finished its post-data setup and left the grid
+  // blank when the inner call threw.)
 }
 
 // Single entry-point called after every dataset load (loadRentals /
