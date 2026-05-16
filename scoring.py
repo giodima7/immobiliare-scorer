@@ -97,13 +97,26 @@ HEATING_COEFFICIENTS: dict[str, float] = {
 }
 
 
-# ── Location Desirability Index ──────────────────────────────────────────────
+# ── Location Desirability Index (city-relative) ──────────────────────────────
+# LDI normalises a zone's purchase price within its CITY's range, not
+# Italy's. 80/100 in Naples means "top 20% of Naples", not "top 20% of
+# Italy" — otherwise every Roma listing would score artificially low
+# against the Milano-calibrated yardstick.
 
-def _build_ldi() -> dict[str, int]:
-    """Normalise OMI compr_mid purchase prices to a 0-100 LDI score per zone."""
+# Per-city caches — populated lazily on first lookup for that city.
+_LDI_CACHE: dict[str, dict[str, int]] = {}
+_LDI_BOOST_THRESHOLDS: dict[str, float] = {}
+
+
+def _build_ldi(city: str = "milano") -> dict[str, int]:
+    """Normalise OMI compr_mid → 0-100 LDI within a single city's range."""
+    try:
+        zones = omi_lookup.load_city_zones(city)
+    except FileNotFoundError:
+        return {}
     values = {
         code: z["compr_mid"]
-        for code, z in omi_lookup.ZONES.items()
+        for code, z in zones.items()
         if z.get("compr_mid") is not None
     }
     if not values:
@@ -114,12 +127,68 @@ def _build_ldi() -> dict[str, int]:
     return {code: round((v - lo) / (hi - lo) * 100) for code, v in values.items()}
 
 
-LDI: dict[str, int] = _build_ldi()
-
-
 def get_ldi(listing: dict) -> int:
-    """Return LDI score (0–100) for the listing's OMI zone. Defaults to 50."""
-    return LDI.get(listing.get("omi_zona"), 50)
+    """Return LDI score (0–100) for the listing's city + OMI zone."""
+    city = listing.get("city", "milano")
+    if city not in _LDI_CACHE:
+        _LDI_CACHE[city] = _build_ldi(city)
+    return _LDI_CACHE[city].get(listing.get("omi_zona"), 50)
+
+
+def _get_ldi_boost_threshold(city: str = "milano") -> float:
+    """
+    City-relative ceiling for the LDI bonus: zones in the TOP 20% of
+    that city's price distribution don't get the boost.
+
+    Old Milan-only hardcode was `omi_compr_mid > 5500` — that worked
+    for Milan but would either disable the boost everywhere in Roma
+    (max compr_mid is similar) or wrongly enable it everywhere in
+    Napoli (max compr_mid is lower). The per-city percentile keeps
+    the boost firing on city-relative bargains, not Italy-relative.
+    """
+    if city not in _LDI_BOOST_THRESHOLDS:
+        try:
+            zones = omi_lookup.load_city_zones(city)
+        except FileNotFoundError:
+            _LDI_BOOST_THRESHOLDS[city] = float("inf")
+            return _LDI_BOOST_THRESHOLDS[city]
+        mids = sorted(
+            z["compr_mid"] for z in zones.values() if z.get("compr_mid")
+        )
+        if not mids:
+            _LDI_BOOST_THRESHOLDS[city] = float("inf")
+        else:
+            # Top 20% start at the 80th-percentile index.
+            idx = min(int(len(mids) * 0.80), len(mids) - 1)
+            _LDI_BOOST_THRESHOLDS[city] = float(mids[idx])
+    return _LDI_BOOST_THRESHOLDS[city]
+
+
+# ── Appreciation rates (per-city, per-fascia) ────────────────────────────────
+# Annual nominal appreciation used by the investor view's 5-yr projection.
+# Mirrors the Supabase `cities` table (migration 007); keep in sync when
+# the DB values change. Last verified: May 2026.
+CITY_APPRECIATION_RATES: dict[str, dict[str, float]] = {
+    "milano":       {"A": 0.030, "B": 0.025, "C": 0.020, "D": 0.015, "E": 0.010, "R": 0.010},
+    "roma":         {"A": 0.025, "B": 0.020, "C": 0.015, "D": 0.010, "E": 0.008, "R": 0.008},
+    "napoli":       {"A": 0.020, "B": 0.015, "C": 0.012, "D": 0.010, "E": 0.008, "R": 0.008},
+    "la_maddalena": {"A": 0.015, "B": 0.010, "C": 0.008, "D": 0.005, "E": 0.005, "R": 0.005},
+}
+
+
+def get_appreciation_rate(listing: dict) -> float:
+    """OMI-sourced annual appreciation rate for this listing's city+fascia."""
+    city   = listing.get("city", "milano")
+    fascia = (listing.get("omi_fascia") or "C").upper()
+    rates  = CITY_APPRECIATION_RATES.get(city, CITY_APPRECIATION_RATES["milano"])
+    return rates.get(fascia, rates.get("C", 0.020))
+
+
+# ── Legacy module-level LDI (Milan-only) ──────────────────────────────────────
+# Kept so unchanged callers (`scoring.LDI["B12"]`, gem/value helpers below)
+# keep working. New code should call get_ldi(listing) which resolves the
+# right city automatically.
+LDI: dict[str, int] = _build_ldi("milano")
 
 
 def is_hidden_gem(listing: dict, settings: dict | None = None) -> bool:
@@ -1002,10 +1071,12 @@ def score_rental(listing: dict, all_listings: list, settings: dict | None = None
 
     # ── LDI boost (only for bargains in non-premium zones) ─────────────────────
     # A bargain in a prime area deserves a reward; an overpriced one does not.
-    # Disabled in zones where omi_compr_mid > 5500 €/m² — comps themselves are
-    # expensive, so the LDI boost would inflate scores for high-cost micro-flats.
+    # The "premium" cutoff is the 80th-percentile compr_mid IN THE LISTING'S
+    # CITY — was hardcoded 5500 for Milan, now city-relative so Naples /
+    # La Maddalena get a sensible threshold too.
     _omi_compr_r = listing.get("omi_compr_mid") or 0
-    if delta_pct is not None and delta_pct <= 0 and _omi_compr_r <= 5500:
+    _boost_max_r = _get_ldi_boost_threshold(listing.get("city", "milano"))
+    if delta_pct is not None and delta_pct <= 0 and _omi_compr_r <= _boost_max_r:
         boosted_price_score = round(min(100.0, pvc_s * (1 + ldi_bonus)))
     else:
         boosted_price_score = round(pvc_s)   # above comps, no comps, or premium zone: no boost
@@ -1317,10 +1388,10 @@ def score_sale_listing(listing: dict, all_listings: list, settings: dict | None 
         delta_label_pct = None
 
     # ── LDI boost (only for at-or-below-comps listings in non-premium zones) ────
-    # Disabled in zones where omi_compr_mid > 5500 €/m² — comps themselves are
-    # expensive, so the LDI boost would inflate scores for high-cost micro-flats.
+    # Same per-city percentile cutoff as the rental scorer above.
     _omi_compr_s = listing.get("omi_compr_mid") or 0
-    if delta_pct is not None and delta_pct <= 0 and _omi_compr_s <= 5500:
+    _boost_max_s = _get_ldi_boost_threshold(listing.get("city", "milano"))
+    if delta_pct is not None and delta_pct <= 0 and _omi_compr_s <= _boost_max_s:
         boosted_price_score = round(min(100.0, pvc_s * (1 + ldi_bonus)))
     else:
         boosted_price_score = round(pvc_s)

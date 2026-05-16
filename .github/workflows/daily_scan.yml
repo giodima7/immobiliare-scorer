@@ -111,6 +111,9 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Rebase on top of whatever any other matrix job already pushed
+          # so concurrent commits to different cities don't reject.
+          git pull --rebase origin main || true
           git add seen_ids_${{ matrix.city }}.json || true
           git add enriched_cache.json || true
           git diff --staged --quiet || git commit -m "chore: daily scan ${{ matrix.city }} $(date -u '+%Y-%m-%d %H:%M UTC')"
