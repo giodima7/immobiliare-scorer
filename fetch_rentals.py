@@ -134,16 +134,32 @@ def parse_floor(raw_floor) -> tuple:
 
 
 def _load_active_areas() -> list:
-    """Return display names of active areas from area_settings.json (new format).
-    Falls back to an empty list so the scanner fetches all of Milano."""
-    if AREA_SETTINGS_PATH.exists():
+    """
+    Return display names of active areas for the current CITY_KEY from
+    area_settings_{city}.json if present, else the legacy shared
+    area_settings.json (Milan-only). Falls back to an empty list so the
+    scanner fetches the whole city when nothing is configured.
+
+    Crucially: when scanning a non-Milan city and no per-city area file
+    exists, we DON'T read the Milan area_settings — those names won't
+    resolve as Idealista/Immobiliare URLs in another city, and the
+    scanner would 0-out the whole run trying to scrape Milan zones in
+    Rome.
+    """
+    per_city = BASE_DIR / f"area_settings_{CITY_KEY}.json"
+    paths = []
+    if per_city.exists():
+        paths.append(per_city)
+    if CITY_KEY == "milano" and AREA_SETTINGS_PATH.exists():
+        paths.append(AREA_SETTINGS_PATH)
+    for p in paths:
         try:
-            data = json.loads(AREA_SETTINGS_PATH.read_text())
+            data = json.loads(p.read_text())
             if isinstance(data, dict) and "areas" in data:
                 return [a["name"] for a in data["areas"]
                         if isinstance(a, dict) and a.get("active") and a.get("name")]
         except Exception:
-            pass
+            continue
     return []
 # ── City registry ──────────────────────────────────────────────────────────────
 # Mirrors the Supabase cities table and the entries in omi_lookup.py's
@@ -1097,13 +1113,19 @@ def fetch_rentals(pages: int = 3, area_names: list = None, max_rent: int = 0,
         #            (b) new listings whose enrich_geo call failed the omi step.
         try:
             import omi_lookup as _omi_lookup
-            if _omi_lookup.ZONES:
-                _need_omi = [l for l in items if l.get("omi_loc_mid") is None
-                             and l.get("latitude") and l.get("longitude")]
+            # Multi-city: use lookup_for_city(..., city=CITY_KEY) instead of
+            # the legacy Milan-only ZONES dict. The legacy lookup() still
+            # works for Milan but returns nothing for other cities.
+            _need_omi = [l for l in items if l.get("omi_loc_mid") is None
+                         and l.get("latitude") and l.get("longitude")]
+            if _need_omi:
                 _omi_updates = []
                 for _l in _need_omi:
-                    _zone, _src = _omi_lookup.lookup(float(_l["latitude"]),
-                                                     float(_l["longitude"]))
+                    _zone, _src = _omi_lookup.lookup_for_city(
+                        float(_l["latitude"]),
+                        float(_l["longitude"]),
+                        city=CITY_KEY,
+                    )
                     if _zone:
                         _omi_f = {
                             "omi_zona":      _zone["zona"],

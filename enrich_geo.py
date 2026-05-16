@@ -561,27 +561,41 @@ def _parse_street(address: str) -> tuple[str, str]:
     return ", ".join(street_parts[:2]).strip(", "), "Milano"
 
 
+# Loose per-city fallback bboxes for when omi_lookup is unavailable.
+# Mirrors the Supabase cities.bbox_* columns.
+_CITY_BBOXES: dict[str, tuple[float, float, float, float]] = {
+    "milano":       (45.38,  9.02, 45.56,  9.32),
+    "roma":         (41.75, 12.30, 42.00, 12.70),
+    "napoli":       (40.78, 14.14, 40.92, 14.38),
+    "la_maddalena": (41.17,  9.35, 41.25,  9.47),
+}
+
+
+def _is_in_city(lat: float, lon: float, city: str = "milano") -> bool:
+    """
+    True iff (lat, lon) falls *inside* one of the OMI zone polygons for
+    the given city. Used by the geocoders to reject results that drift
+    into adjacent municipalities sharing a street name (e.g. "Via
+    Antonio Fogazzaro" in both Milan and Peschiera Borromeo).
+
+    Falls back to a loose city bbox when omi_lookup is unavailable for
+    that city — better to keep geocoding loosely than to block every
+    listing.
+    """
+    if _OMI_AVAILABLE:
+        try:
+            _zone, src = _omi_lookup.lookup_for_city(lat, lon, city=city)
+            if src == "polygon":
+                return True
+        except Exception:
+            pass
+    bb = _CITY_BBOXES.get(city) or _CITY_BBOXES["milano"]
+    return bb[0] <= lat <= bb[2] and bb[1] <= lon <= bb[3]
+
+
 def _is_in_milan(lat: float, lon: float) -> bool:
-    """
-    True iff the point falls *inside* one of the 43 OMI zone polygons that
-    cover the Milan municipality. Using polygon containment (not a bounding
-    box) prevents the geocoders from drifting into adjacent municipalities
-    that share street names — e.g. there's a "Via Antonio Fogazzaro" both in
-    Milan (Cadore zone, postcode 20135) and in Peschiera Borromeo (postcode
-    20068, 9 km east of Milan): the bbox check passed the wrong one.
-    The omi_lookup module already loads the polygons; reuse it.
-    """
-    if not _OMI_AVAILABLE:
-        # Fallback: keep the old loose Milan bbox so we don't accidentally
-        # block ALL geocoding when omi_lookup is missing.
-        return 45.38 <= lat <= 45.56 and 9.02 <= lon <= 9.32
-    try:
-        _zone, src = _omi_lookup.lookup(lat, lon)
-        # src is one of 'polygon' (inside a zone) / 'centroid' (nearest
-        # centroid outside polygons) / 'failed'. Only 'polygon' is in-Milan.
-        return src == "polygon"
-    except Exception:
-        return False
+    """Legacy Milan-only wrapper. Use _is_in_city(lat, lon, city=) instead."""
+    return _is_in_city(lat, lon, city="milano")
 
 
 def _photon_geocode(address: str) -> Optional[tuple[float, float]]:
@@ -842,10 +856,13 @@ def enrich(listing: dict, _skip_osrm: bool = False) -> dict:
         return {**_NULL_OMI, "omi_source": "no_coordinates", **_NULL_OVERPASS}
 
     # ── Step 2: OMI polygon lookup ────────────────────────────────────────────
+    # Multi-city: lookup_for_city resolves polygons against the listing's
+    # city. listing['city'] is stamped by the fetcher (CITY_KEY).
+    _listing_city = listing.get("city") or listing.get("city_key") or "milano"
     omi_fields = dict(_NULL_OMI)
     if _OMI_AVAILABLE:
         try:
-            zone, src = _omi_lookup.lookup(lat, lng)
+            zone, src = _omi_lookup.lookup_for_city(lat, lng, city=_listing_city)
             if zone:
                 prefix = "nominatim+" if geocoded else ""
                 omi_fields = {
