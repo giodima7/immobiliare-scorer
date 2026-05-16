@@ -8257,7 +8257,7 @@ let scoreSettings = {   // loaded from /api/scoring-settings, used for badge dat
 // UPDATE THESE QUARTERLY to reflect current market conditions; the
 // disclaimer in the mortgage breakdown surfaces this date to the user.
 const INVESTOR_CONFIG = {
-  rates_set_on: 'April 2026',
+  rates_set_on: 'May 2026',
   // Yield rating thresholds (gross %) — Milan-specific
   // ≥7.0 = high (rare in Milan, signals strong investment)
   // 5.5-7.0 = medium (typical for outer rings, B1/B22/D zones)
@@ -8272,10 +8272,17 @@ const INVESTOR_CONFIG = {
     term_years:     25,
   },
   investment: {
-    rate:           0.042,   // 20-year fixed, second-home premium
+    // Italian banks routinely offer 25-year (sometimes 30-year) fixed
+    // terms on second-home / investment mortgages; the previous 20-year
+    // term inflated the monthly payment by ~17% vs. the realistic case.
+    // Rate softened from 4.2% → 4.0% to match current 2026 market data
+    // (best fixed investment rates Q2 2026 are 3.6-4.2%; 4.0% is the
+    // realistic median, leaving room for borrowers who can't get the
+    // best tier).
+    rate:           0.040,   // 25-year fixed, second-home premium
     ltv:            0.65,    // 65% LTV (downpayment 35%)
     closing_pct:    0.12,    // notary + 9% registry tax (no prima-casa relief)
-    term_years:     20,
+    term_years:     25,
   },
   // ─── Investment cost assumptions for Milan (April 2026) ───────────────
   // These approximate average-case Italian residential investing costs.
