@@ -50,6 +50,7 @@ FIELD_RENAME: dict[str, str] = {
     # Price-floor sanity gate (migration 008): mirrors the absolute_value_gate
     # naming convention so the DB column is camel-free.
     "_excluded":                    "excluded",
+    "_excluded_reason":             "excluded_reason",
     "_price_floor_gate_applied":    "price_floor_gate_applied",
     "_price_floor_reason":          "price_floor_reason",
     # Italian source data uses `spese_condominiali`; the DB stores the
@@ -79,8 +80,10 @@ SCHEMA_COLUMNS: frozenset[str] = frozenset({
     "year_built", "energy_class", "bathrooms", "condominium_fees",
     "heating_type", "is_external", "is_below_ground", "is_ground_floor",
     "is_auction", "is_nuda_proprieta",
-    # ── Sanity gates (migration 008) ────────────────────────────────────
-    "excluded", "price_floor_gate_applied", "price_floor_reason",
+    # ── Sanity gates (migration 008 + 009) ──────────────────────────────
+    "excluded", "excluded_reason",
+    "price_floor_gate_applied", "price_floor_reason",
+    "description",
     # ── Location / proximity ────────────────────────────────────────────
     "latitude", "longitude",
     "omi_zona", "omi_fascia", "omi_descr",

@@ -1386,21 +1386,33 @@ def score_sale_listing(listing: dict, all_listings: list, settings: dict | None 
     if settings is None:
         settings = _load_settings()
 
-    # Price-floor sanity gate — short-circuit before any scoring. A sale
-    # under the per-city OMI minimum is auctions/data-errors/mislabelled
-    # rentals; treat as excluded so the dashboard hides them via the same
-    # filter as is_auction. We still emit a row (rather than returning
-    # None) so the listing's diagnostic fields make it into the DB and
-    # the Data-Quality panel can surface what got rejected.
-    if apply_price_floor_gate(listing):
-        listing["score_total"] = 0
+    # Short-circuit gates — three flavours of listings that should never
+    # carry a score: judicial auctions, nuda-proprietà sales (buyer can't
+    # actually use the property), and sub-floor prices (mislabelled
+    # rentals / data errors). All three set `_excluded=True` so the
+    # dashboard's applySaleFilters hides them via one consolidated check.
+    # The row still gets emitted (rather than returning None) so the
+    # Data-Quality panel can surface what got rejected.
+    def _excluded_zero(reason: str) -> dict:
+        listing["score_total"]    = 0
         listing["score_price"]    = 0
         listing["score_property"] = 0
         listing["score_location"] = 0
         listing["score_penalty"]  = 0
         listing["hidden_gem"]     = False
         listing["good_value"]     = False
+        listing["_excluded"]      = True
+        listing["_excluded_reason"] = reason
         return listing
+
+    if listing.get("is_nuda_proprieta"):
+        return _excluded_zero("Nuda proprietà — usufruct retained by seller")
+    if listing.get("is_auction"):
+        return _excluded_zero("Auction listing (asta giudiziaria)")
+    if apply_price_floor_gate(listing):
+        # apply_price_floor_gate already sets _excluded + _price_floor_reason
+        return _excluded_zero(listing.get("_price_floor_reason")
+                              or "Below per-city €/m² floor")
 
     w_price = settings.get("w_price",    0.45)
     w_prop  = settings.get("w_property", 0.25)

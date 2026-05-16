@@ -767,6 +767,14 @@ def parse_listing(item: dict, city_key: str, city_label: str) -> Optional[dict]:
                          or (re_data.get("category") or {}).get("name", "")
                          if isinstance(re_data.get("category"), dict)
                          else re_data.get("category", "")).lower()
+    # Immobiliare exposes the listing description on either prop or re_data;
+    # take the first 400 chars to keep the keyword scan cheap. The full
+    # description goes into the listing dict too (downstream UI uses it).
+    description    = (prop.get("description")
+                      or re_data.get("description")
+                      or "")
+    _desc_head     = description[:400].lower() if description else ""
+
     is_auction = bool(
         re_data.get("isAuction") or re_data.get("auction")
         or prop.get("isAuction")  or prop.get("auction")
@@ -777,7 +785,17 @@ def parse_listing(item: dict, city_key: str, city_label: str) -> Optional[dict]:
         or "auction" in _contract
         or "auction" in _category
     )
-    is_nuda = "nuda propriet" in _typology_name or "nuda propriet" in _title_lower
+    # Nuda proprietà: Immobiliare almost never puts it in the title (0/65
+    # in our Milan sample); it surfaces in the description body. Match the
+    # same regex Idealista's parser uses so the two scrapers agree on
+    # what counts. "nuda prop" catches the abbreviated form some agents
+    # use; "usufrutto" catches the seller-retains-life-tenancy variant
+    # that's economically equivalent.
+    _NUDA_TOKENS = ("nuda propriet", "nuda prop", "usufrutto",
+                    "diritto di abitazione", "diritto d'uso", "diritto duso")
+    _hay_for_nuda = " ".join((_typology_name, _title_lower, _contract,
+                              _category, _desc_head))
+    is_nuda = any(tok in _hay_for_nuda for tok in _NUDA_TOKENS)
 
     # Mislabelled rental drop: a "sale" listing with price/sqm < €100/m²
     # is a monthly-rental figure that got scraped into the sales feed
@@ -819,6 +837,7 @@ def parse_listing(item: dict, city_key: str, city_label: str) -> Optional[dict]:
         "city_label":      city_label,
         "city_key":        city_key,
         "title":           re_data.get("title", ""),
+        "description":     description,
         "neighbourhood":   neighbourhood,
         "address":         address,
         "latitude":        latitude,
