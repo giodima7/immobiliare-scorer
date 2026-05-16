@@ -778,18 +778,25 @@ def favourites():
 
 @app.route("/rentals")
 def rentals():
-    path = DASHBOARD_DIR / "rentals_latest.json"
+    """
+    Serve the per-city rentals JSON. The dashboard passes ?city=…; we
+    resolve via _resolve_city_path so Milan falls back to the legacy
+    `rentals_latest.json` when the new `milano_rentals_latest.json` hasn't
+    been written yet. Empty array on miss — the JS layer falls through to
+    Supabase, which always knows the city.
+    """
+    city = (request.args.get("city") or "milano").lower()
+    path = _resolve_city_path(city, "rental")
     if not path.exists():
-        # Dashboard's loadRentals will fall through to Supabase on []
-        # (see SupabaseClient.fetchAll). We could hydrate here too, but
-        # an empty response is faster and the JS fallback is well-tested.
         return jsonify([])
     return send_file(path, mimetype="application/json")
 
 
 @app.route("/sales")
 def sales():
-    path = DASHBOARD_DIR / "sales_latest.json"
+    """Per-city sales JSON. Same resolution rules as /rentals."""
+    city = (request.args.get("city") or "milano").lower()
+    path = _resolve_city_path(city, "sale")
     if not path.exists():
         return jsonify([])
     return send_file(path, mimetype="application/json")
