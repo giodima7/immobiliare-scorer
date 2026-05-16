@@ -5834,8 +5834,8 @@ function saveFilters() {
     <label data-i18n="filter.min_rooms">Min rooms</label>
     <input type="number" id="sMinRooms" placeholder="any" data-i18n-placeholder="filter.any" min="1" max="10" step="1" style="width:65px">
   </div>
-  <div class="filter-sep"></div>
-  <div class="filter-group">
+  <div class="filter-sep" id="sFilterMetroSep"></div>
+  <div class="filter-group" id="sFilterMetroSection">
     <label data-i18n="filter.max_metro">Max metro</label>
     <select id="sMaxMetro">
       <option value="" data-i18n="filter.any">Any</option>
@@ -6172,8 +6172,8 @@ function saveFilters() {
         <button class="sort-tab" data-rsource="idealista">Idealista</button>
       </div>
     </div>
-    <div class="filter-sep"></div>
-    <div class="filter-group">
+    <div class="filter-sep" id="rFilterMetroSep"></div>
+    <div class="filter-group" id="rFilterMetroSection">
       <label data-i18n="filter.max_metro">Max metro</label>
       <select id="rMaxMetro">
         <option value="" data-i18n="filter.any">Any</option>
@@ -6797,10 +6797,14 @@ const STRINGS = {
     'tab.sales':'Sales','tab.rentals':'Rentals','tab.map':'Map','tab.stats':'Stats',
     'tab.valuation':'Valuation','tab.settings':'Settings',
     // Header
-    'header.listings_count':'{n} listings · {date}',
+    'header.listings_count':'{n} listings in {city} · {date}',
     'header.favourites':'Favourites','header.sign_in':'Sign in',
     'header.sign_out':'Sign out','header.live':'Live','header.snapshot':'Snapshot',
     'header.run_lume':'▶ Run Lume now','header.zones':'Zones',
+    // City selector (multi-city expansion)
+    'city.milano':'Milan','city.roma':'Rome','city.napoli':'Naples','city.la_maddalena':'La Maddalena',
+    'city.switch':'Switch city','city.no_metro':'no metro',
+    'city.alert_scope':'Alert for {city}',
     // Filters
     'filter.area':'Area','filter.fascia':'Fascia','filter.omi_zone':'OMI Zone',
     'filter.max_rent':'Max rent €/mo','filter.max_price':'Max price €',
@@ -6966,10 +6970,14 @@ const STRINGS = {
     'tab.sales':'Vendita','tab.rentals':'Affitti','tab.map':'Mappa','tab.stats':'Statistiche',
     'tab.valuation':'Valutazione','tab.settings':'Impostazioni',
     // Header
-    'header.listings_count':'{n} annunci · {date}',
+    'header.listings_count':'{n} annunci a {city} · {date}',
     'header.favourites':'Preferiti','header.sign_in':'Accedi',
     'header.sign_out':'Esci','header.live':'Live','header.snapshot':'Snapshot',
     'header.run_lume':'▶ Avvia Lume','header.zones':'Zone',
+    // City selector (multi-city expansion)
+    'city.milano':'Milano','city.roma':'Roma','city.napoli':'Napoli','city.la_maddalena':'La Maddalena',
+    'city.switch':'Cambia città','city.no_metro':'senza metro',
+    'city.alert_scope':'Avviso per {city}',
     // Filters
     'filter.area':'Area','filter.fascia':'Fascia','filter.omi_zone':'Zona OMI',
     'filter.max_rent':'Affitto max €/me','filter.max_price':'Prezzo max €',
@@ -7243,6 +7251,28 @@ function _cityDisplayName(cfg) {
 function updateCityToggleUI() {
   const lbl = document.getElementById('city-btn-label');
   if (lbl) lbl.textContent = _cityDisplayName(_currentCityConfig());
+  updateMetaCity();
+}
+
+// Refresh the meta line's city slot. Standalone so language toggles +
+// city changes + post-load count updates can all reuse it. The actual
+// listings count is owned by loadRentals' meta-writer; this helper
+// keeps the city name fresh without overwriting the count when one
+// is already there.
+function updateMetaCity() {
+  const meta = document.getElementById('meta');
+  if (!meta) return;
+  const cityName = _cityDisplayName(_currentCityConfig());
+  // Only rewrite when the existing text already includes a count
+  // (header.listings_count was applied). The "loading…" placeholder
+  // and Supabase-error states are left alone.
+  const m = meta.textContent.match(/^(\d[\d.,\s]*)\s+(listings|annunci)\b/);
+  if (!m) return;
+  meta.textContent = t('header.listings_count', {
+    n:    parseInt(m[1].replace(/[^\d]/g, ''), 10),
+    city: cityName,
+    date: fmtDate(new Date()),
+  });
 }
 
 function renderCityDropdown() {
@@ -7298,19 +7328,81 @@ function setCity(code) {
   if (typeof loadRentals === 'function') loadRentals();
   // Sales tab loads lazily on first switch; clearing ALL_SALE forces a
   // re-fetch the next time it's selected.
+
+  // Recentre an already-initialised map on the new city. Skipped when
+  // _map hasn't been built yet (first paint will pick up the right
+  // centre via getMapDefaultView).
+  if (typeof _map !== 'undefined' && _map && typeof getMapDefaultView === 'function') {
+    const [_lat, _lng, _z] = getMapDefaultView();
+    try { _map.setView([_lat, _lng], _z); } catch (_) {}
+  }
+  updateMetaCity();
 }
 
 // Hide controls that don't apply to the active city. Currently:
-//   • La Maddalena has no metro → hide the metro filter + reset its value.
-// Future: per-city zone filter rebuild lives here too.
+//   • cities with has_metro === false (e.g. La Maddalena) hide both the
+//     metro filter group and its preceding separator, and reset the value
+//     so an inherited "≤500m" doesn't silently filter out every listing.
 function updateFiltersForCurrentCity() {
-  const cfg = _currentCityConfig();
-  const metroGroups = document.querySelectorAll('#rMaxMetro, #sMaxMetro');
-  metroGroups.forEach(el => {
-    const group = el.closest('.filter-group');
-    if (group) group.style.display = cfg && cfg.has_metro === false ? 'none' : '';
-    if (cfg && cfg.has_metro === false) el.value = '';
+  const cfg     = _currentCityConfig();
+  const noMetro = !!(cfg && cfg.has_metro === false);
+  ['rFilterMetroSection', 'rFilterMetroSep',
+   'sFilterMetroSection', 'sFilterMetroSep'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = noMetro ? 'none' : '';
   });
+  if (noMetro) {
+    ['rMaxMetro', 'sMaxMetro'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+  }
+}
+
+// ── Per-city filter rebuilds ────────────────────────────────────────────────
+// Zone + area dropdowns are derived from the loaded listings, so they have
+// to be rebuilt every time the city changes (or finishes loading). The
+// heavy lifting already lives in _populateOmiZoneFilter /
+// _populateSaleOmiZoneFilter / buildMultiSelect — these wrappers are the
+// single entry-point onDataLoaded() and setCity() call.
+function rebuildZoneFilter() {
+  if (typeof _populateOmiZoneFilter === 'function' && Array.isArray(ALL_RENT)) {
+    _populateOmiZoneFilter(ALL_RENT);
+  }
+  if (typeof _populateSaleOmiZoneFilter === 'function' && Array.isArray(ALL_SALE)) {
+    _populateSaleOmiZoneFilter(ALL_SALE);
+  }
+}
+
+function rebuildAreaFilter() {
+  // Area MSDs (rentals + sales) lazy-build on first use; rebuilding here
+  // keeps their option lists scoped to the active city. The MSDs read from
+  // ALL_RENT / ALL_SALE via their own rebuild hooks, so just nudging
+  // renderRentals/renderSales is enough when a build is already in place.
+  if (typeof renderRentals === 'function' && Array.isArray(ALL_RENT) && ALL_RENT.length) renderRentals();
+  if (typeof renderSales   === 'function' && Array.isArray(ALL_SALE) && ALL_SALE.length) renderSales();
+}
+
+// Single entry-point called after every dataset load (loadRentals /
+// loadSales) so per-city UI stays in sync without each caller having to
+// remember every step.
+function onDataLoaded() {
+  rebuildZoneFilter();
+  rebuildAreaFilter();
+  updateFiltersForCurrentCity();
+}
+
+// Map default view for the active city. Returns [lat, lng, zoom] using
+// values from the cities Supabase row when available, otherwise the
+// fallback constants baked into availableCities. Used by _mapInit() for
+// the very first paint and again whenever the map needs to "reset" with
+// an empty dataset.
+function getMapDefaultView() {
+  const cfg = _currentCityConfig() || {};
+  const lat  = Number.isFinite(cfg.center_lat) ? cfg.center_lat : 45.4642;
+  const lng  = Number.isFinite(cfg.center_lng) ? cfg.center_lng : 9.1900;
+  const zoom = Number.isFinite(cfg.default_zoom) ? cfg.default_zoom : 12;
+  return [lat, lng, zoom];
 }
 
 // Locale-aware date — Italian: "15 mag 2026", English: "15 May 2026".
@@ -8228,6 +8320,14 @@ async function init() {
     }
   }
 
+  // Load the cities config first so currentCity → display name + map
+  // centre + has_metro are accurate before any listings render. The
+  // fallback availableCities baked into the script already covers the
+  // four seeded cities so a failure here is a no-op.
+  try { await loadAvailableCities(); } catch (_) { /* keep fallback */ }
+  updateCityToggleUI();
+  updateFiltersForCurrentCity();
+
   // Load initial data now that IS_LIVE is settled — avoids a race where a
   // standalone loadRentals() call fires before init() and picks the wrong
   // path (Supabase REST in deployed mode vs Flask /rentals locally).
@@ -8251,17 +8351,12 @@ requestAnimationFrame(() => {
   document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
   document.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.dataset.i18nPlaceholder); });
   document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.dataset.i18nTitle); });
-  // City selector — render the current label immediately from the fallback
-  // list, hide controls that don't apply (e.g. metro filter for La
-  // Maddalena), then upgrade availableCities from Supabase in the
-  // background. updateCityToggleUI runs again once the fetch completes
-  // so the pill label reflects any localised display_name from the DB.
+  // City selector — first paint uses the baked-in fallback list. init()
+  // re-runs both updates once loadAvailableCities() resolves, so any
+  // localised display_name / centre / has_metro from Supabase
+  // overwrites this initial render.
   updateCityToggleUI();
   updateFiltersForCurrentCity();
-  loadAvailableCities().then(() => {
-    updateCityToggleUI();
-    updateFiltersForCurrentCity();
-  });
 });
 
 // ── Sales event listeners ─────────────────────────────────────────────────────
@@ -9447,6 +9542,11 @@ async function submitSaveAlert() {
   // Build the row body. clerk_user_id + email + display_name only matter on
   // INSERT (we don't want a PATCH to e.g. silently overwrite display_name
   // with stale Clerk state), so they're added conditionally below.
+  // Multi-city expansion (migration 007): scope every alert to the city
+  // the user is currently viewing. The digest worker honours
+  // digest_filters.cities (TEXT[]) when filtering listings, so an alert
+  // saved on Roma only matches Roma listings even though the user has
+  // Milano alerts too.
   const filterBody = {
     name:             (str('amName') || '').trim() || null,
     max_rent:         num('amMaxRent')   || null,
@@ -9459,6 +9559,7 @@ async function submitSaveAlert() {
     min_energy:       str('amMinEnergy') || null,
     fascia:           fascia ? [fascia] : [],
     omi_zona:         [],
+    cities:           [currentCity],
     gems_filter:      str('amGems')   || 'all',
     source_filter:    str('amSource') || 'all',
     send_time_utc:    _localTimeToUtcString(str('amSendTime') || '07:00'),
@@ -9692,8 +9793,22 @@ if (!window._digestActionDelegatorBound) {
 
 // Build chip labels summarising one saved alert. Order matches the modal's
 // field order so reading the chips left-to-right mirrors filling the form.
+// Localised city display name for an alert row. Returns the city name in
+// the active language (Milan / Milano), or null for alerts that pre-date
+// migration 007 and have an empty cities array (treated as "all cities"
+// historically — we leave the chip off so the card doesn't lie).
+function _cityNameForAlert(f) {
+  const codes = Array.isArray(f && f.cities) ? f.cities : [];
+  if (!codes.length) return null;
+  const cfg = availableCities.find(c => c.code === codes[0]);
+  if (cfg) return _cityDisplayName(cfg);
+  return codes[0];
+}
+
 function _digestChipsForAlert(f) {
   const chips = [];
+  const cityName = _cityNameForAlert(f);
+  if (cityName) chips.push(`📍 ${cityName}`);
   if (f.max_rent)             chips.push(`Max €${f.max_rent}/mo`);
   if (f.min_sqm)              chips.push(`≥${f.min_sqm} m²`);
   if (f.min_rooms)            chips.push(`≥${f.min_rooms} rooms`);
@@ -11406,7 +11521,8 @@ async function loadRentals() {
   }
   ALL_RENT = _dedupListings(raw, true);
   rentFasciaRanges = computeRentFasciaRanges(ALL_RENT);
-  _populateOmiZoneFilter(ALL_RENT);
+  if (typeof onDataLoaded === 'function') onDataLoaded();
+  else _populateOmiZoneFilter(ALL_RENT);
   renderRentals();
   _updateUnmatchedBadge();
   // Replace the "Lume is reading the listings…" placeholder with the real
@@ -11416,7 +11532,9 @@ async function loadRentals() {
   const _meta = document.getElementById('meta');
   if (_meta && ALL_RENT.length) {
     _meta.textContent = t('header.listings_count', {
-      n: ALL_RENT.length, date: fmtDate(new Date()),
+      n:    ALL_RENT.length,
+      city: _cityDisplayName(_currentCityConfig()),
+      date: fmtDate(new Date()),
     });
   }
   // Rentals just changed — invalidate every sales-side cache that depends
@@ -15212,7 +15330,8 @@ async function loadSales() {
   if (!raw) raw = [];
   ALL_SALE = _dedupListings(raw, false);
   saleFasciaRanges = computeSaleFasciaRanges(ALL_SALE);
-  _populateSaleOmiZoneFilter(ALL_SALE);
+  if (typeof onDataLoaded === 'function') onDataLoaded();
+  else _populateSaleOmiZoneFilter(ALL_SALE);
   // Sales just (re)loaded — drop the cache flag. ensureSalesAnalysis() will
   // recompute everything on the next sales tab visit (or right now if the
   // user is already on the sales tab — switchTab/renderSales handle that).
@@ -16472,7 +16591,9 @@ function _mapInit() {
   _mapInitialised = true;
 
   _mapRenderer = _isMobile ? L.canvas({ padding: 0.5 }) : L.svg();
-  _map = L.map('mapContainer').setView([45.4642, 9.1900], 12);
+  const [_mapLat0, _mapLng0, _mapZ0] = (typeof getMapDefaultView === 'function')
+    ? getMapDefaultView() : [45.4642, 9.1900, 12];
+  _map = L.map('mapContainer').setView([_mapLat0, _mapLng0], _mapZ0);
 
   // Lighter tile options on mobile: load only when panning stops, minimal tile buffer
   const tileOpts = {
@@ -16616,7 +16737,9 @@ function _mapRender() {
       const coords = _mapAllListings.map(l => [l.latitude ?? l.lat, l.longitude ?? l.lng ?? l.lon]);
       _map.fitBounds(coords, { padding: [24, 24], maxZoom: 14 });
     } else {
-      _map.setView([45.4642, 9.1900], 12);
+      const [_dLat, _dLng, _dZ] = (typeof getMapDefaultView === 'function')
+        ? getMapDefaultView() : [45.4642, 9.1900, 12];
+      _map.setView([_dLat, _dLng], _dZ);
     }
   }, 50);
 }

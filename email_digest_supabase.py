@@ -162,6 +162,15 @@ def fetch_new_listings_for_user(filters: dict) -> list[dict]:
     if filters.get("omi_zona"):
         z_in = ",".join(filters["omi_zona"])
         params.append(("omi_zona", f"in.({z_in})"))
+    # Multi-city expansion (migration 007). digest_filters.cities is a
+    # TEXT[] of city codes the alert covers (single-city today via the
+    # dashboard, but the schema is multi-ready). Empty / missing array
+    # → no city filter, matching legacy alerts seeded before the column
+    # existed (treated as "any city" so they keep firing).
+    cities = filters.get("cities") or []
+    if cities:
+        c_in = ",".join(cities)
+        params.append(("city", f"in.({c_in})"))
 
     query = urllib.parse.urlencode(params, safe="(),.*")
     return supabase_get(f"listings?{query}")[:50]   # hard cap; build_email further trims to 20
