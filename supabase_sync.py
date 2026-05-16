@@ -59,6 +59,10 @@ FIELD_RENAME: dict[str, str] = {
 SCHEMA_COLUMNS: frozenset[str] = frozenset({
     # ── Identity ────────────────────────────────────────────────────────
     "id", "source", "listing_type",
+    # ── Multi-city (migration 007) ─────────────────────────────────────
+    # City code (e.g. 'milano', 'roma'). Defaults to 'milano' on the DB
+    # side, but every fetcher should stamp listing['city'] explicitly.
+    "city",
     # ── Display ─────────────────────────────────────────────────────────
     "title", "address", "neighbourhood", "city",
     "url", "thumbnail", "photos", "photo_count",
@@ -135,6 +139,16 @@ def listing_to_row(listing: dict, listing_type: str) -> dict:
         if col not in SCHEMA_COLUMNS:
             continue
         row[col] = _normalise(v)
+
+    # Multi-city safety net: the listings.city column stores the lowercase
+    # code ('milano', 'roma') — match the cities table PK. Old scanner
+    # output occasionally writes the display label ("Milano"); fall back
+    # to city_key when the value doesn't look like a code.
+    city_val = row.get("city")
+    if isinstance(city_val, str) and city_val:
+        if city_val != city_val.lower() or " " in city_val:
+            fallback = listing.get("city_key") or city_val.lower().replace(" ", "_")
+            row["city"] = fallback
 
     # The DB has a single unified `price` column for both listing types, but
     # rental scrapers store the monthly rent in `rent_mo`. Without this
@@ -394,8 +408,28 @@ def push_local_json(path: Path, listing_type: str) -> bool:
         return False
 
 
+def _input_path(city: str, listing_type: str) -> Path:
+    """
+    Per-city, per-type input file. Multi-city expansion (migration 007)
+    moved away from the bare rentals_latest.json / sales_latest.json
+    names so multiple cities' scans can co-exist on disk.
+
+    Falls back to the legacy name when the new one is missing — keeps
+    the very first Milan run after the rename working without manual
+    file shuffling.
+    """
+    suffix = "rentals" if listing_type == "rental" else "sales"
+    new    = DASH_DIR / f"{city}_{suffix}_latest.json"
+    if new.exists():
+        return new
+    legacy = DASH_DIR / f"{suffix}_latest.json"
+    return legacy if legacy.exists() else new
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--city", default="milano",
+                        help="City code (e.g. milano, roma, napoli, la_maddalena)")
     parser.add_argument("--type", choices=["rental", "sale"],
                         help="Which listing type to sync (default: both)")
     args = parser.parse_args()
@@ -405,10 +439,11 @@ def main() -> int:
         return 0
 
     t0 = time.time()
+    print(f"[supabase_sync] city={args.city}")
     if args.type in (None, "rental"):
-        sync_file(DASH_DIR / "rentals_latest.json", "rental")
+        sync_file(_input_path(args.city, "rental"), "rental")
     if args.type in (None, "sale"):
-        sync_file(DASH_DIR / "sales_latest.json",  "sale")
+        sync_file(_input_path(args.city, "sale"),   "sale")
     print(f"[supabase_sync] total time: {time.time() - t0:.0f}s")
     return 0
 

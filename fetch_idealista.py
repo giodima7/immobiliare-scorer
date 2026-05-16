@@ -78,16 +78,66 @@ except ImportError:
     _score_all_sales = None
     _explain_all_sales = None
 
-SOURCE             = "idealista"
-IDEALISTA_CITY_BASE = "https://www.idealista.it/affitto-case/milano-milano/"  # city-wide
-IDEALISTA_ZONE_BASE = "https://www.idealista.it/affitto-case/milano/"          # per-zone
-# Keep IDEALISTA_BASE as an alias so any external references still work
-IDEALISTA_BASE = IDEALISTA_CITY_BASE
+SOURCE      = "idealista"
+SOURCE_SALE = "idealista_sale"
 
-SOURCE_SALE              = "idealista_sale"
-IDEALISTA_SALE_CITY_BASE = "https://www.idealista.it/vendita-case/milano-milano/"
-IDEALISTA_SALE_ZONE_BASE = "https://www.idealista.it/vendita-case/milano/"
-SALE_OUTPUT_PATH         = DASHBOARD_DIR / "sales_latest.json"
+# ── City registry ───────────────────────────────────────────────────────────
+# Idealista city slugs ARE NOT always the same as Immobiliare's. La Maddalena
+# uses "la-maddalena" on Idealista vs "la_maddalena" as our internal code.
+CITY_REGISTRY: dict[str, dict] = {
+    "milano":       {"label": "Milano",       "slug": "milano",       "tokens": {"milano", "mi", "milan"}},
+    "roma":         {"label": "Roma",         "slug": "roma",         "tokens": {"roma", "rm", "rome"}},
+    "napoli":       {"label": "Napoli",       "slug": "napoli",       "tokens": {"napoli", "na", "naples"}},
+    "la_maddalena": {"label": "La Maddalena", "slug": "la-maddalena", "tokens": {"la maddalena", "ss", "maddalena"}},
+}
+
+# Defaults — overwritten by _apply_city() once --city parses.
+CITY_KEY    = "milano"
+CITY_LABEL  = "Milano"
+CITY_SLUG   = "milano"
+CITY_TOKENS = {"milano", "mi", "milan"}
+
+# URL templates. The Idealista URL structure is /<intent>/<slug>-<province-slug>/
+# for city-wide pages and /<intent>/<slug>/ for per-zone pages. We mirror the
+# same convention by reusing the same slug for both halves of the city-wide
+# URL — works for every comune we currently support.
+IDEALISTA_CITY_BASE      = f"https://www.idealista.it/affitto-case/{CITY_SLUG}-{CITY_SLUG}/"
+IDEALISTA_ZONE_BASE      = f"https://www.idealista.it/affitto-case/{CITY_SLUG}/"
+IDEALISTA_BASE           = IDEALISTA_CITY_BASE   # external alias
+IDEALISTA_SALE_CITY_BASE = f"https://www.idealista.it/vendita-case/{CITY_SLUG}-{CITY_SLUG}/"
+IDEALISTA_SALE_ZONE_BASE = f"https://www.idealista.it/vendita-case/{CITY_SLUG}/"
+# Output paths derived per city (matches fetch_rentals / fetch_listings).
+OUTPUT_PATH      = DASHBOARD_DIR / f"{CITY_KEY}_rentals_latest.json"
+SALE_OUTPUT_PATH = DASHBOARD_DIR / f"{CITY_KEY}_sales_latest.json"
+
+
+def _apply_city(city: str) -> None:
+    """Update every per-city module global once --city is known."""
+    global CITY_KEY, CITY_LABEL, CITY_SLUG, CITY_TOKENS
+    global IDEALISTA_CITY_BASE, IDEALISTA_ZONE_BASE, IDEALISTA_BASE
+    global IDEALISTA_SALE_CITY_BASE, IDEALISTA_SALE_ZONE_BASE
+    global OUTPUT_PATH, SALE_OUTPUT_PATH
+    if city not in CITY_REGISTRY:
+        raise ValueError(f"unknown city '{city}'; known: {list(CITY_REGISTRY)}")
+    cfg = CITY_REGISTRY[city]
+    CITY_KEY    = city
+    CITY_LABEL  = cfg["label"]
+    CITY_SLUG   = cfg["slug"]
+    CITY_TOKENS = cfg["tokens"]
+    IDEALISTA_CITY_BASE      = f"https://www.idealista.it/affitto-case/{CITY_SLUG}-{CITY_SLUG}/"
+    IDEALISTA_ZONE_BASE      = f"https://www.idealista.it/affitto-case/{CITY_SLUG}/"
+    IDEALISTA_BASE           = IDEALISTA_CITY_BASE
+    IDEALISTA_SALE_CITY_BASE = f"https://www.idealista.it/vendita-case/{CITY_SLUG}-{CITY_SLUG}/"
+    IDEALISTA_SALE_ZONE_BASE = f"https://www.idealista.it/vendita-case/{CITY_SLUG}/"
+    OUTPUT_PATH              = DASHBOARD_DIR / f"{CITY_KEY}_rentals_latest.json"
+    SALE_OUTPUT_PATH         = DASHBOARD_DIR / f"{CITY_KEY}_sales_latest.json"
+    # fetch_rentals reads OUTPUT_PATH from its own module — set there too
+    # so legacy paths from imports stay in sync.
+    try:
+        from fetch_rentals import _apply_city as _apply_fr
+        _apply_fr(city)
+    except Exception:
+        pass
 
 # Path to the neighbourhood synonym map: Idealista sub-zone name → Immobiliare canonical name
 _SYNONYMS_PATH          = BASE_DIR / "neighbourhood_synonyms.json"
@@ -825,7 +875,9 @@ def _extract_neighbourhood(address: str) -> str:
     Returns the last meaningful segment before city suffixes.
     City segments are detected by their first token being a known city name.
     """
-    _CITY_TOKENS = {"milano", "mi", "milan"}
+    # Use the module-level CITY_TOKENS so the heuristic adapts to
+    # whichever city we're scanning (Roma → {"roma","rm","rome"}).
+    _CITY_TOKENS = CITY_TOKENS
     parts = [p.strip() for p in address.split(",") if p.strip()]
     # Drop any part whose first word is a city name (catches "Milano", "Milano MI", "MI")
     parts = [p for p in parts
@@ -930,7 +982,8 @@ def parse_idealista_listing(raw: dict) -> Optional[dict]:
         # ── Identity ──────────────────────────────────────────────────────────
         "id":                 f"id_{listing_id}",   # "id_" prefix prevents collisions
         "source":             SOURCE,               # "idealista"
-        "city":               CITY_LABEL,
+        "city":               CITY_KEY,
+        "city_label":         CITY_LABEL,
         "city_key":           CITY_KEY,
         "title":              raw.get("title", "").strip(),
         "neighbourhood":      neighbourhood,
@@ -1060,7 +1113,8 @@ def parse_idealista_sale_listing(raw: dict) -> Optional[dict]:
     return {
         "id":              f"id_{listing_id}",
         "source":          SOURCE_SALE,          # "idealista_sale"
-        "city":            CITY_LABEL,
+        "city":            CITY_KEY,
+        "city_label":      CITY_LABEL,
         "city_key":        CITY_KEY,
         "title":           raw.get("title", "").strip(),
         "neighbourhood":   neighbourhood,
@@ -1959,8 +2013,11 @@ def daemon_loop(args):
 
 def parse_args():
     p = argparse.ArgumentParser(
-        description="Fetch Milano rental listings from Idealista.it and score against OMI."
+        description="Fetch rental/sale listings for an Italian city from Idealista.it and score against OMI."
     )
+    p.add_argument("--city",      type=str,   default="milano",
+                   choices=list(CITY_REGISTRY.keys()),
+                   help="City to scan (default: milano)")
     p.add_argument("--pages",     type=int,   default=None,
                    help="Pages to fetch (approx 30 listings/page, default from scan_prefs.json)")
     p.add_argument("--areas",     type=str,   default="",
@@ -1988,6 +2045,10 @@ def parse_args():
 
 def main():
     args = parse_args()
+    # Rebind every per-city module global (URLs, paths, tokens) before
+    # the scan logic kicks in. This also recurses into fetch_rentals
+    # so its OUTPUT_PATH / SEEN_IDS_PATH match.
+    _apply_city(args.city)
 
     # Apply dashboard scan preferences as defaults.
     # Explicit CLI flags (even 0) always win — prefs only fill in when arg is None.

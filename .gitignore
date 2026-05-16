@@ -66,12 +66,20 @@ omi_data/*.kml
 
 # Keep state files tracked (updated by GitHub Actions daily scan).
 # Listing data lives in Supabase now — never commit the JSON snapshots.
+# Per-city naming (migration 007): seen_ids_{city}.json instead of one
+# shared seen_ids.json. enriched_cache stays shared because listing IDs
+# are globally unique across cities.
 !enriched_cache.json
-!seen_ids.json
+!seen_ids_*.json
+seen_ids.json
 rentals_latest.json
 sales_latest.json
+*_rentals_latest.json
+*_sales_latest.json
 dashboard/rentals_latest.json
 dashboard/sales_latest.json
+dashboard/*_rentals_latest.json
+dashboard/*_sales_latest.json
 
 # wrangler files
 .wrangler

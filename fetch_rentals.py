@@ -34,14 +34,19 @@ from urllib.parse import urlencode
 import nodriver as uc
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
+# Multi-city expansion (migration 007): paths that vary per scanned
+# city — SEEN_IDS_PATH, OUTPUT_PATH — are reassigned by _apply_city()
+# from main() once --city is parsed. Module-level helpers read the
+# globals at call time, so the late-binding pattern is safe.
 BASE_DIR         = Path(__file__).parent
 DASHBOARD_DIR    = BASE_DIR / "dashboard"
-SEEN_IDS_PATH        = BASE_DIR / "seen_ids.json"
 STATUS_PATH          = BASE_DIR / "scanner_status.json"
 DIGEST_SENT_PATH     = BASE_DIR / ".digest_sent_date"
-OUTPUT_PATH          = DASHBOARD_DIR / "rentals_latest.json"
 CUSTOM_MAPPINGS_PATH = BASE_DIR / "custom_omi_mappings.json"
 AREA_SETTINGS_PATH   = BASE_DIR / "area_settings.json"
+# Defaults — overwritten by _apply_city() once main() parses --city.
+SEEN_IDS_PATH    = BASE_DIR / "seen_ids_milano.json"
+OUTPUT_PATH      = DASHBOARD_DIR / "milano_rentals_latest.json"
 
 # ── Staleness thresholds ──────────────────────────────────────────────────────
 # A listing is "stale" (probably off-market) once it has been absent from
@@ -140,9 +145,42 @@ def _load_active_areas() -> list:
         except Exception:
             pass
     return []
+# ── City registry ──────────────────────────────────────────────────────────────
+# Mirrors the Supabase cities table and the entries in omi_lookup.py's
+# CITY_REGISTRY. Lookup at startup translates the --city arg into the
+# label / URL slug the Immobiliare.it scraper needs.
+CITY_REGISTRY: dict[str, dict] = {
+    "milano":       {"label": "Milano",       "slug": "milano"},
+    "roma":         {"label": "Roma",         "slug": "roma"},
+    "napoli":       {"label": "Napoli",       "slug": "napoli"},
+    "la_maddalena": {"label": "La Maddalena", "slug": "la-maddalena"},
+}
+
+# Defaults — overwritten by _apply_city() from main() once --city parses.
 CITY_KEY   = "milano"
 CITY_LABEL = "Milano"
 CITY_SLUG  = "milano"
+
+
+def _apply_city(city: str) -> None:
+    """
+    Update every per-city module global from a single --city arg. Called
+    at the top of main() before any scan / fetch / OMI logic runs.
+
+    Reassigning module-level globals (rather than passing city through
+    every function signature) keeps the change small relative to the
+    1,600-line file and avoids breaking any internal callers — Python's
+    late binding means helpers see the updated values.
+    """
+    global CITY_KEY, CITY_LABEL, CITY_SLUG, SEEN_IDS_PATH, OUTPUT_PATH
+    if city not in CITY_REGISTRY:
+        raise ValueError(f"unknown city '{city}'; known: {list(CITY_REGISTRY)}")
+    cfg = CITY_REGISTRY[city]
+    CITY_KEY      = city
+    CITY_LABEL    = cfg["label"]
+    CITY_SLUG     = cfg["slug"]
+    SEEN_IDS_PATH = BASE_DIR      / f"seen_ids_{city}.json"
+    OUTPUT_PATH   = DASHBOARD_DIR / f"{city}_rentals_latest.json"
 
 DAEMON_INTERVAL_SEC = 60 * 60   # 60 minutes
 DIGEST_HOUR         = 8          # send daily digest at 08:xx local time
@@ -777,8 +815,14 @@ def parse_rental(item: dict) -> Optional[dict]:
     return {
         "id":                 listing_id,
         "source":             "immobiliare",
-        "city":               CITY_LABEL,
-        "city_key":           CITY_KEY,
+        # `city` is the lowercase ISTAT-style code stored in Supabase
+        # (matches the cities table primary key + the listings.city
+        # column from migration 007). `city_label` is the display name.
+        "city":               CITY_KEY,
+        "city_label":         CITY_LABEL,
+        "city_key":           CITY_KEY,    # kept for back-compat with
+                                           # callers that still read it
+                                           # under the old name
         "title":              re_data.get("title", ""),
         "neighbourhood":      neighbourhood,
         "address":            address,
@@ -871,7 +915,7 @@ async def _fetch_async(pages: int, area_slugs: list, max_rent: int,
                     try:
                         actual_href = await tab.evaluate("window.location.href")
                         if actual_href:
-                            m = _re.search(r'/milano/([^/?#]+)', actual_href)
+                            m = _re.search(rf'/{_re.escape(CITY_SLUG)}/([^/?#]+)', actual_href)
                             if m:
                                 resolved = m.group(1)
                                 if resolved != canonical_slug:
@@ -1127,17 +1171,27 @@ def score_all(raw: list, comps_pool: list | None = None) -> list:
 # ── Persistence helpers ────────────────────────────────────────────────────────
 
 def load_seen_ids() -> dict:
-    if SEEN_IDS_PATH.exists():
+    # Try the per-city file first (new format from migration 007), fall
+    # back to the legacy shared seen_ids.json so an existing Milan repo
+    # keeps its dedup history through the rename.
+    paths = [SEEN_IDS_PATH]
+    if CITY_KEY == "milano":
+        paths.append(BASE_DIR / "seen_ids.json")
+    for p in paths:
+        if not p.exists():
+            continue
         try:
-            raw = json.loads(SEEN_IDS_PATH.read_text())
+            raw = json.loads(p.read_text())
             if isinstance(raw, list):
                 today = str(date.today())
                 migrated = {str(id_): {"first_seen_date": today, "last_seen_date": today} for id_ in raw}
-                print(f"  [migrate] seen_ids.json: migrated {len(migrated)} IDs to dict format")
+                print(f"  [migrate] {p.name}: migrated {len(migrated)} IDs to dict format")
                 return migrated
+            if p != SEEN_IDS_PATH:
+                print(f"  [migrate] reading legacy {p.name} — will write to {SEEN_IDS_PATH.name}")
             return raw
         except Exception:
-            pass
+            continue
     return {}
 
 
@@ -1618,8 +1672,11 @@ def daemon_loop(args):
 
 def parse_args():
     p = argparse.ArgumentParser(
-        description="Fetch Milano rental listings and score against OMI rent benchmarks."
+        description="Fetch rental listings for an Italian city and score them against OMI rent benchmarks."
     )
+    p.add_argument("--city",     type=str,   default="milano",
+                   choices=list(CITY_REGISTRY.keys()),
+                   help="City to scan (default: milano)")
     p.add_argument("--pages",    type=int,   default=3,
                    help="Pages to fetch (25 listings/page, default 3)")
     p.add_argument("--areas",    type=str,   default="",
@@ -1641,6 +1698,9 @@ def parse_args():
 
 def main():
     args = parse_args()
+    # First thing — rebind every per-city module global so the rest of
+    # the run (paths, URL slug, listings stamp) targets the right city.
+    _apply_city(args.city)
 
     # Apply dashboard prefs as defaults when CLI args are at their zero/default values.
     # Explicit CLI overrides (e.g. --pages 10 --max-rent 2500) always win.

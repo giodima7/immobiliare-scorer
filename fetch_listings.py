@@ -762,7 +762,10 @@ def parse_listing(item: dict, city_key: str, city_label: str) -> Optional[dict]:
     return {
         "id":              str(listing_id),
         "source":          "sale",
-        "city":            city_label,
+        # `city` = lowercase code (Supabase listings.city); `city_label`
+        # = display name. `city_key` kept for back-compat callers.
+        "city":            city_key,
+        "city_label":      city_label,
         "city_key":        city_key,
         "title":           re_data.get("title", ""),
         "neighbourhood":   neighbourhood,
@@ -1057,7 +1060,13 @@ def _stamp_and_apply_staleness(scored: list, latest_path: str) -> list:
     return keep_after_trim
 
 
-def export(listings: list, prefix: str):
+def export(listings: list, prefix: str, city: str | None = None):
+    """
+    Export scored listings. `city` (if set) is used to derive the per-city
+    dashboard mirror path (e.g. dashboard/milano_sales_latest.json).
+    When city is None the legacy combined dashboard/sales_latest.json is
+    used — back-compat for --all-cities runs.
+    """
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     csv_path  = f"{prefix}_{ts}.csv"
     json_path = f"{prefix}_{ts}.json"
@@ -1101,7 +1110,8 @@ def export(listings: list, prefix: str):
     import os as _os
     dashboard_dir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "dashboard")
     _os.makedirs(dashboard_dir, exist_ok=True)
-    latest_path = _os.path.join(dashboard_dir, "sales_latest.json")
+    latest_name = f"{city}_sales_latest.json" if city else "sales_latest.json"
+    latest_path = _os.path.join(dashboard_dir, latest_name)
     merged = _stamp_and_apply_staleness(json_listings, latest_path)
     write_snapshot(latest_path, merged)
 
@@ -1220,8 +1230,11 @@ def main():
     # Sort by score descending
     scored.sort(key=lambda x: x.get("score_total", 0), reverse=True)
 
-    # Export
-    csv_path, json_path = export(scored, args.output)
+    # Export — pass the city for per-city dashboard mirror filename when
+    # the run scanned a single city (matrix workflow path). Multi-city
+    # runs fall back to legacy combined sales_latest.json.
+    _single_city = cities[0] if len(cities) == 1 else None
+    csv_path, json_path = export(scored, args.output, city=_single_city)
 
     # Summary
     top5 = scored[:5]

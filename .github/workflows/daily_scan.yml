@@ -1,95 +1,117 @@
 name: Scan Listings (daily)
 
+# Per-city matrix: each city's scan runs as an independent job step
+# (sequentially on the single self-hosted Mac runner). One city failing
+# never blocks the others — fail-fast disabled. Each step ends by syncing
+# its city's rows to Supabase and committing per-city state files.
+
 on:
   schedule:
     - cron: '0 10 * * *'   # 10:00 UTC = 12:00 CEST / 11:00 CET
-  workflow_dispatch:         # allows manual trigger from GitHub UI
+  workflow_dispatch:
     inputs:
+      city:
+        description: 'City to scan (leave empty for all)'
+        required: false
+        default: ''
+        type: choice
+        options: ['', 'milano', 'roma', 'napoli', 'la_maddalena']
       pages:
         description: 'Pages per area (overrides scan_prefs.json)'
         required: false
         default: ''
         type: string
 
-# Opt JavaScript-based actions into Node 24 ahead of GitHub's
-# 2026-09-16 removal of Node 20 from the runner image. Harmless on the
-# self-hosted Mac (its own Node version is independent) and saves a
-# silent break later when the default flips.
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
   scan:
-    # Runs on your local Mac via the GitHub Actions self-hosted runner.
-    # Works directly in the project folder so scan_prefs.json and
-    # area_settings.json always reflect whatever you configured in the dashboard.
     runs-on: self-hosted
     timeout-minutes: 120
     defaults:
       run:
         working-directory: /Users/giovannidimartino/Downloads/immobiliare-scorer
+    strategy:
+      # Single Mac runner → each matrix entry runs serially. Disabled
+      # fail-fast so a single-city failure doesn't abort the rest.
+      fail-fast: false
+      matrix:
+        city: [milano, roma, napoli, la_maddalena]
 
     steps:
       - name: Pull latest code
+        # Skip the city loop when workflow_dispatch picked one specific city.
+        if: ${{ inputs.city == '' || inputs.city == matrix.city }}
         run: git pull origin main
 
       - name: Install dependencies
+        if: ${{ inputs.city == '' || inputs.city == matrix.city }}
         run: pip3 install -r requirements.txt
 
-      - name: Run rentals scanner
+      - name: Run rentals scanner — ${{ matrix.city }}
+        if: ${{ inputs.city == '' || inputs.city == matrix.city }}
         env:
           IDEALISTA_KEY: ${{ secrets.IDEALISTA_KEY }}
           IDEALISTA_SECRET: ${{ secrets.IDEALISTA_SECRET }}
-        run: python3 fetch_rentals.py
+        run: python3 fetch_rentals.py --city ${{ matrix.city }}
 
-      - name: Run Idealista scanner
+      - name: Run Idealista scanner — ${{ matrix.city }}
+        if: ${{ inputs.city == '' || inputs.city == matrix.city }}
         env:
           IDEALISTA_KEY: ${{ secrets.IDEALISTA_KEY }}
           IDEALISTA_SECRET: ${{ secrets.IDEALISTA_SECRET }}
-        run: python3 fetch_idealista.py
+        run: python3 fetch_idealista.py --city ${{ matrix.city }}
         continue-on-error: true
 
-      - name: Run sales scanner
-        run: python3 fetch_listings.py
+      - name: Run sales scanner — ${{ matrix.city }}
+        if: ${{ inputs.city == '' || inputs.city == matrix.city }}
+        run: python3 fetch_listings.py --city ${{ matrix.city }}
         continue-on-error: true
 
       - name: Trim old cache entries
+        if: ${{ inputs.city == '' || inputs.city == matrix.city }}
         run: python3 trim_cache.py --max-age-days 90
+        continue-on-error: true
 
-      - name: Print scan summary
+      - name: Print scan summary — ${{ matrix.city }}
+        if: ${{ inputs.city == '' || inputs.city == matrix.city }}
         run: |
           python3 -c "
-          import json
-          r = json.load(open('dashboard/rentals_latest.json'))
-          print(f'Rentals: {len(r)} listings')
-          s = json.load(open('dashboard/sales_latest.json'))
-          print(f'Sales: {len(s)} listings')
-          c = json.load(open('enriched_cache.json'))
-          print(f'Cache: {len(c)} enriched entries')
-          gems = [x for x in r if x.get('hidden_gem')]
-          print(f'Hidden gems: {len(gems)}')
+          import json, os
+          city = '${{ matrix.city }}'
+          for kind in ('rentals', 'sales'):
+              path = f'dashboard/{city}_{kind}_latest.json'
+              if os.path.exists(path):
+                  data = json.load(open(path))
+                  print(f'{city}/{kind}: {len(data)} listings')
+              else:
+                  print(f'{city}/{kind}: file missing — skipping summary')
           "
 
-      # Supabase is the sole data source for the deployed dashboard. If this
-      # step fails the dashboard goes stale until the next run, so let the
-      # job fail rather than silently swallowing the error.
-      - name: Sync listings to Supabase
+      # Supabase is the sole data source for the deployed dashboard.
+      # Each city's listings get tagged with city='{matrix.city}' inside
+      # supabase_sync, so cross-city queries on the dashboard filter cleanly.
+      - name: Sync listings to Supabase — ${{ matrix.city }}
+        if: ${{ inputs.city == '' || inputs.city == matrix.city }}
         env:
           SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: |
-          python3 supabase_sync.py --type rental
-          python3 supabase_sync.py --type sale
+          python3 supabase_sync.py --city ${{ matrix.city }} --type rental
+          python3 supabase_sync.py --city ${{ matrix.city }} --type sale
 
-      # Only state files get committed — enriched_cache.json carries the
-      # per-listing enrichment cache across runs, seen_ids.json carries the
-      # dedup history. The listing JSONs themselves are now gitignored
-      # (Supabase serves them at runtime).
-      - name: Commit and push updated state
+      # Per-city state files. The seen_ids file is city-specific
+      # (seen_ids_{city}.json) so each city's dedup history is isolated.
+      # The enrichment cache currently stays shared (enriched_cache.json) —
+      # listing IDs are globally unique across cities, so a single cache
+      # is fine.
+      - name: Commit and push updated state — ${{ matrix.city }}
+        if: ${{ inputs.city == '' || inputs.city == matrix.city }}
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add enriched_cache.json
-          git add seen_ids.json
-          git diff --staged --quiet || git commit -m "chore: daily scan $(date -u '+%Y-%m-%d %H:%M UTC')"
+          git add seen_ids_${{ matrix.city }}.json || true
+          git add enriched_cache.json || true
+          git diff --staged --quiet || git commit -m "chore: daily scan ${{ matrix.city }} $(date -u '+%Y-%m-%d %H:%M UTC')"
           git push
