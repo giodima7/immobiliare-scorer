@@ -8295,7 +8295,21 @@ const INVESTOR_CONFIG = {
     management_pct_of_rent:   0.05,   // self-managed with light support
     imu_pct_of_price:         0.004,  // IMU on second home ≈ 0.4% of price
     maintenance_pct_of_price: 0.003,  // in-flat maintenance reserve only
-    condo_per_sqm_fallback:   5,      // €/m²/mo when condominium_fees missing
+    condo_per_sqm_fallback:   5,      // €/m²/mo when condominium_fees missing — Milan-tier default
+    // Per-city overrides for the condo fallback. Milan stays at the
+    // city-baseline €5/m²/mo (€875/mo for a 175m² flat — high-end
+    // doorman/lift building). Naples/Rome/La Maddalena buildings
+    // typically charge a fraction of that because labour + utility
+    // costs are lower and lifts/doormen are rarer outside the centre.
+    // Sources: typical 2024-2026 condo-bill averages from Idealista
+    // market reports + spot-check of listings with disclosed
+    // spese_condominiali.
+    condo_per_sqm_fallback_by_city: {
+      milano:       5,    // baseline (Milan)
+      roma:         3,    // ~60% of Milan
+      napoli:       2,    // ~40% of Milan
+      la_maddalena: 1.5,  // small-island buildings, low service tier
+    },
   },
 };
 
@@ -12846,8 +12860,16 @@ function computeYieldMetrics(sale) {
   const c = INVESTOR_CONFIG.costs;
   const annualRent = rent * 12;
   const condoKnown   = !!(sale.spese_condominiali || sale.condominium_fees);
+  // Per-city condo fallback so Naples/Rome/La Maddalena don't get
+  // billed Milan-tier €5/m²/mo when their disclosed condo fees are
+  // missing (which is most listings). Falls back to the baseline for
+  // any unknown city.
+  const _city = (sale.city || 'milano').toLowerCase();
+  const _condoRate = (c.condo_per_sqm_fallback_by_city
+                      && c.condo_per_sqm_fallback_by_city[_city])
+                    ?? c.condo_per_sqm_fallback;
   const condoMonthly = sale.spese_condominiali || sale.condominium_fees ||
-                       (sqm > 0 ? Math.round(sqm * c.condo_per_sqm_fallback) : 0);
+                       (sqm > 0 ? Math.round(sqm * _condoRate) : 0);
   const condoAnnual       = condoMonthly * 12;
   const vacancyAnnual     = rent * c.vacancy_months_per_year;
   const managementAnnual  = annualRent * c.management_pct_of_rent;
@@ -15197,9 +15219,15 @@ function computeCarryingCosts(listing, durationMonths) {
 
   const monthlyMortgage = mortgage.investment.monthly_payment;
   const imuMonthly      = (listing.price * c.imu_pct_of_price) / 12;
+  // Per-city condo fallback — same lookup as computeYieldMetrics so the
+  // renovation-carrying-cost projection matches the cash-flow card.
+  const _city = (listing.city || 'milano').toLowerCase();
+  const _condoRate = (c.condo_per_sqm_fallback_by_city
+                      && c.condo_per_sqm_fallback_by_city[_city])
+                    ?? c.condo_per_sqm_fallback;
   const condoMonthly    = listing.spese_condominiali
                        || listing.condominium_fees
-                       || (sqm * c.condo_per_sqm_fallback);
+                       || (sqm * _condoRate);
 
   const monthlyHold = monthlyMortgage + imuMonthly + condoMonthly;
   const total       = monthlyHold * durationMonths + RENO_ONE_TIME_COSTS;
