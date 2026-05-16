@@ -301,16 +301,21 @@ def score_reasons(listing: dict) -> list[dict]:
     line_str   = f" ({metro_line})" if metro_line else ""
     name_str   = f" to {metro_name}" if metro_name else " to nearest metro"
     if metro_min is not None:
+        # Bake the parens into `line` so the i18n template can be a flat
+        # "{min} min to {name}{line}" — when there's no line we send "",
+        # when there is we send " (M1)". Avoids the empty "()" the
+        # dashboard was rendering for listings without a metro_nearest_line.
+        line_var = f" ({metro_line})" if metro_line else ""
         if metro_min <= 3:
             add("Location", "positive", 7,
                 f"{metro_min} min walk{name_str}{line_str}",
                 "reason.location.very_close",
-                {"min": metro_min, "name": metro_name or "nearest metro", "line": metro_line or ""})
+                {"min": metro_min, "name": metro_name or "nearest metro", "line": line_var})
         elif metro_min <= 7:
             add("Location", "positive", 4,
                 f"{metro_min} min{name_str}{line_str}",
                 "reason.location.close",
-                {"min": metro_min, "name": metro_name or "nearest metro", "line": metro_line or ""})
+                {"min": metro_min, "name": metro_name or "nearest metro", "line": line_var})
         elif metro_min >= 18:
             add("Location", "negative", 6,
                 f"Far from metro — {metro_min} min walk",
