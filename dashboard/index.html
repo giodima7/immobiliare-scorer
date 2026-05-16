@@ -4399,6 +4399,47 @@ body.detail-page-active .filter-bar { display: none !important; }
 }
 .btn-scan-secondary:hover { border-color: var(--border-strong); background: var(--bg-card); }
 
+/* ── Scan Areas: per-city tab row ─────────────────────────────────── */
+.scan-areas-city-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.scan-areas-city-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--radius-full);
+  border: 1.5px solid var(--border);
+  background: var(--bg-muted);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+  user-select: none;
+}
+.scan-areas-city-tab:hover { border-color: var(--border-strong); color: var(--text-primary); }
+.scan-areas-city-tab.is-active {
+  background: var(--green-light);
+  border-color: var(--green-deep);
+  color: var(--green-deep);
+}
+.scan-areas-city-tab .city-tab-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg-card);
+  border-radius: var(--radius-full);
+  padding: 1px 7px;
+}
+.scan-areas-city-tab.is-active .city-tab-count {
+  color: var(--green-deep);
+  background: white;
+}
+
 /* ── Enrichment panel ────────────────────────────────────────────────────
    Per-city × per-kind progress rows, rendered in #enrichmentPanelBody by
    _renderEnrichmentPanel() on every /scanner-status tick. The "Run all"
@@ -6866,6 +6907,73 @@ function saveFilters() {
     </div>
   </div>
 
+  <!-- ── Scan Areas (per-city) ─────────────────────────────────────
+       Sits right under the Scanner card so the two scan-config panels
+       read as one logical unit. A city tab row at the top picks which
+       city the area picker / save target. Reads/writes
+       /area-settings?city=… which maps to area_settings_{city}.json
+       on disk (Milan keeps the legacy un-prefixed file). -->
+  <div class="settings-card" id="scanAreasCard" hidden>
+    <div class="settings-card-header">
+      <div>
+        <h2 class="settings-card-title">📍 Scan Areas</h2>
+        <p class="settings-card-subtitle">
+          Choose which neighbourhoods of each city Lume scans. Active areas
+          are passed to both <strong>Immobiliare.it</strong> and
+          <strong>Idealista.it</strong>. Saved per city in
+          <code>area_settings_{city}.json</code>. Click an area on the left
+          to highlight, then → to add. ← clears all.
+        </p>
+      </div>
+    </div>
+
+    <!-- Per-city tab row. Click a tab to load that city's saved areas.
+         The active tab drives /area-settings?city= for both GET + POST. -->
+    <div class="settings-section-label">City</div>
+    <div class="scan-areas-city-tabs" id="scanAreasCityTabs">
+      <!-- populated by _renderScanAreasCityTabs() -->
+    </div>
+
+    <!-- Non-Milan cities don't have a baked-in neighbourhood list yet —
+         show a friendly note so the user knows the picker is Milan-only
+         for now. fetch_rentals.py treats an empty area list as "scan
+         entire city", so a blank Roma/Napoli config still works. -->
+    <div id="scanAreasNoPicker" style="display:none;padding:12px 14px;background:var(--bg-muted);border-radius:var(--radius-md);font-size:13px;color:var(--text-secondary);line-height:1.6">
+      No pre-baked neighbourhood list for this city yet — the scanner will
+      cover the entire municipality. Leaving this card empty is the right
+      default for Roma, Napoli, and La Maddalena until per-city area lists
+      land. Saved areas (if any) are still honoured by
+      <code>area_settings_{city}.json</code>.
+    </div>
+
+    <div id="settingsLoading" style="color:var(--muted);font-size:13px;margin-top:14px">Loading areas…</div>
+    <div id="areaPickerUI" style="display:none;margin-top:14px">
+      <div style="display:grid;grid-template-columns:1fr 44px 1fr;gap:12px;align-items:start">
+        <!-- Left: available areas -->
+        <div>
+          <div class="settings-section-label">Available</div>
+          <input type="text" id="areaPickerSearch" placeholder="Search areas…" autocomplete="off"
+                 style="width:100%;box-sizing:border-box;border:1.5px solid var(--border);border-radius:var(--radius-md);padding:8px 10px;font-size:13px;background:var(--bg-muted);color:var(--text-primary);margin-bottom:6px;outline:none">
+          <div id="areaPickerAvail" style="border:1.5px solid var(--border);border-radius:var(--radius-md);overflow-y:auto;height:280px;background:var(--bg-muted)"></div>
+        </div>
+        <!-- Center: add / remove buttons -->
+        <div style="display:flex;flex-direction:column;gap:8px;padding-top:38px;align-items:center">
+          <button id="btnAreaAdd"    title="Add selected (or all filtered)" style="width:40px;height:40px;border-radius:var(--radius-md);border:1.5px solid var(--border);background:var(--bg-card);cursor:pointer;font-size:16px;color:var(--green-deep)">→</button>
+          <button id="btnAreaRemove" title="Clear all active areas"         style="width:40px;height:40px;border-radius:var(--radius-md);border:1.5px solid var(--border);background:var(--bg-card);cursor:pointer;font-size:16px;color:var(--text-muted)">←</button>
+        </div>
+        <!-- Right: active areas -->
+        <div>
+          <div class="settings-section-label">Active <span id="areaActiveCount" style="font-weight:400;text-transform:none"></span></div>
+          <div id="areaPickerActive" style="border:1.5px solid var(--border);border-radius:var(--radius-md);overflow-y:auto;height:280px;background:var(--bg-muted);margin-top:23px"></div>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;margin-top:18px">
+      <button class="btn-scan-start" id="btnSettingsSave">💾 Save areas</button>
+      <span class="settings-status" id="settingsStatus"></span>
+    </div>
+  </div>
+
   <!-- ── Daily email alert (Supabase digest_filters) ─────────────────
        Populated by renderDigestSettingsSection() the first time the
        Settings tab is shown after sign-in. Hidden when signed out (the
@@ -6950,47 +7058,6 @@ function saveFilters() {
       <span class="settings-status" id="gemSettingsStatus"></span>
     </div>
   </div>
-
-  <!-- ── Scan Areas ──────────────────────────────────────────────── -->
-  <div class="settings-card">
-    <div class="settings-card-header">
-      <div>
-        <h2 class="settings-card-title">📍 Scan Areas</h2>
-        <p class="settings-card-subtitle">
-          Choose which Milan neighbourhoods to scan. Active areas are used for both
-          <strong>Immobiliare.it</strong> and <strong>Idealista.it</strong> — Idealista zones
-          are matched automatically from your selection. Saved to <code>area_settings.json</code>.
-          Click an area on the left to highlight it, then → to add. Use ← to remove all.
-        </p>
-      </div>
-    </div>
-  <div id="settingsLoading" style="color:var(--muted);font-size:13px">Loading areas…</div>
-  <div id="areaPickerUI" style="display:none">
-    <div style="display:grid;grid-template-columns:1fr 44px 1fr;gap:8px;align-items:start">
-      <!-- Left: available areas -->
-      <div>
-        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">Available</div>
-        <input type="text" id="areaPickerSearch" placeholder="Search areas…" autocomplete="off"
-               style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px;background:var(--bg);color:var(--text);margin-bottom:4px;outline:none">
-        <div id="areaPickerAvail" style="border:1px solid var(--border);border-radius:6px;overflow-y:auto;height:240px;background:var(--bg)"></div>
-      </div>
-      <!-- Center: add / remove buttons -->
-      <div style="display:flex;flex-direction:column;gap:8px;padding-top:32px;align-items:center">
-        <button id="btnAreaAdd"    title="Add selected (or all filtered)" style="width:36px;height:36px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:15px;color:var(--accent)">→</button>
-        <button id="btnAreaRemove" title="Clear all active areas"         style="width:36px;height:36px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:15px;color:var(--muted)">←</button>
-      </div>
-      <!-- Right: active areas -->
-      <div>
-        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">Active <span id="areaActiveCount" style="font-weight:400;text-transform:none"></span></div>
-        <div id="areaPickerActive" style="border:1px solid var(--border);border-radius:6px;overflow-y:auto;height:240px;background:var(--bg)"></div>
-      </div>
-    </div>
-  </div>
-  <div style="display:flex;align-items:center;gap:12px;margin-top:16px">
-    <button class="settings-save-btn" id="btnSettingsSave">💾 Save areas</button>
-    <span class="settings-status" id="settingsStatus"></span>
-  </div>
-  </div><!-- /.settings-card Scan Areas -->
 
   <!-- ── Data Quality ────────────────────────────────────────── -->
   <div class="settings-card">
@@ -17726,7 +17793,44 @@ document.getElementById('insightsModeSale')?.addEventListener('click', () => set
 document.getElementById('insightsAgencySearch')?.addEventListener('input', _renderAgencyTable);
 
 // ── Settings tab ─────────────────────────────────────────────────────────────
-let _settingsLoaded = false;
+// _settingsLoaded is keyed on (city, IS_LIVE) so switching the city tab
+// inside the Scan Areas card forces a fresh fetch. _settingsScanCity is
+// the currently-selected city for the picker (lazy-inits to currentCity).
+let _settingsLoaded    = false;
+let _settingsLoadedFor = null;
+let _settingsScanCity  = null;
+
+function _activeScanCity() {
+  return _settingsScanCity
+      || (typeof currentCity === 'string' && currentCity)
+      || 'milano';
+}
+
+const _SCAN_AREAS_CITY_ORDER = ['milano', 'roma', 'napoli', 'la_maddalena'];
+
+function _renderScanAreasCityTabs() {
+  const wrap = document.getElementById('scanAreasCityTabs');
+  if (!wrap) return;
+  const active = _activeScanCity();
+  wrap.innerHTML = _SCAN_AREAS_CITY_ORDER.map(code => {
+    const meta  = (typeof _SCAN_CITY_META !== 'undefined' && _SCAN_CITY_META[code])
+                  || { flag: '📍', label: code };
+    const klass = code === active ? 'scan-areas-city-tab is-active' : 'scan-areas-city-tab';
+    return `<button type="button" class="${klass}" data-scancity="${code}"
+                    onclick="_setScanAreasCity('${code}')">
+              <span>${meta.flag}</span><span>${escapeHtml(meta.label)}</span>
+            </button>`;
+  }).join('');
+}
+
+function _setScanAreasCity(code) {
+  if (code === _activeScanCity()) return;
+  _settingsScanCity     = code;
+  _settingsLoaded       = false;
+  _settingsCurrentAreas = [];
+  _renderScanAreasCityTabs();
+  _settingsLoad();
+}
 
 function _toAreaId(name) {
   // Convert display name to URL slug (matches api.py _to_url_slug / fetch_rentals.py to_url_slug)
@@ -17735,33 +17839,49 @@ function _toAreaId(name) {
 }
 
 async function _settingsLoad() {
-  // Treat "loaded with the local API actually available" as the cache
-  // key — otherwise an early call (before applyStaticMode set IS_LIVE)
-  // would mark this loaded with the "no Flask" placeholder, and the
-  // user would see that hint forever even after Flask came up.
-  if (_settingsLoaded && IS_LIVE) return;
-  const loadEl   = document.getElementById('settingsLoading');
-  const pickerEl = document.getElementById('areaPickerUI');
+  // Treat "loaded with the local API actually available + same city" as
+  // the cache key. Early calls (pre-IS_LIVE) and city-tab switches both
+  // need to retry the fetch instead of being short-circuited.
+  const city = _activeScanCity();
+  if (_settingsLoaded && IS_LIVE && _settingsLoadedFor === city) return;
+  _renderScanAreasCityTabs();
+
+  const cardEl     = document.getElementById('scanAreasCard');
+  const loadEl     = document.getElementById('settingsLoading');
+  const pickerEl   = document.getElementById('areaPickerUI');
+  const noPickerEl = document.getElementById('scanAreasNoPicker');
+  if (cardEl) cardEl.hidden = !IS_LIVE;
   if (!IS_LIVE) {
     if (loadEl) {
       loadEl.textContent = 'Settings require the local Flask API. Run python3 api.py and reopen the dashboard.';
       loadEl.style.display = '';
     }
-    if (pickerEl) pickerEl.style.display = 'none';
+    if (pickerEl)   pickerEl.style.display   = 'none';
+    if (noPickerEl) noPickerEl.style.display = 'none';
     return;
   }
+
+  // Non-Milan cities: no neighbourhood list yet → hide the 3-pane picker
+  // and surface a "scan whole city" note instead. The save button still
+  // works (writes an empty list to area_settings_{city}.json, which
+  // fetch_rentals treats as "scan the entire municipality").
+  const isMilan = city === 'milano';
+  if (noPickerEl) noPickerEl.style.display = isMilan ? 'none' : '';
+  if (pickerEl)   pickerEl.style.display   = 'none';
+  if (loadEl)     loadEl.style.display     = '';
+
   try {
-    // Reuse data from the early page-load fetch when already available; otherwise fetch now.
-    if (!_settingsCurrentAreas.length) {
-      const resp = await fetch('/area-settings');
-      if (!resp.ok) throw new Error(`API error (${resp.status})`);
-      const data = await resp.json();
-      _settingsCurrentAreas = (data.areas || []).map(a => ({...a}));
+    const resp = await fetch(`/area-settings?city=${encodeURIComponent(city)}`);
+    if (!resp.ok) throw new Error(`API error (${resp.status})`);
+    const data = await resp.json();
+    _settingsCurrentAreas = (data.areas || []).map(a => ({...a}));
+    if (isMilan) {
+      _renderAreaPicker();
+      if (pickerEl) pickerEl.style.display = '';
     }
-    _renderAreaPicker();
-    if (loadEl)   loadEl.style.display  = 'none';
-    if (pickerEl) pickerEl.style.display = '';
-    _settingsLoaded = true;
+    if (loadEl) loadEl.style.display = 'none';
+    _settingsLoaded    = true;
+    _settingsLoadedFor = city;
   } catch (e) {
     if (loadEl) { loadEl.textContent = '✗ ' + e.message; loadEl.style.display = ''; }
   }
@@ -18047,23 +18167,28 @@ document.getElementById('btnRescore')?.addEventListener('click', async () => {
 document.getElementById('btnSettingsSave')?.addEventListener('click', async () => {
   const statusEl = document.getElementById('settingsStatus');
   const setStatus = (msg, color = '') => { if (statusEl) { statusEl.textContent = msg; statusEl.style.color = color; } };
+  const city = _activeScanCity();
   setStatus('Saving…');
   try {
-    const r = await fetch('/area-settings', {
+    const r = await fetch(`/area-settings?city=${encodeURIComponent(city)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ areas: _settingsCurrentAreas }),
+      body: JSON.stringify({ areas: _settingsCurrentAreas, city }),
     });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'Error');
     const activeNames = _settingsCurrentAreas.filter(a => a.active).map(a => a.name);
-    setStatus(`✓ Saved — ${activeNames.length} active area(s)`, 'var(--green)');
-    // Sync scanner panel, sales fetch area picker, and mobile drawer to the new active areas
-    scanAreaMsd.setSelected(activeNames);
-    saleAreaFetchMsd.setSelected(activeNames);
-    saveScanPrefs();
-    saveSaleFetchPrefs();
-    _populateDrawerAreaFromActive();
+    setStatus(`✓ Saved ${city} — ${activeNames.length} active area(s)`, 'var(--green)');
+    // Only sync the legacy Milan-anchored MSDs when we just saved Milan.
+    // For other cities, those multi-selects (drawer + sale-fetch picker)
+    // stay anchored to the user's last Milan selection — separate concern.
+    if (city === 'milano') {
+      if (typeof scanAreaMsd      !== 'undefined') scanAreaMsd.setSelected(activeNames);
+      if (typeof saleAreaFetchMsd !== 'undefined') saleAreaFetchMsd.setSelected(activeNames);
+      if (typeof saveScanPrefs    === 'function') saveScanPrefs();
+      if (typeof saveSaleFetchPrefs === 'function') saveSaleFetchPrefs();
+      if (typeof _populateDrawerAreaFromActive === 'function') _populateDrawerAreaFromActive();
+    }
   } catch (e) {
     setStatus('✗ ' + e.message, 'var(--red)');
   }

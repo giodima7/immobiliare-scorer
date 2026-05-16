@@ -1582,20 +1582,31 @@ def _to_url_slug(name: str) -> str:
     return _fr_slug(name)
 
 
-def _load_area_settings_v2() -> dict:
+def _area_settings_path(city: str) -> Path:
+    """Per-city path. Milan reads/writes the legacy un-prefixed file so the
+    existing scan_prefs.json sync chain keeps working."""
+    if city == "milano":
+        return AREA_SETTINGS_PATH
+    return BASE_DIR / f"area_settings_{city}.json"
+
+
+def _load_area_settings_v2(city: str = "milano") -> dict:
     """Load the new-format area settings (list of areas with active flag).
-    Falls back to migrating active areas from scan_prefs.json if the file
-    is missing or still in the old OMI-mapping format."""
-    if AREA_SETTINGS_PATH.exists():
+    Falls back to migrating active areas from scan_prefs.json if the Milan
+    file is missing; non-Milan cities just return an empty list when their
+    per-city file doesn't exist yet."""
+    path = _area_settings_path(city)
+    if path.exists():
         try:
-            data = _json.loads(AREA_SETTINGS_PATH.read_text())
+            data = _json.loads(path.read_text())
             if isinstance(data, dict) and "areas" in data:
                 return data
         except Exception:
             pass
-    # Migrate: seed from scan_prefs.json areas
+    # Migrate: seed from scan_prefs.json areas — Milan only (the legacy
+    # prefs file never knew about other cities).
     areas = []
-    if SCAN_PREFS_PATH.exists():
+    if city == "milano" and SCAN_PREFS_PATH.exists():
         try:
             prefs = _json.loads(SCAN_PREFS_PATH.read_text())
             for name in (prefs.get("areas") or []):
@@ -1604,20 +1615,22 @@ def _load_area_settings_v2() -> dict:
                     areas.append({"id": _to_url_slug(name), "name": name, "active": True})
         except Exception:
             pass
-    return {"areas": areas, "last_saved": None}
+    return {"areas": areas, "last_saved": None, "city": city}
 
 
 @app.route("/area-settings", methods=["GET"])
 def get_area_settings_v2():
-    """Return the new-format area settings (areas list with active flags)."""
-    return jsonify(_load_area_settings_v2())
+    """Return the new-format area settings for ?city= (defaults to milano)."""
+    city = (request.args.get("city") or "milano").lower()
+    return jsonify(_load_area_settings_v2(city))
 
 
 @app.route("/area-settings", methods=["POST"])
 def save_area_settings_v2():
-    """Save the new-format area settings and sync active names to scan_prefs.json."""
+    """Save per-city area settings. Body: {areas: [...]} + optional ?city=."""
     from datetime import datetime as _dt
-    body = request.get_json(force=True, silent=True) or {}
+    body  = request.get_json(force=True, silent=True) or {}
+    city  = (request.args.get("city") or body.get("city") or "milano").lower()
     areas = body.get("areas")
     if not isinstance(areas, list):
         return jsonify({"error": "areas must be a list"}), 400
@@ -1625,19 +1638,26 @@ def save_area_settings_v2():
     settings = {
         "areas": areas,
         "last_saved": _dt.now().isoformat(timespec="seconds"),
+        "city": city,
     }
-    AREA_SETTINGS_PATH.write_text(_json.dumps(settings, ensure_ascii=False, indent=2))
+    path = _area_settings_path(city)
+    path.write_text(_json.dumps(settings, ensure_ascii=False, indent=2))
 
-    # Keep scan_prefs.json in sync so the daemon auto-start uses the right areas
-    active_names = [a["name"] for a in areas if isinstance(a, dict) and a.get("active")]
-    try:
-        prefs = _json.loads(SCAN_PREFS_PATH.read_text())
-    except Exception:
-        prefs = {}
-    prefs["areas"] = active_names
-    SCAN_PREFS_PATH.write_text(_json.dumps(prefs, indent=2))
+    # Milan-only: keep the legacy scan_prefs.json in sync so the existing
+    # daemon auto-start still picks up the right areas without code changes.
+    # Other cities use the per-city area file directly (fetch_rentals reads
+    # area_settings_{city}.json before falling back to scan_prefs).
+    if city == "milano":
+        active_names = [a["name"] for a in areas if isinstance(a, dict) and a.get("active")]
+        try:
+            prefs = _json.loads(SCAN_PREFS_PATH.read_text())
+        except Exception:
+            prefs = {}
+        prefs["areas"] = active_names
+        SCAN_PREFS_PATH.write_text(_json.dumps(prefs, indent=2))
 
-    return jsonify({"saved": True, "active_count": len(active_names)})
+    active_count = sum(1 for a in areas if isinstance(a, dict) and a.get("active"))
+    return jsonify({"saved": True, "city": city, "active_count": active_count})
 
 
 def _normalize_settings_entry(zone_codes: list[str]) -> dict | None:
