@@ -34,7 +34,7 @@ SET excluded                 = TRUE,
     price_floor_reason       = '€' || ROUND(ask_psqm)::text
                               || '/m² below minimum €800/m² for milano',
     is_stale                 = TRUE,
-    last_seen                = NOW()
+    last_seen_date           = NOW()::DATE
 WHERE listing_type = 'sale'
   AND city         = 'milano'
   AND ask_psqm IS NOT NULL
@@ -47,7 +47,7 @@ SET excluded                 = TRUE,
     price_floor_reason       = '€' || ROUND(ask_psqm)::text
                               || '/m² below minimum €600/m² for roma',
     is_stale                 = TRUE,
-    last_seen                = NOW()
+    last_seen_date           = NOW()::DATE
 WHERE listing_type = 'sale'
   AND city         = 'roma'
   AND ask_psqm IS NOT NULL
@@ -60,7 +60,7 @@ SET excluded                 = TRUE,
     price_floor_reason       = '€' || ROUND(ask_psqm)::text
                               || '/m² below minimum €400/m² for napoli',
     is_stale                 = TRUE,
-    last_seen                = NOW()
+    last_seen_date           = NOW()::DATE
 WHERE listing_type = 'sale'
   AND city         = 'napoli'
   AND ask_psqm IS NOT NULL
@@ -73,7 +73,7 @@ SET excluded                 = TRUE,
     price_floor_reason       = '€' || ROUND(ask_psqm)::text
                               || '/m² below minimum €800/m² for la_maddalena',
     is_stale                 = TRUE,
-    last_seen                = NOW()
+    last_seen_date           = NOW()::DATE
 WHERE listing_type = 'sale'
   AND city         = 'la_maddalena'
   AND ask_psqm IS NOT NULL
