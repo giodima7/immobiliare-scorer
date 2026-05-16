@@ -4235,6 +4235,8 @@ body.detail-page-active .filter-bar { display: none !important; }
 .enrich-cell.is-queued  { border-color: rgba(120, 113, 108, 0.35); }
 .enrich-cell.is-done    { opacity: 0.78; }
 .enrich-cell.is-error   { border-color: rgba(220, 38, 38, 0.45); background: rgba(220, 38, 38, 0.06); }
+.enrich-cell.is-stopped { border-color: rgba(120, 113, 108, 0.45); opacity: 0.72; }
+.enrich-state.is-stopped { color: var(--muted); }
 .enrich-cell .kind-pill {
   font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
   padding: 3px 8px; border-radius: 999px; background: var(--surface); color: var(--muted);
@@ -15675,6 +15677,9 @@ async function updateScannerStatus() {
     // a single innerHTML write.
     if (typeof _renderEnrichmentPanel === 'function') {
       _renderEnrichmentPanel(st);
+      // Stash for the Stop button's optimistic render path so it can
+      // diff from the last known-good payload.
+      window._lastScannerStatus = st;
       // While the queue is actually working, drop into a 1.5 s poll so
       // the per-city progress bars feel live instead of the default 10 s
       // scanner cadence. _maybeArmEnrichmentFastPoll() handles arm/disarm.
@@ -15810,10 +15815,15 @@ function _renderEnrichmentPanel(st) {
         sub     = 'queued';
       } else if (state === 'running') {
         primary = job.total > 0 ? `${job.done}/${job.total}` : '…';
-        sub     = 'in progress';
+        // Phase label takes precedence over the generic "in progress" so
+        // the user knows whether we're geocoding, rescoring, or pushing.
+        sub     = job.phase_label || 'in progress';
       } else if (state === 'done') {
         primary = `✓ ${job.done}`;
         sub     = job.total > 0 ? `of ${job.total}` : 'done';
+      } else if (state === 'stopped') {
+        primary = job.done > 0 ? `${job.done}/${job.total || '?'}` : '—';
+        sub     = 'stopped';
       } else { // error
         primary = '✗';
         sub     = 'failed';
@@ -15821,8 +15831,9 @@ function _renderEnrichmentPanel(st) {
       const stateLabel = {
         idle:    'Idle',
         queued:  'Queued',
-        running: 'Running…',
+        running: job.phase_label || 'Running…',
         done:    'Done',
+        stopped: 'Stopped',
         error:   'Error',
       }[state] || state;
 
@@ -15849,8 +15860,13 @@ function _renderEnrichmentPanel(st) {
     }).join('');
 
     // City-row aggregate: sum pending across rentals + sales for the title.
-    const cityPending = _ENRICH_KINDS.reduce(
-      (s, k) => s + ((pending[`${city}:${k}`] || {}).count || 0), 0);
+    const cityPending = _ENRICH_KINDS.reduce((s, k) => {
+      const j = jobs[`${city}:${k}`];
+      // Skip slots whose state has already settled this session so the
+      // header doesn't double-count "pending" after a row reports done.
+      if (j && (j.state === 'done' || j.state === 'stopped')) return s;
+      return s + ((pending[`${city}:${k}`] || {}).count || 0);
+    }, 0);
     const cityRowState = _ENRICH_KINDS.some(
       k => jobs[`${city}:${k}`] && jobs[`${city}:${k}`].running) ? 'is-running' : '';
     const cityRowError = _ENRICH_KINDS.some(
@@ -15927,13 +15943,41 @@ function _renderEnrichmentPanel(st) {
   if (!btn) return;
   btn.addEventListener('click', async () => {
     if (!IS_LIVE) return;
-    btn.disabled = true;
+    btn.disabled    = true;
+    btn.textContent = '■ Stopping…';
+
+    // Optimistic UI: synthesise a status payload where every queued slot
+    // is already "stopped" + the running slot reads "Stopping…". The next
+    // /scanner-status poll will replace this with the real server state
+    // — usually within a second once the DELETE round-trip completes.
+    if (typeof window !== 'undefined' && window._lastScannerStatus) {
+      const st = JSON.parse(JSON.stringify(window._lastScannerStatus));
+      const jobs = st.geo_jobs || {};
+      for (const k of Object.keys(jobs)) {
+        const j = jobs[k];
+        if (!j) continue;
+        if (j.state === 'queued') {
+          j.state = 'stopped';
+          j.running = false;
+          j.phase = null;
+          j.phase_label = null;
+        } else if (j.running) {
+          j.phase       = 'stopping';
+          j.phase_label = 'Stopping…';
+        }
+      }
+      st.geo_queue = [];
+      st.geo_queue_running = true;  // until the DELETE clears the orchestrator
+      _renderEnrichmentPanel(st);
+    }
+
     try {
       // DELETE on either endpoint cancels both the active worker AND the
       // pending queue (both endpoints set _geo_queue_stop).
       await fetch('/geo-enrich', { method: 'DELETE' });
     } catch (_) { /* ok */ }
-    btn.disabled = false;
+    btn.textContent = '■ Stop';
+    btn.disabled    = false;
     if (typeof updateScannerStatus === 'function') updateScannerStatus();
   });
 })();

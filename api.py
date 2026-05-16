@@ -79,10 +79,24 @@ def _geo_job_init(city: str, kind: str, state: str = "queued") -> dict:
     slot = {
         "city": city, "kind": kind, "state": state,
         "running": False, "done": 0, "total": 0, "error": None,
+        "phase": None,       # human-readable: "polygon"/"geocoding"/"rescoring"/"pushing"
+        "phase_label": None, # localised label for the dashboard
         "started_at": None, "finished_at": None,
     }
     _geo_jobs[_geo_job_key(city, kind)] = slot
     return slot
+
+
+def _geo_set_phase(slot: dict, phase: str, label: str | None = None) -> None:
+    """Mark which sub-step of enrichment the worker is in. Picked up by
+    the dashboard so the user can see WHAT is happening, not just IF."""
+    slot["phase"]       = phase
+    slot["phase_label"] = label or {
+        "polygon":   "Applying OMI zones",
+        "geocoding": "Geocoding + enriching listings",
+        "rescoring": "Rescoring city listings",
+        "pushing":   "Syncing to Supabase",
+    }.get(phase, phase)
 
 def _geo_job(city: str, kind: str) -> dict:
     """Fetch an existing slot, creating an empty one if missing."""
@@ -90,6 +104,43 @@ def _geo_job(city: str, kind: str) -> dict:
     if key not in _geo_jobs:
         _geo_job_init(city, kind, state="idle")
     return _geo_jobs[key]
+
+_RE_POSIZIONE_APPROSSIMATIVA = None  # lazy-compiled
+
+def _has_geocodable_data(l: dict) -> bool:
+    """
+    Single source of truth for "could enrich_geo.enrich() resolve coordinates
+    for this listing?". Used by both per-city workers AND _count_pending_for
+    so the preview number on the dashboard matches the actual job size.
+
+    Four routes (checked in priority order):
+      1. Stored coordinates                    → fastest path, always works
+      2. Non-placeholder address string        → Photon / Nominatim geocoding
+      3. Title embeds "in [Location]" or
+         "a [UppercaseLocation]" (Idealista)   → enrich() extracts & geocodes
+      4. Non-empty neighbourhood name          → neighbourhood-centroid fallback
+    """
+    global _RE_POSIZIONE_APPROSSIMATIVA
+    import re as _re
+    if _RE_POSIZIONE_APPROSSIMATIVA is None:
+        _RE_POSIZIONE_APPROSSIMATIVA = _re.compile(r'posizione approssimativa', _re.I)
+
+    if l.get("latitude") and l.get("longitude"):
+        return True
+    addr = (l.get("address") or "").strip()
+    if addr and not _RE_POSIZIONE_APPROSSIMATIVA.search(addr):
+        return True
+    title = (l.get("title") or "").strip()
+    if title and (_re.search(r'\s+in\s+', title, _re.I)
+                  or _re.search(r'\s+a\s+(?=[A-ZÀ-ɏ])', title)):
+        return True
+    nbhd = (l.get("neighbourhood") or "").strip()
+    if (nbhd
+            and nbhd.lower() not in {"—", "-", ""}
+            and not _RE_POSIZIONE_APPROSSIMATIVA.search(nbhd)):
+        return True
+    return False
+
 
 def _resolve_city_path(city: str, kind: str) -> Path:
     """
@@ -145,13 +196,14 @@ def _count_pending_for(city: str, kind: str) -> dict:
     except Exception:
         return {"count": 0, "total": 0, "stale": True}
 
-    src_key = "sale" if kind == "sale" else None  # rentals: derive from listing.source
+    # Cache key source. Sales always use "sale"; rentals derive per listing
+    # (immobiliare vs idealista) so they hit the right cache entry.
+    src_key = "sale" if kind == "sale" else None
     pending = 0
     for l in data:
         # Listings already carrying enrichment in the JSON itself don't need work.
         if l.get("geo_score") is not None:
             continue
-        # Check the cache (per source). Listings with a cached geo_score are skipped.
         src = src_key or l.get("source") or "immobiliare"
         lid = l.get("id")
         if not lid:
@@ -159,20 +211,10 @@ def _count_pending_for(city: str, kind: str) -> dict:
         cached_entry = _ecache.get(src, lid)
         if cached_entry and cached_entry.get("geo_score") is not None:
             continue
-        # Must have at least one route to coordinates — mirrors the worker's
-        # _has_geocodable_data check. Inlined here to avoid a circular import.
-        if l.get("latitude") and l.get("longitude"):
-            pending += 1; continue
-        addr = (l.get("address") or "").strip()
-        if addr and "posizione approssimativa" not in addr.lower():
-            pending += 1; continue
-        title = (l.get("title") or "").strip()
-        if title and (" in " in f" {title.lower()} " or
-                      any(seg[:1].isupper() for seg in title.split(" a ")[1:2])):
-            pending += 1; continue
-        nb = (l.get("neighbourhood") or "").strip()
-        if nb and nb.lower() not in {"—", "-", ""} and "posizione approssimativa" not in nb.lower():
-            pending += 1; continue
+        # Single source of truth shared with both workers — guarantees the
+        # preview number matches the actual job size.
+        if _has_geocodable_data(l):
+            pending += 1
 
     _GEO_PENDING_CACHE[key] = {
         "count": pending, "total": len(data),
@@ -343,8 +385,10 @@ def _geo_enrich_worker(city: str = "milano"):
         # ── Pass 1: fast in-memory OMI polygon application ───────────────────
         # Fixes all listings that have coordinates but were cached before
         # omi_lookup existed (no Overpass call needed).
+        _geo_set_phase(slot, "polygon")
         n_omi = _apply_omi_polygon(data, _ecache)
         if n_omi > 0:
+            _geo_set_phase(slot, "rescoring", "Rescoring after OMI pass")
             _flush_geo(data, rent_path, _scoring)
 
         # ── Pass 2: Overpass POI enrichment for uncached listings ─────────────
@@ -375,45 +419,9 @@ def _geo_enrich_worker(city: str = "milano"):
             # walk times are always haversine-derived in batch mode.
             return cached.get("geo_score") is None
 
-        import re as _re_addr
-
-        def _has_geocodable_data(l: dict) -> bool:
-            """
-            Return True if enrich_geo.enrich() has a chance of resolving coordinates.
-
-            Four routes (checked in priority order):
-              1. Stored coordinates                    → fastest path, always works
-              2. Non-placeholder address string        → Photon / Nominatim geocoding
-              3. Title embeds "in [Location]" or
-                 "a [UppercaseLocation]" (Idealista)   → enrich() extracts & geocodes
-              4. Non-empty neighbourhood name          → neighbourhood-centroid fallback
-            """
-            # 1. Stored coordinates
-            if l.get("latitude") and l.get("longitude"):
-                return True
-            # 2. Real address string (not Idealista's "Posizione approssimativa." placeholder)
-            addr = (l.get("address") or "").strip()
-            if addr and not _re_addr.search(r'posizione approssimativa', addr, _re_addr.I):
-                return True
-            # 3. Title with embedded location — two Italian preposition patterns:
-            #    "Bilocale in Via Roma, Milano"    (preposition "in", case-insensitive)
-            #    "Trilocale a Lodi - Brenta, Milano"  ("a" + uppercase = proper noun only)
-            title = (l.get("title") or "").strip()
-            if title and (
-                _re_addr.search(r'\s+in\s+', title, _re_addr.I)
-                or _re_addr.search(r'\s+a\s+(?=[A-ZÀ-ɏ])', title)   # NO re.I — uppercase only
-            ):
-                return True
-            # 4. Neighbourhood centroid fallback
-            nbhd = (l.get("neighbourhood") or "").strip()
-            if (nbhd
-                    and nbhd.lower() not in {"—", "-", ""}
-                    and not _re_addr.search(r'posizione approssimativa', nbhd, _re_addr.I)):
-                return True
-            return False
-
-        # Include any listing that still needs Overpass data AND for which
-        # enrich_geo.enrich() can reasonably resolve coordinates (see above).
+        # _has_geocodable_data is the module-level helper — same predicate
+        # the dashboard's preview count uses, so the worker's processed
+        # total matches what the UI promised.
         need_idx = [
             i for i, l in enumerate(data)
             if _needs_overpass(l) and _has_geocodable_data(l)
@@ -423,6 +431,8 @@ def _geo_enrich_worker(city: str = "milano"):
             if not (data[i].get("latitude") and data[i].get("longitude"))
         )
         _mark_progress(n_omi, len(need_idx) + n_omi)   # polygon pass already counted
+        if need_idx:
+            _geo_set_phase(slot, "geocoding")
         print(f"  [geo][{city}] background enrichment: {len(need_idx)} listings to process "
               f"({n_needs_geocoding} need Nominatim geocoding)")
 
@@ -488,11 +498,13 @@ def _geo_enrich_worker(city: str = "milano"):
         if n_omi == 0 and done_count == 0:
             print(f"  [geo][{city}] nothing to enrich — skipping rescore")
             return
+        _geo_set_phase(slot, "rescoring")
         _flush_geo(data, rent_path, _scoring)
         # Push the enriched rows back to Supabase so the deployed
         # dashboard sees the new geo fields without waiting for the
         # next scan. Quiet failure if creds aren't set — the local
         # JSON is already updated.
+        _geo_set_phase(slot, "pushing")
         try:
             from supabase_sync import push_local_json
             push_local_json(rent_path, "rental")
@@ -506,8 +518,18 @@ def _geo_enrich_worker(city: str = "milano"):
             _geo_status["error"] = str(exc)
         print(f"  [geo][{city}] worker crashed: {exc}")
     finally:
-        slot["running"]     = False
-        slot["state"]       = "error" if slot.get("error") else "done"
+        slot["running"] = False
+        # A user-triggered stop wins over "done" so the row reads "Stopped"
+        # in the dashboard even though we still exit cleanly. The legacy
+        # _geo_status uses error for the same signal (kept for back-compat).
+        if slot.get("error"):
+            slot["state"] = "error"
+        elif _geo_stop.is_set() or _geo_queue_stop.is_set():
+            slot["state"] = "stopped"
+        else:
+            slot["state"] = "done"
+        slot["phase"]       = None
+        slot["phase_label"] = None
         slot["finished_at"] = _time.time()
         if city == "milano":
             _geo_status["running"] = False
@@ -613,6 +635,7 @@ def _geo_enrich_sales_worker(city: str = "milano"):
 
         if n_omi > 0 or n_backfill > 0:
             print(f"  [geo-sale][{city}] backfill: {n_backfill} from cache, {n_omi} OMI polygon")
+            _geo_set_phase(slot, "rescoring", "Rescoring after OMI pass")
             _flush_sale_geo(data, sale_path)
 
         def _needs_overpass(l):
@@ -621,14 +644,18 @@ def _geo_enrich_sales_worker(city: str = "milano"):
                 return True
             return cached.get("geo_score") is None
 
+        # Match the dashboard preview exactly — same _has_geocodable_data the
+        # rental worker (and _count_pending_for) use. The old loose check
+        # ("coords OR any address string") swept up Idealista listings whose
+        # only address was "Posizione approssimativa.", inflating the
+        # processed count to 8× the preview.
         need_idx = [
             i for i, l in enumerate(data)
-            if _needs_overpass(l) and (
-                (l.get("latitude") and l.get("longitude"))
-                or l.get("address", "").strip()
-            )
+            if _needs_overpass(l) and _has_geocodable_data(l)
         ]
         _mark_progress(n_omi, len(need_idx) + n_omi)
+        if need_idx:
+            _geo_set_phase(slot, "geocoding")
         print(f"  [geo-sale][{city}] background enrichment: {len(need_idx)} listings to process")
 
         from enrich_geo import enrich_batch as _enrich_batch
@@ -671,7 +698,9 @@ def _geo_enrich_sales_worker(city: str = "milano"):
         if n_omi == 0 and n_backfill == 0 and done_count == 0:
             print(f"  [geo-sale][{city}] nothing to enrich — skipping rescore")
             return
+        _geo_set_phase(slot, "rescoring")
         _flush_sale_geo(data, sale_path)
+        _geo_set_phase(slot, "pushing")
         try:
             from supabase_sync import push_local_json
             push_local_json(sale_path, "sale")
@@ -685,8 +714,15 @@ def _geo_enrich_sales_worker(city: str = "milano"):
             _geo_sale_status["error"] = str(exc)
         print(f"  [geo-sale][{city}] worker crashed: {exc}")
     finally:
-        slot["running"]     = False
-        slot["state"]       = "error" if slot.get("error") else "done"
+        slot["running"] = False
+        if slot.get("error"):
+            slot["state"] = "error"
+        elif _geo_sale_stop.is_set() or _geo_queue_stop.is_set():
+            slot["state"] = "stopped"
+        else:
+            slot["state"] = "done"
+        slot["phase"]       = None
+        slot["phase_label"] = None
         slot["finished_at"] = _time.time()
         if city == "milano":
             _geo_sale_status["running"] = False
@@ -1107,12 +1143,36 @@ def start_geo_enrich():
 
 @app.route("/geo-enrich", methods=["DELETE"])
 def stop_geo_enrich():
-    """Stop the background geo enrichment (single-city + the orchestrator)."""
+    """
+    Stop everything: the active worker, any pending sales worker, and the
+    multi-city queue. Slots that are currently `queued` flip to `stopped`
+    here so the dashboard reflects the change on the next poll without
+    requiring a manual refresh — previously they sat at "Queued" forever.
+    """
     _geo_stop.set()
     _geo_sale_stop.set()
     _geo_queue_stop.set()
     with _geo_queue_lock:
+        cancelled = list(_geo_queue)
         _geo_queue.clear()
+    # Flip queued + still-running rows immediately so the next /scanner-status
+    # poll already shows the right thing. The worker's own `finally` block
+    # will also overwrite its slot, but in the meantime the user sees a
+    # responsive UI rather than "Queued" frozen for 10s+.
+    now = _time.time()
+    for c, k in cancelled:
+        s = _geo_job(c, k)
+        if s.get("state") == "queued":
+            s.update({"state": "stopped", "running": False,
+                      "phase": None, "phase_label": None,
+                      "finished_at": now})
+    for s in _geo_jobs.values():
+        if s.get("running"):
+            # Workers also mark themselves as stopped in their finally
+            # block; pre-marking the phase here gives the user instant
+            # "Stopping…" feedback while the chunk in flight finishes.
+            s["phase"]       = "stopping"
+            s["phase_label"] = "Stopping…"
     return jsonify({"ok": True})
 
 
@@ -1140,7 +1200,20 @@ def _geo_orchestrator_worker(jobs: list[tuple[str, str]]):
     try:
         while True:
             with _geo_queue_lock:
-                if not _geo_queue or _geo_queue_stop.is_set():
+                if _geo_queue_stop.is_set():
+                    # User pressed Stop while items were still queued.
+                    # Flip every queued slot to "stopped" so the dashboard
+                    # immediately stops showing them as "Queued" (the
+                    # previous behaviour required a manual refresh).
+                    for c, k in _geo_queue:
+                        s = _geo_job(c, k)
+                        if s.get("state") == "queued":
+                            s.update({"state": "stopped", "running": False,
+                                      "phase": None, "phase_label": None,
+                                      "finished_at": _time.time()})
+                    _geo_queue.clear()
+                    break
+                if not _geo_queue:
                     break
                 city, kind = _geo_queue.pop(0)
 
@@ -1820,12 +1893,9 @@ def start_geo_enrich_sales():
 
 @app.route("/geo-enrich-sales", methods=["DELETE"])
 def stop_geo_enrich_sales():
-    """Stop the background sales geo enrichment (and any orchestrator queue)."""
-    _geo_sale_stop.set()
-    _geo_queue_stop.set()
-    with _geo_queue_lock:
-        _geo_queue.clear()
-    return jsonify({"ok": True})
+    """Alias for DELETE /geo-enrich — stops everything for symmetry with
+    the legacy POST /geo-enrich-sales endpoint."""
+    return stop_geo_enrich()
 
 
 @app.route("/fetch", methods=["POST"])
