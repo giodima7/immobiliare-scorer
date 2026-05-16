@@ -12501,6 +12501,12 @@ function applySaleFilters(data, f) {
     // Hide judicial auctions and nuda-proprietà sales unless explicitly opted in
     if (l.is_auction        && !f.showAuctions) return false;
     if (l.is_nuda_proprieta && !f.showNuda)     return false;
+    // Price-floor sanity gate (scoring.py + migration 008): always hide.
+    // These are mislabelled rentals / data errors / undetected auctions
+    // that slipped through is_auction — there's no "Show excluded" toggle
+    // because there's no legitimate scenario where a user wants to score
+    // them (score_total was set to 0 by score_sale_listing anyway).
+    if (l.excluded) return false;
     if (f.areas && f.areas.length && !f.areas.includes(l.neighbourhood)) return false;
     if (f.source  && l.source !== f.source)                              return false;
     if (f.fascia   && l.omi_fascia !== f.fascia)                          return false;

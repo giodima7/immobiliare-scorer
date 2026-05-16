@@ -751,17 +751,66 @@ def parse_listing(item: dict, city_key: str, city_label: str) -> Optional[dict]:
     listing_id = re_data.get("id", "")
     url = f"https://www.immobiliare.it/annunci/{listing_id}/" if listing_id else ""
 
-    # Exclude auction ("All'Asta") and bare-ownership ("Nuda Proprietà") listings —
-    # these have non-standard pricing that breaks the OMI scoring model.
+    # Detect auctions + nuda proprietà.
+    # OLD behaviour: silent drop. Problem — Immobiliare's `__NEXT_DATA__`
+    # doesn't always label auctions with "asta" in title/typology, so a
+    # subset of judicial-sale listings (€105k Scala-Manzoni etc.) slipped
+    # through and polluted the scored feed.
+    # NEW behaviour: capture them but flag is_auction / is_nuda_proprieta
+    # so the dashboard's existing "Show auctions / nuda proprietà" filters
+    # hide them by default while keeping the rows in the DB for users who
+    # want them.
     _typology_name = (re_data.get("typology") or {}).get("name", "").lower()
-    _title_lower   = re_data.get("title", "").lower()
-    _EXCLUDE_KW    = ("asta", "nuda propriet")
-    if any(kw in _typology_name or kw in _title_lower for kw in _EXCLUDE_KW):
-        return None
+    _title_lower   = (re_data.get("title") or "").lower()
+    _contract      = str(re_data.get("contractType", "")).lower()
+    _category      = str(re_data.get("category", "")
+                         or (re_data.get("category") or {}).get("name", "")
+                         if isinstance(re_data.get("category"), dict)
+                         else re_data.get("category", "")).lower()
+    is_auction = bool(
+        re_data.get("isAuction") or re_data.get("auction")
+        or prop.get("isAuction")  or prop.get("auction")
+        or "asta" in _typology_name
+        or "asta" in _title_lower
+        or "asta" in _contract
+        or "asta" in _category
+        or "auction" in _contract
+        or "auction" in _category
+    )
+    is_nuda = "nuda propriet" in _typology_name or "nuda propriet" in _title_lower
+
+    # Mislabelled rental drop: a "sale" listing with price/sqm < €100/m²
+    # is a monthly-rental figure that got scraped into the sales feed
+    # (Immobiliare occasionally surfaces cross-category results). No
+    # legitimate sale anywhere in Italy is < €100/m² total — even auction
+    # floors land in the hundreds-of-€/m². Drop entirely; flagging would
+    # confuse downstream scoring.
+    if sqm and sqm > 0:
+        _psqm = price / sqm
+        if _psqm < 100:
+            print(f"  [skip] {listing_id} ({city_key}): €{price}/€{sqm}m² = "
+                  f"€{_psqm:.0f}/m² — looks like a monthly rental in the sales feed",
+                  flush=True)
+            return None
+
+    # Sanity floor: a sale below the per-city OMI minimum is almost
+    # certainly an auction in disguise. Flag as auction so it's hidden
+    # behind the same filter — the price-floor gate in scoring.py will
+    # belt-and-suspenders it with _excluded too.
+    _PSQM_FLOOR_BY_CITY = {
+        "milano": 800, "roma": 600, "napoli": 400, "la_maddalena": 800,
+    }
+    _floor = _PSQM_FLOOR_BY_CITY.get(city_key, 400)
+    if sqm and sqm > 0 and (price / sqm) < _floor and not is_auction:
+        is_auction = True   # silently re-classify as auction
+        print(f"  [auction-by-price] {listing_id} ({city_key}): €{price/sqm:.0f}/m² "
+              f"< €{_floor}/m² floor → flagged is_auction=True", flush=True)
 
     omi = match_omi(city_key, neighbourhood)
 
     return {
+        "is_auction":         is_auction,
+        "is_nuda_proprieta":  is_nuda,
         "id":              str(listing_id),
         "source":          "sale",
         # `city` = lowercase code (Supabase listings.city); `city_label`

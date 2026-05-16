@@ -769,6 +769,55 @@ def apply_price_ceiling(score_total: float, comps_delta_pct: float) -> int:
     return min(round(score_total), ceiling)
 
 
+# Minimum legitimate sale €/m² by city. Anything below this is almost
+# certainly an auction (asta giudiziaria), a data error, or a mislabelled
+# rental price. Calibrated from the OMI compr_min across each city's
+# zones with safety margin so floor sales don't false-positive.
+#   milano       — OMI min in D/E fascia is ~1000; 800 = safe margin
+#   roma         — OMI min ~750 in periphery; 600 = safe margin
+#   napoli       — OMI min ~500 in deep periphery; 400 = safe margin
+#   la_maddalena — tourist market, no floor sales below ~€1000/m²
+# Default 400 catches anything unmistakably wrong without rejecting
+# legitimately cheap stock in cities we haven't tuned yet.
+MIN_SALE_PSQM: dict[str, int] = {
+    "milano":       800,
+    "roma":         600,
+    "napoli":       400,
+    "la_maddalena": 800,
+    "default":      400,
+}
+
+
+def apply_price_floor_gate(listing: dict) -> bool:
+    """
+    Returns True if `listing` should be excluded for impossibly low
+    €/m². Catches three flavours of rubbish:
+      • judicial auctions that slipped past the auction-flag detector
+      • monthly-rental prices scraped into the sales feed (e.g. €30/m²)
+      • plain data errors (price stored as the down payment, etc.)
+
+    Mutates the listing dict in place with diagnostic fields so the
+    Settings → Data Quality panel can surface why a row got dropped.
+    """
+    ask_psqm = listing.get("ask_psqm") or 0
+    sqm      = listing.get("sqm")      or 0
+    price    = listing.get("price")    or 0
+    if not ask_psqm or not sqm or not price:
+        return False
+
+    city     = (listing.get("city") or "milano").lower()
+    min_psqm = MIN_SALE_PSQM.get(city, MIN_SALE_PSQM["default"])
+    if ask_psqm >= min_psqm:
+        return False
+
+    listing["_price_floor_gate_applied"] = True
+    listing["_price_floor_reason"] = (
+        f"€{ask_psqm:.0f}/m² below minimum €{min_psqm}/m² for {city}"
+    )
+    listing["_excluded"] = True
+    return True
+
+
 def apply_absolute_value_gate(score_total: float, ask_psqm: float, sqm: float) -> tuple[int, bool]:
     """
     Hard score ceiling for small, very expensive listings.
@@ -1336,6 +1385,22 @@ def score_sale_listing(listing: dict, all_listings: list, settings: dict | None 
     """
     if settings is None:
         settings = _load_settings()
+
+    # Price-floor sanity gate — short-circuit before any scoring. A sale
+    # under the per-city OMI minimum is auctions/data-errors/mislabelled
+    # rentals; treat as excluded so the dashboard hides them via the same
+    # filter as is_auction. We still emit a row (rather than returning
+    # None) so the listing's diagnostic fields make it into the DB and
+    # the Data-Quality panel can surface what got rejected.
+    if apply_price_floor_gate(listing):
+        listing["score_total"] = 0
+        listing["score_price"]    = 0
+        listing["score_property"] = 0
+        listing["score_location"] = 0
+        listing["score_penalty"]  = 0
+        listing["hidden_gem"]     = False
+        listing["good_value"]     = False
+        return listing
 
     w_price = settings.get("w_price",    0.45)
     w_prop  = settings.get("w_property", 0.25)
