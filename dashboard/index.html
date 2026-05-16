@@ -362,6 +362,226 @@ header h1 span { color: var(--accent); }
   margin-top: -1px;
   pointer-events: none;
 }
+
+/* ── Filter bar: structured grid ────────────────────────────────────────
+   .filters-grid switches the flat-wrap layout above into a vertical stack
+   of three .filter-row's, each wrapping its own controls. All controls
+   normalise to .filter-control (36px tall) so the bar reads as a clean
+   grid instead of the ad-hoc heights the old layout had. */
+.filters.filters-grid {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 14px 18px;
+}
+.filters.filters-grid .filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+.filters.filters-grid .filter-row-bottom {
+  align-items: center;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-light, var(--border));
+}
+.filters.filters-grid .filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: stretch;
+}
+.filters.filters-grid .filter-group-check {
+  flex-direction: row;
+  align-items: center;
+  padding-top: 16px;    /* aligns checkbox baseline with the .filter-control's */
+}
+.filters.filters-grid .filter-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  white-space: nowrap;
+  line-height: 1;
+}
+.filters.filters-grid .filter-label-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.filters.filters-grid .filter-checkbox {
+  accent-color: var(--green-deep);
+  cursor: pointer;
+  margin: 0;
+}
+
+/* Normalised control surface: select, input, MSD trigger, pill group all
+   sit at exactly 36 px so the row reads as a grid. */
+.filters.filters-grid .filter-control,
+.filters.filters-grid select.filter-control,
+.filters.filters-grid input.filter-control {
+  height: 36px;
+  box-sizing: border-box;
+  padding: 0 10px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-family: var(--font);
+  background: var(--bg-muted);
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.filters.filters-grid select.filter-control { padding-right: 26px; }
+.filters.filters-grid .filter-control:focus,
+.filters.filters-grid .filter-control:focus-within {
+  border-color: var(--green-deep);
+  background: var(--bg-card);
+}
+.filters.filters-grid input.filter-num         { width: 100px; text-align: right; padding-right: 12px; }
+.filters.filters-grid input.filter-num-narrow  { width: 80px; }
+.filters.filters-grid #rFascia                 { min-width: 110px; }
+.filters.filters-grid #rMaxMetro               { min-width: 100px; }
+.filters.filters-grid #rMinFloor               { min-width: 90px;  }
+.filters.filters-grid #rMinEnergy              { min-width: 100px; }
+.filters.filters-grid #rListed                 { min-width: 110px; }
+.filters.filters-grid #filterAreaTrigger {
+  min-width: 160px;
+  text-align: left;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* Pill groups (Source, Sort, Gems): replace the old .sort-tabs row with a
+   single rounded pill rail so the three options read as one control. */
+.filters.filters-grid .filter-pill-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: var(--bg-muted);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-full);
+  height: 36px;
+  box-sizing: border-box;
+}
+.filters.filters-grid .filter-pill {
+  padding: 0 12px;
+  height: 28px;
+  border: none;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font);
+  background: transparent;
+  color: var(--text-muted);
+  transition: background 120ms ease, color 120ms ease, box-shadow 120ms ease;
+  white-space: nowrap;
+}
+.filters.filters-grid .filter-pill:hover { color: var(--text-primary); }
+.filters.filters-grid .filter-pill.active {
+  background: var(--bg-card);
+  color: var(--green-deep);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+}
+
+/* Score control: slider + editable number input glued together. The
+   number reads/writes the same value as the slider; .score-slider is
+   the source of truth (existing JS reads getElementById('rScore').value). */
+.filters.filters-grid .filter-group-score { min-width: 200px; }
+.filters.filters-grid .score-filter-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  background: var(--bg-muted);
+}
+.filters.filters-grid .score-slider {
+  flex: 1;
+  accent-color: var(--green-deep);
+  cursor: pointer;
+  min-width: 80px;
+  height: 4px;
+}
+.filters.filters-grid .score-number-input {
+  width: 46px;
+  height: 26px;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--font);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  text-align: center;
+  outline: none;
+  transition: border-color 120ms ease;
+  -moz-appearance: textfield;
+}
+.filters.filters-grid .score-number-input::-webkit-outer-spin-button,
+.filters.filters-grid .score-number-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.filters.filters-grid .score-number-input:focus { border-color: var(--green-deep); }
+
+/* Flex spacer pushes Save-alert + Clear-filters to the right edge of row 3. */
+.filters.filters-grid .filter-spacer { flex: 1 1 auto; min-width: 8px; }
+
+/* Clear-filters button: low-emphasis outlined pill, sits next to Save alert. */
+.filters.filters-grid .btn-clear-filters {
+  height: 36px;
+  padding: 0 16px;
+  background: transparent;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font);
+  color: var(--text-muted);
+  transition: border-color 120ms ease, color 120ms ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.filters.filters-grid .btn-clear-filters:hover {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+/* Save-alert button height-aligned with the rest of the row. */
+.filters.filters-grid .btn-save-digest {
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Mobile: row 1 + 2 scroll horizontally so the controls don't squash;
+   row 3 (utilities) wraps freely so Clear-filters stays accessible. */
+@media (max-width: 768px) {
+  .filters.filters-grid .filter-row:not(.filter-row-bottom) {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding-bottom: 4px;
+  }
+  .filters.filters-grid .filter-row:not(.filter-row-bottom)::-webkit-scrollbar {
+    display: none;
+  }
+  .filters.filters-grid .filter-row-bottom { flex-wrap: wrap; }
+  .filters.filters-grid .filter-spacer    { display: none; }
+}
 @media (max-width: 768px) {
   .filters { margin: 12px 14px 0; border-radius: var(--radius-md); padding: 10px 14px; }
   .filters.is-stuck { margin-left: 0; margin-right: 0; border-radius: 0; }
@@ -6354,150 +6574,170 @@ function saveFilters() {
        digest_filters table). Local SMTP config lived here too, but is now
        owned by GitHub Secrets / .env on the deployment side. -->
 
-  <!-- Rentals filter bar -->
-  <div class="filters">
-    <div class="filter-group">
-      <label>Area</label>
-      <div class="msd-wrap" id="filterAreaWrap">
-        <button type="button" class="msd-trigger" id="filterAreaTrigger">All areas <span class="msd-caret">▾</span></button>
-        <div class="msd-panel" id="filterAreaPanel">
-          <input class="msd-search-input" id="filterAreaSearch" placeholder="Search areas…" type="text" autocomplete="off">
-          <div class="msd-list" id="filterAreaList"></div>
-          <div class="msd-footer">
-            <button type="button" class="msd-footer-btn msd-footer-clear" id="filterAreaClear">Clear</button>
-            <button type="button" class="msd-footer-btn"                   id="filterAreaDone">Done ✓</button>
+  <!-- Rentals filter bar (restructured)
+       Three rows with consistent 36 px control height:
+         Row 1 — location + size: Area, Fascia, Max rent, Min m², Min rooms, Max metro, Min floor
+         Row 2 — quality / sort:  Source, Elevator, Min energy, Min score, Sort
+         Row 3 — meta / utilities: Listed, Gems, Show expired, Save alert, Clear filters
+       OMI Zone filter removed (Milan-only legacy, superseded by the Area
+       picker once cities became first-class). Score moved to slider +
+       editable number input. "Start fresh" renamed to "Clear filters"
+       and pushed to the right edge by a flex spacer. -->
+  <div class="filters filters-grid">
+
+    <!-- Row 1 — location + size ─────────────────────────────────── -->
+    <div class="filter-row">
+      <div class="filter-group">
+        <label class="filter-label" data-i18n="filter.area">Area</label>
+        <div class="msd-wrap" id="filterAreaWrap">
+          <button type="button" class="msd-trigger filter-control" id="filterAreaTrigger">All areas <span class="msd-caret">▾</span></button>
+          <div class="msd-panel" id="filterAreaPanel">
+            <input class="msd-search-input" id="filterAreaSearch" placeholder="Search areas…" type="text" autocomplete="off">
+            <div class="msd-list" id="filterAreaList"></div>
+            <div class="msd-footer">
+              <button type="button" class="msd-footer-btn msd-footer-clear" id="filterAreaClear">Clear</button>
+              <button type="button" class="msd-footer-btn"                   id="filterAreaDone">Done ✓</button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-    <div class="filter-sep"></div>
-    <div class="filter-group">
-      <label data-i18n="filter.fascia">Fascia</label>
-      <select id="rFascia">
-        <option value="" data-i18n="filter.all">All</option>
-        <option value="B">B — Centrale</option>
-        <option value="C">C — Semicentrale</option>
-        <option value="D">D — Periferica</option>
-        <option value="E">E — Periferica outer</option>
-      </select>
-    </div>
-    <div class="filter-sep"></div>
-    <div class="filter-group">
-      <label data-i18n="filter.omi_zone">OMI Zone</label>
-      <select id="rOmiZone" onchange="renderRentals()">
-        <option value="" data-i18n="filter.all_areas">All zones</option>
-      </select>
-    </div>
-    <div class="filter-sep"></div>
-    <div class="filter-group">
-      <label data-i18n="filter.max_rent">Max rent €/mo</label>
-      <input type="number" id="rMaxRent" placeholder="any" data-i18n-placeholder="filter.any" min="0" step="50" style="width:90px">
-    </div>
-    <div class="filter-sep"></div>
-    <div class="filter-group">
-      <label data-i18n="filter.min_sqm">Min m²</label>
-      <input type="number" id="rMinSqm" placeholder="any" data-i18n-placeholder="filter.any" min="0" step="5" style="width:70px">
-    </div>
-    <div class="filter-sep"></div>
-    <div class="filter-group">
-      <label data-i18n="filter.min_rooms">Min rooms</label>
-      <input type="number" id="rMinRooms" placeholder="any" data-i18n-placeholder="filter.any" min="1" max="10" step="1" style="width:65px">
-    </div>
-    <div class="filter-sep"></div>
-    <div class="filter-group">
-      <label data-i18n="filter.source">Source</label>
-      <div class="sort-tabs" id="rSourceFilter">
-        <button class="sort-tab active" data-rsource="" data-i18n="filter.all">All</button>
-        <button class="sort-tab" data-rsource="immobiliare">Immobiliare</button>
-        <button class="sort-tab" data-rsource="idealista">Idealista</button>
+      <div class="filter-group">
+        <label class="filter-label" data-i18n="filter.fascia">Fascia</label>
+        <select id="rFascia" class="filter-control">
+          <option value="" data-i18n="filter.all">All</option>
+          <option value="B">B — Centrale</option>
+          <option value="C">C — Semicentrale</option>
+          <option value="D">D — Periferica</option>
+          <option value="E">E — Periferica outer</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label" data-i18n="filter.max_rent">Max rent €/mo</label>
+        <input type="number" id="rMaxRent" class="filter-control filter-num" placeholder="Any"
+               data-i18n-placeholder="filter.any" min="0" step="50">
+      </div>
+      <div class="filter-group">
+        <label class="filter-label" data-i18n="filter.min_sqm">Min m²</label>
+        <input type="number" id="rMinSqm" class="filter-control filter-num" placeholder="Any"
+               data-i18n-placeholder="filter.any" min="0" step="5">
+      </div>
+      <div class="filter-group">
+        <label class="filter-label" data-i18n="filter.min_rooms">Min rooms</label>
+        <input type="number" id="rMinRooms" class="filter-control filter-num filter-num-narrow" placeholder="Any"
+               data-i18n-placeholder="filter.any" min="1" max="10" step="1">
+      </div>
+      <div class="filter-group" id="rFilterMetroSection">
+        <label class="filter-label" data-i18n="filter.max_metro">Max metro</label>
+        <select id="rMaxMetro" class="filter-control">
+          <option value="" data-i18n="filter.any">Any</option>
+          <option value="500">≤500m</option>
+          <option value="800">≤800m</option>
+          <option value="1200">≤1200m</option>
+        </select>
+      </div>
+      <span id="rFilterMetroSep" hidden></span>
+      <div class="filter-group">
+        <label class="filter-label" data-i18n="filter.min_floor">Min floor</label>
+        <select id="rMinFloor" class="filter-control">
+          <option value="" data-i18n="filter.any">Any</option>
+          <option value="2">2+</option>
+          <option value="4">4+</option>
+          <option value="6">6+</option>
+        </select>
       </div>
     </div>
-    <div class="filter-sep" id="rFilterMetroSep"></div>
-    <div class="filter-group" id="rFilterMetroSection">
-      <label data-i18n="filter.max_metro">Max metro</label>
-      <select id="rMaxMetro">
-        <option value="" data-i18n="filter.any">Any</option>
-        <option value="500">≤500m</option>
-        <option value="800">≤800m</option>
-        <option value="1200">≤1200m</option>
-      </select>
-    </div>
-    <div class="filter-sep"></div>
-    <div class="filter-group">
-      <label data-i18n="filter.min_floor">Min floor</label>
-      <select id="rMinFloor">
-        <option value="" data-i18n="filter.any">Any</option>
-        <option value="2">2+</option>
-        <option value="4">4+</option>
-        <option value="6">6+</option>
-      </select>
-    </div>
-    <div class="filter-sep"></div>
-    <div class="filter-group">
-      <label style="display:flex;align-items:center;gap:5px;cursor:pointer;user-select:none">
-        <input type="checkbox" id="rElevator" style="accent-color:var(--accent);cursor:pointer">
-        <span data-i18n="filter.elevator">Elevator</span>
-      </label>
-    </div>
-    <div class="filter-sep"></div>
-    <div class="filter-group">
-      <label data-i18n="filter.min_energy">Min energy</label>
-      <select id="rMinEnergy">
-        <option value="" data-i18n="filter.any">Any</option>
-        <option value="C">C+</option>
-        <option value="B">B+</option>
-        <option value="A">A</option>
-      </select>
-    </div>
-    <div class="filter-sep"></div>
-    <div class="filter-group">
-      <label data-i18n="filter.min_score">Min score</label>
-      <input type="range" id="rScore" min="0" max="100" value="0" step="5">
-      <span class="range-val" id="rScoreVal">0</span>
-    </div>
-    <div class="filter-sep"></div>
-    <div class="filter-group">
-      <label data-i18n="filter.sort">Sort</label>
-      <div class="sort-tabs" id="rentSortTabs">
-        <button class="sort-tab active" data-rsort="score_total" data-i18n="sort.score">Score</button>
-        <button class="sort-tab" data-rsort="vs_omi_rent_pct" data-i18n="sort.vs_omi">vs OMI</button>
-        <button class="sort-tab" data-rsort="rent_mo" data-i18n="sort.rent_asc">Rent ↑</button>
+
+    <!-- Row 2 — quality / sort ─────────────────────────────────── -->
+    <div class="filter-row">
+      <div class="filter-group">
+        <label class="filter-label" data-i18n="filter.source">Source</label>
+        <div class="filter-pill-group filter-control" id="rSourceFilter">
+          <!-- Dual-classed (filter-pill + sort-tab) so the new visual matches
+               the rounded-pill look while every existing handler that
+               queries '.sort-tab' keeps binding without changes. -->
+          <button class="filter-pill sort-tab active" data-rsource="" data-i18n="filter.all">All</button>
+          <button class="filter-pill sort-tab" data-rsource="immobiliare">Immobiliare</button>
+          <button class="filter-pill sort-tab" data-rsource="idealista">Idealista</button>
+        </div>
+      </div>
+      <div class="filter-group filter-group-check">
+        <label class="filter-label filter-label-inline" title="Listings with elevator only">
+          <input type="checkbox" id="rElevator" class="filter-checkbox">
+          <span data-i18n="filter.elevator">Elevator</span>
+        </label>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label" data-i18n="filter.min_energy">Min energy</label>
+        <select id="rMinEnergy" class="filter-control">
+          <option value="" data-i18n="filter.any">Any</option>
+          <option value="C">C+</option>
+          <option value="B">B+</option>
+          <option value="A">A</option>
+        </select>
+      </div>
+      <div class="filter-group filter-group-score">
+        <label class="filter-label" data-i18n="filter.min_score">Min score</label>
+        <div class="filter-control score-filter-control">
+          <input type="range"  id="rScore"    class="score-slider" min="0" max="100" value="0" step="1">
+          <!-- Number input is the visible "0" — clickable + editable. The
+               slider stays the source of truth so any code reading rScore
+               keeps working. rScoreVal is kept as a hidden mirror so the
+               existing 'rScoreVal' updates from elsewhere don't throw. -->
+          <input type="number" id="rScoreNum" class="score-number-input" min="0" max="100" value="0" inputmode="numeric">
+          <span id="rScoreVal" hidden>0</span>
+        </div>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label" data-i18n="filter.sort">Sort</label>
+        <div class="filter-pill-group filter-control" id="rentSortTabs">
+          <button class="filter-pill sort-tab active" data-rsort="score_total"     data-i18n="sort.score">Score</button>
+          <button class="filter-pill sort-tab"        data-rsort="vs_omi_rent_pct" data-i18n="sort.vs_omi">vs OMI</button>
+          <button class="filter-pill sort-tab"        data-rsort="rent_mo"         data-i18n="sort.rent_asc">Rent ↑</button>
+        </div>
       </div>
     </div>
-    <div class="filter-sep"></div>
-    <div class="filter-group">
-      <label data-i18n="filter.listed">Listed</label>
-      <select id="rListed">
-        <option value="" data-i18n="filter.any">Any</option>
-        <option value="today">Today</option>
-        <option value="7">Last 7 days</option>
-        <option value="14">Last 14 days</option>
-        <option value="30">Last 30 days</option>
-      </select>
-    </div>
-    <div class="filter-sep"></div>
-    <div class="filter-group">
-      <label data-i18n="filter.gems">Gems</label>
-      <div id="rGemFilter" style="display:flex;gap:4px">
-        <button class="gem-tab active" data-gem="" data-i18n="filter.all">All</button>
-        <button class="gem-tab" data-gem="hidden" data-i18n="filter.hidden">✦ Hidden</button>
-        <button class="gem-tab" data-gem="good" data-i18n="filter.great_value">Great Value</button>
+
+    <!-- Row 3 — meta / utilities ───────────────────────────────── -->
+    <div class="filter-row filter-row-bottom">
+      <div class="filter-group">
+        <label class="filter-label" data-i18n="filter.listed">Listed</label>
+        <select id="rListed" class="filter-control">
+          <option value="" data-i18n="filter.any">Any</option>
+          <option value="today">Today</option>
+          <option value="7">Last 7 days</option>
+          <option value="14">Last 14 days</option>
+          <option value="30">Last 30 days</option>
+        </select>
       </div>
+      <div class="filter-group">
+        <label class="filter-label" data-i18n="filter.gems">Gems</label>
+        <div class="filter-pill-group filter-control" id="rGemFilter">
+          <button class="filter-pill gem-tab active" data-gem=""       data-i18n="filter.all">All</button>
+          <button class="filter-pill gem-tab"        data-gem="hidden" data-i18n="filter.hidden">✦ Hidden</button>
+          <button class="filter-pill gem-tab"        data-gem="good"   data-i18n="filter.great_value">Great Value</button>
+        </div>
+      </div>
+      <div class="filter-group filter-group-check">
+        <label class="filter-label filter-label-inline" title="Show listings not seen by the scanner in 7+ days">
+          <input type="checkbox" id="rShowStale" class="filter-checkbox">
+          <span data-i18n="filter.show_expired">Show expired</span>
+        </label>
+      </div>
+      <!-- Spacer pushes Save-alert + Clear-filters to the right edge. -->
+      <span class="filter-spacer"></span>
+      <!-- Save the current filter state as a daily email alert. Hidden until
+           the user signs in via Clerk (toggled by Auth._onLogin/_onLogout). -->
+      <button id="save-digest-btn"
+              class="btn-save-digest"
+              type="button"
+              onclick="saveDigestFilters()"
+              style="display:none"
+              title="Save current filters as your daily email alert"
+              data-i18n="filter.save_alert">🔔 Save alert</button>
+      <button class="btn-clear-filters" id="rBtnReset"
+              data-i18n="filter.clear_filters">Clear filters</button>
     </div>
-    <button class="btn-reset" id="rBtnReset" data-i18n="filter.start_fresh">Start fresh</button>
-    <label class="stale-toggle" title="Show listings not seen by the scanner in 7+ days">
-      <input type="checkbox" id="rShowStale">
-      <span data-i18n="filter.show_expired">Show expired</span>
-    </label>
-    <!-- Save the current filter state as a daily email alert. Hidden until
-         the user signs in via Clerk (toggled by Auth._onLogin/_onLogout). -->
-    <button id="save-digest-btn"
-            class="btn-save-digest"
-            type="button"
-            onclick="saveDigestFilters()"
-            style="display:none"
-            title="Save current filters as your daily email alert"
-            data-i18n="filter.save_alert">🔔 Save alert</button>
+
   </div>
 
   <!-- Rentals stats bar -->
@@ -7259,6 +7499,7 @@ const STRINGS = {
     'filter.listed':'Listed','filter.gems':'Gems','filter.sort':'Sort',
     'filter.all_areas':'All areas','filter.all':'All','filter.any':'Any',
     'filter.show_expired':'Show expired','filter.start_fresh':'Start fresh',
+    'filter.clear_filters':'Clear filters',
     'filter.hidden':'✦ Hidden','filter.great_value':'Great Value',
     'filter.show_auctions':'Show auctions','filter.show_nuda':'Show nuda proprietà',
     // Save-alert button (Supabase digest) — visible on rentals tab when signed in.
@@ -7432,6 +7673,7 @@ const STRINGS = {
     'filter.listed':'Inserito','filter.gems':'Opportunità','filter.sort':'Ordina',
     'filter.all_areas':'Tutte le aree','filter.all':'Tutti','filter.any':'Qualsiasi',
     'filter.show_expired':'Mostra scaduti','filter.start_fresh':'Azzera filtri',
+    'filter.clear_filters':'Azzera filtri',
     'filter.hidden':'✦ Gemme','filter.great_value':'Ottimo valore',
     'filter.show_auctions':'Mostra aste','filter.show_nuda':'Mostra nuda proprietà',
     // Save-alert button (Supabase digest) — visible on rentals tab when signed in.
@@ -11721,7 +11963,11 @@ function getRentFilters() {
   return {
     areas:     rentSelectedAreas,
     fascia:    document.getElementById('rFascia').value,
-    omiZone:   document.getElementById('rOmiZone')?.value || '',
+    // OMI Zone filter removed from the bar — Area + Fascia cover the same
+    // intent and work across cities. Field kept as '' so applyRentFilters'
+    // `if (f.omiZone && …)` branch becomes an effective no-op without
+    // editing every filter-call-site.
+    omiZone:   '',
     maxRent:   parseInt(document.getElementById('rMaxRent').value)   || 0,
     minSqm:    parseInt(document.getElementById('rMinSqm').value)    || 0,
     minRooms:  parseInt(document.getElementById('rMinRooms').value)  || 0,
@@ -16419,8 +16665,40 @@ document.querySelectorAll('#rGemFilter .gem-tab').forEach(btn =>
     renderRentals();
   }));
 
+// Score slider ↔ number-input sync. Slider stays the source of truth so
+// getRentFilters() + every other reader of rScore.value keeps working.
+// rScoreVal (the old text mirror) is now a hidden node — preserved so
+// any stray writes to it from elsewhere don't throw.
+function _rScoreClamp(v) {
+  const n = parseInt(v, 10);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(100, n));
+}
+function syncScoreFromSlider(v) {
+  const clamped = _rScoreClamp(v);
+  const numEl   = document.getElementById('rScoreNum');
+  const valEl   = document.getElementById('rScoreVal');
+  if (numEl && numEl.value !== String(clamped)) numEl.value = clamped;
+  if (valEl) valEl.textContent = String(clamped);
+}
+function syncScoreFromNumber(v) {
+  const clamped  = _rScoreClamp(v);
+  const sliderEl = document.getElementById('rScore');
+  const valEl    = document.getElementById('rScoreVal');
+  if (sliderEl && sliderEl.value !== String(clamped)) sliderEl.value = clamped;
+  if (valEl) valEl.textContent = String(clamped);
+}
+document.getElementById('rScoreNum')?.addEventListener('input', function () {
+  syncScoreFromNumber(this.value);
+  renderRentals();
+});
+document.getElementById('rScoreNum')?.addEventListener('blur', function () {
+  // Normalise on blur so a half-typed "12" stays put but an out-of-range
+  // "999" snaps back to 100 (and "" snaps to 0).
+  this.value = _rScoreClamp(this.value);
+});
 document.getElementById('rScore').addEventListener('input', function () {
-  document.getElementById('rScoreVal').textContent = this.value;
+  syncScoreFromSlider(this.value);
   renderRentals();
   saveFilters();
 });
@@ -16438,12 +16716,14 @@ document.getElementById('rBtnReset').addEventListener('click', () => {
   filterAreaMsd.clear();
   rentSelectedAreas = [];
   document.getElementById('rFascia').value    = '';
-  const _rOmiZone = document.getElementById('rOmiZone');
-  if (_rOmiZone) _rOmiZone.value = '';
+  // OMI Zone filter removed from the bar — no rOmiZone reset needed.
   document.getElementById('rMaxRent').value   = '';
   document.getElementById('rMinSqm').value    = '';
   document.getElementById('rMinRooms').value  = '';
   document.getElementById('rScore').value     = 0;
+  // Score slider + number input + hidden text mirror — keep all three in sync.
+  const _rScoreNum = document.getElementById('rScoreNum');
+  if (_rScoreNum) _rScoreNum.value = 0;
   document.getElementById('rScoreVal').textContent = '0';
   document.getElementById('rMaxMetro').value  = '';
   document.getElementById('rMinFloor').value  = '';
