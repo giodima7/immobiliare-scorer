@@ -4254,6 +4254,72 @@ body.detail-page-active .filter-bar { display: none !important; }
   .lang-btn { padding: 4px 7px; font-size: 10px; }
 }
 
+/* ── City selector (multi-city expansion, migration 007) ──────────────────
+   Pill next to the Lume wordmark. Opens a dropdown of every active city
+   from the Supabase cities table; clicking one re-fetches listings
+   scoped to that city. State is persisted to localStorage so the choice
+   sticks across reloads. */
+.city-selector { position: relative; display: inline-block; margin-left: 12px; flex-shrink: 0; }
+.city-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 10px;
+  background: var(--surf2, #F2EFE9);
+  border: 1px solid var(--border, #E0DBD4);
+  border-radius: 999px;
+  font-size: 12px; font-weight: 600;
+  cursor: pointer; font-family: inherit;
+  color: var(--text);
+  transition: background 120ms ease, border-color 120ms ease;
+  line-height: 1.2;
+}
+.city-btn:hover { background: #FFFFFF; border-color: #2A7A5A; }
+.city-btn svg  { opacity: 0.55; }
+.city-dropdown {
+  position: absolute;
+  top: calc(100% + 6px); left: 0;
+  background: #FFFFFF;
+  border: 1px solid var(--border, #E0DBD4);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.10);
+  min-width: 220px;
+  z-index: 950;
+  overflow: hidden;
+  padding: 4px;
+}
+.city-dropdown[hidden] { display: none; }
+.city-option {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%;
+  padding: 9px 14px;
+  background: transparent;
+  border: none; cursor: pointer;
+  font-size: 13px; font-weight: 500; font-family: inherit;
+  color: var(--text);
+  text-align: left;
+  border-radius: 8px;
+  transition: background 100ms ease;
+}
+.city-option:hover  { background: var(--surf2, #F2EFE9); }
+.city-option.active { background: #E6F4ED; font-weight: 700; color: #2A7A5A; }
+.city-option .city-option-dot {
+  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--muted, #C5BFB9); flex-shrink: 0;
+}
+.city-option.active .city-option-dot { background: #2A7A5A; }
+.city-option-name { flex: 1; }
+.city-option-tag {
+  font-size: 10px;
+  color: var(--muted);
+  background: var(--surf2, #F2EFE9);
+  padding: 2px 7px; border-radius: 999px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+@media (max-width: 600px) {
+  .city-selector { margin-left: 8px; }
+  .city-dropdown { left: auto; right: 0; }
+}
+
 .status-pill {
   display: inline-flex; align-items: center; gap: 5px;
   font-size: 10px; font-weight: 600; color: var(--muted);
@@ -4878,6 +4944,11 @@ const SupabaseClient = {
       const params = new URLSearchParams({
         select:       '*',
         listing_type: `eq.${listingType}`,
+        // Multi-city scope (migration 007). Defaults to 'milano' on first
+        // page load so users with no saved preference get the same
+        // behaviour as before. setCity() updates currentCity + triggers
+        // a re-fetch.
+        city:         `eq.${(typeof currentCity === 'string' && currentCity) || 'milano'}`,
         is_stale:     'eq.false',
         order,
         limit:        String(PAGE_SIZE),
@@ -5545,6 +5616,21 @@ function saveFilters() {
             font-size="22" font-weight="700" fill="#1A1A1A"
             letter-spacing="-0.5">lume</text>
     </svg>
+  </div>
+
+  <!-- City selector — pill sits next to the logo so the active city
+       reads like "lume · Milano". Dropdown is populated lazily by
+       renderCityDropdown() from the cities Supabase table. -->
+  <div class="city-selector" id="city-selector">
+    <button class="city-btn" type="button" id="city-btn" onclick="toggleCityDropdown()">
+      <span id="city-btn-label">Milano</span>
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+           stroke-linejoin="round" aria-hidden="true">
+        <polyline points="6 9 12 15 18 9"/>
+      </svg>
+    </button>
+    <div class="city-dropdown" id="city-dropdown" hidden></div>
   </div>
 
   <span class="server-note" title="Requires python3 api.py running locally — does not work as a static file">⚙ local · running on your machine</span>
@@ -7105,6 +7191,126 @@ function rerenderUI() {
   // Dynamic content — re-run the renderers for whatever's on screen.
   if (typeof renderRentals === 'function' && Array.isArray(ALL_RENT) && ALL_RENT.length) renderRentals();
   if (typeof renderSales === 'function'   && Array.isArray(ALL_SALE) && ALL_SALE.length) renderSales();
+  // City selector pill carries a locale-aware label (Milano/Rome/Roma).
+  if (typeof updateCityToggleUI === 'function') updateCityToggleUI();
+}
+
+// ─── City selector ─────────────────────────────────────────────────────────
+// Multi-city expansion (migration 007). currentCity drives the city= filter
+// on every Supabase listings fetch + zone-filter rebuild + metro-filter
+// visibility. Persisted in localStorage so the user's choice survives reloads.
+let currentCity = (function () {
+  try {
+    const saved = localStorage.getItem('lume_city');
+    if (saved) return saved;
+  } catch (_) {}
+  return 'milano';
+})();
+
+// Loaded async at page-init from the cities Supabase table. Fallback list
+// covers the seeded 4 cities so the dropdown still works when Supabase is
+// unreachable (the cities table is small + public-read; failures are rare).
+let availableCities = [
+  { code: 'milano',       comune_code: 'F205', display_name_en: 'Milan',         display_name_it: 'Milano',       has_metro: true,  center_lat: 45.4642, center_lng: 9.1900,  default_zoom: 13 },
+  { code: 'roma',         comune_code: 'H501', display_name_en: 'Rome',          display_name_it: 'Roma',         has_metro: true,  center_lat: 41.9028, center_lng: 12.4964, default_zoom: 12 },
+  { code: 'napoli',       comune_code: 'F839', display_name_en: 'Naples',        display_name_it: 'Napoli',       has_metro: true,  center_lat: 40.8518, center_lng: 14.2681, default_zoom: 13 },
+  { code: 'la_maddalena', comune_code: 'E425', display_name_en: 'La Maddalena',  display_name_it: 'La Maddalena', has_metro: false, center_lat: 41.2133, center_lng: 9.4063,  default_zoom: 14 },
+];
+
+async function loadAvailableCities() {
+  if (typeof SUPABASE_URL === 'undefined' || typeof SUPABASE_ANON_KEY === 'undefined') return;
+  try {
+    const resp = await fetch(
+      `${SUPABASE_URL}/rest/v1/cities?active=eq.true&order=display_name_en`,
+      { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
+    );
+    if (resp.ok) {
+      const rows = await resp.json();
+      if (Array.isArray(rows) && rows.length) availableCities = rows;
+    }
+  } catch (_) { /* keep fallback */ }
+}
+
+function _currentCityConfig() {
+  return availableCities.find(c => c.code === currentCity) || availableCities[0];
+}
+
+function _cityDisplayName(cfg) {
+  if (!cfg) return '';
+  return currentLang === 'it' ? (cfg.display_name_it || cfg.code) : (cfg.display_name_en || cfg.code);
+}
+
+function updateCityToggleUI() {
+  const lbl = document.getElementById('city-btn-label');
+  if (lbl) lbl.textContent = _cityDisplayName(_currentCityConfig());
+}
+
+function renderCityDropdown() {
+  const dd = document.getElementById('city-dropdown');
+  if (!dd) return;
+  const tagNoMetro = (currentLang === 'it') ? 'senza metro' : 'no metro';
+  dd.innerHTML = availableCities.map(city => {
+    const name   = currentLang === 'it' ? city.display_name_it : city.display_name_en;
+    const active = city.code === currentCity;
+    return `<button type="button" class="city-option${active ? ' active' : ''}"
+                    onclick="setCity('${city.code}')">
+              <span class="city-option-dot"></span>
+              <span class="city-option-name">${escapeHtml(name)}</span>
+              ${!city.has_metro ? `<span class="city-option-tag">${escapeHtml(tagNoMetro)}</span>` : ''}
+            </button>`;
+  }).join('');
+}
+
+function toggleCityDropdown() {
+  const dd = document.getElementById('city-dropdown');
+  if (!dd) return;
+  if (dd.hidden) {
+    renderCityDropdown();
+    dd.hidden = false;
+    setTimeout(() => document.addEventListener('click', _cityDropdownOutsideHandler, true), 0);
+  } else {
+    closeCityDropdown();
+  }
+}
+
+function closeCityDropdown() {
+  const dd = document.getElementById('city-dropdown');
+  if (dd) dd.hidden = true;
+  document.removeEventListener('click', _cityDropdownOutsideHandler, true);
+}
+
+function _cityDropdownOutsideHandler(e) {
+  const sel = document.getElementById('city-selector');
+  if (sel && !sel.contains(e.target)) closeCityDropdown();
+}
+
+function setCity(code) {
+  closeCityDropdown();
+  if (!availableCities.some(c => c.code === code)) return;
+  if (code === currentCity) return;
+  currentCity = code;
+  try { localStorage.setItem('lume_city', code); } catch (_) {}
+  updateCityToggleUI();
+  updateFiltersForCurrentCity();
+  // Reload listings — drop the cached arrays so loadRentals/Sales re-fetch.
+  if (typeof ALL_RENT !== 'undefined') ALL_RENT = [];
+  if (typeof ALL_SALE !== 'undefined') ALL_SALE = [];
+  if (typeof loadRentals === 'function') loadRentals();
+  // Sales tab loads lazily on first switch; clearing ALL_SALE forces a
+  // re-fetch the next time it's selected.
+}
+
+// Hide controls that don't apply to the active city. Currently:
+//   • La Maddalena has no metro → hide the metro filter + reset its value.
+// Future: per-city zone filter rebuild lives here too.
+function updateFiltersForCurrentCity() {
+  const cfg = _currentCityConfig();
+  const metroGroups = document.querySelectorAll('#rMaxMetro, #sMaxMetro');
+  metroGroups.forEach(el => {
+    const group = el.closest('.filter-group');
+    if (group) group.style.display = cfg && cfg.has_metro === false ? 'none' : '';
+    if (cfg && cfg.has_metro === false) el.value = '';
+  });
 }
 
 // Locale-aware date — Italian: "15 mag 2026", English: "15 May 2026".
@@ -8045,6 +8251,17 @@ requestAnimationFrame(() => {
   document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
   document.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.dataset.i18nPlaceholder); });
   document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.dataset.i18nTitle); });
+  // City selector — render the current label immediately from the fallback
+  // list, hide controls that don't apply (e.g. metro filter for La
+  // Maddalena), then upgrade availableCities from Supabase in the
+  // background. updateCityToggleUI runs again once the fetch completes
+  // so the pill label reflects any localised display_name from the DB.
+  updateCityToggleUI();
+  updateFiltersForCurrentCity();
+  loadAvailableCities().then(() => {
+    updateCityToggleUI();
+    updateFiltersForCurrentCity();
+  });
 });
 
 // ── Sales event listeners ─────────────────────────────────────────────────────
