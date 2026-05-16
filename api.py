@@ -201,15 +201,26 @@ def _count_pending_for(city: str, kind: str) -> dict:
     src_key = "sale" if kind == "sale" else None
     pending = 0
     for l in data:
-        # Listings already carrying enrichment in the JSON itself don't need work.
-        if l.get("geo_score") is not None:
+        # Cross-city contamination check: a nearest-metro distance > 50 km
+        # is always wrong (every supported city fits inside a 50 km radius),
+        # so listings carrying such a value need re-enrichment even though
+        # their geo_score is non-null. Matches _needs_overpass() in both
+        # workers so the preview number matches the actual job size.
+        def _contaminated(entry):
+            md = entry.get("metro_nearest_dist_m") if entry else None
+            return md is not None and md > 50_000
+
+        if l.get("geo_score") is not None and not _contaminated(l):
             continue
         src = src_key or l.get("source") or "immobiliare"
         lid = l.get("id")
         if not lid:
             continue
         cached_entry = _ecache.get(src, lid)
-        if cached_entry and cached_entry.get("geo_score") is not None:
+        if (cached_entry
+                and cached_entry.get("geo_score") is not None
+                and not _contaminated(cached_entry)
+                and not _contaminated(l)):
             continue
         # Single source of truth shared with both workers — guarantees the
         # preview number matches the actual job size.
@@ -397,27 +408,31 @@ def _geo_enrich_worker(city: str = "milano"):
         # Overpass enrichment — this happens when the scan's inline enrich_batch
         # timed out but the OMI polygon pass ran and partially populated the cache.
         def _needs_overpass(l):
-            # Fast path: if the listing JSON already carries geo_score the listing
-            # was enriched in a previous run.  The cache may have been cleared since
-            # then (e.g. file deleted) but there's nothing to gain by re-enriching.
+            # Sanity check first — applies to both the JSON-carried value
+            # and the cached entry. A nearest-metro distance > 50 km is
+            # always wrong: every city in CITY_REGISTRY fits inside a 50 km
+            # radius. This catches the pre-fix Roma/Napoli/La-Maddalena
+            # listings that were matched against Milan POIs (San Donato
+            # ~600 km from Rome → metro_nearest_dist_m ≈ 600 000).
+            def _is_contaminated(d):
+                return d is not None and d > 50_000
+
+            # Fast path: listing already carries geo_score AND it's not
+            # cross-city contaminated.
             if l.get("geo_score") is not None:
+                if _is_contaminated(l.get("metro_nearest_dist_m")):
+                    return True   # re-enrich to repair the bad cache row
                 return False
 
             cached = _ecache.get(l.get("source", "immobiliare"), l["id"])
             if cached is None:
                 return True
 
-            # Re-enrich only if geo_score is missing entirely.
-            # NOTE: do NOT add a terminal-state check for omi_source="no_coordinates"
-            # here.  Whether a listing CAN be enriched is determined by
-            # _has_geocodable_data() below.  A past "no_coordinates" result may have
-            # been caused by an older code version that lacked title-based address
-            # extraction — _has_geocodable_data() will correctly re-admit those
-            # listings for another attempt with the improved enrich_geo.enrich().
-            # metro_walk_routed is no longer used as a trigger: the table API
-            # (/table/v1/foot/) is unavailable on the public OSRM server, so
-            # walk times are always haversine-derived in batch mode.
-            return cached.get("geo_score") is None
+            if cached.get("geo_score") is None:
+                return True
+            if _is_contaminated(cached.get("metro_nearest_dist_m")):
+                return True
+            return False
 
         # _has_geocodable_data is the module-level helper — same predicate
         # the dashboard's preview count uses, so the worker's processed
@@ -642,7 +657,16 @@ def _geo_enrich_sales_worker(city: str = "milano"):
             cached = _ecache.get(l.get("source", "sale"), l["id"])
             if cached is None:
                 return True
-            return cached.get("geo_score") is None
+            if cached.get("geo_score") is None:
+                return True
+            # Pre-fix Roma/Napoli/La-Maddalena rows were matched against
+            # Milan POIs (San Donato ~600 km from Rome). Any cached
+            # nearest-metro distance > 50 km is cross-city contamination —
+            # re-enrich so the listing's own city's POIs land.
+            md = cached.get("metro_nearest_dist_m")
+            if md is not None and md > 50_000:
+                return True
+            return False
 
         # Match the dashboard preview exactly — same _has_geocodable_data the
         # rental worker (and _count_pending_for) use. The old loose check

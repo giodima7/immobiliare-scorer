@@ -49,41 +49,60 @@ SEARCH_RADIUS = 2000   # metres
 _NOMINATIM_LOCK = threading.Lock()
 
 # ── Local POI dataset (bulk download once, then offline) ──────────────────────
-# Milan bounding box (lat_min, lon_min, lat_max, lon_max)
-_MILAN_BBOX   = (45.38, 9.02, 45.56, 9.32)
-_POIS_PATH    = Path(__file__).parent / "milan_pois.json"
-_local_pois   = None   # loaded on first call to load_local_pois()
-_pois_checked = False  # avoid repeated stat() calls
-_pois_lock    = threading.Lock()  # prevents race when multiple threads load simultaneously
+# Per-city. File path: {city}_pois.json (Milan also accepts the legacy
+# un-prefixed milan_pois.json for back-compat). _local_pois is a dict
+# keyed by city → POI dataset; None entry means "we already looked and
+# the file isn't there", so we don't re-stat on every listing.
+_MILAN_BBOX = (45.38, 9.02, 45.56, 9.32)   # legacy alias
+_POIS_DIR   = Path(__file__).parent
+_local_pois: dict[str, "dict | None"] = {}
+_pois_lock  = threading.Lock()
 
 
-def load_local_pois() -> "dict | None":
-    """Return in-memory local POI dataset, loading from disk on first call."""
-    global _local_pois, _pois_checked
+def _pois_path(city: str) -> Path:
+    """Per-city POI file path. Milan checks the legacy un-prefixed name
+    first so existing milan_pois.json keeps working without a rename."""
+    if city == "milano":
+        legacy = _POIS_DIR / "milan_pois.json"
+        if legacy.exists():
+            return legacy
+    return _POIS_DIR / f"{city}_pois.json"
+
+
+def load_local_pois(city: str = "milano") -> "dict | None":
+    """Return in-memory POI dataset for `city`, loading from disk on first
+    call. Returns None when the city's file isn't present — the caller's
+    fallback path (per-listing Overpass query) covers the gap."""
+    global _local_pois
     with _pois_lock:
-        if _pois_checked:
-            return _local_pois
-        _pois_checked = True
-        if not _POIS_PATH.exists():
+        if city in _local_pois:
+            return _local_pois[city]
+        path = _pois_path(city)
+        if not path.exists():
+            _local_pois[city] = None
             return None
         try:
-            _local_pois = json.loads(_POIS_PATH.read_text())
-            n = sum(len(v) for v in _local_pois.values() if isinstance(v, list))
-            print(f"  [geo] local POI dataset: {n} elements", file=sys.stderr)
+            data = json.loads(path.read_text())
+            n = sum(len(v) for v in data.values() if isinstance(v, list))
+            print(f"  [geo] local POI dataset for {city}: {n} elements", file=sys.stderr)
+            _local_pois[city] = data
         except Exception as exc:
-            print(f"  [geo] failed to load milan_pois.json: {exc}", file=sys.stderr)
-            _local_pois = None
-        return _local_pois
+            print(f"  [geo] failed to load {path.name}: {exc}", file=sys.stderr)
+            _local_pois[city] = None
+        return _local_pois[city]
 
 
-def download_milan_pois() -> dict:
+def download_city_pois(city: str = "milano") -> dict:
     """
-    Download all POIs for the Milan area in ONE bulk Overpass query and save to
-    milan_pois.json.  After this runs, enrich() uses the local file and makes
-    zero Overpass calls per listing.
+    Download all POIs for `city`'s bounding box in ONE bulk Overpass query
+    and save to {city}_pois.json. After this runs, enrich(listing) for any
+    listing in that city skips the per-listing Overpass query.
     """
-    global _local_pois, _pois_checked
-    lat_min, lon_min, lat_max, lon_max = _MILAN_BBOX
+    global _local_pois
+    bbox_tuple = _CITY_BBOXES.get(city)
+    if not bbox_tuple:
+        raise ValueError(f"Unknown city {city!r}; add it to _CITY_BBOXES")
+    lat_min, lon_min, lat_max, lon_max = bbox_tuple
     bbox = f"{lat_min},{lon_min},{lat_max},{lon_max}"
     query = (
         f"[out:json][timeout:90];\n(\n"
@@ -100,7 +119,7 @@ def download_milan_pois() -> dict:
         f'  way["amenity"="college"]({bbox});\n'
         f");\nout center bb;"
     )
-    print("  [geo] downloading Milan POI dataset (one-time)…", file=sys.stderr)
+    print(f"  [geo] downloading {city} POI dataset (one-time)…", file=sys.stderr)
     elements = _overpass(query, timeout_http=90, retries=5)
 
     pois: dict = {"metro": [], "tram": [], "supermarket": [], "park": [], "university": []}
@@ -135,13 +154,20 @@ def download_milan_pois() -> dict:
 
     from datetime import datetime
     pois["downloaded_at"] = datetime.now().isoformat(timespec="seconds")
-    _POIS_PATH.write_text(json.dumps(pois, ensure_ascii=False, indent=2))
-    _local_pois   = pois
-    _pois_checked = True
+    pois["city"]          = city
+    out_path = _POIS_DIR / f"{city}_pois.json"
+    out_path.write_text(json.dumps(pois, ensure_ascii=False, indent=2))
+    _local_pois[city] = pois
 
     counts = {k: len(v) for k, v in pois.items() if isinstance(v, list)}
-    print(f"  [geo] POI dataset saved → {counts}", file=sys.stderr)
+    print(f"  [geo] {city} POI dataset saved → {counts}", file=sys.stderr)
     return pois
+
+
+# Legacy alias kept so any external caller (the rentals scanner shells
+# out to this helper) doesn't break.
+def download_milan_pois() -> dict:
+    return download_city_pois("milano")
 
 
 def _nearest_dist(elements: list, lat: float, lon: float) -> "int | None":
@@ -747,6 +773,10 @@ def enrich(listing: dict, _skip_osrm: bool = False) -> dict:
     Use `listing.update(enrich(listing))` to merge back.
     """
     lid = listing.get("id", "?")
+    # Pin the city up-front — used by both the in-city sanity check below
+    # AND the per-city POI lookup further down. Defaults to milano so
+    # legacy pre-multi-city listings without a `city` field still resolve.
+    _city = (listing.get("city") or "milano").lower()
 
     # ── Step 1: resolve coordinates ───────────────────────────────────────────
     lat = lng = None
@@ -754,9 +784,9 @@ def enrich(listing: dict, _skip_osrm: bool = False) -> dict:
 
     # Priority 1+2: stored coordinates.
     # If the listing carries a prior `omi_source` that landed outside the
-    # Milan polygons (centroid fallback), the stored coords were geocoded
+    # city polygons (centroid fallback), the stored coords were geocoded
     # to the wrong municipality — discard them so the geocoder reruns with
-    # the new polygon-validated logic and resolves the right Milan match.
+    # the new polygon-validated logic and resolves the right city match.
     _prior_src = (listing.get("omi_source") or "").lower()
     _stored_coords_suspect = _prior_src in ("centroid", "nominatim+centroid")
 
@@ -767,7 +797,7 @@ def enrich(listing: dict, _skip_osrm: bool = False) -> dict:
             try:
                 _lat, _lng = float(raw_lat), float(raw_lng)
                 if _lat != 0.0 and _lng != 0.0:
-                    if _stored_coords_suspect and not _is_in_milan(_lat, _lng):
+                    if _stored_coords_suspect and not _is_in_city(_lat, _lng, _city):
                         # Force re-geocoding by leaving lat/lng unset
                         continue
                     lat, lng = _lat, _lng
@@ -885,7 +915,12 @@ def enrich(listing: dict, _skip_osrm: bool = False) -> dict:
 
     # ── Step 3: POI distances ────────────────────────────────────────────────
     _metro_routed = False   # True only if OSRM actually returned a route
-    pois = load_local_pois()
+    # CRITICAL: load the listing's OWN city's POI dataset. Without this,
+    # every Rome / Naples / La Maddalena listing was being matched against
+    # Milan's metro stations, producing nonsense like "San Donato · 7898 min M1"
+    # for a Rome flat (San Donato is a Milan M1 stop ~600 km away).
+    _city_for_pois = (listing.get("city") or "milano").lower()
+    pois = load_local_pois(_city_for_pois)
     if pois:
         # Fast path: in-memory haversine for all POIs, then one OSRM call for metro
         metro_m, metro_name, metro_line, metro_lat, metro_lon = _nearest_metro_local(pois["metro"], lat, lng)
