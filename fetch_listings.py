@@ -123,16 +123,18 @@ def to_url_slug(name: str) -> str:
 # ── City config ───────────────────────────────────────────────────────────────
 # url_slug: the /vendita-case/{slug}/ URL segment
 CITIES = {
-    "napoli":  {"label": "Napoli",  "url_slug": "napoli"},
-    "milano":  {"label": "Milano",  "url_slug": "milano"},
-    "roma":    {"label": "Roma",    "url_slug": "roma"},
-    "torino":  {"label": "Torino",  "url_slug": "torino"},
-    "firenze": {"label": "Firenze", "url_slug": "firenze"},
-    "bologna": {"label": "Bologna", "url_slug": "bologna"},
-    "palermo": {"label": "Palermo", "url_slug": "palermo"},
-    "bari":    {"label": "Bari",    "url_slug": "bari"},
-    "catania": {"label": "Catania", "url_slug": "catania"},
-    "verona":  {"label": "Verona",  "url_slug": "verona"},
+    "napoli":       {"label": "Napoli",       "url_slug": "napoli"},
+    "milano":       {"label": "Milano",       "url_slug": "milano"},
+    "roma":         {"label": "Roma",         "url_slug": "roma"},
+    "torino":       {"label": "Torino",       "url_slug": "torino"},
+    "firenze":      {"label": "Firenze",      "url_slug": "firenze"},
+    "bologna":      {"label": "Bologna",      "url_slug": "bologna"},
+    "palermo":      {"label": "Palermo",      "url_slug": "palermo"},
+    "bari":         {"label": "Bari",         "url_slug": "bari"},
+    "catania":      {"label": "Catania",      "url_slug": "catania"},
+    "verona":       {"label": "Verona",       "url_slug": "verona"},
+    # Added in multi-city migration 007 — tiny island market.
+    "la_maddalena": {"label": "La Maddalena", "url_slug": "la-maddalena"},
 }
 
 # ── OMI benchmark data (Agenzia Entrate, 2° sem 2025) ─────────────────────────
@@ -1220,6 +1222,47 @@ def main():
         sys.exit(1)
 
     print(f"\n  Total raw listings: {len(all_raw)}")
+
+    # OMI polygon pass — fills omi_zona/fascia/loc_mid/compr_mid for any
+    # listing with coordinates but no OMI yet. Critical for non-Milan
+    # cities: match_omi() above uses Milan-specific keyword tables, so
+    # Roma / Napoli / La Maddalena sales would otherwise have 0% OMI
+    # coverage. Mirrors the polygon-application step in fetch_rentals.
+    try:
+        import omi_lookup as _omi_lookup
+        _omi_hits = 0
+        for _l in all_raw:
+            if _l.get("omi_zona"):
+                continue
+            _lat = _l.get("latitude")
+            _lng = _l.get("longitude")
+            if _lat is None or _lng is None:
+                continue
+            _city = _l.get("city") or _l.get("city_key") or "milano"
+            try:
+                _zone, _src = _omi_lookup.lookup_for_city(
+                    float(_lat), float(_lng), city=_city,
+                )
+            except Exception:
+                _zone, _src = None, "failed"
+            if _zone:
+                _l["omi_zona"]      = _zone.get("zona")
+                _l["omi_fascia"]    = _zone.get("fascia")
+                _l["omi_descr"]     = _zone.get("descr")
+                _l["omi_loc_min"]   = _zone.get("loc_min")
+                _l["omi_loc_max"]   = _zone.get("loc_max")
+                _l["omi_loc_mid"]   = _zone.get("loc_mid")
+                _l["omi_compr_min"] = _zone.get("compr_min")
+                _l["omi_compr_max"] = _zone.get("compr_max")
+                _l["omi_compr_mid"] = _zone.get("compr_mid")
+                _l["omi_source"]    = _src
+                _omi_hits += 1
+        if _omi_hits:
+            print(f"  [omi]  polygon fields applied to {_omi_hits} listings")
+    except ImportError:
+        pass
+    except Exception as _exc:
+        print(f"  [omi]  polygon pass skipped: {_exc}")
 
     # Score (needs full list for within-fascia percentile)
     scored = []

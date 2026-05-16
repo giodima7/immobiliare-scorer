@@ -175,7 +175,8 @@ def lookup_for_city(lat: float, lng: float, city: str = "milano",
         try:
             d = pt.distance(p["geom"].centroid)
             if d < best_dist:
-                best_dist, best = p, d
+                best_dist = d
+                best      = p
         except Exception:
             continue
 
