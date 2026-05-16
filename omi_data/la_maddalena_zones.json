@@ -1,0 +1,24 @@
+{
+  "B1": {
+    "zona": "B1",
+    "fascia": "B",
+    "descr": "CENTRO URBANO",
+    "compr_min": 1700.0,
+    "compr_max": 2400.0,
+    "compr_mid": 2050,
+    "loc_min": 7.1,
+    "loc_max": 10.0,
+    "loc_mid": 8.55
+  },
+  "D1": {
+    "zona": "D1",
+    "fascia": "D",
+    "descr": "ZONA TURISTICA COSTIERA",
+    "compr_min": 2200.0,
+    "compr_max": 3300.0,
+    "compr_mid": 2750,
+    "loc_min": 9.2,
+    "loc_max": 13.8,
+    "loc_mid": 11.5
+  }
+}
