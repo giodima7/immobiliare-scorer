@@ -4183,6 +4183,83 @@ body.detail-page-active .filter-bar { display: none !important; }
   border-bottom: 1px solid var(--border);
 }
 .settings-section-title:first-child { margin-top: 0; }
+
+/* ── Enrichment panel ────────────────────────────────────────────────────
+   Per-city × per-kind progress rows, rendered in #enrichmentPanelBody by
+   _renderEnrichmentPanel() on every /scanner-status tick. The "Run all"
+   button issues a single POST and the orchestrator drains the queue
+   sequentially — the user clicks once and walks away. */
+.enrich-panel { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.enrich-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 8px 0 16px; }
+.enrich-toolbar .btn-run-all {
+  background: var(--accent); color: #fff; border: 0; border-radius: 8px;
+  padding: 9px 18px; font-weight: 700; cursor: pointer; font-size: 13px;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.enrich-toolbar .btn-run-all:hover:not(:disabled) { background: var(--accent-dark, #1f5f4a); }
+.enrich-toolbar .btn-run-all:disabled { opacity: 0.5; cursor: not-allowed; }
+.enrich-toolbar .btn-stop {
+  background: rgba(220, 38, 38, 0.08); color: #b91c1c; border: 1px solid rgba(220, 38, 38, 0.25);
+  border-radius: 8px; padding: 8px 14px; font-weight: 600; cursor: pointer; font-size: 12px;
+}
+.enrich-toolbar .btn-stop:hover { background: rgba(220, 38, 38, 0.16); }
+.enrich-row {
+  display: grid;
+  grid-template-columns: 160px 90px 1fr 90px 110px;
+  align-items: center; gap: 12px;
+  padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface);
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.enrich-row.is-running   { border-color: rgba(45, 106, 79, 0.55); background: rgba(45, 106, 79, 0.05); }
+.enrich-row.is-queued    { border-color: rgba(120, 113, 108, 0.35); }
+.enrich-row.is-done      { opacity: 0.78; }
+.enrich-row.is-error     { border-color: rgba(220, 38, 38, 0.55); background: rgba(220, 38, 38, 0.04); }
+.enrich-row .city-name  { font-weight: 700; font-size: 13px; }
+.enrich-row .kind-pill {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+  padding: 3px 8px; border-radius: 999px; background: var(--surf2); color: var(--muted);
+  width: fit-content;
+}
+.enrich-row .kind-pill.is-rental { background: rgba(45, 106, 79, 0.12); color: #2A7A5A; }
+.enrich-row .kind-pill.is-sale   { background: rgba(14, 116, 144, 0.12); color: #0E7490; }
+.enrich-bar {
+  position: relative; height: 8px; background: var(--surf2);
+  border-radius: 99px; overflow: hidden;
+}
+.enrich-bar-fill {
+  position: absolute; inset: 0; right: auto; width: 0%;
+  background: linear-gradient(90deg, #2A7A5A 0%, #15803D 100%);
+  border-radius: inherit; transition: width 280ms ease;
+}
+.enrich-bar-fill.is-indeterminate {
+  width: 30% !important;
+  animation: enrich-indet 1.1s ease-in-out infinite alternate;
+}
+@keyframes enrich-indet {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(330%); }
+}
+.enrich-count { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.enrich-state {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+  font-weight: 700; text-align: right;
+}
+.enrich-state.is-running { color: #2A7A5A; }
+.enrich-state.is-queued  { color: var(--muted); }
+.enrich-state.is-done    { color: #2A7A5A; }
+.enrich-state.is-error   { color: #b91c1c; }
+.enrich-state.is-idle    { color: var(--muted); }
+.enrich-error-line {
+  grid-column: 1 / -1; font-size: 11px; color: #b91c1c; margin-top: 2px;
+}
+@media (max-width: 720px) {
+  .enrich-row { grid-template-columns: 1fr 1fr; row-gap: 6px; }
+  .enrich-row .city-name { grid-column: 1 / 2; }
+  .enrich-row .kind-pill { grid-column: 2 / 3; justify-self: end; }
+  .enrich-row .enrich-bar { grid-column: 1 / -1; }
+  .enrich-row .enrich-count, .enrich-row .enrich-state { font-size: 11px; }
+}
 .area-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .area-table th {
   text-align: left; padding: 6px 12px;
@@ -5949,8 +6026,14 @@ function saveFilters() {
     <span id="rescoreSalesStatus" style="font-size:10px;color:var(--muted);margin-left:4px"></span>
   </span>
   <span class="geo-coverage" id="sSaleGeoCoverage">🌍 Geo: <strong id="sSaleGeoCoverageCount">–</strong>
-    <button class="btn-enrich-geo" id="btnEnrichGeoSales" title="Enrich sale listings with geo data">Enrich</button>
-    <div class="geo-progress-bar" id="sSaleGeoProgressBar"><div class="geo-progress-fill" id="sSaleGeoProgressFill" style="width:0%"></div></div>
+    <!-- Replaced by multi-city Enrichment panel in Settings. Old button +
+         progress bar kept hidden so the scanner-status poll still finds
+         the element refs without throwing. -->
+    <button class="btn-enrich-geo" id="btnEnrichGeoSales" title="Enrich sale listings with geo data" hidden style="display:none">Enrich</button>
+    <button class="btn-enrich-geo" id="btnEnrichGoSettingsSales"
+            title="Open the multi-city Enrichment panel in Settings"
+            onclick="switchTab('settings'); setTimeout(() =&gt; { const el = document.getElementById('enrichmentPanel'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);">Enrich →</button>
+    <div class="geo-progress-bar" id="sSaleGeoProgressBar" hidden style="display:none"><div class="geo-progress-fill" id="sSaleGeoProgressFill" style="width:0%"></div></div>
     <span id="sSaleGeoEnrichStatus" style="font-size:10px;color:var(--muted)"></span>
   </span>
 </div>
@@ -6272,8 +6355,16 @@ function saveFilters() {
     </span>
     <span class="geo-coverage" id="geoCoverage">🌍 Geo: <strong id="geoCoverageCount">–</strong>
       <button class="btn-enrich-geo" id="btnDownloadPois" title="Download all Milan POIs once — enables fast offline enrichment (no Overpass calls per listing)">📡 POI data</button>
-      <button class="btn-enrich-geo" id="btnEnrichGeo" title="Enrich existing listings with geo data">Enrich</button>
-      <div class="geo-progress-bar" id="geoProgressBar"><div class="geo-progress-fill" id="geoProgressFill" style="width:0%"></div></div>
+      <!-- Multi-city Enrich workflow now lives in Settings → Data Enrichment.
+           Old single-city button stays in the DOM but hidden — the
+           updateScannerStatus poll still reads its element refs so we
+           don't have to gut that branch yet. The deep-link below replaces
+           the user-visible affordance. -->
+      <button class="btn-enrich-geo" id="btnEnrichGeo" title="Enrich existing listings with geo data" hidden style="display:none">Enrich</button>
+      <button class="btn-enrich-geo" id="btnEnrichGoSettings"
+              title="Open the multi-city Enrichment panel in Settings"
+              onclick="switchTab('settings'); setTimeout(() =&gt; { const el = document.getElementById('enrichmentPanel'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);">Enrich →</button>
+      <div class="geo-progress-bar" id="geoProgressBar" hidden style="display:none"><div class="geo-progress-fill" id="geoProgressFill" style="width:0%"></div></div>
       <span id="geoEnrichStatus" style="font-size:10px;color:var(--muted)"></span>
     </span>
   </div>
@@ -6560,6 +6651,33 @@ function saveFilters() {
        Settings tab is shown after sign-in. Hidden when signed out (the
        renderer returns an empty section heading + sign-in prompt). -->
   <div id="digestSettingsWrap" style="margin-bottom:32px"></div>
+
+  <!-- ── Geo enrichment (multi-city) ─────────────────────────────────
+       Single source of truth for the "fill in metro/POI/walk-score
+       data" workflow. The Run-all button kicks off a sequential queue
+       across every active city × rentals + sales — one click and the
+       backend orchestrator handles the rest. Rows update live from
+       /scanner-status (1 s poll) so the user can step away without
+       wondering whether something hung. Hidden in static mode. -->
+  <div id="enrichmentPanel" style="margin-bottom:32px" hidden>
+    <div class="settings-section-title">Data Enrichment</div>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 6px;line-height:1.6">
+      Fill in missing geo data (metro distance, walk score, POIs, OMI zones)
+      for every city's listings. Click <strong>Run for all cities</strong> to
+      queue every city × both rentals + sales — they run one after the other
+      so you only click once.
+    </p>
+    <div class="enrich-toolbar">
+      <button class="btn-run-all" type="button" id="btnEnrichAll">
+        ▶ Run for all cities
+      </button>
+      <button class="btn-stop" type="button" id="btnEnrichStop" hidden>■ Stop</button>
+      <span class="enrich-state" id="enrichQueueStatus" style="font-weight:600"></span>
+    </div>
+    <div class="enrich-panel" id="enrichmentPanelBody">
+      <!-- rows populated by _renderEnrichmentPanel() -->
+    </div>
+  </div>
 
   <!-- ── Scoring parameters ─────────────────────────────────────────── -->
   <div class="settings-section-title">Scoring Parameters</div>
@@ -8768,7 +8886,10 @@ function switchTab(tab, opts) {
     if (!ALL_RENT.length && typeof loadRentals === 'function') loadRentals();
     if (typeof renderValuationTab === 'function') renderValuationTab();
   } else if (tab === 'settings') {
-    stopScannerPoll();
+    // Keep the scanner poll alive on Settings — the multi-city Enrichment
+    // panel reads its progress from /scanner-status. Polling here is also
+    // useful for the (less-frequently-touched) scan log.
+    startScannerPoll();
     stopSaleFetchPoll();
     _settingsLoad();
     _loadScoreSettings();
@@ -15521,8 +15642,219 @@ async function updateScannerStatus() {
         }
       }
     }
+
+    // Multi-city enrichment panel (Settings tab). Renders per-(city,kind)
+    // progress rows + the queue. Safe to call every tick — DOM diff is
+    // a single innerHTML write.
+    if (typeof _renderEnrichmentPanel === 'function') {
+      _renderEnrichmentPanel(st);
+      // While the queue is actually working, drop into a 1.5 s poll so
+      // the per-city progress bars feel live instead of the default 10 s
+      // scanner cadence. _maybeArmEnrichmentFastPoll() handles arm/disarm.
+      _maybeArmEnrichmentFastPoll(st);
+    }
   } catch { /* /scanner-status unavailable — no-op */ }
 }
+
+// ── Enrichment fast-poll ────────────────────────────────────────────────────
+// 1.5 s status refresh while any (city, kind) job is running OR the queue
+// orchestrator is alive. Self-extinguishes the moment everything's idle
+// so we're not hammering Flask after the queue drains.
+let _enrichFastPollTimer = null;
+function _maybeArmEnrichmentFastPoll(st) {
+  const jobs       = (st && st.geo_jobs) || {};
+  const anyRunning = Object.values(jobs).some(j => j && j.running);
+  const queueLive  = !!(st && (st.geo_queue_running || (st.geo_queue || []).length));
+  const wantFast   = anyRunning || queueLive;
+
+  if (wantFast && !_enrichFastPollTimer) {
+    _enrichFastPollTimer = setInterval(() => {
+      if (typeof updateScannerStatus === 'function') updateScannerStatus();
+    }, 1500);
+  } else if (!wantFast && _enrichFastPollTimer) {
+    clearInterval(_enrichFastPollTimer);
+    _enrichFastPollTimer = null;
+  }
+}
+
+// ── Multi-city enrichment panel ──────────────────────────────────────────────
+// Renders one row per (city, kind) job from the backend's _geo_jobs slot.
+// Rows that haven't been touched yet appear in "idle" state so the user
+// always sees the full grid of cities × kinds. Once they click "Run all"
+// the orchestrator drains the queue sequentially and each row transitions
+// queued → running → done in turn.
+const _ENRICH_CITY_ORDER = ['milano', 'roma', 'napoli', 'la_maddalena'];
+const _ENRICH_CITY_LABELS = {
+  milano: 'Milano', roma: 'Roma', napoli: 'Napoli', la_maddalena: 'La Maddalena',
+};
+const _ENRICH_KINDS = ['rental', 'sale'];
+
+function _enrichCityLabel(code) {
+  // Prefer the same display name the city pill is using so the i18n
+  // toggle propagates here too.
+  if (typeof availableCities !== 'undefined') {
+    const cfg = availableCities.find(c => c.code === code);
+    if (cfg) {
+      return (typeof _cityDisplayName === 'function')
+        ? _cityDisplayName(cfg)
+        : (cfg.display_name_en || cfg.code);
+    }
+  }
+  return _ENRICH_CITY_LABELS[code] || code;
+}
+
+function _renderEnrichmentPanel(st) {
+  const wrap = document.getElementById('enrichmentPanel');
+  if (!wrap) return;
+  // Hide in static mode (no Flask backend = nothing to enrich).
+  wrap.hidden = !IS_LIVE;
+  if (!IS_LIVE) return;
+
+  const body = document.getElementById('enrichmentPanelBody');
+  if (!body) return;
+
+  const jobs        = (st && st.geo_jobs) || {};
+  const queue       = (st && st.geo_queue) || [];
+  const queueLive   = !!(st && st.geo_queue_running);
+
+  // Toolbar state — "Run for all" disabled while any job is running OR
+  // queue is draining; "Stop" only visible while there's something to stop.
+  const anyRunning  = Object.values(jobs).some(j => j && j.running);
+  const queueActive = queueLive || queue.length > 0 || anyRunning;
+  const runBtn  = document.getElementById('btnEnrichAll');
+  const stopBtn = document.getElementById('btnEnrichStop');
+  if (runBtn)  runBtn.disabled = queueActive;
+  if (stopBtn) stopBtn.hidden  = !queueActive;
+
+  const queueLabel = document.getElementById('enrichQueueStatus');
+  if (queueLabel) {
+    if (queueActive) {
+      const done    = Object.values(jobs).filter(j => j && j.state === 'done').length;
+      const total   = _ENRICH_CITY_ORDER.length * _ENRICH_KINDS.length;
+      queueLabel.textContent = `Queue: ${done}/${total} jobs done`;
+      queueLabel.style.color = 'var(--accent)';
+    } else {
+      queueLabel.textContent = '';
+    }
+  }
+
+  // Render one row per (city, kind). Idle rows show "—" with no progress
+  // bar — they exist so the user can see what hasn't been run yet without
+  // having to read the queue separately.
+  const rows = [];
+  for (const city of _ENRICH_CITY_ORDER) {
+    for (const kind of _ENRICH_KINDS) {
+      const key   = `${city}:${kind}`;
+      const job   = jobs[key] || { state: 'idle', done: 0, total: 0 };
+      const state = job.state || (job.running ? 'running'
+                                              : (job.error ? 'error'
+                                                           : (job.done > 0 ? 'done' : 'idle')));
+      const pctNum = job.total > 0 ? Math.round((job.done / job.total) * 100) : 0;
+      const indet  = job.running && (!job.total || job.total === 0);
+
+      const countStr = (state === 'idle')
+        ? '—'
+        : (job.total > 0 ? `${job.done}/${job.total}` : (job.running ? '…' : '0'));
+      const stateLabel = {
+        idle:    'Idle',
+        queued:  'Queued',
+        running: 'Running…',
+        done:    `✓ Done`,
+        error:   '✗ Error',
+      }[state] || state;
+
+      const kindLabel = kind === 'rental' ? 'Rentals' : 'Sales';
+      const kindClass = kind === 'rental' ? 'is-rental' : 'is-sale';
+
+      // Hide the progress bar for idle rows so the row reads cleaner.
+      const barHtml = (state === 'idle')
+        ? '<div class="enrich-bar" style="visibility:hidden"></div>'
+        : `<div class="enrich-bar"><div class="enrich-bar-fill${indet ? ' is-indeterminate' : ''}"
+             style="width:${indet ? 30 : pctNum}%"></div></div>`;
+
+      rows.push(`
+        <div class="enrich-row is-${state}" data-job="${escapeHtml(key)}">
+          <div class="city-name">${escapeHtml(_enrichCityLabel(city))}</div>
+          <span class="kind-pill ${kindClass}">${escapeHtml(kindLabel)}</span>
+          ${barHtml}
+          <div class="enrich-count">${escapeHtml(countStr)}</div>
+          <div class="enrich-state is-${state}">${escapeHtml(stateLabel)}</div>
+          ${job.error
+            ? `<div class="enrich-error-line">${escapeHtml(job.error)}</div>`
+            : ''}
+        </div>`);
+    }
+  }
+  body.innerHTML = rows.join('');
+}
+
+// "Run for all cities" — single POST kicks off the backend orchestrator,
+// which drains a queue of (city × kind) jobs sequentially. The button
+// flips to a queued/running state optimistically so the user sees
+// feedback in <50 ms instead of waiting for the next 1 s scanner poll.
+(function () {
+  const btn = document.getElementById('btnEnrichAll');
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    if (!IS_LIVE) return;
+    btn.disabled = true;
+
+    // Optimistic UI: seed every (city, kind) slot with a "queued" state so
+    // the rows light up the moment the user clicks. The next /scanner-status
+    // poll will replace this with the real server state.
+    const optimistic = { geo_jobs: {}, geo_queue: [], geo_queue_running: true };
+    for (const c of _ENRICH_CITY_ORDER) for (const k of _ENRICH_KINDS) {
+      optimistic.geo_jobs[`${c}:${k}`] = {
+        city: c, kind: k, state: 'queued', running: false,
+        done: 0, total: 0, error: null,
+      };
+      optimistic.geo_queue.push({ city: c, kind: k });
+    }
+    _renderEnrichmentPanel(optimistic);
+
+    try {
+      const r = await fetch('/geo-enrich-queue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          cities: _ENRICH_CITY_ORDER, kinds: _ENRICH_KINDS,
+        }),
+      });
+      if (!r.ok && r.status !== 409) {
+        const j = await r.json().catch(() => ({}));
+        const q = document.getElementById('enrichQueueStatus');
+        if (q) { q.textContent = '✗ ' + (j.error || ('HTTP ' + r.status)); q.style.color = '#b91c1c'; }
+        btn.disabled = false;
+        return;
+      }
+    } catch (e) {
+      const q = document.getElementById('enrichQueueStatus');
+      if (q) { q.textContent = '✗ ' + e.message; q.style.color = '#b91c1c'; }
+      btn.disabled = false;
+      return;
+    }
+    // Bump the poll once so the UI catches up faster than waiting for the
+    // next 1 s tick. The orchestrator may still be initialising slots,
+    // so even a slightly stale read is fine — the next poll fixes it.
+    if (typeof updateScannerStatus === 'function') updateScannerStatus();
+  });
+})();
+
+(function () {
+  const btn = document.getElementById('btnEnrichStop');
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    if (!IS_LIVE) return;
+    btn.disabled = true;
+    try {
+      // DELETE on either endpoint cancels both the active worker AND the
+      // pending queue (both endpoints set _geo_queue_stop).
+      await fetch('/geo-enrich', { method: 'DELETE' });
+    } catch (_) { /* ok */ }
+    btn.disabled = false;
+    if (typeof updateScannerStatus === 'function') updateScannerStatus();
+  });
+})();
 
 // ── Scanner start/stop buttons ────────────────────────────────────────────────
 document.getElementById('btnStartScanner').addEventListener('click', async () => {

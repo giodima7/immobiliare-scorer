@@ -51,12 +51,59 @@ _scanner_proc = None   # subprocess.Popen for fetch_rentals.py --daemon
 _idealista_proc = None  # subprocess.Popen for fetch_idealista.py --daemon
 
 # ── Background geo enrichment ─────────────────────────────────────────────────
+# Legacy single-status dicts: kept so the existing dashboard polling code that
+# reads st.geo_enrich / st.geo_sale_enrich keeps working unchanged. Mirrors
+# the milano slot of _geo_jobs.
 _geo_status: dict = {"running": False, "done": 0, "total": 0, "error": None}
 _geo_stop   = threading.Event()
 
 # ── Background geo enrichment — sales ────────────────────────────────────────
 _geo_sale_status: dict = {"running": False, "done": 0, "total": 0, "error": None}
 _geo_sale_stop   = threading.Event()
+
+# ── Multi-city enrichment queue ──────────────────────────────────────────────
+# Per-(city, type) progress, keyed "{city}:{rental|sale}". The orchestrator
+# below drains _geo_queue one entry at a time, mutating the matching slot.
+# The dashboard polls scanner-status and renders each row.
+_geo_jobs: dict[str, dict] = {}
+_geo_queue: list[tuple[str, str]] = []
+_geo_queue_lock = threading.Lock()
+_geo_queue_stop = threading.Event()       # global cancel for the orchestrator
+_geo_orchestrator_thread: threading.Thread | None = None
+
+def _geo_job_key(city: str, kind: str) -> str:
+    return f"{city}:{kind}"
+
+def _geo_job_init(city: str, kind: str, state: str = "queued") -> dict:
+    """Create/replace a progress slot for one (city, kind) job."""
+    slot = {
+        "city": city, "kind": kind, "state": state,
+        "running": False, "done": 0, "total": 0, "error": None,
+        "started_at": None, "finished_at": None,
+    }
+    _geo_jobs[_geo_job_key(city, kind)] = slot
+    return slot
+
+def _geo_job(city: str, kind: str) -> dict:
+    """Fetch an existing slot, creating an empty one if missing."""
+    key = _geo_job_key(city, kind)
+    if key not in _geo_jobs:
+        _geo_job_init(city, kind, state="idle")
+    return _geo_jobs[key]
+
+def _resolve_city_path(city: str, kind: str) -> Path:
+    """
+    Resolve the JSON path for a (city, kind) pair, falling back to the
+    legacy un-prefixed file for Milan when the new per-city file hasn't
+    been written yet. Returns the per-city path either way — callers
+    that need to create the file use this as the write target.
+    """
+    suffix = "rentals_latest.json" if kind == "rental" else "sales_latest.json"
+    p = DASHBOARD_DIR / f"{city}_{suffix}"
+    if p.exists() or city != "milano":
+        return p
+    legacy = DASHBOARD_DIR / suffix
+    return legacy if legacy.exists() else p
 
 # ── Sales fetch (fetch_listings.py) ──────────────────────────────────────────
 _sale_fetch_lock   = threading.Lock()
@@ -143,24 +190,39 @@ def _apply_omi_polygon(data: list, ecache=None) -> int:
     return updated
 
 
-def _geo_enrich_worker():
+def _geo_enrich_worker(city: str = "milano"):
     """
-    Background thread: enrich all listings in rentals_latest.json that are
-    not yet in the enrichment cache.
+    Background thread: enrich all rental listings for `city` that aren't
+    yet in the enrichment cache.
 
     Strategy:
       • OMI polygon lookup + haversine POI distances: in-memory, parallel (fast)
       • OSRM walk times: one table API call per metro station per 500-listing chunk
       • Flush to disk after every chunk so the dashboard updates in real time
+
+    Progress is written to BOTH the per-city slot (`_geo_jobs[city:rental]`)
+    AND, for Milan, the legacy `_geo_status` dict so the existing
+    stats-bar progress UI keeps working without code changes.
     """
     global _geo_status
     _geo_stop.clear()
-    _geo_status = {"running": True, "done": 0, "total": 0, "error": None}
+    slot = _geo_job_init(city, "rental", state="running")
+    slot.update({"running": True, "started_at": _time.time()})
+    if city == "milano":
+        _geo_status = {"running": True, "done": 0, "total": 0, "error": None}
+
+    def _mark_progress(done: int, total: int) -> None:
+        """Single point of truth so per-city slot + legacy dict stay in sync."""
+        slot["done"]  = done
+        slot["total"] = total
+        if city == "milano":
+            _geo_status["done"]  = done
+            _geo_status["total"] = total
     try:
         import enrichment_cache as _ecache
         import scoring as _scoring
 
-        rent_path = DASHBOARD_DIR / "rentals_latest.json"
+        rent_path = _resolve_city_path(city, "rental")
         if not rent_path.exists():
             # Scanner hasn't run on this machine yet — pull the current
             # rows from Supabase so the user can still re-enrich without
@@ -168,10 +230,13 @@ def _geo_enrich_worker():
             _load_env()
             from supabase_sync import hydrate_local_json
             if not hydrate_local_json(rent_path, "rental"):
-                _geo_status["error"] = (
-                    "rentals_latest.json not found — set SUPABASE_URL / "
-                    "SUPABASE_SERVICE_KEY in .env, or run a scan first"
+                err = (
+                    f"{rent_path.name} not found — set SUPABASE_URL / "
+                    f"SUPABASE_SERVICE_KEY in .env, or run a scan first"
                 )
+                slot["error"] = err
+                if city == "milano":
+                    _geo_status["error"] = err
                 return
 
         data = _json.loads(rent_path.read_text())
@@ -259,9 +324,8 @@ def _geo_enrich_worker():
             1 for i in need_idx
             if not (data[i].get("latitude") and data[i].get("longitude"))
         )
-        _geo_status["total"] = len(need_idx) + n_omi
-        _geo_status["done"]  = n_omi   # polygon pass already counted
-        print(f"  [geo] background enrichment: {len(need_idx)} listings to process "
+        _mark_progress(n_omi, len(need_idx) + n_omi)   # polygon pass already counted
+        print(f"  [geo][{city}] background enrichment: {len(need_idx)} listings to process "
               f"({n_needs_geocoding} need Nominatim geocoding)")
 
         from enrich_geo import enrich_batch as _enrich_batch
@@ -308,7 +372,7 @@ def _geo_enrich_worker():
             _ecache.bulk_save(cache_entries)
             done_count  += len(chunk_idxs)
             null_streak  = null_streak + chunk_nulls if chunk_nulls == len(chunk_idxs) else 0
-            _geo_status["done"] = n_omi + done_count
+            _mark_progress(n_omi + done_count, slot["total"])
 
             # Flush after every chunk so the dashboard reflects progress in real time
             clean = [{k: v for k, v in l.items() if k != "omi"} for l in data]
@@ -316,10 +380,10 @@ def _geo_enrich_worker():
             from dashboard_io import write_snapshot
             write_snapshot(tmp, clean)
             tmp.replace(rent_path)
-            print(f"  [geo] {done_count}/{len(need_idx)} done")
+            print(f"  [geo][{city}] {done_count}/{len(need_idx)} done")
 
         # Final flush — mark total complete so UI shows 100 %
-        _geo_status["done"] = _geo_status["total"]
+        _mark_progress(slot["total"], slot["total"])
         _flush_geo(data, rent_path, _scoring)
         # Push the enriched rows back to Supabase so the deployed
         # dashboard sees the new geo fields without waiting for the
@@ -329,14 +393,20 @@ def _geo_enrich_worker():
             from supabase_sync import push_local_json
             push_local_json(rent_path, "rental")
         except Exception as exc:
-            print(f"  [geo] supabase push after enrich failed: {exc}")
-        print(f"  [geo] enrichment complete: {n_omi + done_count} done")
+            print(f"  [geo][{city}] supabase push after enrich failed: {exc}")
+        print(f"  [geo][{city}] enrichment complete: {n_omi + done_count} done")
 
     except Exception as exc:
-        _geo_status["error"] = str(exc)
-        print(f"  [geo] worker crashed: {exc}")
+        slot["error"] = str(exc)
+        if city == "milano":
+            _geo_status["error"] = str(exc)
+        print(f"  [geo][{city}] worker crashed: {exc}")
     finally:
-        _geo_status["running"] = False
+        slot["running"]     = False
+        slot["state"]       = "error" if slot.get("error") else "done"
+        slot["finished_at"] = _time.time()
+        if city == "milano":
+            _geo_status["running"] = False
 
 
 def _flush_geo(data: list, path: Path, scoring_mod):
@@ -372,26 +442,43 @@ def _flush_sale_geo(data: list, path: Path):
     tmp.replace(path)
 
 
-def _geo_enrich_sales_worker():
+def _geo_enrich_sales_worker(city: str = "milano"):
     """
-    Background thread: enrich all listings in sales_latest.json that are
-    not yet in the enrichment cache. Uses `sale:` prefix for cache keys.
+    Background thread: enrich sale listings for `city` that aren't yet in
+    the enrichment cache. Cache keys use the `sale` source prefix.
+
+    Progress is written to BOTH `_geo_jobs[city:sale]` AND the legacy
+    `_geo_sale_status` dict (Milan-only mirror) so the stats-bar progress
+    UI keeps working without changes.
     """
     global _geo_sale_status
     _geo_sale_stop.clear()
-    _geo_sale_status = {"running": True, "done": 0, "total": 0, "error": None}
+    slot = _geo_job_init(city, "sale", state="running")
+    slot.update({"running": True, "started_at": _time.time()})
+    if city == "milano":
+        _geo_sale_status = {"running": True, "done": 0, "total": 0, "error": None}
+
+    def _mark_progress(done: int, total: int) -> None:
+        slot["done"]  = done
+        slot["total"] = total
+        if city == "milano":
+            _geo_sale_status["done"]  = done
+            _geo_sale_status["total"] = total
     try:
         import enrichment_cache as _ecache
 
-        sale_path = DASHBOARD_DIR / "sales_latest.json"
+        sale_path = _resolve_city_path(city, "sale")
         if not sale_path.exists():
             _load_env()
             from supabase_sync import hydrate_local_json
             if not hydrate_local_json(sale_path, "sale"):
-                _geo_sale_status["error"] = (
-                    "sales_latest.json not found — set SUPABASE_URL / "
-                    "SUPABASE_SERVICE_KEY in .env, or run a scan first"
+                err = (
+                    f"{sale_path.name} not found — set SUPABASE_URL / "
+                    f"SUPABASE_SERVICE_KEY in .env, or run a scan first"
                 )
+                slot["error"] = err
+                if city == "milano":
+                    _geo_sale_status["error"] = err
                 return
 
         data = _json.loads(sale_path.read_text())
@@ -417,7 +504,7 @@ def _geo_enrich_sales_worker():
                 n_backfill += 1
 
         if n_omi > 0 or n_backfill > 0:
-            print(f"  [geo-sale] backfill: {n_backfill} from cache, {n_omi} OMI polygon")
+            print(f"  [geo-sale][{city}] backfill: {n_backfill} from cache, {n_omi} OMI polygon")
             _flush_sale_geo(data, sale_path)
 
         def _needs_overpass(l):
@@ -433,9 +520,8 @@ def _geo_enrich_sales_worker():
                 or l.get("address", "").strip()
             )
         ]
-        _geo_sale_status["total"] = len(need_idx) + n_omi
-        _geo_sale_status["done"]  = n_omi
-        print(f"  [geo-sale] background enrichment: {len(need_idx)} listings to process")
+        _mark_progress(n_omi, len(need_idx) + n_omi)
+        print(f"  [geo-sale][{city}] background enrichment: {len(need_idx)} listings to process")
 
         from enrich_geo import enrich_batch as _enrich_batch
 
@@ -464,29 +550,35 @@ def _geo_enrich_sales_worker():
 
             _ecache.bulk_save(cache_entries)
             done_count += len(chunk_idxs)
-            _geo_sale_status["done"] = n_omi + done_count
+            _mark_progress(n_omi + done_count, slot["total"])
 
             clean = [{k: v for k, v in l.items() if k != "omi"} for l in data]
             tmp = sale_path.with_suffix(".tmp")
             from dashboard_io import write_snapshot
             write_snapshot(tmp, clean)
             tmp.replace(sale_path)
-            print(f"  [geo-sale] {done_count}/{len(need_idx)} done")
+            print(f"  [geo-sale][{city}] {done_count}/{len(need_idx)} done")
 
-        _geo_sale_status["done"] = _geo_sale_status["total"]
+        _mark_progress(slot["total"], slot["total"])
         _flush_sale_geo(data, sale_path)
         try:
             from supabase_sync import push_local_json
             push_local_json(sale_path, "sale")
         except Exception as exc:
-            print(f"  [geo-sale] supabase push after enrich failed: {exc}")
-        print(f"  [geo-sale] enrichment complete: {n_omi + done_count} done")
+            print(f"  [geo-sale][{city}] supabase push after enrich failed: {exc}")
+        print(f"  [geo-sale][{city}] enrichment complete: {n_omi + done_count} done")
 
     except Exception as exc:
-        _geo_sale_status["error"] = str(exc)
-        print(f"  [geo-sale] worker crashed: {exc}")
+        slot["error"] = str(exc)
+        if city == "milano":
+            _geo_sale_status["error"] = str(exc)
+        print(f"  [geo-sale][{city}] worker crashed: {exc}")
     finally:
-        _geo_sale_status["running"] = False
+        slot["running"]     = False
+        slot["state"]       = "error" if slot.get("error") else "done"
+        slot["finished_at"] = _time.time()
+        if city == "milano":
+            _geo_sale_status["running"] = False
 
 def _load_env():
     env_path = BASE_DIR / ".env"
@@ -686,6 +778,12 @@ def scanner_status():
         "idealista":   ideal_st,
         "geo_enrich":       dict(_geo_status),       # live rentals enrichment progress
         "geo_sale_enrich":  dict(_geo_sale_status),  # live sales enrichment progress
+        # Multi-city queue + per-(city, kind) state. The Settings panel
+        # renders one row per slot; `queue` is the not-yet-started list.
+        "geo_jobs": {k: dict(v) for k, v in _geo_jobs.items()},
+        "geo_queue": [{"city": c, "kind": k} for c, k in list(_geo_queue)],
+        "geo_queue_running": bool(_geo_orchestrator_thread
+                                  and _geo_orchestrator_thread.is_alive()),
     }
     return jsonify(result)
 
@@ -873,19 +971,96 @@ def pois_status():
 
 @app.route("/geo-enrich", methods=["POST"])
 def start_geo_enrich():
-    """Start background geo enrichment of existing listings."""
-    if _geo_status.get("running"):
-        return jsonify({"ok": False, "error": "already running"}), 409
-    t = threading.Thread(target=_geo_enrich_worker, daemon=True)
+    """
+    Start background geo enrichment of existing listings.
+
+    Body / query is optional. Recognised:
+      ?city=roma     → enrich a single city's rentals (default: milano).
+      Otherwise behaves identically to the legacy Milan-only endpoint.
+    """
+    city = (request.args.get("city") or
+            (request.get_json(silent=True) or {}).get("city") or
+            "milano").lower()
+    if _geo_job(city, "rental").get("running"):
+        return jsonify({"ok": False, "error": f"{city} rental enrichment already running"}), 409
+    t = threading.Thread(target=_geo_enrich_worker, args=(city,), daemon=True)
     t.start()
-    return jsonify({"ok": True, "message": "geo enrichment started"})
+    return jsonify({"ok": True, "message": f"{city} rental enrichment started"})
 
 
 @app.route("/geo-enrich", methods=["DELETE"])
 def stop_geo_enrich():
-    """Stop the background geo enrichment."""
+    """Stop the background geo enrichment (single-city + the orchestrator)."""
     _geo_stop.set()
+    _geo_sale_stop.set()
+    _geo_queue_stop.set()
+    with _geo_queue_lock:
+        _geo_queue.clear()
     return jsonify({"ok": True})
+
+
+# ── Multi-city orchestrator ──────────────────────────────────────────────────
+def _geo_orchestrator_worker(jobs: list[tuple[str, str]]):
+    """
+    Sequentially drain `jobs` (list of (city, kind) tuples), running one
+    worker at a time. Each job's progress is observable via
+    /scanner-status. A DELETE /geo-enrich aborts both the current worker
+    and the queue.
+    """
+    _geo_queue_stop.clear()
+    with _geo_queue_lock:
+        _geo_queue[:] = list(jobs)
+        for city, kind in jobs:
+            # Eagerly create a "queued" slot so the dashboard renders the
+            # full queue immediately, before any worker has actually run.
+            _geo_job_init(city, kind, state="queued")
+
+    try:
+        while True:
+            with _geo_queue_lock:
+                if not _geo_queue or _geo_queue_stop.is_set():
+                    break
+                city, kind = _geo_queue.pop(0)
+            # The per-city worker also calls _geo_stop.clear() — but since
+            # the orchestrator is the only producer here we don't need
+            # any extra coordination.
+            target = _geo_enrich_worker if kind == "rental" else _geo_enrich_sales_worker
+            try:
+                target(city)
+            except Exception as exc:
+                print(f"  [geo-orch] {city}:{kind} crashed: {exc}")
+    finally:
+        with _geo_queue_lock:
+            _geo_queue.clear()
+
+
+@app.route("/geo-enrich-queue", methods=["POST"])
+def start_geo_enrich_queue():
+    """
+    Start a sequential queue covering one or more (city, kind) jobs.
+
+    Body (optional, all fields default sensibly):
+      {
+        "cities": ["milano", "roma", "napoli", "la_maddalena"],
+        "kinds":  ["rental", "sale"]
+      }
+
+    Default = every active city × both kinds. Refuses to start a new
+    queue while another is in progress; DELETE /geo-enrich cancels.
+    """
+    global _geo_orchestrator_thread
+    if _geo_orchestrator_thread and _geo_orchestrator_thread.is_alive():
+        return jsonify({"ok": False, "error": "queue already running"}), 409
+
+    body  = request.get_json(silent=True) or {}
+    cities = body.get("cities") or ["milano", "roma", "napoli", "la_maddalena"]
+    kinds  = body.get("kinds")  or ["rental", "sale"]
+    jobs   = [(c, k) for c in cities for k in kinds]
+
+    _geo_orchestrator_thread = threading.Thread(
+        target=_geo_orchestrator_worker, args=(jobs,), daemon=True)
+    _geo_orchestrator_thread.start()
+    return jsonify({"ok": True, "queued": [{"city": c, "kind": k} for c, k in jobs]})
 
 
 @app.route("/cache-stats")
@@ -1489,18 +1664,24 @@ def api_rescore_sales():
 
 @app.route("/geo-enrich-sales", methods=["POST"])
 def start_geo_enrich_sales():
-    """Start background geo enrichment of existing sale listings."""
-    if _geo_sale_status.get("running"):
-        return jsonify({"ok": False, "error": "already running"}), 409
-    t = threading.Thread(target=_geo_enrich_sales_worker, daemon=True)
+    """Start background geo enrichment of existing sale listings (one city)."""
+    city = (request.args.get("city") or
+            (request.get_json(silent=True) or {}).get("city") or
+            "milano").lower()
+    if _geo_job(city, "sale").get("running"):
+        return jsonify({"ok": False, "error": f"{city} sale enrichment already running"}), 409
+    t = threading.Thread(target=_geo_enrich_sales_worker, args=(city,), daemon=True)
     t.start()
-    return jsonify({"ok": True, "message": "sales geo enrichment started"})
+    return jsonify({"ok": True, "message": f"{city} sale enrichment started"})
 
 
 @app.route("/geo-enrich-sales", methods=["DELETE"])
 def stop_geo_enrich_sales():
-    """Stop the background sales geo enrichment."""
+    """Stop the background sales geo enrichment (and any orchestrator queue)."""
     _geo_sale_stop.set()
+    _geo_queue_stop.set()
+    with _geo_queue_lock:
+        _geo_queue.clear()
     return jsonify({"ok": True})
 
 
