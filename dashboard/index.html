@@ -4203,28 +4203,47 @@ body.detail-page-active .filter-bar { display: none !important; }
   border-radius: 8px; padding: 8px 14px; font-weight: 600; cursor: pointer; font-size: 12px;
 }
 .enrich-toolbar .btn-stop:hover { background: rgba(220, 38, 38, 0.16); }
+/* One row per city; rentals + sales are two equal columns inside. */
 .enrich-row {
   display: grid;
-  grid-template-columns: 160px 90px 1fr 90px 110px;
-  align-items: center; gap: 12px;
+  grid-template-columns: 160px 1fr 1fr;
+  align-items: stretch; gap: 14px;
   padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px;
   background: var(--surface);
   transition: border-color 120ms ease, background 120ms ease;
 }
 .enrich-row.is-running   { border-color: rgba(45, 106, 79, 0.55); background: rgba(45, 106, 79, 0.05); }
-.enrich-row.is-queued    { border-color: rgba(120, 113, 108, 0.35); }
-.enrich-row.is-done      { opacity: 0.78; }
 .enrich-row.is-error     { border-color: rgba(220, 38, 38, 0.55); background: rgba(220, 38, 38, 0.04); }
-.enrich-row .city-name  { font-weight: 700; font-size: 13px; }
-.enrich-row .kind-pill {
-  font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
-  padding: 3px 8px; border-radius: 999px; background: var(--surf2); color: var(--muted);
-  width: fit-content;
+.enrich-row .city-name {
+  font-weight: 700; font-size: 14px; align-self: center;
+  display: flex; flex-direction: column; gap: 2px;
 }
-.enrich-row .kind-pill.is-rental { background: rgba(45, 106, 79, 0.12); color: #2A7A5A; }
-.enrich-row .kind-pill.is-sale   { background: rgba(14, 116, 144, 0.12); color: #0E7490; }
+.enrich-row .city-name .city-pending-total {
+  font-size: 11px; color: var(--muted); font-weight: 500;
+  text-transform: none; letter-spacing: 0;
+}
+.enrich-cell {
+  display: grid;
+  grid-template-columns: 70px 1fr auto;
+  align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 8px;
+  background: var(--surf2, #f5f3ef);
+  border: 1px solid transparent;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.enrich-cell.is-running { border-color: rgba(45, 106, 79, 0.45); background: rgba(45, 106, 79, 0.08); }
+.enrich-cell.is-queued  { border-color: rgba(120, 113, 108, 0.35); }
+.enrich-cell.is-done    { opacity: 0.78; }
+.enrich-cell.is-error   { border-color: rgba(220, 38, 38, 0.45); background: rgba(220, 38, 38, 0.06); }
+.enrich-cell .kind-pill {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+  padding: 3px 8px; border-radius: 999px; background: var(--surface); color: var(--muted);
+  font-weight: 700; text-align: center;
+}
+.enrich-cell .kind-pill.is-rental { background: rgba(45, 106, 79, 0.15); color: #2A7A5A; }
+.enrich-cell .kind-pill.is-sale   { background: rgba(14, 116, 144, 0.15); color: #0E7490; }
 .enrich-bar {
-  position: relative; height: 8px; background: var(--surf2);
+  position: relative; height: 8px; background: rgba(0, 0, 0, 0.06);
   border-radius: 99px; overflow: hidden;
 }
 .enrich-bar-fill {
@@ -4240,25 +4259,33 @@ body.detail-page-active .filter-bar { display: none !important; }
   0%   { transform: translateX(-100%); }
   100% { transform: translateX(330%); }
 }
-.enrich-count { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.enrich-cell .meta {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 2px;
+  min-width: 80px;
+}
+.enrich-count {
+  font-size: 12px; color: var(--text); font-weight: 600;
+  font-variant-numeric: tabular-nums; line-height: 1.2;
+}
+.enrich-count .pending-num {
+  font-size: 13px; font-weight: 700; color: var(--accent);
+}
 .enrich-state {
-  font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
-  font-weight: 700; text-align: right;
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+  font-weight: 700; line-height: 1.2;
 }
 .enrich-state.is-running { color: #2A7A5A; }
 .enrich-state.is-queued  { color: var(--muted); }
 .enrich-state.is-done    { color: #2A7A5A; }
 .enrich-state.is-error   { color: #b91c1c; }
 .enrich-state.is-idle    { color: var(--muted); }
-.enrich-error-line {
-  grid-column: 1 / -1; font-size: 11px; color: #b91c1c; margin-top: 2px;
+.enrich-cell .cell-error {
+  grid-column: 1 / -1; font-size: 11px; color: #b91c1c; margin-top: 4px;
 }
 @media (max-width: 720px) {
-  .enrich-row { grid-template-columns: 1fr 1fr; row-gap: 6px; }
-  .enrich-row .city-name { grid-column: 1 / 2; }
-  .enrich-row .kind-pill { grid-column: 2 / 3; justify-self: end; }
-  .enrich-row .enrich-bar { grid-column: 1 / -1; }
-  .enrich-row .enrich-count, .enrich-row .enrich-state { font-size: 11px; }
+  .enrich-row { grid-template-columns: 1fr; gap: 8px; }
+  .enrich-row .city-name { font-size: 15px; }
+  .enrich-cell { grid-template-columns: 60px 1fr auto; gap: 8px; }
 }
 .area-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .area-table th {
@@ -15713,17 +15740,29 @@ function _renderEnrichmentPanel(st) {
   const body = document.getElementById('enrichmentPanelBody');
   if (!body) return;
 
-  const jobs        = (st && st.geo_jobs) || {};
-  const queue       = (st && st.geo_queue) || [];
-  const queueLive   = !!(st && st.geo_queue_running);
+  const jobs       = (st && st.geo_jobs)    || {};
+  const queue      = (st && st.geo_queue)   || [];
+  const pending    = (st && st.geo_pending) || {};
+  const queueLive  = !!(st && st.geo_queue_running);
 
   // Toolbar state — "Run for all" disabled while any job is running OR
   // queue is draining; "Stop" only visible while there's something to stop.
   const anyRunning  = Object.values(jobs).some(j => j && j.running);
   const queueActive = queueLive || queue.length > 0 || anyRunning;
+  const totalPending = Object.values(pending).reduce(
+    (s, p) => s + ((p && p.count) || 0), 0);
   const runBtn  = document.getElementById('btnEnrichAll');
   const stopBtn = document.getElementById('btnEnrichStop');
-  if (runBtn)  runBtn.disabled = queueActive;
+  if (runBtn) {
+    runBtn.disabled = queueActive;
+    // Bake the total pending count into the button label when nothing is
+    // running so the user knows exactly how much work clicking will do.
+    runBtn.textContent = queueActive
+      ? '▶ Running queue…'
+      : (totalPending > 0
+          ? `▶ Run for all cities (${totalPending} listings)`
+          : '▶ Run for all cities');
+  }
   if (stopBtn) stopBtn.hidden  = !queueActive;
 
   const queueLabel = document.getElementById('enrichQueueStatus');
@@ -15738,52 +15777,95 @@ function _renderEnrichmentPanel(st) {
     }
   }
 
-  // Render one row per (city, kind). Idle rows show "—" with no progress
-  // bar — they exist so the user can see what hasn't been run yet without
-  // having to read the queue separately.
+  // Build one row per city, with rentals + sales as side-by-side cells.
   const rows = [];
   for (const city of _ENRICH_CITY_ORDER) {
-    for (const kind of _ENRICH_KINDS) {
-      const key   = `${city}:${kind}`;
-      const job   = jobs[key] || { state: 'idle', done: 0, total: 0 };
+    const cellsHtml = _ENRICH_KINDS.map(kind => {
+      const key  = `${city}:${kind}`;
+      const job  = jobs[key] || { state: 'idle', done: 0, total: 0 };
+      const pend = pending[key] || { count: 0, total: 0, stale: false };
       const state = job.state || (job.running ? 'running'
                                               : (job.error ? 'error'
                                                            : (job.done > 0 ? 'done' : 'idle')));
       const pctNum = job.total > 0 ? Math.round((job.done / job.total) * 100) : 0;
       const indet  = job.running && (!job.total || job.total === 0);
 
-      const countStr = (state === 'idle')
-        ? '—'
-        : (job.total > 0 ? `${job.done}/${job.total}` : (job.running ? '…' : '0'));
+      // Idle cells show the pending-listing preview so the user knows up
+      // front how much each job will process. Running/queued/done cells
+      // show the in-flight done/total counter.
+      let primary, sub;
+      if (state === 'idle') {
+        if (pend.stale) {
+          primary = '—';
+          sub     = 'no data';
+        } else if (pend.count === 0) {
+          primary = '✓ 0';
+          sub     = pend.total > 0 ? `${pend.total} listings` : 'all done';
+        } else {
+          primary = `<span class="pending-num">${pend.count}</span>`;
+          sub     = `of ${pend.total} need enrichment`;
+        }
+      } else if (state === 'queued') {
+        primary = pend.count > 0 ? String(pend.count) : '…';
+        sub     = 'queued';
+      } else if (state === 'running') {
+        primary = job.total > 0 ? `${job.done}/${job.total}` : '…';
+        sub     = 'in progress';
+      } else if (state === 'done') {
+        primary = `✓ ${job.done}`;
+        sub     = job.total > 0 ? `of ${job.total}` : 'done';
+      } else { // error
+        primary = '✗';
+        sub     = 'failed';
+      }
       const stateLabel = {
         idle:    'Idle',
         queued:  'Queued',
         running: 'Running…',
-        done:    `✓ Done`,
-        error:   '✗ Error',
+        done:    'Done',
+        error:   'Error',
       }[state] || state;
 
       const kindLabel = kind === 'rental' ? 'Rentals' : 'Sales';
       const kindClass = kind === 'rental' ? 'is-rental' : 'is-sale';
 
-      // Hide the progress bar for idle rows so the row reads cleaner.
-      const barHtml = (state === 'idle')
+      const barHtml = (state === 'idle' || state === 'queued')
         ? '<div class="enrich-bar" style="visibility:hidden"></div>'
         : `<div class="enrich-bar"><div class="enrich-bar-fill${indet ? ' is-indeterminate' : ''}"
              style="width:${indet ? 30 : pctNum}%"></div></div>`;
 
-      rows.push(`
-        <div class="enrich-row is-${state}" data-job="${escapeHtml(key)}">
-          <div class="city-name">${escapeHtml(_enrichCityLabel(city))}</div>
+      return `
+        <div class="enrich-cell is-${state}" data-job="${escapeHtml(key)}">
           <span class="kind-pill ${kindClass}">${escapeHtml(kindLabel)}</span>
           ${barHtml}
-          <div class="enrich-count">${escapeHtml(countStr)}</div>
-          <div class="enrich-state is-${state}">${escapeHtml(stateLabel)}</div>
+          <div class="meta">
+            <div class="enrich-count">${primary}</div>
+            <div class="enrich-state is-${state}" title="${escapeHtml(sub)}">${escapeHtml(stateLabel)}</div>
+          </div>
           ${job.error
-            ? `<div class="enrich-error-line">${escapeHtml(job.error)}</div>`
+            ? `<div class="cell-error">${escapeHtml(job.error)}</div>`
             : ''}
-        </div>`);
-    }
+        </div>`;
+    }).join('');
+
+    // City-row aggregate: sum pending across rentals + sales for the title.
+    const cityPending = _ENRICH_KINDS.reduce(
+      (s, k) => s + ((pending[`${city}:${k}`] || {}).count || 0), 0);
+    const cityRowState = _ENRICH_KINDS.some(
+      k => jobs[`${city}:${k}`] && jobs[`${city}:${k}`].running) ? 'is-running' : '';
+    const cityRowError = _ENRICH_KINDS.some(
+      k => jobs[`${city}:${k}`] && jobs[`${city}:${k}`].state === 'error') ? 'is-error' : '';
+
+    rows.push(`
+      <div class="enrich-row ${cityRowState} ${cityRowError}">
+        <div class="city-name">
+          ${escapeHtml(_enrichCityLabel(city))}
+          ${cityPending > 0
+            ? `<span class="city-pending-total">${cityPending} pending</span>`
+            : '<span class="city-pending-total">all enriched</span>'}
+        </div>
+        ${cellsHtml}
+      </div>`);
   }
   body.innerHTML = rows.join('');
 }

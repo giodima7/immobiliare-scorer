@@ -105,6 +105,104 @@ def _resolve_city_path(city: str, kind: str) -> Path:
     legacy = DASHBOARD_DIR / suffix
     return legacy if legacy.exists() else p
 
+
+# ── Pending-count preview ────────────────────────────────────────────────────
+# Used by the Settings → Data Enrichment panel so the user knows how much
+# work each (city, kind) job will do BEFORE clicking Run-all. Computing it
+# means opening every file + walking the enrichment cache, which is too
+# heavy to do per poll — cache the result with a short TTL and only
+# recompute when the file mtime changes or the TTL expires.
+_GEO_PENDING_CACHE: dict[str, dict] = {}   # key: "{city}:{kind}" → {count, total, mtime, computed_at}
+_GEO_PENDING_TTL = 60.0  # seconds
+
+def _count_pending_for(city: str, kind: str) -> dict:
+    """
+    Return {"count": N pending, "total": N listings, "stale": bool}.
+    `count` mirrors what the worker would actually process; `stale`
+    flags whether the file is missing entirely.
+    """
+    key  = _geo_job_key(city, kind)
+    path = _resolve_city_path(city, kind)
+    if not path.exists():
+        return {"count": 0, "total": 0, "stale": True}
+
+    try:
+        mtime = path.stat().st_mtime
+    except OSError:
+        return {"count": 0, "total": 0, "stale": True}
+
+    cached = _GEO_PENDING_CACHE.get(key)
+    now    = _time.time()
+    if (cached
+            and cached.get("mtime") == mtime
+            and (now - cached.get("computed_at", 0)) < _GEO_PENDING_TTL):
+        return {"count": cached["count"], "total": cached["total"], "stale": False}
+
+    try:
+        import enrichment_cache as _ecache
+        _ecache.load()
+        data = _json.loads(path.read_text())
+    except Exception:
+        return {"count": 0, "total": 0, "stale": True}
+
+    src_key = "sale" if kind == "sale" else None  # rentals: derive from listing.source
+    pending = 0
+    for l in data:
+        # Listings already carrying enrichment in the JSON itself don't need work.
+        if l.get("geo_score") is not None:
+            continue
+        # Check the cache (per source). Listings with a cached geo_score are skipped.
+        src = src_key or l.get("source") or "immobiliare"
+        lid = l.get("id")
+        if not lid:
+            continue
+        cached_entry = _ecache.get(src, lid)
+        if cached_entry and cached_entry.get("geo_score") is not None:
+            continue
+        # Must have at least one route to coordinates — mirrors the worker's
+        # _has_geocodable_data check. Inlined here to avoid a circular import.
+        if l.get("latitude") and l.get("longitude"):
+            pending += 1; continue
+        addr = (l.get("address") or "").strip()
+        if addr and "posizione approssimativa" not in addr.lower():
+            pending += 1; continue
+        title = (l.get("title") or "").strip()
+        if title and (" in " in f" {title.lower()} " or
+                      any(seg[:1].isupper() for seg in title.split(" a ")[1:2])):
+            pending += 1; continue
+        nb = (l.get("neighbourhood") or "").strip()
+        if nb and nb.lower() not in {"—", "-", ""} and "posizione approssimativa" not in nb.lower():
+            pending += 1; continue
+
+    _GEO_PENDING_CACHE[key] = {
+        "count": pending, "total": len(data),
+        "mtime": mtime, "computed_at": now,
+    }
+    return {"count": pending, "total": len(data), "stale": False}
+
+
+def _all_pending() -> dict:
+    """Per-(city, kind) pending counts for the four active cities."""
+    out = {}
+    for city in ("milano", "roma", "napoli", "la_maddalena"):
+        for kind in ("rental", "sale"):
+            out[_geo_job_key(city, kind)] = _count_pending_for(city, kind)
+    return out
+
+
+def _invalidate_pending_cache(city: str | None = None, kind: str | None = None) -> None:
+    """Drop pending-count cache entries so the next poll recomputes."""
+    if city is None and kind is None:
+        _GEO_PENDING_CACHE.clear()
+        return
+    if city and kind:
+        _GEO_PENDING_CACHE.pop(_geo_job_key(city, kind), None)
+        return
+    if city:
+        for k in list(_GEO_PENDING_CACHE):
+            if k.startswith(f"{city}:"):
+                _GEO_PENDING_CACHE.pop(k, None)
+
 # ── Sales fetch (fetch_listings.py) ──────────────────────────────────────────
 _sale_fetch_lock   = threading.Lock()
 _sale_proc: subprocess.Popen | None = None
@@ -407,6 +505,10 @@ def _geo_enrich_worker(city: str = "milano"):
         slot["finished_at"] = _time.time()
         if city == "milano":
             _geo_status["running"] = False
+        # File on disk just changed (rescored + flushed) → pending count
+        # is now stale. Drop the cache so the next poll recomputes from
+        # the fresh file.
+        _invalidate_pending_cache(city, "rental")
 
 
 def _flush_geo(data: list, path: Path, scoring_mod):
@@ -579,6 +681,7 @@ def _geo_enrich_sales_worker(city: str = "milano"):
         slot["finished_at"] = _time.time()
         if city == "milano":
             _geo_sale_status["running"] = False
+        _invalidate_pending_cache(city, "sale")
 
 def _load_env():
     env_path = BASE_DIR / ".env"
@@ -784,6 +887,11 @@ def scanner_status():
         "geo_queue": [{"city": c, "kind": k} for c, k in list(_geo_queue)],
         "geo_queue_running": bool(_geo_orchestrator_thread
                                   and _geo_orchestrator_thread.is_alive()),
+        # Per-(city, kind) preview: how many listings the worker WOULD
+        # process if the user clicked Run-all right now. Cached for
+        # _GEO_PENDING_TTL seconds and auto-invalidated whenever a worker
+        # finishes (so post-enrichment the row drops to 0).
+        "geo_pending": _all_pending(),
     }
     return jsonify(result)
 
