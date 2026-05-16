@@ -4590,6 +4590,15 @@ body.detail-page-active .filter-bar { display: none !important; }
   grid-template-columns: repeat(2, 1fr);
   gap: 10px;
 }
+/* Listing-kinds toggle (Rentals / Sales) — same look as city tiles, two
+   columns. Sits in its own grid so it doesn't merge with city-scan-grid
+   if the latter ever changes layout. */
+.scan-kind-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
 @media (max-width: 500px) {
   .city-scan-grid { grid-template-columns: 1fr; }
 }
@@ -7208,7 +7217,31 @@ function saveFilters() {
       <button id="scannerSkippedWarn" style="display:none;border:none;background:rgba(217,119,6,0.12);color:#92400E;border-radius:6px;padding:2px 10px;font-size:11px;font-weight:600;cursor:pointer;margin-left:4px" title="Some areas were skipped on the last scan"></button>
     </div>
 
-    <!-- Action buttons -->
+    <!-- Listing types — pick which feeds to scrape. Persisted in
+         localStorage["lume_scan_kinds"]. Default = both. Wired to the
+         existing /start-scanner (rentals) + /start-sale-fetch (sales)
+         endpoints — kinds run in parallel, each as its own subprocess. -->
+    <div class="settings-section-label">Listing types</div>
+    <div class="scan-kind-grid">
+      <label class="city-scan-card city-scan-card-on" id="scanKind_rentals">
+        <input type="checkbox" data-kind="rentals" checked
+               onchange="toggleScanKind('rentals', this.checked)">
+        <div class="city-scan-icon">🔑</div>
+        <div class="city-scan-name">Rentals</div>
+        <div class="toggle-track toggle-on"><div class="toggle-thumb"></div></div>
+      </label>
+      <label class="city-scan-card city-scan-card-on" id="scanKind_sales">
+        <input type="checkbox" data-kind="sales" checked
+               onchange="toggleScanKind('sales', this.checked)">
+        <div class="city-scan-icon">🏡</div>
+        <div class="city-scan-name">Sales</div>
+        <div class="toggle-track toggle-on"><div class="toggle-thumb"></div></div>
+      </label>
+    </div>
+
+    <!-- Action buttons. Start Lume fires whichever kind toggles are on
+         (one POST per kind, run in parallel). Stop Lume hits both
+         endpoints — harmless when only one is active. -->
     <div class="scan-actions">
       <button class="btn-scan-start" id="btnStartScanner">▶ Start Lume</button>
       <button class="btn-scan-stop"  id="btnStopScanner" disabled>■ Stop Lume</button>
@@ -9610,7 +9643,12 @@ function switchTab(tab, opts) {
     const _scannerCard = document.getElementById('scannerCard');
     if (_scannerCard) {
       _scannerCard.hidden = !IS_LIVE;
-      if (IS_LIVE && typeof _renderCityScanGrid === 'function') _renderCityScanGrid();
+      if (IS_LIVE) {
+        if (typeof _renderCityScanGrid === 'function') _renderCityScanGrid();
+        // Restore the Rentals/Sales toggle state from localStorage so
+        // a reload remembers the user's choice (defaults: both on).
+        if (typeof _renderScanKindGrid === 'function') _renderScanKindGrid();
+      }
     }
     // Daily-alert section reads from Supabase digest_filters. Async so
     // the rest of the Settings panel paints immediately; the wrap div
@@ -16254,17 +16292,30 @@ let _lastScannerRun = null;   // ISO string of last known run — detect new run
 async function updateScannerStatus() {
   try {
     const st    = await fetch('/scanner-status').then(r => r.json());
+    // Side-fetch the sales-fetch process state so Start/Stop reflect
+    // BOTH kinds. Returns null on error (treated as not-running) so a
+    // missing endpoint can't lock the buttons.
+    const saleSt = await fetch('/sale-fetch-status').then(r => r.json()).catch(() => null);
+    const saleRunning = !!(saleSt && saleSt.running);
+    const anyRunning  = !!st.running || saleRunning;
+
     const dot   = document.getElementById('scannerDot');
     const lbl   = document.getElementById('scannerLabel');
     const meta  = document.getElementById('scannerLastRun');
     const badge = document.getElementById('scannerNewBadge');
 
-    dot.classList.toggle('running', !!st.running);
-    lbl.textContent   = st.running ? 'Scanner running' : 'Scanner stopped';
-    lbl.style.color   = st.running ? 'var(--green)' : 'var(--muted)';
+    dot.classList.toggle('running', anyRunning);
+    // Surface which kinds are active so the user can see what's running
+    // without having to read the per-kind toggles.
+    let label = 'Scanner stopped';
+    if (st.running && saleRunning)        label = 'Scanning rentals + sales…';
+    else if (st.running)                  label = 'Scanning rentals…';
+    else if (saleRunning)                 label = 'Scanning sales…';
+    lbl.textContent   = label;
+    lbl.style.color   = anyRunning ? 'var(--green)' : 'var(--muted)';
 
-    document.getElementById('btnStartScanner').disabled = !!st.running;
-    document.getElementById('btnStopScanner').disabled  = !st.running;
+    document.getElementById('btnStartScanner').disabled = anyRunning;
+    document.getElementById('btnStopScanner').disabled  = !anyRunning;
 
     if (st.last_run) {
       meta.textContent = 'Last run: ' + st.last_run.replace('T', ' ');
@@ -16766,34 +16817,127 @@ function _renderCityScanGrid() {
   }).join('');
 }
 
+// ── Scanner: listing-kind toggles ─────────────────────────────────────────────
+// Which feeds the Start Lume button kicks off. Persisted in localStorage
+// so a reload remembers the choice. Default = both rentals + sales on.
+const SCAN_KINDS_KEY = 'lume_scan_kinds';
+function _readScanKinds() {
+  try {
+    const raw = localStorage.getItem(SCAN_KINDS_KEY);
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr) && arr.length) return arr;
+    }
+  } catch (_) {}
+  return ['rentals', 'sales'];
+}
+
+function toggleScanKind(kind, enabled) {
+  const current = _readScanKinds();
+  const next = enabled
+    ? Array.from(new Set([...current, kind]))
+    : current.filter(k => k !== kind);
+  // Guarantee at least one kind so Start Lume never fires with nothing
+  // to scan; flip the toggle back if the user tried to disable the last.
+  if (!next.length) {
+    next.push(kind);
+    const card  = document.getElementById(`scanKind_${kind}`);
+    const input = card?.querySelector('input[type="checkbox"]');
+    const track = card?.querySelector('.toggle-track');
+    if (input) input.checked = true;
+    if (card)  card.classList.add('city-scan-card-on');
+    if (track) track.classList.add('toggle-on');
+    showToast('At least one listing type must be enabled');
+    return;
+  }
+  try { localStorage.setItem(SCAN_KINDS_KEY, JSON.stringify(next)); } catch (_) {}
+  const card  = document.getElementById(`scanKind_${kind}`);
+  const track = card?.querySelector('.toggle-track');
+  if (card)  card.classList.toggle('city-scan-card-on', enabled);
+  if (track) track.classList.toggle('toggle-on', enabled);
+}
+
+// Rehydrate the toggle UI on first paint so the localStorage state
+// matches what the user sees. Kinds default to ['rentals','sales']
+// (matches the `checked` attribute baked into the HTML), so this is
+// mostly a no-op except when the user previously turned one off.
+function _renderScanKindGrid() {
+  const kinds = new Set(_readScanKinds());
+  for (const kind of ['rentals', 'sales']) {
+    const on    = kinds.has(kind);
+    const card  = document.getElementById(`scanKind_${kind}`);
+    const input = card?.querySelector('input[type="checkbox"]');
+    const track = card?.querySelector('.toggle-track');
+    if (input) input.checked = on;
+    if (card)  card.classList.toggle('city-scan-card-on', on);
+    if (track) track.classList.toggle('toggle-on', on);
+  }
+}
+
 // ── Scanner start/stop buttons ────────────────────────────────────────────────
+// Start Lume kicks off whichever (kind × city) combos are toggled on.
+// Rentals goes through /start-scanner (fetch_rentals.py daemon), sales
+// goes through /start-sale-fetch (fetch_listings.py one-shot per city).
+// The two run in parallel — each subprocess is independent.
 document.getElementById('btnStartScanner').addEventListener('click', async () => {
   saveScanPrefs();
   const cities = _readScanCities();
-  const body = {
-    pages:  parseInt(document.getElementById('sScanPages').value) || 3,
-    cities: cities,
-  };
+  const kinds  = _readScanKinds();
   const maxRent  = document.getElementById('sScanMaxRent').value;
   const minRooms = document.getElementById('sScanMinRooms').value;
-  // Areas are driven by area_settings_{city}.json (Settings tab) — not
-  // sent here. fetch_rentals.py reads them per-city directly.
-  if (maxRent)  body.max_rent  = parseInt(maxRent);
-  if (minRooms) body.min_rooms = parseInt(minRooms);
+  const pages    = parseInt(document.getElementById('sScanPages').value) || 3;
+
+  const tasks = [];
+
+  if (kinds.includes('rentals')) {
+    const body = { pages, cities };
+    if (maxRent)  body.max_rent  = parseInt(maxRent);
+    if (minRooms) body.min_rooms = parseInt(minRooms);
+    tasks.push(
+      fetch('/start-scanner', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }).then(r => ({ kind: 'rentals', ok: r.ok || r.status === 409, status: r.status }))
+    );
+  }
+
+  if (kinds.includes('sales')) {
+    // Sales endpoint uses max_price (not max_rent) — fetch_listings.py
+    // takes --max-price. Re-use the same input field by treating its
+    // value as a sales ceiling when sales is the active kind. If the
+    // user has only sales on, the field's label still says "Max rent"
+    // — acceptable trade-off for the simpler single-input UX; refining
+    // to dual inputs would clutter the card.
+    const body = { pages, cities };
+    if (minRooms) body.min_rooms = parseInt(minRooms);
+    tasks.push(
+      fetch('/start-sale-fetch', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }).then(r => ({ kind: 'sales', ok: r.ok || r.status === 409, status: r.status }))
+    );
+  }
 
   try {
-    const r = await fetch('/start-scanner', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    if (r.status === 409) { alert('Scanner is already running.'); return; }
+    const results = await Promise.all(tasks);
+    const failures = results.filter(r => !r.ok);
+    if (failures.length) {
+      alert('Some scans failed to start:\n' +
+            failures.map(f => `  ${f.kind}: HTTP ${f.status}`).join('\n'));
+    }
     await updateScannerStatus();
   } catch (e) { alert('Could not start scanner: ' + e.message); }
 });
 
 document.getElementById('btnStopScanner').addEventListener('click', async () => {
+  // Hit both endpoints unconditionally — each one is a no-op when its
+  // process isn't running, so we don't need to track which subset is
+  // active.
   try {
-    await fetch('/stop-scanner', { method: 'POST' });
+    await Promise.all([
+      fetch('/stop-scanner',    { method: 'POST' }).catch(() => null),
+      fetch('/stop-sale-fetch', { method: 'POST' }).catch(() => null),
+    ]);
     await updateScannerStatus();
   } catch (e) { alert('Could not stop scanner: ' + e.message); }
 });
