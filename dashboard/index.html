@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-17 toggle-fixed-on-mobile">
+<meta name="lume-build" content="2026-05-17 analysis-banner-spacing">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -2406,15 +2406,25 @@ body.detail-page-active .filter-bar { display: none !important; }
   .tier-buttons      { grid-template-columns: 1fr; }
 }
 
-/* Sales analysis loading banner — shown only on first sales-tab visit */
+/* Sales analysis loading banner — shown only on first sales-tab visit.
+   Inserted as a sibling BEFORE the .grid (which has its own padding),
+   so the banner needs its OWN horizontal margin to line up with the
+   card columns. Equal top + bottom margin so it breathes against the
+   stats bar above and the first card below — previously had 0 top
+   margin and felt crammed. */
 .sales-loading-banner {
   padding: 14px 18px;
   background: var(--bg-card);
   border-radius: var(--radius-md);
-  margin-bottom: 12px;
+  margin: 14px 24px;          /* = grid horizontal padding for clean alignment */
   box-shadow: var(--shadow-card);
   font-size: 13px;
   color: var(--text-secondary);
+}
+@media (max-width: 768px) {
+  /* Match the mobile grid gutter so the banner sits flush with the
+     card column edges (grid padding is 12 px on mobile). */
+  .sales-loading-banner { margin: 12px; padding: 12px 14px; }
 }
 .sales-loading-content {
   display: flex; align-items: center; gap: 12px;
