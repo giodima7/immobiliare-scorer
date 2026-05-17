@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-17 analysis-banner-spacing">
+<meta name="lume-build" content="2026-05-17 floating-toggle">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -1052,48 +1052,53 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--green-deep); }
 .sort-tab.active { background: var(--green-deep); color: #fff; }
 
 /* ── Buyer / Investor view toggle (Sales tab only) ──────────────────────── */
-/* Outer sticky strip: full-width, sits between the tab bar and the
-   filter bar in the scroll stack so the toggle never goes off-screen.
-   Background matches the page so there's no seam against the body. */
+/* Outer sticky strip: PASSTHROUGH wrap — no background, no border, no
+   shadow. The pill inside is the only visible chrome; the listings
+   beneath slide visibly through the space around it. JS still uses
+   the wrap to measure offsetHeight + set sticky top, but visually
+   the user only sees the floating rounded pill.
+   pointer-events: none on the wrap so the empty area on either side
+   of the pill is click-through (you can tap a card behind it). */
 .view-mode-toggle-wrap {
   position: sticky;
-  /* JS (_updateStickyTops) sets `top` at runtime to header + tab-bar
-     height. The 0 default lets the CSS work even if the JS hasn't run
-     yet (e.g. between paint + the rAF). */
-  top: 0;
-  z-index: 95;             /* above content cards, below the .filters bar (z=90) */
-  background: var(--bg-page, var(--surface));
-  padding: 12px 24px;      /* equal vertical, matches the side gutter */
+  top: 0;                  /* set by _updateStickyTops at runtime */
+  z-index: 95;             /* above content cards */
+  background: transparent;
+  padding: 12px 24px;
   display: flex;
   justify-content: flex-start;
-  /* Bottom hairline so the strip reads as its own layer when stuck. */
-  border-bottom: 1px solid transparent;
-  transition: border-color 180ms ease;
+  pointer-events: none;
 }
-.view-mode-toggle-wrap.is-stuck {
-  border-bottom-color: var(--border);
-}
+/* Re-enable interaction on the pill itself (the wrap above is
+   click-through so the empty padding area doesn't swallow taps). */
 .view-mode-toggle {
+  pointer-events: auto;
   display: inline-flex;
+  /* The pill IS the visible chrome now — keep its rounded muted bg
+     + add a soft elevation so it reads as floating over the cards. */
   background: var(--bg-muted);
   border-radius: var(--radius-full);
   padding: 3px;
   gap: 2px;
-  /* Margin removed — outer wrap owns the spacing now. */
   margin: 0;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.08), 0 0 0 1px var(--border);
+  backdrop-filter: saturate(180%) blur(6px);
+  -webkit-backdrop-filter: saturate(180%) blur(6px);
 }
 @media (max-width: 768px) {
   /* On mobile the header + tab-bar are both position: fixed, so the
      toggle has to be fixed too — sticky against a non-fixed ancestor
      would scroll out of view because there's no shared scroll
      container with the fixed chrome above. JS sets top = headerH +
-     tabH so the strip lines up flush with the bottom of the tab bar. */
+     tabH so the strip lines up flush with the bottom of the tab bar.
+     Still transparent + click-through outside the pill. */
   .view-mode-toggle-wrap {
     position: fixed !important;
     left: 0; right: 0;
     padding: 10px 14px;
     justify-content: center;   /* centred on phone for thumb-reach */
     z-index: 190;              /* same as tab-bar so they stack right */
+    background: transparent;
   }
   /* Sales view content needs extra top padding equal to the toggle's
      painted height so the first card doesn't sit underneath the
