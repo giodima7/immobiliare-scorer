@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-17 sales-toggle-sticky">
+<meta name="lume-build" content="2026-05-17 no-input-zoom">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -5181,6 +5181,25 @@ body.detail-page-active .filter-bar { display: none !important; }
   html, body {
     max-width: 100vw;
     overflow-x: hidden;
+  }
+  /* iOS Safari auto-zooms on any input whose font-size is < 16 px when
+     it gets focus — which then rescales the entire viewport and
+     leaves the user manually pinch-zooming back out. Inputs inside
+     the filter drawer (msd-search-input is 12 px, the score number is
+     13 px etc.) all triggered this. Force a minimum 16 px on every
+     focusable form field on mobile to disable the auto-zoom. The
+     desktop sizing is untouched (rule is gated by the mobile media
+     query). */
+  input[type="text"],
+  input[type="number"],
+  input[type="search"],
+  input[type="email"],
+  input[type="tel"],
+  input[type="password"],
+  input[type="url"],
+  select,
+  textarea {
+    font-size: 16px !important;
   }
   /* Fixed mobile header. The combined safe-area + 56 px content row
      means the actual painted height grows with the device — needed so
