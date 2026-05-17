@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-17 loading-grid-match">
+<meta name="lume-build" content="2026-05-17 loading-span-grid">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -4547,6 +4547,13 @@ body.detail-page-active .detail-header {
   text-align: center;
   width: 100%;
   box-sizing: border-box;
+  /* CRITICAL: the loading container is mounted INSIDE #rentGrid /
+     #salesGrid, which are themselves display:grid with 3 columns. As
+     a grid item it would only take 1 column (~280 px wide), making
+     the brand mark + skeletons look like a single tall card pinned
+     to the left. grid-column: 1 / -1 spans every column so the
+     loading state fills the full grid width. */
+  grid-column: 1 / -1;
 }
 .lume-loading-mark {
   margin-bottom: 14px;
