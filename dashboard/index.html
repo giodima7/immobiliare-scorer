@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-17 detail-back-visible">
+<meta name="lume-build" content="2026-05-17 loading-grid-match">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -4539,7 +4539,11 @@ body.detail-page-active .detail-header {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 48px 16px 24px;
+  /* Match the real .grid padding (20 px 24 px) on the sides so the
+     skeleton cards land exactly where the real cards will, no width
+     pop on the swap. Generous top padding so the brand mark has room
+     to breathe above the skeletons. */
+  padding: 48px 24px 24px;
   text-align: center;
   width: 100%;
   box-sizing: border-box;
@@ -4568,15 +4572,15 @@ body.detail-page-active .detail-header {
   50%       { transform: scale(1.35); opacity: 0.55; }
 }
 
-/* Skeleton cards — three identical placeholders that match the real
-   card silhouette + shimmer. Hidden gem badge / score circle / etc.
-   are not represented; just the photo block + two text lines. */
+/* Skeleton cards — placeholders that match the real listings grid
+   layout exactly (3 columns on desktop, 1 on mobile) so the silhouette
+   is identical to the cards that replace it. No max-width cap, so the
+   skeletons fill the same width the real grid fills. */
 .lume-loading-skeletons {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
   width: 100%;
-  max-width: 720px;
 }
 .lume-skel-card {
   background: var(--bg-card);
@@ -4611,9 +4615,14 @@ body.detail-page-active .detail-header {
   0%   { background-position:  200% 0; }
   100% { background-position: -200% 0; }
 }
-@media (max-width: 720px) {
-  .lume-loading-skeletons { grid-template-columns: 1fr; gap: 10px; }
-  .lume-loading           { padding: 28px 12px 16px; }
+/* Match the real .grid breakpoints exactly so the skeleton layout is
+   identical to whatever the real listings would render at this width. */
+@media (max-width: 1023px) {
+  .lume-loading-skeletons { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 639px) {
+  .lume-loading-skeletons { grid-template-columns: 1fr; gap: 12px; }
+  .lume-loading           { padding: 28px 14px 16px; }
   .lume-skel-photo        { height: 160px; }
 }
 
@@ -12778,6 +12787,13 @@ function _renderLumeLoading() {
       </div>
       <div class="lume-loading-text">${escapeHtml(t1)}</div>
       <div class="lume-loading-skeletons">
+        <!-- 6 cards = 2 full rows × 3 columns on desktop, so the grid
+             silhouette reads as "real listings", not a single
+             centred placeholder. Mobile collapses to 1 column = 6
+             stacked skeletons which is still a clear loading cue. -->
+        <div class="lume-skel-card"><div class="lume-skel-photo"></div><div class="lume-skel-line w-80"></div><div class="lume-skel-line w-40"></div></div>
+        <div class="lume-skel-card"><div class="lume-skel-photo"></div><div class="lume-skel-line w-80"></div><div class="lume-skel-line w-40"></div></div>
+        <div class="lume-skel-card"><div class="lume-skel-photo"></div><div class="lume-skel-line w-80"></div><div class="lume-skel-line w-40"></div></div>
         <div class="lume-skel-card"><div class="lume-skel-photo"></div><div class="lume-skel-line w-80"></div><div class="lume-skel-line w-40"></div></div>
         <div class="lume-skel-card"><div class="lume-skel-photo"></div><div class="lume-skel-line w-80"></div><div class="lume-skel-line w-40"></div></div>
         <div class="lume-skel-card"><div class="lume-skel-photo"></div><div class="lume-skel-line w-80"></div><div class="lume-skel-line w-40"></div></div>
