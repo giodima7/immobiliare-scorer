@@ -1,6 +1,31 @@
 # Cloudflare Pages headers — equivalent of the old netlify.toml [[headers]] blocks.
 # Cloudflare evaluates rules top-to-bottom; later rules merge with earlier ones.
 
+# HTML pages: never cache. The default (max-age=0, must-revalidate) STILL
+# lets browsers serve a cached copy if their revalidation hits 304 — iOS
+# Safari and Chrome on iOS are especially sticky and can keep serving an
+# hours-old index.html after a deploy. `no-store` is the only header that
+# guarantees every page load fetches the latest dashboard.
+#
+# We don't bundle assets — every script/style is inline in index.html —
+# so making HTML uncacheable has zero compound cost.
+/
+  Cache-Control: no-store, no-cache, must-revalidate
+  Pragma: no-cache
+  Expires: 0
+/index.html
+  Cache-Control: no-store, no-cache, must-revalidate
+  Pragma: no-cache
+  Expires: 0
+/favourites
+  Cache-Control: no-store, no-cache, must-revalidate
+/favourites.html
+  Cache-Control: no-store, no-cache, must-revalidate
+/zone-mappings
+  Cache-Control: no-store, no-cache, must-revalidate
+/zone-mappings.html
+  Cache-Control: no-store, no-cache, must-revalidate
+
 # JSON snapshots: 1-hour browser cache. Fresh data lands via GitHub Actions
 # committing to main, which triggers a Cloudflare Pages redeploy.
 /*.json

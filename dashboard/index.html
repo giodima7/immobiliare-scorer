@@ -10,6 +10,13 @@
 <meta name="apple-mobile-web-app-title" content="Lume">
 <meta name="theme-color" content="#2A7A5A">
 <meta name="description" content="Lume scores every Milan rental and sale listing so you can see through the market.">
+<!-- Build version marker. Visible via:
+       1. View Source → look for <meta name="lume-build">
+       2. DevTools console → first line of the boot log
+     Lets you verify which deploy you're looking at when iOS Safari
+     serves a stale cached copy. Bump by editing this line in any commit
+     that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
+<meta name="lume-build" content="2026-05-17 mobile-fixes (1e20ac7)">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -9169,6 +9176,11 @@ function _wireFilterBarStickyShadow() {
 }
 
 async function init() {
+  // Log the build marker so iOS Safari stale-cache debugging becomes
+  // a one-glance check in DevTools instead of guessing whether a
+  // deploy actually landed.
+  const _buildMeta = document.querySelector('meta[name="lume-build"]');
+  if (_buildMeta) console.log(`[lume] build: ${_buildMeta.content}`);
   const isHttp = location.protocol === 'http:' || location.protocol === 'https:';
   if (!isHttp) {
     const salesGrid = document.getElementById('salesGrid');
