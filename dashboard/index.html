@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-17 mobile-stability">
+<meta name="lume-build" content="2026-05-17 sales-loading">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -16476,7 +16476,17 @@ function renderSales() {
   if (!grid) return;
   grid.innerHTML = '';
   if (!data.length) {
-    grid.innerHTML = '<div class="empty"><h3>Nothing matches yet.</h3><p>Loosen up a filter.</p></div>';
+    // Three states (mirrors renderRentals):
+    //   (a) Filters narrowed an existing dataset to zero
+    //   (b) Initial fetch in flight (_saleLoading)         → branded shimmer
+    //   (c) Fetch completed but dataset is genuinely empty
+    if (ALL_SALE.length) {
+      grid.innerHTML = '<div class="empty"><h3>Nothing matches yet.</h3><p>Loosen up a filter.</p></div>';
+    } else if (typeof _saleLoading !== 'undefined' && _saleLoading) {
+      grid.innerHTML = _renderLumeLoading();
+    } else {
+      grid.innerHTML = '<div class="empty"><h3>Lume hasn&rsquo;t scanned yet.</h3><p>Run the scanner to begin, or run <code>python3 fetch_listings.py</code> to fetch sales listings.</p></div>';
+    }
     _updateSaleScrollStatus();
   } else {
     _saleAppendBatch();
@@ -16510,9 +16520,20 @@ function renderSales() {
 }
 
 // ── Sales — data loading ──────────────────────────────────────────────────────
+// Mirror of _rentLoading so renderSales can paint the branded loading
+// state instead of "Nothing matches yet" during the initial fetch.
+let _saleLoading = false;
+
 async function loadSales() {
   // Mirror of loadRentals — Flask first when local, then Supabase as a
   // fallback (or sole source on deployed). Empty grid is the failure state.
+  _saleLoading = true;
+  // Paint the loading shimmer immediately so the user sees brand motion
+  // rather than the empty grid for the few seconds it takes Supabase
+  // to respond. Only fires when ALL_SALE is empty (first-load); a
+  // city-switch re-fetch keeps the previous grid visible until the new
+  // data lands — same UX rentals uses.
+  if (typeof renderSales === 'function' && !ALL_SALE.length) renderSales();
   const _supabaseReady = typeof SupabaseClient !== 'undefined' && SupabaseClient.configured;
   let raw = null;
   if (IS_LIVE) {
@@ -16530,6 +16551,10 @@ async function loadSales() {
   saleFasciaRanges = computeSaleFasciaRanges(ALL_SALE);
   if (typeof onDataLoaded === 'function') onDataLoaded();
   else _populateSaleOmiZoneFilter(ALL_SALE);
+  // Clear the loading flag BEFORE renderSales so the empty-state copy
+  // returns to "Nothing matches yet" / "Lume hasn't scanned yet" once
+  // we know the fetch has resolved.
+  _saleLoading = false;
   // Sales just (re)loaded — drop the cache flag. ensureSalesAnalysis() will
   // recompute everything on the next sales tab visit (or right now if the
   // user is already on the sales tab — switchTab/renderSales handle that).
