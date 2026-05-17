@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-17 no-input-zoom">
+<meta name="lume-build" content="2026-05-17 toggle-fixed-on-mobile">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -1083,10 +1083,24 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--green-deep); }
   margin: 0;
 }
 @media (max-width: 768px) {
+  /* On mobile the header + tab-bar are both position: fixed, so the
+     toggle has to be fixed too — sticky against a non-fixed ancestor
+     would scroll out of view because there's no shared scroll
+     container with the fixed chrome above. JS sets top = headerH +
+     tabH so the strip lines up flush with the bottom of the tab bar. */
   .view-mode-toggle-wrap {
+    position: fixed !important;
+    left: 0; right: 0;
     padding: 10px 14px;
     justify-content: center;   /* centred on phone for thumb-reach */
+    z-index: 190;              /* same as tab-bar so they stack right */
   }
+  /* Sales view content needs extra top padding equal to the toggle's
+     painted height so the first card doesn't sit underneath the
+     fixed toggle. JS adds the rule at runtime via _updateStickyTops
+     (sets data attribute) — fall back here to a sane default so the
+     first paint isn't broken. */
+  body.has-fixed-toggle #salesView { padding-top: 56px !important; }
 }
 .view-mode-btn {
   padding: 7px 16px;
@@ -5172,16 +5186,18 @@ body.detail-page-active .filter-bar { display: none !important; }
 /* ── Mobile layout ── */
 @media (max-width: 768px) {
   /* Global horizontal overflow lock — any single overflowing element on
-     mobile makes the whole page rubber-band sideways and the chrome
-     feels like it's drifting under the user's finger. Belt-and-
-     suspenders: html + body both clamped.
-     The `overflow-x: hidden` doesn't suppress legitimate horizontal
-     scroll inside .stats-bar / .filter-row (those have their own
-     overflow-x:auto). */
-  html, body {
+     mobile makes the whole page rubber-band sideways. Apply ONLY to
+     <html>, not <body>: overflow on body breaks position: sticky on
+     descendants (the sticky element's nearest-scrolling-ancestor
+     becomes <body> and sticky stops working). The .view-mode-toggle-wrap
+     needs sticky to work, so we keep body's overflow-x at visible.
+     Legitimate horizontal scroll inside .stats-bar / .filter-row
+     still works because they're inner overflow-x:auto containers. */
+  html {
     max-width: 100vw;
     overflow-x: hidden;
   }
+  body { max-width: 100vw; }
   /* iOS Safari auto-zooms on any input whose font-size is < 16 px when
      it gets focus — which then rescales the entire viewport and
      leaves the user manually pinch-zooming back out. Inputs inside
@@ -9386,14 +9402,28 @@ function _updateStickyTops() {
   const tabH    = tabBar ? tabBar.offsetHeight : 0;
   if (tabBar) tabBar.style.top = headerH + 'px';
 
-  // Sales view-mode toggle: sticks immediately below the tab bar so
-  // For-me / As-investment stays reachable while the cards scroll.
-  // Measure AFTER setting its top so the height read includes any
-  // padding we just laid out.
+  // Sales view-mode toggle: pinned just below the tab bar so it stays
+  // visible while the cards scroll. On mobile the toggle is
+  // position:fixed (matches the fixed header + tab-bar above it); on
+  // desktop it's position:sticky relative to body. In both cases we
+  // measure the painted height AFTER setting top so the padding-top
+  // offset for the salesView content matches exactly.
   let toggleH = 0;
+  const _isMobile = window.matchMedia('(max-width: 768px)').matches;
   if (toggle) {
     toggle.style.top = (headerH + tabH) + 'px';
     toggleH = toggle.offsetHeight;
+    // Push the sales-view scroll content down so the first card isn't
+    // hidden under the now-fixed toggle. Skipped on desktop because
+    // the toggle is in normal flow there (sticky → still takes space).
+    const salesView = document.getElementById('salesView');
+    if (salesView && _isMobile) {
+      salesView.style.paddingTop = (toggleH + 8) + 'px';
+      document.body.classList.add('has-fixed-toggle');
+    } else if (salesView) {
+      salesView.style.paddingTop = '';
+      document.body.classList.remove('has-fixed-toggle');
+    }
   }
 
   // Filter bar sticks below the toggle. On non-Sales tabs the toggle
