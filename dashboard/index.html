@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-17 floating-toggle">
+<meta name="lume-build" content="2026-05-17 detail-back-visible">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -1230,7 +1230,9 @@ body:not(.is-investor) .investor-only { display: none !important; }
    Investor detail page — full-page view at ?view=detail&l=ID
    Phase 1 layout (hero, verdict, analysis, costs, mortgage, placeholders).
    ────────────────────────────────────────────────────────────────────────── */
+body.detail-page-active header,
 body.detail-page-active .tab-bar,
+body.detail-page-active .view-mode-toggle-wrap,
 body.detail-page-active #salesView,
 body.detail-page-active #rentalsView,
 body.detail-page-active #mapView,
@@ -1238,6 +1240,16 @@ body.detail-page-active #insightsView,
 body.detail-page-active #settingsView,
 body.detail-page-active #shared-collection-banner,
 body.detail-page-active .filter-bar { display: none !important; }
+/* Reset the body padding-top that the mobile fixed-toggle rule
+   adds — the main app header is hidden in detail mode, so the page
+   no longer needs to leave room for it. */
+body.detail-page-active.has-fixed-toggle #salesView { padding-top: 0 !important; }
+/* Detail header takes over the top — make sure its safe-area padding
+   accounts for the iOS Dynamic Island now that the main header
+   (which previously handled the safe-area) is gone. */
+body.detail-page-active .detail-header {
+  padding-top: calc(14px + env(safe-area-inset-top, 0px));
+}
 
 .detail-page {
   max-width: 960px;
