@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-17 remove-unmatched-badge">
+<meta name="lume-build" content="2026-05-17 loading-anim+drawer-alert+onboarding-fix">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -4458,6 +4458,96 @@ body.detail-page-active .filter-bar { display: none !important; }
    the screen on wide monitors. */
 #settingsView { padding: 0; }
 
+/* ── Branded loading state (initial-fetch placeholder) ─────────────────
+   Replaces the "Lume hasn't scanned yet" empty-state message during the
+   initial loadRentals() in-flight window. Three pieces:
+     • Pulsing green-glow mark from the login screen for instant brand
+       recognition + visible "something is happening" cue.
+     • Localised "Lume is reading the listings…" text.
+     • Three shimmering skeleton cards so the grid silhouette is right
+       before the real cards land — softens the layout shift. */
+.lume-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48px 16px 24px;
+  text-align: center;
+  width: 100%;
+  box-sizing: border-box;
+}
+.lume-loading-mark {
+  margin-bottom: 14px;
+  animation: lume-loading-pulse 1.6s cubic-bezier(.4, 0, .2, 1) infinite;
+}
+.lume-loading-mark .lume-loading-halo {
+  transform-origin: center;
+  animation: lume-loading-halo 2.2s ease-in-out infinite;
+}
+.lume-loading-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.2px;
+  margin-bottom: 28px;
+}
+@keyframes lume-loading-pulse {
+  0%, 100% { transform: scale(1);   opacity: 1; }
+  50%       { transform: scale(1.08); opacity: 0.7; }
+}
+@keyframes lume-loading-halo {
+  0%, 100% { transform: scale(1);    opacity: 1; }
+  50%       { transform: scale(1.35); opacity: 0.55; }
+}
+
+/* Skeleton cards — three identical placeholders that match the real
+   card silhouette + shimmer. Hidden gem badge / score circle / etc.
+   are not represented; just the photo block + two text lines. */
+.lume-loading-skeletons {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  width: 100%;
+  max-width: 720px;
+}
+.lume-skel-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: 0 0 14px 0;
+  overflow: hidden;
+}
+.lume-skel-photo {
+  height: 180px;
+  background: linear-gradient(90deg,
+    var(--bg-muted) 0%,
+    rgba(255,255,255,0.7) 50%,
+    var(--bg-muted) 100%);
+  background-size: 200% 100%;
+  animation: lume-skel-shimmer 1.4s linear infinite;
+}
+.lume-skel-line {
+  height: 12px;
+  margin: 14px 16px 0;
+  border-radius: 6px;
+  background: linear-gradient(90deg,
+    var(--bg-muted) 0%,
+    rgba(255,255,255,0.7) 50%,
+    var(--bg-muted) 100%);
+  background-size: 200% 100%;
+  animation: lume-skel-shimmer 1.4s linear infinite;
+}
+.lume-skel-line.w-80 { width: 80%; }
+.lume-skel-line.w-40 { width: 40%; }
+@keyframes lume-skel-shimmer {
+  0%   { background-position:  200% 0; }
+  100% { background-position: -200% 0; }
+}
+@media (max-width: 720px) {
+  .lume-loading-skeletons { grid-template-columns: 1fr; gap: 10px; }
+  .lume-loading           { padding: 28px 12px 16px; }
+  .lume-skel-photo        { height: 160px; }
+}
+
 /* ── Data Quality section ── */
 .dq-cards { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
 .dq-card { flex: 1; min-width: 170px; background: var(--surface); border-radius: 8px; padding: 14px 16px; border: 1px solid var(--border); }
@@ -5279,6 +5369,28 @@ body.detail-page-active .filter-bar { display: none !important; }
 }
 .drawer-show-btn:hover { opacity: 0.9; }
 
+/* Save-alert button at the drawer bottom (mirrors desktop's pill).
+   Outlined-secondary style so it doesn't compete with the primary
+   "Show results" CTA below it. */
+.drawer-save-alert-btn {
+  display: block;
+  width: calc(100% - 32px);
+  margin: 0 16px 8px;
+  padding: 12px 16px;
+  background: var(--bg-card);
+  color: var(--green-deep);
+  border: 1.5px solid var(--green-deep);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 600;
+  font-family: var(--font);
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: background 150ms ease;
+}
+.drawer-save-alert-btn:hover,
+.drawer-save-alert-btn:active { background: var(--green-light); }
+
 /* ── Area searchable multiselect (inside drawer) ── */
 .area-msearch {
   position: relative;
@@ -5832,10 +5944,13 @@ const Auth = (() => {
       try { localStorage.setItem('lume_clerk_user_id', user.id); } catch (_) {}
       updateUserAvatar();
       updateFavBadge?.();
-      // Show the "🔔 Save alert" button — saving a daily digest needs an
-      // identified user (clerk_user_id is the digest_filters PK).
+      // Show the "🔔 Save alert" buttons (desktop pill + mobile drawer)
+      // — saving a daily digest needs an identified user (clerk_user_id
+      // is the digest_filters PK).
       const _saveBtn = document.getElementById('save-digest-btn');
       if (_saveBtn) _saveBtn.style.display = 'inline-flex';
+      const _drawerSaveBtn = document.getElementById('drawerSaveAlertBtn');
+      if (_drawerSaveBtn) _drawerSaveBtn.style.display = 'block';
       // Refresh the avatar's red dot from Supabase. Async fire-and-forget;
       // the dot stays hidden until the fetch resolves.
       if (typeof _refreshDigestAlertBadge === 'function') _refreshDigestAlertBadge();
@@ -5849,6 +5964,8 @@ const Auth = (() => {
       updateFavBadge?.();
       const _saveBtn = document.getElementById('save-digest-btn');
       if (_saveBtn) _saveBtn.style.display = 'none';
+      const _drawerSaveBtn = document.getElementById('drawerSaveAlertBtn');
+      if (_drawerSaveBtn) _drawerSaveBtn.style.display = 'none';
       // Clear the alert dot — the now-anonymous user has no scoped alerts.
       if (typeof _refreshDigestAlertBadge === 'function') _refreshDigestAlertBadge();
       if (typeof renderRentals === 'function') try { renderRentals(); } catch (_) {}
@@ -6320,6 +6437,16 @@ function saveFilters() {
       </div>
     </div>
   </div>
+  <!-- Save-alert button (mobile parity with the desktop filter bar's
+       🔔 Save alert pill). Hidden by default — Auth._onLogin /
+       _onLogout toggle it the same way they do for #save-digest-btn.
+       Tapping it closes the drawer (so the modal stack stays clean)
+       then opens the digest-alert save modal seeded from the current
+       drawer filters. -->
+  <button id="drawerSaveAlertBtn" class="drawer-save-alert-btn"
+          type="button" style="display:none"
+          title="Save current filters as your daily email alert"
+          data-i18n="filter.save_alert">🔔 Save alert</button>
   <button class="drawer-show-btn" id="drawerShowBtn">Show results</button>
 </div>
 
@@ -12368,9 +12495,17 @@ function renderRentals() {
   grid.innerHTML = '';
 
   if (!_rentFilteredData.length) {
-    grid.innerHTML = ALL_RENT.length
-      ? '<div class="empty"><h3>Nothing matches yet.</h3><p>Loosen up a filter.</p></div>'
-      : '<div class="empty"><h3>Lume hasn&rsquo;t scanned yet.</h3><p>Run the scanner to begin, or run <code>python3 fetch_rentals.py</code> to fetch listings.</p></div>';
+    // Three states:
+    //   (a) Filters narrowed an existing dataset to zero → loosen-filters copy
+    //   (b) Initial fetch in flight (_rentLoading) → branded loading shimmer
+    //   (c) Fetch completed but dataset is genuinely empty → scan-now copy
+    if (ALL_RENT.length) {
+      grid.innerHTML = '<div class="empty"><h3>Nothing matches yet.</h3><p>Loosen up a filter.</p></div>';
+    } else if (typeof _rentLoading !== 'undefined' && _rentLoading) {
+      grid.innerHTML = _renderLumeLoading();
+    } else {
+      grid.innerHTML = '<div class="empty"><h3>Lume hasn&rsquo;t scanned yet.</h3><p>Run the scanner to begin, or run <code>python3 fetch_rentals.py</code> to fetch listings.</p></div>';
+    }
     _updateRentScrollStatus();
   } else {
     _rentAppendBatch();
@@ -12427,6 +12562,44 @@ function renderRentals() {
 }
 
 // ── Rentals — data loading ────────────────────────────────────────────────────
+// Flag the loading window so renderRentals can paint a branded
+// loading state instead of the "Lume hasn't scanned yet" empty
+// message (which previously appeared during the initial fetch and
+// implied the data was missing when it was just in flight).
+let _rentLoading = false;
+
+// Branded loading-state markup. Renders the same green-glow lume mark
+// from the login screen, plus 3 shimmering skeleton cards so the user
+// can see the shape of the grid before the data arrives. The pulse +
+// shimmer animations are defined in CSS so they keep running even
+// while the JS main thread is busy parsing the listings JSON.
+function _renderLumeLoading() {
+  const t1 = (typeof t === 'function')
+    ? (t('loading.listings') || 'Lume is reading the listings…')
+    : 'Lume is reading the listings…';
+  return `
+    <div class="lume-loading" role="status" aria-live="polite">
+      <div class="lume-loading-mark">
+        <svg width="56" height="56" viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <defs>
+            <radialGradient id="lume-loading-glow" cx="50%" cy="50%" r="50%">
+              <stop offset="40%" stop-color="#2A7A5A"/>
+              <stop offset="100%" stop-color="#2A7A5A" stop-opacity="0.15"/>
+            </radialGradient>
+          </defs>
+          <circle class="lume-loading-halo" cx="14" cy="14" r="12" fill="url(#lume-loading-glow)"/>
+          <circle cx="14" cy="14" r="6"  fill="#2A7A5A"/>
+        </svg>
+      </div>
+      <div class="lume-loading-text">${escapeHtml(t1)}</div>
+      <div class="lume-loading-skeletons">
+        <div class="lume-skel-card"><div class="lume-skel-photo"></div><div class="lume-skel-line w-80"></div><div class="lume-skel-line w-40"></div></div>
+        <div class="lume-skel-card"><div class="lume-skel-photo"></div><div class="lume-skel-line w-80"></div><div class="lume-skel-line w-40"></div></div>
+        <div class="lume-skel-card"><div class="lume-skel-photo"></div><div class="lume-skel-line w-80"></div><div class="lume-skel-line w-40"></div></div>
+      </div>
+    </div>`;
+}
+
 async function loadRentals() {
   // Three paths, tried in priority order:
   //   1. Local dev (IS_LIVE) — Flask /rentals serves the freshest scanner
@@ -12436,6 +12609,11 @@ async function loadRentals() {
   //   2. Supabase REST — sole source on the deployed dashboard, and the
   //      local fallback when Flask has nothing to serve.
   //   3. Empty grid + diagnostic meta line — Supabase isn't configured.
+  _rentLoading = true;
+  // Paint the loading state immediately so the user sees the brand
+  // animation rather than the empty placeholder for the few seconds
+  // it takes Supabase to respond.
+  if (typeof renderRentals === 'function' && !ALL_RENT.length) renderRentals();
   const _supabaseReady = typeof SupabaseClient !== 'undefined' && SupabaseClient.configured;
   let raw = null;
   if (IS_LIVE) {
@@ -12465,6 +12643,10 @@ async function loadRentals() {
   rentFasciaRanges = computeRentFasciaRanges(ALL_RENT);
   if (typeof onDataLoaded === 'function') onDataLoaded();
   else _populateOmiZoneFilter(ALL_RENT);
+  // Clear the loading flag BEFORE renderRentals so the empty-state
+  // message switches from "loading…" animation back to the real
+  // "Nothing matches yet" / "Lume hasn't scanned yet" copy.
+  _rentLoading = false;
   renderRentals();
   _updateUnmatchedBadge();
   // Replace the "Lume is reading the listings…" placeholder with the real
@@ -17585,6 +17767,22 @@ function setDrawerMode(mode) {
   backdrop.addEventListener('click', () => closeDrawer(false));
   showBtn.addEventListener('click',  () => closeDrawer(true));
 
+  // Save-alert button (mobile parity with desktop's pill). Apply the
+  // drawer's filters back to the main filter bar FIRST (closeDrawer
+  // with apply=true), then open the save-alert modal. Without the
+  // apply step, the modal would seed from the stale pre-drawer state.
+  const drawerSaveAlertBtn = document.getElementById('drawerSaveAlertBtn');
+  if (drawerSaveAlertBtn) {
+    drawerSaveAlertBtn.addEventListener('click', () => {
+      closeDrawer(true);
+      if (typeof saveDigestFilters === 'function') {
+        // setTimeout 0 so the drawer's closing animation paints first;
+        // the save-alert modal then layers on top without flicker.
+        setTimeout(() => saveDigestFilters(), 0);
+      }
+    });
+  }
+
   // Mode tab clicks (re-sync from the appropriate source)
   if (tabRent) tabRent.addEventListener('click', () => {
     setDrawerMode('rent');
@@ -17676,11 +17874,40 @@ function setDrawerMode(mode) {
 
 // ── Onboarding ──────────────────────────────────────────────────────────────
 // Called by showApp() AFTER auth resolves so Auth.userId() is the real user ID.
+// Global unscoped key for the onboarded flag. Previously this used
+// Storage.get('onboarded') which keys by Auth.userId() — but userId()
+// returns 'guest' before Clerk resolves and the real id after, so the
+// flag set during one phase couldn't be read in the other and the
+// slideshow showed on every page load. A device-wide UI preference
+// belongs in a single key, not a per-user namespace.
+const _ONBOARDED_KEY = 'lume_onboarded_v1';
+function _hasSeenOnboarding() {
+  try {
+    // Check both the new global key AND every legacy per-user key — if
+    // the user has clicked through the slideshow under ANY identity,
+    // count them as onboarded so they don't see it again.
+    if (localStorage.getItem(_ONBOARDED_KEY)) return true;
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('scorer_onboarded_') && localStorage.getItem(k) === 'true') {
+        // Self-heal: copy into the new global key so future loads
+        // don't pay the iteration cost.
+        try { localStorage.setItem(_ONBOARDED_KEY, '1'); } catch (_) {}
+        return true;
+      }
+    }
+  } catch (_) {}
+  return false;
+}
+function _markOnboarded() {
+  try { localStorage.setItem(_ONBOARDED_KEY, '1'); } catch (_) {}
+}
+
 function _checkOnboarding() {
   const overlay = document.getElementById('onboardingOverlay');
   if (!overlay) return;
   const isLocal = ['localhost','127.0.0.1'].includes(location.hostname);
-  if (isLocal || Storage.get('onboarded')) {
+  if (isLocal || _hasSeenOnboarding()) {
     overlay.remove();   // Dev mode: always skip; production: skip if already seen
   } else {
     overlay.classList.add('is-visible');
@@ -17704,6 +17931,10 @@ function _checkOnboarding() {
   let _ob2Done = false, _ob4Done = false;
 
   function _finish() {
+    // Store under the global unscoped key so the flag survives Clerk
+    // sign-in / sign-out cycles. Still set the legacy per-user key for
+    // back-compat with any code that hasn't been updated yet.
+    _markOnboarded();
     Storage.set('onboarded', true);
     overlay.classList.add('hiding');
     setTimeout(() => overlay.remove(), 420);
