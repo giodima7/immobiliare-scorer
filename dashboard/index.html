@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-17 sales-loading">
+<meta name="lume-build" content="2026-05-17 sales-toggle-sticky">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -1052,13 +1052,41 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--green-deep); }
 .sort-tab.active { background: var(--green-deep); color: #fff; }
 
 /* ── Buyer / Investor view toggle (Sales tab only) ──────────────────────── */
+/* Outer sticky strip: full-width, sits between the tab bar and the
+   filter bar in the scroll stack so the toggle never goes off-screen.
+   Background matches the page so there's no seam against the body. */
+.view-mode-toggle-wrap {
+  position: sticky;
+  /* JS (_updateStickyTops) sets `top` at runtime to header + tab-bar
+     height. The 0 default lets the CSS work even if the JS hasn't run
+     yet (e.g. between paint + the rAF). */
+  top: 0;
+  z-index: 95;             /* above content cards, below the .filters bar (z=90) */
+  background: var(--bg-page, var(--surface));
+  padding: 12px 24px;      /* equal vertical, matches the side gutter */
+  display: flex;
+  justify-content: flex-start;
+  /* Bottom hairline so the strip reads as its own layer when stuck. */
+  border-bottom: 1px solid transparent;
+  transition: border-color 180ms ease;
+}
+.view-mode-toggle-wrap.is-stuck {
+  border-bottom-color: var(--border);
+}
 .view-mode-toggle {
   display: inline-flex;
   background: var(--bg-muted);
   border-radius: var(--radius-full);
   padding: 3px;
   gap: 2px;
-  margin: 14px 24px 0;
+  /* Margin removed — outer wrap owns the spacing now. */
+  margin: 0;
+}
+@media (max-width: 768px) {
+  .view-mode-toggle-wrap {
+    padding: 10px 14px;
+    justify-content: center;   /* centred on phone for thumb-reach */
+  }
 }
 .view-mode-btn {
   padding: 7px 16px;
@@ -6685,16 +6713,23 @@ function saveFilters() {
   </div>
 </div>
 
-<!-- ── Buyer / Investor view toggle (Sales tab only) ── -->
-<div class="view-mode-toggle" id="salesViewToggle" role="tablist" aria-label="Sales view mode">
-  <button class="view-mode-btn active" data-mode="buyer" type="button"
-          onclick="setSalesViewMode('buyer')" role="tab" aria-selected="true">
-    🏠 For me
-  </button>
-  <button class="view-mode-btn" data-mode="investor" type="button"
-          onclick="setSalesViewMode('investor')" role="tab" aria-selected="false">
-    📈 As investment
-  </button>
+<!-- ── Buyer / Investor view toggle (Sales tab only) ─────────────────
+     Wrapped in .view-mode-toggle-wrap so the OUTER strip can sticky
+     to the top of the scroll area while the INNER pill keeps its
+     rounded-rail look. Equal vertical padding inside the wrap so the
+     toggle breathes; the strip itself shares the page background so
+     it doesn't show a seam against the body. -->
+<div class="view-mode-toggle-wrap">
+  <div class="view-mode-toggle" id="salesViewToggle" role="tablist" aria-label="Sales view mode">
+    <button class="view-mode-btn active" data-mode="buyer" type="button"
+            onclick="setSalesViewMode('buyer')" role="tab" aria-selected="true">
+      🏠 For me
+    </button>
+    <button class="view-mode-btn" data-mode="investor" type="button"
+            onclick="setSalesViewMode('investor')" role="tab" aria-selected="false">
+      📈 As investment
+    </button>
+  </div>
 </div>
 
 <!-- ── Sales filter bar ── -->
@@ -9325,13 +9360,28 @@ function _startCiPoll() {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 function _updateStickyTops() {
-  const header = document.querySelector('header');
-  const tabBar = document.querySelector('.tab-bar');
+  const header  = document.querySelector('header');
+  const tabBar  = document.querySelector('.tab-bar');
+  const toggle  = document.querySelector('.view-mode-toggle-wrap');
   const headerH = header ? header.offsetHeight : 0;
-  const tabH    = tabBar ? tabBar.offsetHeight  : 0;
+  const tabH    = tabBar ? tabBar.offsetHeight : 0;
   if (tabBar) tabBar.style.top = headerH + 'px';
+
+  // Sales view-mode toggle: sticks immediately below the tab bar so
+  // For-me / As-investment stays reachable while the cards scroll.
+  // Measure AFTER setting its top so the height read includes any
+  // padding we just laid out.
+  let toggleH = 0;
+  if (toggle) {
+    toggle.style.top = (headerH + tabH) + 'px';
+    toggleH = toggle.offsetHeight;
+  }
+
+  // Filter bar sticks below the toggle. On non-Sales tabs the toggle
+  // isn't rendered (offsetHeight=0) so the math still works — the bar
+  // sticks at header + tabs as before.
   document.querySelectorAll('.filters').forEach(f => {
-    f.style.top = (headerH + tabH) + 'px';
+    f.style.top = (headerH + tabH + toggleH) + 'px';
   });
 }
 window.addEventListener('resize', _updateStickyTops);
@@ -9802,6 +9852,12 @@ function switchTab(tab, opts) {
   });
   document.querySelectorAll('.tab-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.tab === tab));
+  // The For-me / As-investment toggle wrap is only rendered on the
+  // Sales tab; its presence shifts the filter-bar sticky offset. Recalc
+  // after the tab swap so the filter bar lands at the right top.
+  if (typeof _updateStickyTops === 'function') {
+    requestAnimationFrame(_updateStickyTops);
+  }
   // Persist the active tab so reloading the dashboard keeps the user where
   // they were. Skip persistence for detail-view navigations — those use the
   // URL itself, not the tab state.
