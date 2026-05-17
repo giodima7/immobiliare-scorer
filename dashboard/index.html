@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-17 mobile-fixes (1e20ac7)">
+<meta name="lume-build" content="2026-05-17 remove-unmatched-badge">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -6371,10 +6371,16 @@ function saveFilters() {
     <span id="ciPillLabel">CI –</span>
   </a>
   <div class="meta" id="meta" data-i18n="loading.listings">Lume is reading the listings…</div>
-  <!-- "Run Lume now" + "Zones" removed (consolidation): the scanner now lives
-       in Settings → Scanner, and the OMI-zone fixer was for one-off Milan
-       cleanup that's no longer needed now that update_omi.py runs per-city. -->
-  <span id="unmatchedBadge" style="display:none"></span>
+  <!-- "Run Lume now" + "Zones" header buttons removed (consolidation):
+       scanner moved to Settings → Scanner; the OMI-zone fixer was a
+       one-off Milan cleanup superseded by per-city update_omi.py runs.
+       The unmatchedBadge ("N listings need zone-mapping cleanup") that
+       used to live here is gone too — same info is in the stats bar as
+       "Keyword fallback N" with its own Apply-OMI button, so the
+       floating header number was just confusing noise.
+       _updateUnmatchedBadge() no-ops gracefully when the element is
+       absent (line 12503 guards with `if (!badge) return`). -->
+
   <a class="fav-link fav-btn" href="/favourites" id="favLink">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
     <span class="fav-label" data-i18n="header.favourites"> Favourites</span>
