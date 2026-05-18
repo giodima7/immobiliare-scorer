@@ -47,8 +47,72 @@ _fetch_lock    = threading.Lock()
 _fetch_running = False
 
 _scanner_lock = threading.Lock()
-_scanner_proc = None   # subprocess.Popen for fetch_rentals.py --daemon
-_idealista_proc = None  # subprocess.Popen for fetch_idealista.py --daemon
+_scanner_proc = None   # subprocess.Popen for fetch_rentals.py --daemon (primary city)
+_idealista_proc = None # subprocess.Popen for fetch_idealista.py --daemon (primary city)
+# Every extra-city scanner subprocess spawned by /start-scanner gets its
+# Popen handle parked here so /stop-scanner can terminate them too.
+# Previously only the integer PIDs were collected and the handles were
+# discarded — the extras kept cron-firing every 60 min as orphans even
+# after the user clicked Stop or restarted api.py.
+_scanner_extras: list = []
+
+
+def _sweep_orphan_scanner_pids() -> list[int]:
+    """
+    Find and SIGTERM every `fetch_rentals.py --daemon` /
+    `fetch_idealista.py --daemon` / `fetch_listings.py` process
+    currently running for this checkout — excluding our own
+    in-process subprocesses (the Popen handles we already track).
+
+    Runs at api.py startup (to reap ghosts from a previous session)
+    AND inside /stop-scanner as a backstop. Returns the list of PIDs
+    we actually killed so the response can report them.
+
+    Match strategy: scan `ps -eo pid,command` for fetch_*.py whose
+    command line contains our BASE_DIR — that way we don't accidentally
+    kill another project's scanner sharing the same script name.
+    """
+    import subprocess as _sp
+    import os as _os
+    base = str(BASE_DIR)
+    me   = _os.getpid()
+    known_pids = set()
+    for p in (_scanner_proc, _idealista_proc, *_scanner_extras):
+        if p is not None:
+            try: known_pids.add(p.pid)
+            except Exception: pass
+    killed: list[int] = []
+    try:
+        out = _sp.check_output(["ps", "-eo", "pid,command"], text=True)
+    except Exception as exc:
+        print(f"[orphan-sweep] ps failed: {exc}")
+        return killed
+    for line in out.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            pid_s, _, cmd = line.partition(" ")
+            pid = int(pid_s)
+        except ValueError:
+            continue
+        if pid == me or pid in known_pids:
+            continue
+        if base not in cmd:
+            continue
+        if not any(tag in cmd for tag in
+                   ("fetch_rentals.py", "fetch_idealista.py", "fetch_listings.py")):
+            continue
+        # Only ghost the daemonised ones — one-shot fetches that happen
+        # to be in flight from the current /start-scanner extras are
+        # tracked in _scanner_extras and excluded above.
+        try:
+            _os.kill(pid, 15)  # SIGTERM
+            killed.append(pid)
+            print(f"[orphan-sweep] killed {pid}: {cmd[:120]}")
+        except Exception as exc:
+            print(f"[orphan-sweep] kill {pid} failed: {exc}")
+    return killed
 
 # ── Background geo enrichment ─────────────────────────────────────────────────
 # Legacy single-status dicts: kept so the existing dashboard polling code that
@@ -938,10 +1002,20 @@ def start_scanner():
         # the daemon. They run in parallel — fetch_rentals.py is mostly
         # network-bound on Immobiliare, so 4 concurrent processes still
         # fit comfortably under the site's rate limits.
+        #
+        # CRITICAL: park each Popen handle in _scanner_extras so
+        # /stop-scanner can terminate the whole fleet. Previously only
+        # `.pid` was collected and the handle was dropped, so terminate()
+        # never reached the extras + they kept cron-firing every 60 min
+        # as orphans after Stop. Filter dead entries first so the list
+        # doesn't grow unbounded across many Start clicks.
+        _scanner_extras[:] = [p for p in _scanner_extras if p and p.poll() is None]
         extras = []
         for c in cities[1:]:
             try:
-                extras.append(_start_scanner_proc(body, c).pid)
+                proc = _start_scanner_proc(body, c)
+                _scanner_extras.append(proc)
+                extras.append(proc.pid)
             except Exception as exc:
                 print(f"[start-scanner] {c} failed: {exc}")
         if extras:
@@ -951,6 +1025,16 @@ def start_scanner():
 
 @app.route("/stop-scanner", methods=["POST"])
 def stop_scanner():
+    """
+    Stop everything the rentals scanner started:
+      • primary city's --daemon process (_scanner_proc)
+      • Idealista daemon (_idealista_proc)
+      • every extra-city subprocess parked in _scanner_extras
+      • any orphan fetch_rentals.py / fetch_idealista.py left from a
+        previous api.py session (sweep by process-name match — catches
+        the daemons that survived an api.py restart and kept cron-
+        firing every 60 min as ghosts)
+    """
     global _scanner_proc, _idealista_proc
     with _scanner_lock:
         stopped = []
@@ -960,6 +1044,18 @@ def stop_scanner():
         if _idealista_proc and _idealista_proc.poll() is None:
             _idealista_proc.terminate()
             stopped.append(_idealista_proc.pid)
+        for p in _scanner_extras:
+            if p and p.poll() is None:
+                try:
+                    p.terminate()
+                    stopped.append(p.pid)
+                except Exception as exc:
+                    print(f"[stop-scanner] extra terminate failed: {exc}")
+        _scanner_extras.clear()
+        # Backstop sweep — catches orphan daemons whose Popen handles
+        # we lost (api.py restart, OS reaped the proc, etc.).
+        for pid in _sweep_orphan_scanner_pids():
+            stopped.append(pid)
         if stopped:
             return jsonify({"stopped": True, "pids": stopped})
     return jsonify({"stopped": False, "reason": "not running"})
@@ -2745,6 +2841,16 @@ if __name__ == "__main__":
     # Rescore existing JSON with current formula before starting
     _rescore_existing_json()
     _rescore_existing_sales_json()
+
+    # Sweep for orphan scanner daemons from previous api.py sessions —
+    # without this, restarting api.py leaves any --daemon subprocess
+    # alive and it keeps cron-firing scans every 60 min as a ghost
+    # (we have no Popen handle to terminate it later, so /stop-scanner
+    # can't reach it from the UI either).
+    _ghosts = _sweep_orphan_scanner_pids()
+    if _ghosts:
+        print(f"  Orphan sweep → reaped {len(_ghosts)} ghost daemons: {_ghosts}",
+              flush=True)
 
     # Auto-push to Supabase whenever a scan cycle rewrites the local JSON.
     # Background daemon — dies with the parent process on Ctrl+C.
