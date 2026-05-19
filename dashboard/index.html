@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-18 toggle-natural-width">
+<meta name="lume-build" content="2026-05-18 hide-sales-scan-panel">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -6749,8 +6749,14 @@ function saveFilters() {
 ═══════════════════════════════════════════════════════════════ -->
 <div id="salesView" hidden>
 
-<!-- ── Sales fetch panel ── -->
-<div class="scanner-panel" id="sScanPanel">
+<!-- ── Sales fetch panel ─────────────────────────────────────────────
+     Hidden in DOM: the scanner workflow moved into Settings → Scanner
+     (same as rentals). The panel STAYS in the DOM with hidden=true
+     because updateSaleFetchStatus + the start/stop handlers below
+     reference the panel's element IDs (sScanDot, btnStartSaleFetch,
+     sSaleFetchPages, …) at module load. Removing them outright would
+     throw getElementById nulls during the status poll. -->
+<div class="scanner-panel" id="sScanPanel" hidden style="display:none">
   <div class="fetch-section-title">Lume — sales scan</div>
   <div class="scanner-row">
     <div class="scanner-status-wrap">
