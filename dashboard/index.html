@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-17 loading-span-grid">
+<meta name="lume-build" content="2026-05-18 toggle-in-filterbar">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -1075,15 +1075,29 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--green-deep); }
   pointer-events: auto;
   display: inline-flex;
   /* The pill IS the visible chrome now — keep its rounded muted bg
-     + add a soft elevation so it reads as floating over the cards. */
+     so it reads as a distinct floating control even when inside the
+     filter bar's white surface. */
   background: var(--bg-muted);
   border-radius: var(--radius-full);
   padding: 3px;
   gap: 2px;
   margin: 0;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.08), 0 0 0 1px var(--border);
-  backdrop-filter: saturate(180%) blur(6px);
-  -webkit-backdrop-filter: saturate(180%) blur(6px);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 0 0 1px var(--border);
+}
+
+/* When the toggle is moved INTO .filters by _ensureToggleInFilters,
+   force it onto its own line above the filter rows. width:100% +
+   align-self:flex-start makes the flex container's wrap behavior
+   give us a proper line break; the inner inline-flex pill stays
+   left-aligned in its row. flex-basis with 100% achieves the line
+   break in browsers that use the older flex-wrap behaviour. */
+.filters > .view-mode-toggle {
+  flex: 0 0 100%;
+  align-self: flex-start;
+  margin-bottom: 4px;
+  /* Drop the elevation — inside the filter bar's own elevated
+     surface, the double-shadow looks busy. */
+  box-shadow: 0 0 0 1px var(--border);
 }
 @media (max-width: 768px) {
   /* On mobile the header + tab-bar are both position: fixed, so the
@@ -9445,38 +9459,50 @@ function _updateStickyTops() {
   const tabH    = tabBar ? tabBar.offsetHeight : 0;
   if (tabBar) tabBar.style.top = headerH + 'px';
 
-  // Sales view-mode toggle: pinned just below the tab bar so it stays
-  // visible while the cards scroll. On mobile the toggle is
-  // position:fixed (matches the fixed header + tab-bar above it); on
-  // desktop it's position:sticky relative to body. In both cases we
-  // measure the painted height AFTER setting top so the padding-top
-  // offset for the salesView content matches exactly.
-  let toggleH = 0;
-  const _isMobile = window.matchMedia('(max-width: 768px)').matches;
-  if (toggle) {
-    toggle.style.top = (headerH + tabH) + 'px';
-    toggleH = toggle.offsetHeight;
-    // Push the sales-view scroll content down so the first card isn't
-    // hidden under the now-fixed toggle. Skipped on desktop because
-    // the toggle is in normal flow there (sticky → still takes space).
-    const salesView = document.getElementById('salesView');
-    if (salesView && _isMobile) {
-      salesView.style.paddingTop = (toggleH + 8) + 'px';
-      document.body.classList.add('has-fixed-toggle');
-    } else if (salesView) {
-      salesView.style.paddingTop = '';
-      document.body.classList.remove('has-fixed-toggle');
-    }
-  }
-
-  // Filter bar sticks below the toggle. On non-Sales tabs the toggle
-  // isn't rendered (offsetHeight=0) so the math still works — the bar
-  // sticks at header + tabs as before.
+  // The toggle now lives INSIDE the sales filter bar as its first row
+  // (see HTML — view-mode-toggle is moved into .filters by the JS in
+  // _ensureToggleInFilters below). So there's only ONE sticky bar to
+  // position: the filter bar itself. No separate transparent strip
+  // means no gap for scrolling cards to leak through.
   document.querySelectorAll('.filters').forEach(f => {
-    f.style.top = (headerH + tabH + toggleH) + 'px';
+    f.style.top = (headerH + tabH) + 'px';
   });
+
+  // Mobile only: header + tab-bar are position:fixed (not sticky), so
+  // salesView needs a top spacer equal to their combined height. The
+  // toggle is part of the filter bar now so we don't add anything
+  // extra for it.
+  const _isMobile = window.matchMedia('(max-width: 768px)').matches;
+  const salesView = document.getElementById('salesView');
+  if (salesView && _isMobile) {
+    salesView.style.paddingTop = '8px';
+    document.body.classList.add('has-fixed-toggle');
+  } else if (salesView) {
+    salesView.style.paddingTop = '';
+    document.body.classList.remove('has-fixed-toggle');
+  }
 }
 window.addEventListener('resize', _updateStickyTops);
+
+// Move the toggle pill (view-mode-toggle) from its standalone wrap
+// into the sales filter bar as a first-row child. The wrap stays in
+// the DOM for legacy reasons but is hidden — the pill becomes part
+// of the filter bar's own chrome, eliminating the transparent gap
+// between the tab strip and the filter bar that previously let
+// scrolling cards leak through.
+function _ensureToggleInFilters() {
+  const wrap   = document.querySelector('.view-mode-toggle-wrap');
+  const toggle = document.getElementById('salesViewToggle');
+  const filter = document.querySelector('#salesView .filters');
+  if (!wrap || !toggle || !filter) return;
+  // Only move once — bail if the toggle is already inside the filter.
+  if (filter.contains(toggle)) return;
+  // Insert as the filter bar's FIRST child so it reads as the top row.
+  filter.insertBefore(toggle, filter.firstChild);
+  // Hide the now-empty original wrap so it takes no flow space.
+  wrap.hidden = true;
+}
+requestAnimationFrame(_ensureToggleInFilters);
 
 // ── Filter bar sticky shadow — sentinel-based detection ───────────────────────
 // Insert a 1px sentinel just before each .filters element. When the sentinel
