@@ -977,6 +977,22 @@ def parse_idealista_listing(raw: dict) -> Optional[dict]:
     omi = match_omi(neighbourhood)
 
     is_auction, is_nuda = detect_auction_or_nuda(raw)
+    # Fake / foreign-property bait detection — shared helper from
+    # fetch_listings so the two scrapers stay in lock-step. Scans
+    # title + first 1000 chars of description.
+    try:
+        from fetch_listings import detect_fake_listing as _detect_fake
+        _is_fake = _detect_fake(
+            title       = raw.get("title", "") or "",
+            description = raw.get("description", "") or "",
+            city        = CITY_KEY,
+        )
+    except Exception:
+        _is_fake = False
+    if _is_fake:
+        print(f"  [fake] id_{listing_id} ({CITY_KEY}) — "
+              f"{(raw.get('title') or '')[:70]}",
+              flush=True)
 
     return {
         # ── Identity ──────────────────────────────────────────────────────────
@@ -996,6 +1012,7 @@ def parse_idealista_listing(raw: dict) -> Optional[dict]:
         # ── Listing-type flags (rentals — usually False, kept for symmetry) ──
         "is_auction":         is_auction,
         "is_nuda_proprieta":  is_nuda,
+        "is_fake":            _is_fake,
         # ── Price ─────────────────────────────────────────────────────────────
         "rent_mo":            price,        # monthly rent € — same field name as fetch_rentals
         "sqm":                sqm,
@@ -1109,6 +1126,20 @@ def parse_idealista_sale_listing(raw: dict) -> Optional[dict]:
     omi = match_omi(neighbourhood)
 
     is_auction, is_nuda = detect_auction_or_nuda(raw)
+    # Same fake-listing scan as the rentals path above (shared helper).
+    try:
+        from fetch_listings import detect_fake_listing as _detect_fake
+        _is_fake = _detect_fake(
+            title       = raw.get("title", "") or "",
+            description = raw.get("description", "") or "",
+            city        = CITY_KEY,
+        )
+    except Exception:
+        _is_fake = False
+    if _is_fake:
+        print(f"  [fake-sale] id_{listing_id} ({CITY_KEY}) — "
+              f"{(raw.get('title') or '')[:70]}",
+              flush=True)
 
     return {
         "id":              f"id_{listing_id}",
@@ -1128,6 +1159,7 @@ def parse_idealista_sale_listing(raw: dict) -> Optional[dict]:
         # nuda proprietà by default (see applySaleFilters in index.html).
         "is_auction":      is_auction,
         "is_nuda_proprieta": is_nuda,
+        "is_fake":         _is_fake,
         "price":           price,                # total purchase price €
         "sqm":             sqm,
         "ask_psqm":        ask_psqm,             # €/m²  (purchase, not monthly)

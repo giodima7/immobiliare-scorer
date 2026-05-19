@@ -120,6 +120,90 @@ def to_url_slug(name: str) -> str:
     name = _re.sub(r"[^a-z0-9]+", "-", name)
     return name.strip("-")
 
+# ── Fake / foreign-property bait detection ────────────────────────────────────
+# Some agencies post listings claiming to be in Milan / Rome but actually
+# advertise foreign real estate (Albania / Dubai / Montenegro / etc.).
+# They score artificially high because their prices look "way below comps"
+# next to Italian benchmarks. Detect them at scrape time and flag
+# is_fake=True; scoring.score_sale_listing short-circuits the flag the
+# same way it does for is_auction / is_nuda_proprieta.
+#
+# Two signal families:
+#   1. Foreign country / city mentions — always a fake in an Italian city
+#      search.
+#   2. Coastal-amenity language ("vista mare", "spiaggia privata") — fake
+#      in inland cities (Milano, Roma), legitimate in coastal ones
+#      (Napoli, La Maddalena). Whitelist via _SEA_VIEW_OK_CITIES.
+#   3. All-caps title heuristic — scam agencies write the title in
+#      SHOUTING because they're chasing impressions. Real Italian agents
+#      use title case.
+_FAKE_FOREIGN_KEYWORDS: tuple[str, ...] = (
+    # Albania
+    "albania", "albanian", "tirana", "durres", "saranda", "vlora", "vlore",
+    # UAE / Gulf
+    "dubai", "emirati arabi", "uae", "abu dhabi",
+    # Other Balkans / Med
+    "montenegro", "podgorica", "budva",
+    "turchia", "turkey", "istanbul", "antalya",
+    "portogallo", "portugal", "lisbona", "porto",
+    "grecia", "greece", "atene", "athens", "creta",
+    "croazia", "croatia", "zagabria", "dubrovnik",
+    "marocco", "morocco", "marrakech", "casablanca",
+    # Bait language
+    "shop like a billionaire",
+    "invest abroad",
+    "acquista all'estero",
+    "investi all'estero",
+    "resort & residence",
+    "luxury resort abroad",
+)
+_SEA_VIEW_KEYWORDS: tuple[str, ...] = (
+    "spiaggia privata",   # private beach — impossible inland
+    "marina privata",     # private marina
+    "vista mare",         # sea view — only legitimate in coastal cities
+    "fronte mare",        # seafront
+    "sul mare",           # on the sea
+    "costa mare",         # coast
+)
+_SEA_VIEW_OK_CITIES: frozenset[str] = frozenset({"napoli", "la_maddalena"})
+
+
+def detect_fake_listing(title: str, description: str, city: str = "milano") -> bool:
+    """
+    Returns True if this looks like a fraudulent bait-and-switch — an
+    Italian city listing that actually advertises foreign property or
+    impossible amenities (sea view in Milan etc.).
+
+    Only scans the first 1000 chars of the description so we don't false
+    positive on listings that mention a foreign country incidentally
+    ("renovated by Albanian craftsmen", "the previous owner moved to
+    Portugal", etc.) deep in the body.
+    """
+    text  = ((title or "") + " " + (description or "")[:1000]).lower()
+    city  = (city or "milano").lower()
+
+    # 1. Foreign country / city mentions — always fake in an IT search.
+    if any(kw in text for kw in _FAKE_FOREIGN_KEYWORDS):
+        return True
+
+    # 2. Coastal-amenity language — only flag for inland cities.
+    if city not in _SEA_VIEW_OK_CITIES:
+        if any(kw in text for kw in _SEA_VIEW_KEYWORDS):
+            return True
+
+    # 3. All-caps title heuristic. Skip very short titles (≤ 3 words)
+    #    because "VILLA IN VENDITA" can come from a legit agent header.
+    title_words = (title or "").split()
+    if len(title_words) >= 4:
+        long_words = [w for w in title_words if len(w) > 2]
+        if long_words:
+            caps_ratio = sum(1 for w in long_words if w.isupper()) / len(long_words)
+            if caps_ratio > 0.5:    # >50% of long words ALL-CAPS → scam pattern
+                return True
+
+    return False
+
+
 # ── City config ───────────────────────────────────────────────────────────────
 # url_slug: the /vendita-case/{slug}/ URL segment
 CITIES = {
@@ -824,11 +908,28 @@ def parse_listing(item: dict, city_key: str, city_label: str) -> Optional[dict]:
         print(f"  [auction-by-price] {listing_id} ({city_key}): €{price/sqm:.0f}/m² "
               f"< €{_floor}/m² floor → flagged is_auction=True", flush=True)
 
+    # Fake / foreign-property bait detection — sets is_fake=True for
+    # listings whose title or description mentions a foreign country
+    # (Albania / Dubai / Montenegro / etc.) or an impossible amenity
+    # for the listed city (sea view in Milan, private marina in Rome).
+    # scoring.score_sale_listing short-circuits on this flag the same
+    # way it does for is_auction / is_nuda_proprieta.
+    is_fake = detect_fake_listing(
+        title       = re_data.get("title") or "",
+        description = description,
+        city        = city_key,
+    )
+    if is_fake:
+        print(f"  [fake] {listing_id} ({city_key}) — "
+              f"{(re_data.get('title') or '')[:70]}",
+              flush=True)
+
     omi = match_omi(city_key, neighbourhood)
 
     return {
         "is_auction":         is_auction,
         "is_nuda_proprieta":  is_nuda,
+        "is_fake":            is_fake,
         "id":              str(listing_id),
         "source":          "sale",
         # `city` = lowercase code (Supabase listings.city); `city_label`

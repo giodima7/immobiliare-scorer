@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-18 toggle-in-filterbar">
+<meta name="lume-build" content="2026-05-18 fake-detection+extreme-underpricing">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -1022,6 +1022,21 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--green-deep); }
 .agency-link:hover { text-decoration: underline; }
 
 /* Banner that appears on cards when a stale listing is shown via the toggle */
+/* Extreme-underpricing banner — sits above the stale banner on cards
+   whose comps-delta dropped below -60 %. Amber tone to signal caution
+   without the louder red used for hard exclusions; the row is still
+   visible (genuine distressed sales exist) but the user is asked to
+   verify before acting on it. */
+.extreme-underpricing-banner {
+  background: #FFF3E0;
+  color: #B85C00;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 12px;
+  text-align: center;
+  border-top: 1px solid rgba(184, 92, 0, 0.18);
+  line-height: 1.4;
+}
 .stale-banner {
   background: var(--coral-light, #FDEEEC);
   color: var(--coral, #E05C4B);
@@ -12094,6 +12109,30 @@ function staleBannerHtml(l) {
   return `<div class="stale-banner">⚠ Off-market — not seen by the scanner in ${daysStr}</div>`;
 }
 
+// Banner shown on cards that crossed the extreme-underpricing threshold
+// (>60 % below comps). The row is NOT excluded (genuine distressed sales
+// exist), but the score is capped at 55 and gem badges stripped — this
+// banner surfaces the suspicion so the user verifies before acting on it.
+// Reads .extreme_underpricing (DB column from migration 010). The
+// legacy _extreme_underpricing key from scoring.py's apply_… helper
+// also works for listings that were scored locally without going
+// through Supabase.
+function extremeUnderpricingBannerHtml(l) {
+  const flag = l.extreme_underpricing || l._extreme_underpricing;
+  if (!flag) return '';
+  const dp = (l.extreme_underpricing_delta != null)
+    ? l.extreme_underpricing_delta
+    : (l._extreme_underpricing_delta != null
+        ? l._extreme_underpricing_delta
+        : (l.comps_sale_delta_pct != null
+            ? l.comps_sale_delta_pct
+            : l.comps_delta_pct));
+  const pctStr = (dp != null && !isNaN(dp))
+    ? `${Math.abs(dp).toFixed(0)}% below comps — `
+    : '';
+  return `<div class="extreme-underpricing-banner">⚠ ${pctStr}verify this listing — price unusually far below market</div>`;
+}
+
 // ── Rentals — card renderer ───────────────────────────────────────────────────
 function renderRentalCard(l) {
   const sc       = scoreClass(l.score_total);
@@ -12503,6 +12542,7 @@ function renderRentalCard(l) {
       <a class="link-btn" href="${l.url}" target="_blank" rel="noopener">${escapeHtml(t('card.view'))}</a>
     </div>
     ${detailsHtml}
+    ${extremeUnderpricingBannerHtml(l)}
     ${staleBannerHtml(l)}
   `;
 
@@ -16520,6 +16560,7 @@ function renderSaleCard(l) {
       <a class="link-btn" href="${l.url}" target="_blank" rel="noopener">${escapeHtml(t('card.view'))}</a>
     </div>
     ${detailsHtml}
+    ${extremeUnderpricingBannerHtml(l)}
     ${staleBannerHtml(l)}
   `;
 

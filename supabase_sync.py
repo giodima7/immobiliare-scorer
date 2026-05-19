@@ -53,6 +53,11 @@ FIELD_RENAME: dict[str, str] = {
     "_excluded_reason":             "excluded_reason",
     "_price_floor_gate_applied":    "price_floor_gate_applied",
     "_price_floor_reason":          "price_floor_reason",
+    # Extreme-underpricing flag (migration 010): score capped at 55 +
+    # gem badges stripped + warning banner shown on the card. The
+    # camel-free DB column drops the leading underscore.
+    "_extreme_underpricing":        "extreme_underpricing",
+    "_extreme_underpricing_delta":  "extreme_underpricing_delta",
     # Italian source data uses `spese_condominiali`; the DB stores the
     # unified `condominium_fees` column. The dashboard JS still reads
     # `spese_condominiali`, so SupabaseClient.fetchAll aliases it back.
@@ -80,9 +85,13 @@ SCHEMA_COLUMNS: frozenset[str] = frozenset({
     "year_built", "energy_class", "bathrooms", "condominium_fees",
     "heating_type", "is_external", "is_below_ground", "is_ground_floor",
     "is_auction", "is_nuda_proprieta",
+    # ── Fake / foreign-property bait (migration 010) ────────────────────
+    "is_fake",
     # ── Sanity gates (migration 008 + 009) ──────────────────────────────
     "excluded", "excluded_reason",
     "price_floor_gate_applied", "price_floor_reason",
+    # ── Extreme-underpricing flag (migration 010) ───────────────────────
+    "extreme_underpricing", "extreme_underpricing_delta",
     "description",
     # ── Location / proximity ────────────────────────────────────────────
     "latitude", "longitude",

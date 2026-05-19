@@ -818,6 +818,43 @@ def apply_price_floor_gate(listing: dict) -> bool:
     return True
 
 
+# ── Extreme-underpricing suspicion flag ──────────────────────────────────
+# A legitimate listing is rarely more than ~40% below comps. Beyond -60%
+# the probability of fraud / data error / undetected fake spikes. We
+# don't auto-exclude — genuine distressed sales exist — but cap the
+# score at 55 and strip gem badges so the row never lands at the top
+# of the user's grid. Dashboard surfaces a "verify this listing"
+# banner via the _extreme_underpricing flag.
+EXTREME_UNDERPRICING_THRESHOLD_PCT: float = -60.0
+EXTREME_UNDERPRICING_CAP:           int   = 55
+
+
+def apply_extreme_underpricing_flag(listing: dict, comps_delta_pct: float | None) -> None:
+    """
+    Mutate `listing` if comps_delta_pct is below the extreme threshold.
+    Caps score_total at EXTREME_UNDERPRICING_CAP, clears hidden_gem /
+    good_value, sets _extreme_underpricing + _extreme_underpricing_delta
+    so the dashboard can render a warning banner.
+
+    Idempotent: re-running on an already-flagged listing is a no-op.
+    """
+    if comps_delta_pct is None:
+        return
+    try:
+        dp = float(comps_delta_pct)
+    except (TypeError, ValueError):
+        return
+    if dp >= EXTREME_UNDERPRICING_THRESHOLD_PCT:
+        return
+    listing["_extreme_underpricing"]       = True
+    listing["_extreme_underpricing_delta"] = dp
+    if (listing.get("score_total") or 0) > EXTREME_UNDERPRICING_CAP:
+        listing["score_total"] = EXTREME_UNDERPRICING_CAP
+    # Strip gem badges — suspicious listings should never read as gems.
+    listing["hidden_gem"] = False
+    listing["good_value"] = False
+
+
 def apply_absolute_value_gate(score_total: float, ask_psqm: float, sqm: float) -> tuple[int, bool]:
     """
     Hard score ceiling for small, very expensive listings.
@@ -1066,6 +1103,17 @@ def score_rental(listing: dict, all_listings: list, settings: dict | None = None
     """
     if settings is None:
         settings = _load_settings()
+
+    # Fake/foreign-property bait — same short-circuit as score_sale_listing.
+    # Mutate in place + return an empty dict; score_all merges {**l, **s}
+    # so the mutation survives.
+    if listing.get("is_fake"):
+        listing["score_total"]      = 0
+        listing["hidden_gem"]       = False
+        listing["good_value"]       = False
+        listing["_excluded"]        = True
+        listing["_excluded_reason"] = "Fake / foreign-property bait listing"
+        return {}
 
     w_price = settings.get("w_price", 0.40)
     w_prop  = settings.get("w_property", 0.30)
@@ -1405,6 +1453,8 @@ def score_sale_listing(listing: dict, all_listings: list, settings: dict | None 
         listing["_excluded_reason"] = reason
         return listing
 
+    if listing.get("is_fake"):
+        return _excluded_zero("Fake / foreign-property bait listing")
     if listing.get("is_nuda_proprieta"):
         return _excluded_zero("Nuda proprietà — usufruct retained by seller")
     if listing.get("is_auction"):
@@ -1619,7 +1669,14 @@ def score_all_sales(listings: list, settings: dict | None = None) -> list:
     scored = []
     for l in listings:
         s = score_sale_listing(l, listings, settings)
-        scored.append({**l, **s})
+        merged = {**l, **s}
+        # Apply the extreme-underpricing flag AFTER the merge so we see
+        # the final score_total + comps_sale_delta_pct in one place.
+        # Fake / auction / nuda / price-floor early-return above means
+        # we never apply the flag to already-excluded rows (they have
+        # score_total=0 and no comps delta — the function is a no-op).
+        apply_extreme_underpricing_flag(merged, merged.get("comps_sale_delta_pct"))
+        scored.append(merged)
 
     scored.sort(key=lambda x: x.get("score_total", 0) or 0, reverse=True)
 
@@ -1675,7 +1732,12 @@ def score_all(listings: list, settings: dict | None = None,
     scored = []
     for l in listings:
         s = score_rental(l, pool, settings)
-        scored.append({**l, **s})
+        merged = {**l, **s}
+        # Same extreme-underpricing flag as sales (rentals at -60 % vs
+        # comps are equally suspicious — fake listings exist on both
+        # sides of the market).
+        apply_extreme_underpricing_flag(merged, merged.get("comps_delta_pct"))
+        scored.append(merged)
 
     scored.sort(key=lambda x: x.get("score_total", 0) or 0, reverse=True)
 
