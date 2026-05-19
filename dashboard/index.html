@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-18 hide-sales-scan-panel">
+<meta name="lume-build" content="2026-05-18 map-city-bbox">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -18686,14 +18686,54 @@ function _mapInit() {
   }
 }
 
+// Per-city tight bboxes for map filtering. Matches enrich_geo._CITY_BBOXES
+// exactly so the dashboard and the geocoder agree on what counts as
+// "inside the city". The old map filter used a loose 44–47°/8–11° box
+// that covered most of Lombardy + Piedmont, so listings whose
+// coordinates drifted to Bollate / Sesto / Cornaredo / Corsico etc.
+// got plotted on the Milan map.
+const _CITY_MAP_BBOXES = {
+  milano:       [45.38,  9.02, 45.56,  9.32],
+  roma:         [41.75, 12.30, 42.00, 12.70],
+  napoli:       [40.78, 14.14, 40.92, 14.38],
+  la_maddalena: [41.17,  9.35, 41.25,  9.47],
+};
+
+function _coordsInsideCity(lat, lng, city) {
+  const bb = _CITY_MAP_BBOXES[city] || _CITY_MAP_BBOXES.milano;
+  return lat >= bb[0] && lat <= bb[2] && lng >= bb[1] && lng <= bb[3];
+}
+
 function _mapRender() {
   if (!_map) return;
 
   // Refresh dataset and reset viewport rendering state.
+  // Two filter passes:
+  //   1. Coordinates must be inside the active city's bbox — kills
+  //      the suburb pins (Sesto / Bollate / Corsico etc.) the old
+  //      44–47° loose filter let through.
+  //   2. Listings whose OMI lookup landed via 'centroid' fallback
+  //      (instead of a real polygon match) are also dropped — that's
+  //      where geocoder-drifted suburb addresses end up even when
+  //      their coords technically fall inside the loose bbox.
+  const _city = (typeof currentCity === 'string' && currentCity) || 'milano';
   _mapAllListings = _getMapData().filter(l => {
     const lat = l.latitude ?? l.lat;
     const lng = l.longitude ?? l.lng ?? l.lon;
-    return lat && lng && lat >= 44 && lat <= 47 && lng >= 8 && lng <= 11;
+    if (!lat || !lng) return false;
+    if (!_coordsInsideCity(lat, lng, _city)) return false;
+    // omi_source values that count as "really in the city":
+    //   'polygon'                  — direct hit on an OMI zone polygon
+    //   'nominatim+polygon'        — geocoded then polygon-validated
+    // 'centroid' / 'nominatim+centroid' / 'failed' / 'no_coordinates'
+    // all indicate the address didn't actually polygon-match — drop
+    // them. Listings without any omi_source (older rows) keep working
+    // because the bbox check above handles the obvious suburbs.
+    const src = (l.omi_source || '').toLowerCase();
+    if (src.includes('centroid') || src === 'failed' || src === 'no_coordinates') {
+      return false;
+    }
+    return true;
   });
   _mapRenderedIds.clear();
   _clusterGroup.clearLayers();
