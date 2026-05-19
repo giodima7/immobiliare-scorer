@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Favourites — Lume</title>
+<meta name="lume-build" content="2026-05-19 favourites-supabase-fallback">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
 <style>
@@ -326,6 +327,45 @@ header h1 span { color: var(--accent); }
 const FAV_KEY      = window._FAV_KEY;
 const RENT_FAV_KEY = window._RENT_FAV_KEY;
 
+// Supabase fallback: when the Flask /rentals + /sales endpoints aren't
+// reachable (i.e. on Cloudflare Pages where there's no Python backend), we
+// hit Supabase REST directly to batch-fetch the favourited rows by id.
+const SUPABASE_URL      = 'https://sexbjvmedgappzqmcdjv.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_rxIMYBFh3IeQvNUgfAFEKQ_CUc_Rsba';
+
+async function fetchFromSupabase(listingType, ids) {
+  if (!ids.length) return [];
+  // Supabase REST `in.(...)` filter — quote each id so non-numeric ids
+  // (some legacy rows store hashes) still match.
+  const idList = ids.map(x => `"${String(x).replace(/"/g, '\\"')}"`).join(',');
+  const url = `${SUPABASE_URL}/rest/v1/listings`
+            + `?listing_type=eq.${listingType}`
+            + `&id=in.(${idList})`
+            + `&select=*`;
+  const res = await fetch(url, {
+    headers: {
+      apikey:        SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    },
+  });
+  if (!res.ok) throw new Error(`Supabase ${listingType} fetch ${res.status}`);
+  return await res.json();
+}
+
+async function loadFavListings(listingType, ids) {
+  if (!ids.length) return [];
+  // Try Flask first (localhost dev), fall back to Supabase REST (prod).
+  const flaskPath = listingType === 'rental' ? '/rentals' : '/sales';
+  try {
+    const r = await fetch(flaskPath);
+    if (r.ok) {
+      const all = await r.json();
+      return all.filter(l => ids.includes(String(l.id)));
+    }
+  } catch (_) { /* network error → fall through */ }
+  return await fetchFromSupabase(listingType, ids);
+}
+
 function getSalesFavs() { try { return JSON.parse(localStorage.getItem(FAV_KEY)) || []; } catch { return []; } }
 function getRentFavs()  { try { return JSON.parse(localStorage.getItem(RENT_FAV_KEY)) || []; } catch { return []; } }
 function saveSalesFavs(ids) { localStorage.setItem(FAV_KEY, JSON.stringify(ids)); }
@@ -601,20 +641,17 @@ async function init() {
     return;
   }
 
-  const rentFavIds  = getRentFavs();
-  const salesFavIds = getSalesFavs();
+  const rentFavIds  = getRentFavs().map(String);
+  const salesFavIds = getSalesFavs().map(String);
 
   // Fetch both listing sets in parallel
   const [rentResp, salesResp] = await Promise.allSettled([
-    rentFavIds.length  ? fetch('/rentals').then(r => r.ok ? r.json() : []) : Promise.resolve([]),
-    salesFavIds.length ? fetch('/sales').then(r => r.ok ? r.json() : []) : Promise.resolve([]),
+    loadFavListings('rental', rentFavIds),
+    loadFavListings('sale',   salesFavIds),
   ]);
 
-  const allRentals = rentResp.status  === 'fulfilled' ? (rentResp.value  || []) : [];
-  const allSales   = salesResp.status === 'fulfilled' ? (salesResp.value || []) : [];
-
-  _rentListings  = allRentals.filter(l => rentFavIds.includes(String(l.id)));
-  _saleListings  = allSales.filter(l  => salesFavIds.includes(String(l.id)));
+  _rentListings = rentResp.status  === 'fulfilled' ? (rentResp.value  || []) : [];
+  _saleListings = salesResp.status === 'fulfilled' ? (salesResp.value || []) : [];
 
   const total = _rentListings.length + _saleListings.length;
   document.getElementById('favCount').textContent   = total + ' saved';
