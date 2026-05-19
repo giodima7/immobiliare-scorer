@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-18 map-city-bbox">
+<meta name="lume-build" content="2026-05-19 filter-persistence">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -6288,35 +6288,146 @@ function updateUserAvatar() {
   }
 }
 
+// Persist EVERY filter knob on both tabs so a refresh — or even a session
+// resume after closing the tab — keeps the user's current view intact. The
+// payload is `{ rentals: {...}, sales: {...} }`; an old flat blob (legacy
+// pre-2026-05-19 schema) is detected and read as rentals for back-compat.
+//
+// Inputs that don't exist yet (sales area MSD is lazy, built when the user
+// first opens the Sales tab) are handled by writing to the underlying var
+// (saleSelectedAreas) here and re-syncing the MSD trigger when it's built.
 function restoreFilters() {
   const filters = Storage.get('filters');
   if (!filters) return;
-  const set = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val; };
-  set('rFascia',   filters.fascia);
-  set('rMaxRent',  filters.maxRent);
-  set('sMaxPrice', filters.maxPrice);
-  set('rMinSqm',   filters.minSqm);
-  set('rMinRooms', filters.minRooms);
-  set('rMaxMetro', filters.maxMetro);
-  set('rMinFloor', filters.minFloor);
-  set('rScore',    filters.minScore);
-  set('rListed',   filters.fListed);
-  const elev = document.getElementById('rElevator');
-  if (elev && filters.elevator != null) elev.checked = filters.elevator;
+
+  const setVal = (id, val) => {
+    const el = document.getElementById(id);
+    if (el && val != null && val !== '') el.value = val;
+  };
+  const setChk = (id, val) => {
+    const el = document.getElementById(id);
+    if (el && val != null) el.checked = !!val;
+  };
+  const setTab = (groupSel, dataAttr, val) => {
+    if (val == null) return;
+    const tabs = document.querySelectorAll(groupSel);
+    if (!tabs.length) return;
+    tabs.forEach(t => t.classList.toggle('active', (t.dataset[dataAttr] || '') === val));
+  };
+
+  // Back-compat: old payload was flat (rentals-only); new payload nests
+  // under `rentals` + `sales` keys.
+  const r = filters.rentals || filters;
+  const s = filters.sales   || {};
+
+  // Rentals
+  setVal('rFascia',    r.fascia);
+  setVal('rMaxRent',   r.maxRent);
+  setVal('rMinSqm',    r.minSqm);
+  setVal('rMinRooms',  r.minRooms);
+  setVal('rMaxMetro',  r.maxMetro);
+  setVal('rMinFloor',  r.minFloor);
+  setVal('rMinEnergy', r.minEnergy);
+  setVal('rListed',    r.fListed);
+  if (r.minScore != null && r.minScore !== '') {
+    setVal('rScore',    r.minScore);
+    setVal('rScoreNum', r.minScore);
+    const valEl = document.getElementById('rScoreVal');
+    if (valEl) valEl.textContent = String(r.minScore);
+  }
+  setChk('rElevator',  r.elevator);
+  setChk('rShowStale', r.showStale);
+  setTab('#rSourceFilter .sort-tab', 'rsource', r.source);
+  setTab('#rGemFilter .gem-tab',     'gem',     r.gemFilter);
+  setTab('#rentSortTabs .sort-tab',  'rsort',   r.sortKey);
+  if (r.sortKey && typeof rentSortKey !== 'undefined') rentSortKey = r.sortKey;
+  if (Array.isArray(r.areas)) {
+    if (typeof rentSelectedAreas !== 'undefined') rentSelectedAreas = r.areas.slice();
+    if (typeof filterAreaMsd !== 'undefined' && filterAreaMsd && filterAreaMsd.setSelected) {
+      try { filterAreaMsd.setSelected(r.areas); } catch (_) {}
+    }
+  }
+
+  // Sales
+  setVal('sFascia',       s.fascia);
+  setVal('sOmiZone',      s.omiZone);
+  setVal('sMaxPrice',     s.maxPrice);
+  setVal('sMinSqm',       s.minSqm);
+  setVal('sMinRooms',     s.minRooms);
+  setVal('sMaxMetro',     s.maxMetro);
+  setVal('sMinFloor',     s.minFloor);
+  setVal('sMinEnergy',    s.minEnergy);
+  setVal('sMinYield',     s.minYield);
+  if (s.minScore != null && s.minScore !== '') {
+    setVal('sScore', s.minScore);
+    const valEl = document.getElementById('sScoreVal');
+    if (valEl) valEl.textContent = String(s.minScore);
+  }
+  setChk('sElevator',     s.elevator);
+  setChk('sShowAuctions', s.showAuctions);
+  setChk('sShowNuda',     s.showNuda);
+  setChk('sShowStale',    s.showStale);
+  setTab('#sSourceFilter .sort-tab', 'ssource', s.source);
+  setTab('#sGemFilterBar .gem-tab',  'sgem',    s.gem);
+  setTab('#sSortTabs .sort-tab',     'ssort',   s.sortKey);
+  if (s.sortKey != null && typeof sSortKey !== 'undefined')       sSortKey       = s.sortKey;
+  if (s.gem     != null && typeof sSaleGemFilter !== 'undefined') sSaleGemFilter = s.gem;
+  if (Array.isArray(s.areas)) {
+    if (typeof saleSelectedAreas !== 'undefined') saleSelectedAreas = s.areas.slice();
+    if (typeof saleAreaMsd !== 'undefined' && saleAreaMsd && saleAreaMsd.setSelected) {
+      try { saleAreaMsd.setSelected(s.areas); } catch (_) {}
+    }
+  }
+
+  // The active class on pill groups may have moved — recompute the sliding
+  // thumb so it sits under the restored option, not the visual default.
+  if (typeof _updateAllPillThumbs === 'function') {
+    requestAnimationFrame(_updateAllPillThumbs);
+  }
 }
 
 function saveFilters() {
+  const get = id => document.getElementById(id);
   const filters = {
-    fascia:   document.getElementById('rFascia')?.value,
-    maxRent:  document.getElementById('rMaxRent')?.value,
-    maxPrice: document.getElementById('sMaxPrice')?.value,
-    minSqm:   document.getElementById('rMinSqm')?.value,
-    minRooms: document.getElementById('rMinRooms')?.value,
-    maxMetro: document.getElementById('rMaxMetro')?.value,
-    minFloor: document.getElementById('rMinFloor')?.value,
-    elevator: document.getElementById('rElevator')?.checked,
-    minScore: document.getElementById('rScore')?.value,
-    fListed:  document.getElementById('rListed')?.value,
+    rentals: {
+      areas:     Array.isArray(typeof rentSelectedAreas !== 'undefined' ? rentSelectedAreas : null)
+                 ? rentSelectedAreas.slice() : [],
+      fascia:    get('rFascia')?.value,
+      maxRent:   get('rMaxRent')?.value,
+      minSqm:    get('rMinSqm')?.value,
+      minRooms:  get('rMinRooms')?.value,
+      maxMetro:  get('rMaxMetro')?.value,
+      minFloor:  get('rMinFloor')?.value,
+      minEnergy: get('rMinEnergy')?.value,
+      fListed:   get('rListed')?.value,
+      minScore:  get('rScore')?.value,
+      elevator:  get('rElevator')?.checked,
+      showStale: get('rShowStale')?.checked,
+      source:    document.querySelector('#rSourceFilter .sort-tab.active')?.dataset.rsource || '',
+      gemFilter: document.querySelector('#rGemFilter .gem-tab.active')?.dataset.gem || '',
+      sortKey:   typeof rentSortKey !== 'undefined' ? rentSortKey : 'score_total',
+    },
+    sales: {
+      areas:        Array.isArray(typeof saleSelectedAreas !== 'undefined' ? saleSelectedAreas : null)
+                    ? saleSelectedAreas.slice() : [],
+      fascia:       get('sFascia')?.value,
+      omiZone:      get('sOmiZone')?.value,
+      maxPrice:     get('sMaxPrice')?.value,
+      minSqm:       get('sMinSqm')?.value,
+      minRooms:     get('sMinRooms')?.value,
+      maxMetro:     get('sMaxMetro')?.value,
+      minFloor:     get('sMinFloor')?.value,
+      minEnergy:    get('sMinEnergy')?.value,
+      minYield:     get('sMinYield')?.value,
+      minScore:     get('sScore')?.value,
+      elevator:     get('sElevator')?.checked,
+      showAuctions: get('sShowAuctions')?.checked,
+      showNuda:     get('sShowNuda')?.checked,
+      showStale:    get('sShowStale')?.checked,
+      source:       document.querySelector('#sSourceFilter .sort-tab.active')?.dataset.ssource || '',
+      gem:          typeof sSaleGemFilter !== 'undefined' ? sSaleGemFilter : '',
+      sortKey:      typeof sSortKey !== 'undefined' ? sSortKey : 'score_total',
+    },
   };
   Storage.set('filters', filters);
 }
@@ -9655,26 +9766,40 @@ requestAnimationFrame(() => {
 });
 
 // ── Sales event listeners ─────────────────────────────────────────────────────
+// Every interaction persists via saveFilters() so a refresh keeps the
+// current view. The debounce mirrors the rentals side — typing inside a
+// numeric input writes once the user pauses. Inline (not the shared
+// _debounce const) because that const is declared later in the file and
+// is still in TDZ at parse-time when this listener is registered.
+const _renderSalesDebounced = (() => {
+  let t;
+  return () => {
+    clearTimeout(t);
+    t = setTimeout(() => { renderSales(); saveFilters(); }, 350);
+  };
+})();
+
 document.getElementById('sScore').addEventListener('input', function () {
   document.getElementById('sScoreVal').textContent = this.value;
   renderSales();
+  saveFilters();
 });
 
 ['sFascia', 'sOmiZone', 'sMaxMetro', 'sMinFloor', 'sMinEnergy'].forEach(id => {
   const el = document.getElementById(id);
-  if (el) el.addEventListener('change', renderSales);
+  if (el) el.addEventListener('change', () => { renderSales(); saveFilters(); });
 });
 
 ['sMaxPrice', 'sMinSqm', 'sMinRooms'].forEach(id => {
   const el = document.getElementById(id);
-  if (el) el.addEventListener('input', renderSales);
+  if (el) el.addEventListener('input', _renderSalesDebounced);
 });
 
-document.getElementById('sElevator').addEventListener('change', renderSales);
-document.getElementById('sShowAuctions')?.addEventListener('change', renderSales);
-document.getElementById('sShowNuda')    ?.addEventListener('change', renderSales);
-document.getElementById('sMinYield')    ?.addEventListener('change', renderSales);
-document.getElementById('sShowStale')   ?.addEventListener('change', renderSales);
+document.getElementById('sElevator').addEventListener('change', () => { renderSales(); saveFilters(); });
+document.getElementById('sShowAuctions')?.addEventListener('change', () => { renderSales(); saveFilters(); });
+document.getElementById('sShowNuda')    ?.addEventListener('change', () => { renderSales(); saveFilters(); });
+document.getElementById('sMinYield')    ?.addEventListener('change', () => { renderSales(); saveFilters(); });
+document.getElementById('sShowStale')   ?.addEventListener('change', () => { renderSales(); saveFilters(); });
 
 // Restore the persisted sales view mode (buyer/investor) on page load.
 // Done at module-load time so the toggle reflects the right state before
@@ -9706,11 +9831,13 @@ document.getElementById('sBtnReset').addEventListener('click', () => {
   const sa = document.getElementById('sShowAuctions'); if (sa) sa.checked = false;
   const sn = document.getElementById('sShowNuda');     if (sn) sn.checked = false;
   const sy = document.getElementById('sMinYield');     if (sy) sy.value = '';
+  const sst = document.getElementById('sShowStale');   if (sst) sst.checked = false;
   document.getElementById('sMinEnergy').value = '';
   document.getElementById('sScore').value     = 0;
   document.getElementById('sScoreVal').textContent = '0';
   sSortKey = 'score_total';
   sSaleGemFilter = '';
+  saleSelectedAreas = [];
   if (saleAreaMsd) saleAreaMsd.setSelected([]);
   document.querySelectorAll('#sSortTabs .sort-tab').forEach(t =>
     t.classList.toggle('active', t.dataset.ssort === 'score_total'));
@@ -9718,7 +9845,11 @@ document.getElementById('sBtnReset').addEventListener('click', () => {
     t.classList.toggle('active', t.dataset.sgem === ''));
   document.querySelectorAll('#sSourceFilter .sort-tab').forEach(t =>
     t.classList.toggle('active', t.dataset.ssource === ''));
+  if (typeof _updateAllPillThumbs === 'function') {
+    requestAnimationFrame(_updateAllPillThumbs);
+  }
   renderSales();
+  saveFilters();
 });
 
 document.querySelectorAll('#sSortTabs .sort-tab').forEach(btn => {
@@ -9727,6 +9858,7 @@ document.querySelectorAll('#sSortTabs .sort-tab').forEach(btn => {
     document.querySelectorAll('#sSortTabs .sort-tab').forEach(t =>
       t.classList.toggle('active', t === btn));
     renderSales();
+    saveFilters();
   });
 });
 
@@ -9736,6 +9868,7 @@ document.querySelectorAll('#sGemFilterBar .gem-tab').forEach(btn => {
     document.querySelectorAll('#sGemFilterBar .gem-tab').forEach(t =>
       t.classList.toggle('active', t === btn));
     renderSales();
+    saveFilters();
   });
 });
 
@@ -9744,6 +9877,7 @@ document.querySelectorAll('#sSourceFilter .sort-tab').forEach(btn => {
     document.querySelectorAll('#sSourceFilter .sort-tab').forEach(t =>
       t.classList.toggle('active', t === btn));
     renderSales();
+    saveFilters();
   });
 });
 
@@ -10470,8 +10604,19 @@ const filterAreaMsd = buildMultiSelect({
   wrapId: 'filterAreaWrap', triggerId: 'filterAreaTrigger', panelId: 'filterAreaPanel',
   searchId: 'filterAreaSearch', listId: 'filterAreaList',
   clearId: 'filterAreaClear', doneId: 'filterAreaDone',
-  onChange: areas => { rentSelectedAreas = areas; renderRentals(); },
+  onChange: areas => {
+    rentSelectedAreas = areas;
+    renderRentals();
+    if (typeof saveFilters === 'function') saveFilters();
+  },
 });
+// If restoreFilters has already populated rentSelectedAreas (it runs in
+// showApp(), which can fire before this script-tag block during certain
+// startup orderings), reflect that selection in the MSD trigger now that
+// it exists.
+if (Array.isArray(rentSelectedAreas) && rentSelectedAreas.length && filterAreaMsd?.setSelected) {
+  try { filterAreaMsd.setSelected(rentSelectedAreas); } catch (_) {}
+}
 
 // Instantiate for map filter bar
 let mapSelectedAreas = [];
@@ -16814,8 +16959,19 @@ async function loadSales() {
       listId:    'sFilterAreaList',
       clearId:   'sFilterAreaClear',
       doneId:    'sFilterAreaDone',
-      onChange:  areas => { saleSelectedAreas = areas; renderSales(); },
+      onChange:  areas => {
+        saleSelectedAreas = areas;
+        renderSales();
+        if (typeof saveFilters === 'function') saveFilters();
+      },
     });
+    // restoreFilters() ran at showApp() time, before this lazy MSD was
+    // built, so it could only update the underlying saleSelectedAreas
+    // variable. Now that the trigger exists, reflect that selection on
+    // screen so the user sees "3 areas" instead of "All areas".
+    if (Array.isArray(saleSelectedAreas) && saleSelectedAreas.length && saleAreaMsd.setSelected) {
+      try { saleAreaMsd.setSelected(saleSelectedAreas); } catch (_) {}
+    }
   }
 
   renderSales();
@@ -17503,6 +17659,7 @@ document.querySelectorAll('#rSourceFilter .sort-tab').forEach(btn =>
     document.querySelectorAll('#rSourceFilter .sort-tab').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     renderRentals();
+    saveFilters();
   }));
 
 document.querySelectorAll('#rGemFilter .gem-tab').forEach(btn =>
@@ -17510,6 +17667,7 @@ document.querySelectorAll('#rGemFilter .gem-tab').forEach(btn =>
     document.querySelectorAll('#rGemFilter .gem-tab').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     renderRentals();
+    saveFilters();
   }));
 
 // ── Pill-group sliding thumb ───────────────────────────────────────────────
@@ -17608,6 +17766,7 @@ document.querySelectorAll('#rentSortTabs .sort-tab').forEach(btn => {
     document.querySelectorAll('#rentSortTabs .sort-tab').forEach(t =>
       t.classList.toggle('active', t === btn));
     renderRentals();
+    saveFilters();
   });
 });
 
@@ -17627,10 +17786,13 @@ document.getElementById('rBtnReset').addEventListener('click', () => {
   document.getElementById('rMaxMetro').value  = '';
   document.getElementById('rMinFloor').value  = '';
   document.getElementById('rElevator').checked = false;
+  const rst = document.getElementById('rShowStale'); if (rst) rst.checked = false;
   document.getElementById('rMinEnergy').value = '';
   document.getElementById('rListed').value    = '';
   document.querySelectorAll('#rGemFilter .gem-tab').forEach(t =>
     t.classList.toggle('active', t.dataset.gem === ''));
+  document.querySelectorAll('#rSourceFilter .sort-tab').forEach(t =>
+    t.classList.toggle('active', (t.dataset.rsource || '') === ''));
   rentSortKey = 'score_total';
   document.querySelectorAll('#rentSortTabs .sort-tab').forEach(t =>
     t.classList.toggle('active', t.dataset.rsort === 'score_total'));
@@ -17641,6 +17803,7 @@ document.getElementById('rBtnReset').addEventListener('click', () => {
     requestAnimationFrame(_updateAllPillThumbs);
   }
   renderRentals();
+  saveFilters();
 });
 
 // "What Lume sends" panel + its handlers were removed during UI

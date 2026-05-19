@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Favourites — Lume</title>
-<meta name="lume-build" content="2026-05-19 favourites-supabase-fallback">
+<meta name="lume-build" content="2026-05-19 fav-section-persistence">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
 <style>
@@ -587,10 +587,15 @@ let _currentSection = 'rentals';
 let _rentListings   = [];
 let _saleListings   = [];
 
+// Persist the last-viewed section so refreshing /favourites keeps the user
+// on whichever tab they were reading. Scoped by user id like the favourite
+// id lists themselves.
+const _FAV_SECTION_KEY = `scorer_favSection_${(window._FAV_KEY || '').split('_').pop() || 'guest'}`;
 function showSection(sec) {
   _currentSection = sec;
   document.getElementById('tabRentals').classList.toggle('active', sec === 'rentals');
   document.getElementById('tabSales').classList.toggle('active', sec === 'sales');
+  try { localStorage.setItem(_FAV_SECTION_KEY, sec); } catch (_) {}
   renderSection();
 }
 
@@ -662,12 +667,18 @@ async function init() {
     document.getElementById('btnClearAll').hidden = false;
   }
 
-  // Show rentals first (most likely to have favs); switch to sales if none
-  if (_rentListings.length === 0 && _saleListings.length > 0) {
+  // Restore the previously-viewed section (rentals vs sales) so refreshing
+  // /favourites keeps the user where they were. Fall back to whichever
+  // section has results if there's no saved preference.
+  let preferred = null;
+  try { preferred = localStorage.getItem(_FAV_SECTION_KEY); } catch (_) {}
+  if (preferred === 'sales' || preferred === 'rentals') {
+    _currentSection = preferred;
+  } else if (_rentListings.length === 0 && _saleListings.length > 0) {
     _currentSection = 'sales';
-    document.getElementById('tabRentals').classList.remove('active');
-    document.getElementById('tabSales').classList.add('active');
   }
+  document.getElementById('tabRentals').classList.toggle('active', _currentSection === 'rentals');
+  document.getElementById('tabSales').classList.toggle('active',   _currentSection === 'sales');
 
   renderSection();
 
