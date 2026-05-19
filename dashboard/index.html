@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-18 fake-detection+extreme-underpricing">
+<meta name="lume-build" content="2026-05-18 toggle-natural-width">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -1100,18 +1100,26 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--green-deep); }
   box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 0 0 1px var(--border);
 }
 
-/* When the toggle is moved INTO .filters by _ensureToggleInFilters,
-   force it onto its own line above the filter rows. width:100% +
-   align-self:flex-start makes the flex container's wrap behavior
-   give us a proper line break; the inner inline-flex pill stays
-   left-aligned in its row. flex-basis with 100% achieves the line
-   break in browsers that use the older flex-wrap behaviour. */
-.filters > .view-mode-toggle {
+/* Row that holds the For-me / As-investment pill inside the filter
+   bar. The row spans the full filter-bar width (flex-basis:100%) to
+   force a line break so the pill sits on its own line above the
+   filter controls — BUT the row itself is transparent, so only the
+   inner inline-flex pill paints its muted background. Before this
+   wrapper, the pill itself was set to flex:0 0 100%, which stretched
+   the muted rail edge-to-edge and looked like an empty cream bar. */
+.filters > .view-mode-toggle-row {
   flex: 0 0 100%;
-  align-self: flex-start;
-  margin-bottom: 4px;
-  /* Drop the elevation — inside the filter bar's own elevated
-     surface, the double-shadow looks busy. */
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  margin: 0 0 4px 0;
+  padding: 0;
+  background: transparent;
+}
+.filters > .view-mode-toggle-row > .view-mode-toggle {
+  /* Drop the floating elevation here — the filter bar is already an
+     elevated card, a second drop-shadow reads busy. Keep just the
+     1 px border so the pill is distinct from the surface. */
   box-shadow: 0 0 0 1px var(--border);
 }
 @media (max-width: 768px) {
@@ -9512,8 +9520,16 @@ function _ensureToggleInFilters() {
   if (!wrap || !toggle || !filter) return;
   // Only move once — bail if the toggle is already inside the filter.
   if (filter.contains(toggle)) return;
+  // Wrap the inline pill in a full-width row container BEFORE inserting,
+  // so the row reserves a 100 %-wide flex line for the toggle while the
+  // pill stays at natural inline-flex width. Without this wrapper the
+  // pill itself was flex:0 0 100% and its muted background stretched
+  // edge-to-edge — looked like an empty cream bar across the filter.
+  const row = document.createElement('div');
+  row.className = 'view-mode-toggle-row';
+  row.appendChild(toggle);
   // Insert as the filter bar's FIRST child so it reads as the top row.
-  filter.insertBefore(toggle, filter.firstChild);
+  filter.insertBefore(row, filter.firstChild);
   // Hide the now-empty original wrap so it takes no flow space.
   wrap.hidden = true;
 }
