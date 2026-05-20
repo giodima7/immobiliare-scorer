@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-20 area-median-pill">
+<meta name="lume-build" content="2026-05-20 area-pill-with-ask">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -3873,8 +3873,17 @@ body.detail-page-active .detail-header {
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  margin-right: 1px;
+  margin: 0 1px;
 }
+/* Listing's own €/m² — colour-coded against the area median. Same
+   colour vocabulary as the .vs-omi / .vs-below pill family so the
+   page reads consistently: green = below market, red = above,
+   amber = at market. */
+.price-area-ask          { font-weight: 700; }
+.price-area-ask.tone-good { color: #15803D; }
+.price-area-ask.tone-bad  { color: #B91C1C; }
+.price-area-ask.tone-at   { color: #B45309; }
+.price-area-ask.tone-neutral { color: var(--text-secondary); }
 .vs-omi {
   font-size: 12px; font-weight: 600;
   padding: 2px 9px; border-radius: 6px; margin-left: auto;
@@ -12312,36 +12321,57 @@ function compsRowHtml(l, isRental) {
   </div>`;
 }
 
-// Area-median €/m² pill — sits next to the listing's own €/m² in the
-// price row so the reader can see at a glance how this listing's
-// asking-€/m² compares to what the surrounding neighbourhood is going
-// for. Only rendered when the listing is below market (delta < 0),
-// since that's where the comparison adds information.
+// Listing-€/m² vs area-median pill — sits next to the listing's own
+// €/m² in the price row so the reader can see at a glance how this
+// listing's asking-€/m² compares to what the surrounding
+// neighbourhood is fetching. Renders whenever we have the listing's
+// €/m² AND a comps anchor (median OR delta) so the pill is either
+// present on every card or absent for the same reason (no comps)
+// — never conditional on direction (below/above market).
 //
-// Derivation: prefer the actual comps median when present
-// (comps_median for rentals, comps_sale_median for sales — already
-// per-m²). Fall back to deriving it from ask_psqm + delta when only
-// the delta is available, since that's a near-perfect proxy
-// (area_median ≈ ask_psqm / (1 + delta/100)).
+// Layout: "€18.7 vs €24/m²/mo"
+//   - Left number is the listing's own €/m², colour-coded by delta:
+//       ≤ -5 %  → green (below market)
+//       ≥ +5 %  → red   (above market)
+//       between → amber (at market)
+//   - Right number is the area median (preferred from comps_median
+//     when present, else derived from ask_psqm + delta — exact
+//     mathematical inverse).
 function areaPsqmPillHtml(l, isRental) {
   const askPsqm = Number((isRental ? (l.ask_psqm_rent ?? l.ask_psqm) : l.ask_psqm) || 0);
-  const delta   = isRental ? l.comps_delta_pct : l.comps_sale_delta_pct;
-  if (delta == null || delta >= 0) return '';
+  if (!(askPsqm > 0)) return '';
 
+  const unit    = isRental ? '/m²/mo' : '/m²';
+  const askStr  = `€${askPsqm.toFixed(1)}`;
+  const delta   = isRental ? l.comps_delta_pct : l.comps_sale_delta_pct;
+
+  // Resolve the area median: prefer the actual comps median, fall back
+  // to deriving it from ask_psqm + delta (exact mathematical inverse).
   let med = isRental ? l.comps_median : l.comps_sale_median;
   med = Number(med);
   if (!Number.isFinite(med) || med <= 0) {
-    if (!(askPsqm > 0)) return '';
+    if (delta == null) {
+      // No comps anchor at all — render the listing's €/m² alone so
+      // the price row still shows it (matches the pre-pill UI).
+      return `<span class="price-area-pill" title="Listing €/m²">
+                <span class="price-area-ask tone-neutral">${askStr}${unit}</span>
+              </span>`;
+    }
     med = askPsqm / (1 + delta / 100);
   }
 
-  const psqmStr = isRental ? `€${Math.round(med)}/m²/mo` : `€${Math.round(med)}/m²`;
+  const medStr  = `€${Math.round(med)}${unit}`;
+  const tone    = (delta == null) ? 'neutral'
+                : delta <= -5     ? 'good'
+                : delta >=  5     ? 'bad'
+                                  : 'at';
   const nComps  = isRental ? (l.comps_n || 0) : (l.comps_sale_n || 0);
   const title   = nComps
-    ? `Area median €/m² from ${nComps} comparables`
-    : 'Area median €/m² for similar nearby listings';
+    ? `Listing €/m² vs area median from ${nComps} comparables`
+    : 'Listing €/m² vs area median for similar nearby listings';
   return `<span class="price-area-pill" title="${title}">
-            <span class="price-area-vs">vs</span>${psqmStr}
+            <span class="price-area-ask tone-${tone}">${askStr}</span>
+            <span class="price-area-vs">vs</span>${medStr}
           </span>`;
 }
 
@@ -12745,9 +12775,6 @@ function renderRentalCard(l) {
       <span style="font-size:13px;color:var(--muted);font-weight:500">${l.rent_mo != null ? '/mo' : ''}</span>
       ${speseNote}
       ${specsPillHtml(l)}
-      ${l.ask_psqm != null
-        ? `<span style="font-size:12px;color:var(--muted);white-space:nowrap">· €${l.ask_psqm.toFixed(1)}/m²</span>`
-        : ''}
       ${areaPsqmPillHtml(l, true)}
     </div>
     ${(() => {
@@ -16778,9 +16805,6 @@ function renderSaleCard(l) {
     <div class="price-row-a">
       <span class="price-main-a">€${fmt(l.price)}</span>
       ${specsPillHtml(l)}
-      ${l.ask_psqm != null
-        ? `<span style="font-size:12px;color:var(--muted);white-space:nowrap">· €${fmt(l.ask_psqm)}/m²</span>`
-        : ''}
       ${areaPsqmPillHtml(l, false)}
     </div>
 
