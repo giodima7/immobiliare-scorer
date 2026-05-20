@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-20 id-search-in-filter-bar">
+<meta name="lume-build" content="2026-05-20 map-city-rerender">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -8753,7 +8753,16 @@ function setCity(code) {
   // sees the new city name immediately, before loadRentals resolves.
   const _mNow = document.getElementById('meta');
   if (_mNow) _mNow.textContent = t('loading.listings') || 'Loading listings…';
-  if (typeof loadRentals === 'function') loadRentals();
+  // Kick off rentals load + chain an explicit _mapRender for the
+  // rentals-on-map case. renderRentals() already triggers _mapRender
+  // when activeTab === 'map' && _mapDataType === 'rentals', but going
+  // through the explicit .then here makes the intent obvious and
+  // covers the (rare) case where renderRentals exits early before
+  // hitting that branch.
+  const _rentalsPromise = (typeof loadRentals === 'function') ? loadRentals() : null;
+  if (activeTab === 'map' && _mapDataType === 'rentals' && _rentalsPromise) {
+    _rentalsPromise.then(() => { if (typeof _mapRender === 'function') _mapRender(); });
+  }
   if (activeTab === 'sales' && typeof loadSales === 'function') {
     loadSales().then(() => {
       if (typeof ensureSalesAnalysis === 'function') ensureSalesAnalysis();
@@ -18854,7 +18863,20 @@ function _createMapPopup(l, isRentalArg) {
   const gridHtml = rows.length
     ? `<div class="map-popup-grid">${rows.map(r => `<span>${r}</span>`).join('')}</div>`
     : '';
-  const zoneSub = l.omi_descr || l.omi_zone || '';
+  // Popup sub-line: prefer the cleaned-up street address. Drop trailing
+  // city name + postcode that Immobiliare/Idealista append, since the
+  // city is implied by the map and the postcode is dead weight.
+  // NEVER fall back to omi_descr here — that field is an ALL-CAPS OMI
+  // zone label ("NAVIGLI, CORSO GENOVA") and reads as garbage when
+  // shown as if it were an address.
+  const rawAddr = String(l.address || '').trim();
+  const subAddr = rawAddr
+    .replace(/,?\s*(?:milano|roma|napoli|la\s*maddalena)\s*$/i, '')
+    .replace(/,?\s*\d{5}\s*$/i, '')
+    .trim();
+  const zoneSub = (subAddr && subAddr.toLowerCase() !== String(l.neighbourhood || '').toLowerCase())
+    ? formatAddress(subAddr)
+    : '';
   return `
     ${imgHtml}
     <div class="map-popup-body">
@@ -19140,6 +19162,11 @@ function _mapRender() {
   });
   _mapRenderedIds.clear();
   _clusterGroup.clearLayers();
+
+  // Diagnostic: open DevTools console to verify the right city's data
+  // is on screen. Switching cities should print a different count here
+  // — if it doesn't, the data pipeline forgot to re-filter by city.
+  console.log(`[map] rendering ${_mapAllListings.length} ${_mapDataType} markers for city=${_city}`);
 
   // Render markers currently in viewport (moveend will add more as user pans)
   _renderVisibleMarkers();
