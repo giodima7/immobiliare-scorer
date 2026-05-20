@@ -270,11 +270,19 @@ CONCORDATO_ELIGIBLE_CITIES: set[str] = {"milano", "roma", "napoli"}
 # against omi_descr OR neighbourhood.
 TRANSITORIO_ZONE_KEYWORDS: dict[str, list[str]] = {
     "milano": [
-        "duomo", "brera", "cordusio", "turati", "moscova", "porta venezia",
-        "cadorna", "cinque vie", "guastalla", "porta romana", "navigli",
-        "porta genova", "sant'ambrogio", "bocconi", "porta vittoria",
-        "citta' studi", "città studi", "lambrate", "isola", "porta nuova",
-        "garibaldi", "lima", "loreto", "piola",
+        # Centro & adjacent
+        "duomo", "centro", "centro storico", "brera", "cordusio", "cinque vie",
+        "turati", "moscova", "porta venezia", "porta romana", "porta vittoria",
+        "cadorna", "sant'ambrogio", "sant ambrogio", "guastalla", "tribunale",
+        "missori", "crocetta",
+        # University districts
+        "bocconi", "citta studi", "città studi", "citta' studi",
+        "politecnico", "piola", "lambrate",
+        # Business / trendy
+        "navigli", "porta genova", "isola", "porta nuova", "garibaldi",
+        "corso italia", "corso vittorio",
+        # Adjacent dense / commuter corridors
+        "loreto", "lima",
     ],
     "roma": [
         "centro storico", "trastevere", "monti", "esquilino", "san giovanni",

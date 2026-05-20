@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-20 scenario-ui">
+<meta name="lume-build" content="2026-05-20 scenario-fixes">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -1525,7 +1525,13 @@ body.detail-page-active .detail-header {
 .benchmark-disclaimer {
   font-size: 11px; color: var(--text-muted);
   line-height: 1.5; font-style: italic;
-  margin: 0;
+  /* Fix 8: the parent section's bottom had no padding, so the
+     disclaimer butted up against the next section's heading on the
+     detail page. Give it explicit breathing room + tuck the paragraph
+     inside the surrounding card via a top border for visual closure. */
+  margin: 16px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
 }
 
 /* Investment analysis section ─────────────────────────────── */
@@ -3296,8 +3302,8 @@ body.detail-page-active .detail-header {
 .scenario-pill-strong   .scenario-pill-value { color: #2A7A5A; }
 .scenario-pill-decent   { background: #F0F7E8; border-color: #6BA84F; }
 .scenario-pill-decent   .scenario-pill-value { color: #6BA84F; }
-.scenario-pill-mediocre { background: #FFF9E6; border-color: #E8922A; }
-.scenario-pill-mediocre .scenario-pill-value { color: #B85C00; }
+.scenario-pill-reasonable { background: #FFF9E6; border-color: #E8922A; }
+.scenario-pill-reasonable .scenario-pill-value { color: #B85C00; }
 .scenario-pill-weak     { background: #FDEEEC; border-color: #C0392B; }
 .scenario-pill-weak     .scenario-pill-value { color: #C0392B; }
 .scenario-pill-cf-positive .scenario-pill-value { color: #2A7A5A; }
@@ -3344,6 +3350,38 @@ body.detail-page-active .detail-header {
 }
 
 /* ── Detail page scenarios section ─────────────────────────────────────── */
+/* Fix 9: wrap the whole scenarios section in a card so it sits as its
+   own contained surface rather than floating against the page bg.
+   Same look as the buyer-mode detail panels (white surface, shadow,
+   rounded corners, faint border). */
+.detail-section.detail-scenarios {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: 28px 32px;
+  margin-bottom: 24px;
+  border: 1px solid var(--border);
+}
+@media (max-width: 600px) {
+  .detail-section.detail-scenarios { padding: 20px 18px; }
+}
+.detail-section-header {
+  margin-bottom: 24px;
+}
+.detail-section.detail-scenarios .detail-section-title {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  margin: 0 0 8px 0;
+  color: var(--text-primary);
+}
+.detail-section.detail-scenarios .detail-section-subtitle {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.55;
+  margin: 0;
+}
+
 .best-scenario-callout {
   display: flex;
   gap: 14px;
@@ -3452,7 +3490,7 @@ body.detail-page-active .detail-header {
 }
 .matrix-cell-strong   { background: #E6F4ED; color: #2A7A5A; }
 .matrix-cell-decent   { background: #F0F7E8; color: #6BA84F; }
-.matrix-cell-mediocre { background: #FFF9E6; color: #B85C00; }
+.matrix-cell-reasonable { background: #FFF9E6; color: #B85C00; }
 .matrix-cell-weak     { background: #FDEEEC; color: #C0392B; }
 .matrix-cell-avoid    { background: #F5E0DD; color: #8B0000; }
 .matrix-cell-ineligible {
@@ -3482,8 +3520,54 @@ body.detail-page-active .detail-header {
 }
 .legend-strong   { background: #2A7A5A; }
 .legend-decent   { background: #6BA84F; }
-.legend-mediocre { background: #E8922A; }
+.legend-reasonable { background: #E8922A; }
 .legend-weak     { background: #C0392B; }
+
+/* Fix 5: primary residence two-phase block, sits above the 3-column
+   breakdown grid. The orange "occupancy" box reads as cost (left),
+   the green "rental" box reads as income (right). Stacks on mobile. */
+.primary-residence-phases {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 0 0 18px;
+}
+@media (max-width: 760px) {
+  .primary-residence-phases { grid-template-columns: 1fr; }
+}
+.phase-box {
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+}
+.phase-occupancy { background: #FFF3E0; }
+.phase-rental    { background: #E6F4ED; }
+.phase-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.phase-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+.phase-value-suffix {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-left: 4px;
+  text-transform: lowercase;
+}
+.phase-note {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
 
 /* Selected-scenario 3-column breakdown. */
 .scenario-breakdown { margin-bottom: 24px; }
@@ -8744,7 +8828,7 @@ const STRINGS = {
     // Verdict tiers — keyed off bestScenario.annualised10yr.
     'verdict.strong':                 'Strong investment',
     'verdict.decent':                 'Decent investment',
-    'verdict.mediocre':               'Mediocre — beats BTP',
+    'verdict.reasonable':             'Reasonable — beats BTP',
     'verdict.weak':                   'Weak — below safer alternatives',
     'verdict.avoid':                  'Negative return projected',
     'verdict.no_data':                'Insufficient data',
@@ -8769,10 +8853,10 @@ const STRINGS = {
     'detail.scenarios.assumptions':'Show calculation assumptions',
     'detail.scenarios.annualised_label':'annualised 10yr return',
     'detail.scenarios.no_positive':'No scenarios produce positive returns for this listing.',
-    'detail.scenarios.legend_strong':  'Strong',
-    'detail.scenarios.legend_decent':  'Decent',
-    'detail.scenarios.legend_mediocre':'Mediocre',
-    'detail.scenarios.legend_weak':    'Weak',
+    'detail.scenarios.legend_strong':     'Strong',
+    'detail.scenarios.legend_decent':     'Decent',
+    'detail.scenarios.legend_reasonable': 'Reasonable',
+    'detail.scenarios.legend_weak':       'Weak',
     'detail.scenarios.ineligible_concordato_not_available':       'Canone concordato not available in this city',
     'detail.scenarios.ineligible_transitorio_zone_not_qualified': 'Zone does not qualify for transitorio (need centro / university / business district)',
     'detail.scenarios.ineligible_no_rent_estimate':               'Insufficient rental data',
@@ -8795,9 +8879,24 @@ const STRINGS = {
     'breakdown.monthly_cash_flow':'Net monthly cash flow',
     'breakdown.returns':          'Returns',
     'breakdown.gross_yield':      'Gross yield',
+    // Fix 2: net_yield is yield-on-price (asset-level, comparable across
+    // financings); cash_on_cash is the leveraged metric, only meaningful
+    // when financingKey !== 'cash'. net_yield_on_cash kept as a legacy
+    // alias so any other call-site doesn't 404.
+    'breakdown.net_yield':        'Net yield',
     'breakdown.net_yield_on_cash':'Net yield on cash',
+    'breakdown.cash_on_cash':     'Cash-on-cash return',
     'breakdown.appreciation':     'Capital appreciation',
+    'breakdown.appreciation_y1':  'Capital appreciation (year 1)',
+    'breakdown.appreciation_10y': 'Total appreciation (10yr compound)',
     'breakdown.annualised_10yr':  'Annualised 10yr return',
+    // Fix 5: primary residence phase split block.
+    'breakdown.phase_occupancy_label':  'Years 1-2 (you live there)',
+    'breakdown.phase_occupancy_note':   "Replaces what you'd pay in rent elsewhere",
+    'breakdown.phase_rental_label':     'Years 3-10 (rented out)',
+    'breakdown.phase_rental_note':      'After prima casa decadenza (18mo minimum)',
+    'breakdown.phase_housing_cost':     'housing cost',
+    'breakdown.phase_cash_flow':        'cash flow',
     'assumptions.appreciation':   'Appreciation',
     'assumptions.maintenance':    'Maintenance',
     'assumptions.imu':            'IMU',
@@ -8983,7 +9082,7 @@ const STRINGS = {
     'scenario.con.transitorio':       'Transitorio (1-18 mesi)',
     'verdict.strong':                 'Investimento forte',
     'verdict.decent':                 'Investimento discreto',
-    'verdict.mediocre':               'Mediocre — supera il BTP',
+    'verdict.reasonable':             'Ragionevole — supera il BTP',
     'verdict.weak':                   'Debole — sotto le alternative più sicure',
     'verdict.avoid':                  'Rendimento previsto negativo',
     'verdict.no_data':                'Dati insufficienti',
@@ -9007,10 +9106,10 @@ const STRINGS = {
     'detail.scenarios.assumptions':'Mostra ipotesi di calcolo',
     'detail.scenarios.annualised_label':'rendimento annualizzato 10 anni',
     'detail.scenarios.no_positive':'Nessuno scenario produce un rendimento positivo per questo annuncio.',
-    'detail.scenarios.legend_strong':  'Forte',
-    'detail.scenarios.legend_decent':  'Discreto',
-    'detail.scenarios.legend_mediocre':'Mediocre',
-    'detail.scenarios.legend_weak':    'Debole',
+    'detail.scenarios.legend_strong':     'Forte',
+    'detail.scenarios.legend_decent':     'Discreto',
+    'detail.scenarios.legend_reasonable': 'Ragionevole',
+    'detail.scenarios.legend_weak':       'Debole',
     'detail.scenarios.ineligible_concordato_not_available':       'Canone concordato non disponibile in questa città',
     'detail.scenarios.ineligible_transitorio_zone_not_qualified': 'Zona non qualificata per il transitorio (serve centro / università / zona business)',
     'detail.scenarios.ineligible_no_rent_estimate':               'Dati affitto insufficienti',
@@ -9033,9 +9132,19 @@ const STRINGS = {
     'breakdown.monthly_cash_flow':'Flusso di cassa netto mensile',
     'breakdown.returns':          'Rendimenti',
     'breakdown.gross_yield':      'Rendimento lordo',
+    'breakdown.net_yield':        'Rendimento netto',
     'breakdown.net_yield_on_cash':'Rendimento netto sul capitale',
+    'breakdown.cash_on_cash':     'Cash-on-cash (sul capitale)',
     'breakdown.appreciation':     'Apprezzamento capitale',
+    'breakdown.appreciation_y1':  'Rivalutazione (anno 1)',
+    'breakdown.appreciation_10y': 'Rivalutazione totale (10 anni composti)',
     'breakdown.annualised_10yr':  'Rendimento annualizzato 10 anni',
+    'breakdown.phase_occupancy_label':  'Anni 1-2 (ci abiti tu)',
+    'breakdown.phase_occupancy_note':   'Sostituisce il canone che pagheresti altrove',
+    'breakdown.phase_rental_label':     'Anni 3-10 (affittato)',
+    'breakdown.phase_rental_note':      'Dopo la decadenza prima casa (18 mesi minimi)',
+    'breakdown.phase_housing_cost':     'costo abitativo',
+    'breakdown.phase_cash_flow':        'flusso di cassa',
     'assumptions.appreciation':   'Apprezzamento',
     'assumptions.maintenance':    'Manutenzione',
     'assumptions.imu':            'IMU',
@@ -9535,11 +9644,19 @@ const CONCORDATO_ELIGIBLE_CITIES = ['milano', 'roma', 'napoli'];
 
 const TRANSITORIO_ZONE_KEYWORDS = {
   milano: [
-    'duomo', 'brera', 'cordusio', 'turati', 'moscova', 'porta venezia',
-    'cadorna', 'cinque vie', 'guastalla', 'porta romana', 'navigli',
-    'porta genova', "sant'ambrogio", 'bocconi', 'porta vittoria',
-    "citta' studi", 'città studi', 'lambrate', 'isola', 'porta nuova',
-    'garibaldi', 'lima', 'loreto', 'piola',
+    // Centro & adjacent
+    'duomo', 'centro', 'centro storico', 'brera', 'cordusio', 'cinque vie',
+    'turati', 'moscova', 'porta venezia', 'porta romana', 'porta vittoria',
+    'cadorna', "sant'ambrogio", 'sant ambrogio', 'guastalla', 'tribunale',
+    'missori', 'crocetta',
+    // University districts
+    'bocconi', 'citta studi', 'città studi', "citta' studi",
+    'politecnico', 'piola', 'lambrate',
+    // Business / trendy
+    'navigli', 'porta genova', 'isola', 'porta nuova', 'garibaldi',
+    'corso italia', 'corso vittorio',
+    // Adjacent dense / commuter corridors
+    'loreto', 'lima',
   ],
   roma: [
     'centro storico', 'trastevere', 'monti', 'esquilino', 'san giovanni',
@@ -9597,10 +9714,18 @@ function computeScenario(listing, financingKey, contractKey) {
              annualised10yr: null };
   }
   if (contractKey === 'transitorio') {
-    const zoneKw   = TRANSITORIO_ZONE_KEYWORDS[city] || [];
-    const omiDescr = (listing.omi_descr     || '').toLowerCase();
-    const nbhd     = (listing.neighbourhood || '').toLowerCase();
-    const ok       = zoneKw.some(kw => omiDescr.includes(kw) || nbhd.includes(kw));
+    // Fix 4: search across omi_descr + neighbourhood + address so a
+    // listing that's clearly in centro but happens to lack the omi_descr
+    // field (rare but real) still qualifies. Keyword list itself lives
+    // in TRANSITORIO_ZONE_KEYWORDS, which now covers centro, university,
+    // and business-district synonyms.
+    const zoneKw = TRANSITORIO_ZONE_KEYWORDS[city] || [];
+    const searchable = (
+      String(listing.omi_descr     || '') + ' ' +
+      String(listing.neighbourhood || '') + ' ' +
+      String(listing.address       || '')
+    ).toLowerCase();
+    const ok = zoneKw.some(kw => searchable.includes(kw));
     if (!ok) {
       return { eligible: false, financingKey, contractKey,
                reason: 'transitorio_zone_not_qualified',
@@ -9608,13 +9733,17 @@ function computeScenario(listing, financingKey, contractKey) {
     }
   }
 
-  // ── Income side ─────────────────────────────────────────────────────
+  // ── Income side (assumes property is rented out) ────────────────────
   const grossRentAnnual = scenarioRentMo * 12;
   const vacancyAnnual   = scenarioRentMo * con.vacancy_months;
   const mgmtAnnual      = grossRentAnnual * con.mgmt_pct;
   const collectedRent   = grossRentAnnual - vacancyAnnual - mgmtAnnual;
 
   const cedolareAnnual  = collectedRent * con.cedolare_rate;
+  // Prima casa IMU is 0 % for primary-residence years (Fix 1). The
+  // post-conversion years pay the standard rate, modulated by the
+  // contract's imu_discount. Same expression as before for the
+  // non-primary financings.
   const imuAnnual       = price * 0.004 * (1 - con.imu_discount);
   const maintAnnual     = price * 0.003;
   const condoAnnual     = (listing.condominium_fees || listing.spese_condominiali || 100) * 12;
@@ -9629,6 +9758,7 @@ function computeScenario(listing, financingKey, contractKey) {
   let mortgageAnnual = 0;
   let cashInvested   = 0;
   let loan           = 0;
+  let monthlyRate    = 0;
 
   if (financingKey === 'cash') {
     cashInvested = price + purchaseCosts;
@@ -9637,35 +9767,77 @@ function computeScenario(listing, financingKey, contractKey) {
     const downPayment = price * (1 - fin.ltv);
     cashInvested      = downPayment + purchaseCosts;
 
-    const monthlyRate = fin.rate / 12;
-    const nMonths     = fin.term_years * 12;
-    const monthlyPmt  = monthlyRate > 0
+    monthlyRate     = fin.rate / 12;
+    const nMonths   = fin.term_years * 12;
+    const monthlyPmt = monthlyRate > 0
       ? loan * monthlyRate * Math.pow(1 + monthlyRate, nMonths)
               / (Math.pow(1 + monthlyRate, nMonths) - 1)
       : 0;
     mortgageAnnual = monthlyPmt * 12;
   }
 
-  const cashFlowAnnual = netRentAnnual - mortgageAnnual;
-  const cashFlowMonth  = cashFlowAnnual / 12;
+  let cashFlowAnnual = netRentAnnual - mortgageAnnual;
+  let cashFlowMonth  = cashFlowAnnual / 12;
 
-  // ── Total return (year-1 simple) ────────────────────────────────────
+  // ── Appreciation ────────────────────────────────────────────────────
   const apprRate = (CITY_APPRECIATION_RATES?.[city]?.[fascia])
                  ?? (CITY_APPRECIATION_RATES?.[city]?.['C'])
                  ?? 0.02;
-  const appreciationGain = price * apprRate;
+  const appreciationGain = price * apprRate;                       // year-1 simple
+  const appreciationTotal10y = price * (Math.pow(1 + apprRate, 10) - 1);
   const totalAnnualGain  = netRentAnnual - mortgageAnnual + appreciationGain;
   const annualisedReturn = cashInvested > 0 ? totalAnnualGain / cashInvested : 0;
 
   // ── Annualised over 10yr (the primary ranking metric) ───────────────
+  // Three paths:
+  //   • cash               — yield + compounded appreciation
+  //   • mortgage_invest    — full rental income years 1-10 + exit proceeds
+  //   • mortgage_primary   — Fix 1: live there years 1-2 (mortgage out of
+  //                          pocket, no rent), rent it out years 3-10
   let annualised10yr;
-  if (financingKey === 'cash') {
+  let primaryResidencePhase = false;
+  let occupancyYears  = 0;
+  let occupancyCostAnnual = 0;
+
+  if (financingKey === 'mortgage_primary') {
+    primaryResidencePhase = true;
+    occupancyYears = 2;
+    const rentalYears = 10 - occupancyYears;
+
+    // Years 1-2 occupancy: mortgage + maintenance + condo paid out of
+    // pocket (prima casa IMU is 0 %, so excluded). Pure outflow.
+    occupancyCostAnnual = mortgageAnnual + maintAnnual + condoAnnual;
+    const totalOccupancyCost = occupancyCostAnnual * occupancyYears;
+
+    // Years 3-10 rental: same numbers we just computed.
+    const rentalCashFlowAnnual = netRentAnnual - mortgageAnnual;
+
+    // Exit at year 10. Remaining loan after 10 yrs of payments on a
+    // 25-yr amortisation.
+    const remPayments = (fin.term_years - 10) * 12;
+    const loanRemaining = remPayments > 0 && monthlyRate > 0
+      ? (mortgageAnnual / 12)
+        * (1 - Math.pow(1 + monthlyRate, -remPayments)) / monthlyRate
+      : 0;
+    const exitPrice    = price * Math.pow(1 + apprRate, 10);
+    const exitProceeds = exitPrice - loanRemaining;
+
+    const totalReturn = -totalOccupancyCost
+                      + rentalCashFlowAnnual * rentalYears
+                      + exitProceeds
+                      - cashInvested;
+    const ratio = (totalReturn + cashInvested) / cashInvested;
+    annualised10yr = ratio > 0 ? Math.pow(ratio, 0.1) - 1 : -0.99;
+
+    // Display: the headline cash flow is the rental-phase cash flow.
+    // The two-phase UI surfaces the occupancy cost separately.
+    cashFlowAnnual = rentalCashFlowAnnual;
+    cashFlowMonth  = cashFlowAnnual / 12;
+  } else if (financingKey === 'cash') {
     // Cash: rent yield stays roughly flat; appreciation compounds.
-    // Approximation: cash-on-cash + compounded appreciation rate.
     const yr1Return = (netRentAnnual + appreciationGain) / cashInvested;
     annualised10yr  = yr1Return;
   } else {
-    const monthlyRate = fin.rate / 12;
     const remPayments = (fin.term_years - 10) * 12;
     const loanRemaining = remPayments > 0 && monthlyRate > 0
       ? (mortgageAnnual / 12)
@@ -9699,14 +9871,25 @@ function computeScenario(listing, financingKey, contractKey) {
     netRentAnnual,
     cashFlowAnnual,
     cashFlowMonth,
-    appreciationGain,
+    appreciationGain,         // year-1
+    appreciationTotal10y,     // 10-yr compounded total — used in breakdown
     totalAnnualGain,
     annualisedReturn,   // year-1 simple
     annualised10yr,     // primary metric
-    // Display helpers (decimal fractions, not %)
+    // Fix 2: yields on price (gross + net) vs cash-on-cash on cashInvested.
+    //   grossYield:  unleveraged, pre-cost rent return on the asset
+    //   netYield:    same shape but after every running cost — comparable
+    //                across financings since it ignores leverage
+    //   cashOnCash:  the eye-popping leverage metric — only meaningful
+    //                when cashInvested < price
     grossYield: grossRentAnnual / price,
-    netYield:   cashInvested > 0 ? netRentAnnual / cashInvested : 0,
+    netYield:   price > 0        ? netRentAnnual  / price        : 0,
     cashOnCash: cashInvested > 0 ? cashFlowAnnual / cashInvested : 0,
+    // Fix 1 — primary residence two-phase metadata. Always present so
+    // the matrix / breakdown can branch without an undefined check.
+    primaryResidencePhase,
+    occupancyYears,
+    occupancyCostMonth: -occupancyCostAnnual / 12,
   };
 }
 
@@ -9774,11 +9957,17 @@ function getInvestorVerdict(bestScenario, city = 'milano') {
   if (r == null || !Number.isFinite(r)) {
     return { tier: 'no_data', label: 'Insufficient data' };
   }
-  if (r >= 0.08) return { tier: 'strong',   label: 'Strong investment' };
-  if (r >= 0.05) return { tier: 'decent',   label: 'Decent investment' };
-  if (r >= 0.03) return { tier: 'mediocre', label: 'Mediocre — beats BTP' };
-  if (r >= 0.00) return { tier: 'weak',     label: 'Weak — below safer alternatives' };
-  return                  { tier: 'avoid',  label: 'Negative return projected' };
+  // Thresholds retuned for Milan reality (Fix 3):
+  //   ≥ 7.0 % beats S&P long-run after-tax → strong
+  //   ≥ 4.5 % beats European RE benchmark → decent
+  //   ≥ 3.0 % beats BTP 10yr (~3.8 %)     → reasonable (was "mediocre")
+  //   ≥ 0   yet behind safer alternatives → weak
+  //   < 0                                  → avoid
+  if (r >= 0.070) return { tier: 'strong',     label: 'Strong investment' };
+  if (r >= 0.045) return { tier: 'decent',     label: 'Decent investment' };
+  if (r >= 0.030) return { tier: 'reasonable', label: 'Reasonable — beats BTP' };
+  if (r >= 0.000) return { tier: 'weak',       label: 'Weak — below safer alternatives' };
+  return                   { tier: 'avoid',    label: 'Negative return projected' };
 }
 
 // Card-level metrics for the investor headline pills. Sources every
@@ -15033,10 +15222,11 @@ function investorCardHtml(listing) {
                  : m.cashFlowMonth >= -300 ? 'neutral'
                                            : 'negative';
 
-  const returnColor = m.annualised10yr >= 8 ? 'strong'
-                    : m.annualised10yr >= 5 ? 'decent'
-                    : m.annualised10yr >= 3 ? 'mediocre'
-                    :                          'weak';
+  // Same ladder as getInvestorVerdict + the matrix cells (Fix 3).
+  const returnColor = m.annualised10yr >= 7.0 ? 'strong'
+                    : m.annualised10yr >= 4.5 ? 'decent'
+                    : m.annualised10yr >= 3.0 ? 'reasonable'
+                    :                            'weak';
 
   const finLabel = t(`scenario.fin.${m.financingKey}`) || m.financingLabel;
   const conLabel = t(`scenario.con.${m.contractKey}`)  || m.contractLabel;
@@ -16027,12 +16217,12 @@ function detailVerdictHtml(listing) {
 function detailScenariosHtml(listing) {
   const { scenario: best, allScenarios, explanation } = pickBestScenario(listing);
   if (!best) {
-    return `<div class="detail-section detail-scenarios">
+    return `<section class="detail-section detail-scenarios">
       <div class="detail-section-header">
-        <h2>${t('detail.section.scenarios')}</h2>
+        <h2 class="detail-section-title">${t('detail.section.scenarios')}</h2>
       </div>
       <div class="detail-empty">${t('detail.scenarios.no_positive') || 'No scenarios produce positive returns for this listing.'}</div>
-    </div>`;
+    </section>`;
   }
 
   // Selected scenario starts as the picker's choice; selectScenario()
@@ -16047,10 +16237,10 @@ function detailScenariosHtml(listing) {
   const conLabel = t(`scenario.con.${best.contractKey}`)  || CONTRACT_PROFILES[best.contractKey].label_en;
 
   return `
-    <div class="detail-section detail-scenarios">
+    <section class="detail-section detail-scenarios">
       <div class="detail-section-header">
-        <h2>${t('detail.section.scenarios')}</h2>
-        <span class="detail-section-sub">${t('detail.scenarios.subtitle')}</span>
+        <h2 class="detail-section-title">${t('detail.section.scenarios')}</h2>
+        <p class="detail-section-subtitle">${t('detail.scenarios.subtitle')}</p>
       </div>
 
       <!-- Best scenario callout -->
@@ -16086,11 +16276,11 @@ function detailScenariosHtml(listing) {
         <summary>${t('detail.scenarios.assumptions')}</summary>
         ${renderScenarioAssumptions(listing)}
       </details>
-    </div>`;
+    </section>`;
 }
 
 // 3×3 matrix renderer. Cells are colour-coded by annualised 10yr return
-// tier (strong / decent / mediocre / weak / avoid) so the eye can pick
+// tier (strong / decent / reasonable / weak / avoid) so the eye can pick
 // the winning quadrant before reading any numbers. The best-scenario
 // cell carries a ⭐ and starts as the selected (clicked) cell.
 function renderScenarioMatrix(scenarios, bestFin, bestCon) {
@@ -16124,14 +16314,25 @@ function renderScenarioMatrix(scenarios, bestFin, bestCon) {
     }
 
     const r    = s.annualised10yr * 100;
-    const tier = r >= 8 ? 'strong'
-               : r >= 5 ? 'decent'
-               : r >= 3 ? 'mediocre'
-               : r >= 0 ? 'weak'
-               :          'avoid';
-    const cfStr = s.cashFlowMonth >= 0
-      ? `+€${Math.round(s.cashFlowMonth).toLocaleString(currentLang === 'it' ? 'it-IT' : 'en-US')}`
-      : `−€${Math.abs(Math.round(s.cashFlowMonth)).toLocaleString(currentLang === 'it' ? 'it-IT' : 'en-US')}`;
+    // Milan-calibrated thresholds (Fix 3). Beating BTP at 3 % earns the
+    // "reasonable" tier — that's a yellow-but-honest signal, not the
+    // negative "mediocre" framing the old ladder used.
+    const tier = r >= 7.0   ? 'strong'
+               : r >= 4.5   ? 'decent'
+               : r >= 3.0   ? 'reasonable'
+               : r >= 0     ? 'weak'
+               :              'avoid';
+    const _loc  = (currentLang === 'it') ? 'it-IT' : 'en-US';
+    const cfAbs = Math.abs(Math.round(s.cashFlowMonth)).toLocaleString(_loc);
+    // Fix 5: primary-residence cells label the cash flow as "Rental yr 3+"
+    // so the user understands the money flow only kicks in once the
+    // occupancy phase ends.
+    const cfNum = s.cashFlowMonth >= 0
+      ? `+€${cfAbs}`
+      : `−€${cfAbs}`;
+    const cfStr = s.primaryResidencePhase
+      ? `Rental yr 3+: ${cfNum}`
+      : `${cfNum}/mo`;
 
     const classes = ['matrix-cell', `matrix-cell-${tier}`];
     if (isSelected) classes.push('matrix-cell-selected');
@@ -16183,9 +16384,9 @@ function renderScenarioMatrix(scenarios, bestFin, bestCon) {
       </tbody>
     </table>
     <div class="matrix-legend">
-      <span class="matrix-legend-item"><span class="legend-dot legend-strong"></span>${t('detail.scenarios.legend_strong')} (≥8%)</span>
-      <span class="matrix-legend-item"><span class="legend-dot legend-decent"></span>${t('detail.scenarios.legend_decent')} (5-8%)</span>
-      <span class="matrix-legend-item"><span class="legend-dot legend-mediocre"></span>${t('detail.scenarios.legend_mediocre')} (3-5%)</span>
+      <span class="matrix-legend-item"><span class="legend-dot legend-strong"></span>${t('detail.scenarios.legend_strong')} (≥7%)</span>
+      <span class="matrix-legend-item"><span class="legend-dot legend-decent"></span>${t('detail.scenarios.legend_decent')} (4.5-7%)</span>
+      <span class="matrix-legend-item"><span class="legend-dot legend-reasonable"></span>${t('detail.scenarios.legend_reasonable')} (3-4.5%)</span>
       <span class="matrix-legend-item"><span class="legend-dot legend-weak"></span>${t('detail.scenarios.legend_weak')} (0-3%)</span>
     </div>`;
 }
@@ -16222,7 +16423,28 @@ function renderScenarioBreakdown(scenario, listing) {
   const downPayment = (listing.price || 0) * (1 - fin.ltv);
   const purchaseCostsOnly = scenario.cashInvested - downPayment;
 
+  // Fix 5: primary-residence phase split. Rendered above the 3-column
+  // grid so the user reads the two distinct phases (housing cost vs
+  // rental cash flow) before they see the cost rows that combine them
+  // into a single annualised figure.
+  const phaseHtml = scenario.primaryResidencePhase ? `
+    <div class="primary-residence-phases">
+      <div class="phase-box phase-occupancy">
+        <div class="phase-label">${t('breakdown.phase_occupancy_label')}</div>
+        <div class="phase-value">−${fmt(Math.abs(scenario.occupancyCostMonth))}/mo
+          <span class="phase-value-suffix">${t('breakdown.phase_housing_cost')}</span></div>
+        <div class="phase-note">${t('breakdown.phase_occupancy_note')}</div>
+      </div>
+      <div class="phase-box phase-rental">
+        <div class="phase-label">${t('breakdown.phase_rental_label')}</div>
+        <div class="phase-value">${scenario.cashFlowMonth >= 0 ? '+' : '−'}${fmt(Math.abs(scenario.cashFlowMonth))}/mo
+          <span class="phase-value-suffix">${t('breakdown.phase_cash_flow')}</span></div>
+        <div class="phase-note">${t('breakdown.phase_rental_note')}</div>
+      </div>
+    </div>` : '';
+
   return `
+    ${phaseHtml}
     <div class="breakdown-grid">
       <!-- Income -->
       <div class="breakdown-section">
@@ -16299,12 +16521,21 @@ function renderScenarioBreakdown(scenario, listing) {
           <span>${fmtPct(scenario.grossYield)}</span>
         </div>
         <div class="breakdown-row">
-          <span>${t('breakdown.net_yield_on_cash')}</span>
+          <span>${t('breakdown.net_yield')}</span>
           <span>${fmtPct(scenario.netYield)}</span>
         </div>
+        ${scenario.financingKey !== 'cash' ? `
         <div class="breakdown-row">
-          <span>${t('breakdown.appreciation')}</span>
+          <span>${t('breakdown.cash_on_cash')}</span>
+          <span>${fmtPct(scenario.cashOnCash)}</span>
+        </div>` : ''}
+        <div class="breakdown-row">
+          <span>${t('breakdown.appreciation_y1')}</span>
           <span>+${fmt(scenario.appreciationGain)}/yr</span>
+        </div>
+        <div class="breakdown-row">
+          <span>${t('breakdown.appreciation_10y')}</span>
+          <span>+${fmt(scenario.appreciationTotal10y)}</span>
         </div>
         <div class="breakdown-row breakdown-total breakdown-total-headline">
           <span>${t('breakdown.annualised_10yr')}</span>
