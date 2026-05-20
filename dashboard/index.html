@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-21 investor-profile-filters">
+<meta name="lume-build" content="2026-05-21 investor-listing-level-filter">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -14869,6 +14869,26 @@ function applySaleFilters(data, f) {
     if (f.minYield) {
       const y = computeYieldMetrics(l).gross_yield_pct;
       if (y == null || y < f.minYield) return false;
+    }
+    // Investor profile filters (Financing + Contract) — listing-level gate.
+    // Previously this lived inside pickBestScenario which only narrowed the
+    // scenario pool per listing, so every listing always rendered SOMETHING.
+    // The user's intent is "show me listings where cash IS actually the best
+    // choice", so we filter at the listing level by computing each listing's
+    // UNCONSTRAINED best (with the usual primary-residence exclude) and
+    // keeping only those whose best matches the filter.
+    const inInv = (typeof window !== 'undefined' && window.salesViewMode === 'investor');
+    const fFin  = (typeof window !== 'undefined' && window.investorFinancing) || 'all';
+    const fCon  = (typeof window !== 'undefined' && window.investorContract)  || 'all';
+    if (inInv && (fFin !== 'all' || fCon !== 'all')) {
+      // Unconstrained best — pass an explicit override so the scenario
+      // picker ignores the active filters and returns the genuine top
+      // pick. Cheap: 9 scenarios per listing, all pure arithmetic.
+      const unc = pickBestScenario(l, { financing: 'all', contract: 'all' }).scenario;
+      if (!unc) return false;
+      if (fFin === 'cash'     && unc.financingKey !== 'cash')                                              return false;
+      if (fFin === 'mortgage' && !['mortgage_invest','mortgage_primary'].includes(unc.financingKey))       return false;
+      if (fCon !== 'all'      && unc.contractKey !== fCon)                                                 return false;
     }
     return true;
   });
