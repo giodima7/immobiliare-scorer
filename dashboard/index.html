@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-20 scenario-consolidation">
+<meta name="lume-build" content="2026-05-20 restore-comp-helpers">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -16959,6 +16959,114 @@ function updateMetricStrip(m) {
 }
 
 // ── Cost breakdown ────────────────────────────────────────────────────────
+// Floor label helper for comp rows (handles strings / numbers / nulls).
+// Restored after the sed delete that landed alongside detailVerdictHtml.
+function _compFloorLabel(c) {
+  if (c.floor_label) return c.floor_label;
+  if (c.floor_n == null) return '—';
+  if (c.floor_n < 0) return 'basement';
+  if (c.floor_n === 0) return 'ground';
+  return c.floor_n + '°';
+}
+
+// One row per comp listing — used by both rental and sale comp lists.
+// `target` is the listing being analysed; we render a "vs target" delta so
+// the user sees relative pricing at a glance.
+function compRowHtml(comp, type, target) {
+  const isRent       = type === 'rent';
+  const compPsqm     = isRent
+    ? (comp.ask_psqm_effective || comp.ask_psqm || comp.effective_psqm_rent || 0)
+    : (comp.ask_psqm || 0);
+  const targetPsqm   = isRent ? (target.estimated_rent_psqm || 0) : (target.ask_psqm || 0);
+  const compPrice    = isRent ? (comp.rent_mo || comp.effective_rent_mo) : comp.price;
+  const psqmDelta    = (compPsqm && targetPsqm)
+    ? ((compPsqm - targetPsqm) / targetPsqm) * 100
+    : null;
+
+  const photo = comp.thumbnail
+    ? `<img src="${escapeAttr(comp.thumbnail)}" alt="" loading="lazy">`
+    : `<div class="comp-photo-placeholder">🏠</div>`;
+
+  const condition = comp.condition || '—';
+  const floor     = _compFloorLabel(comp);
+  const rooms     = (comp.rooms != null) ? comp.rooms + ' loc.' : '—';
+  const sqm       = (comp.sqm != null) ? comp.sqm + ' m²' : '—';
+  const addr      = (comp.address || '').slice(0, 60);
+  const source    = comp.source || '';
+
+  const linkAttrs = `href="?l=${encodeURIComponent(String(comp.id))}" onclick="event.preventDefault(); openCompDetail('${escapeAttr(String(comp.id))}', '${type}')"`;
+
+  const psqmDisp = compPsqm
+    ? '€' + (isRent ? compPsqm.toFixed(1) : fmt(Math.round(compPsqm))) + '/m²' + (isRent ? '/mo' : '')
+    : '—';
+  const priceDisp = compPrice != null
+    ? '€' + fmt(compPrice) + (isRent ? '<span class="suffix">/mo</span>' : '')
+    : '—';
+
+  const deltaCls = psqmDelta == null ? '' : (psqmDelta < 0 ? 'positive' : psqmDelta > 0 ? 'negative' : '');
+  const deltaStr = psqmDelta == null ? '' : (psqmDelta >= 0 ? '+' : '') + psqmDelta.toFixed(1) + '%';
+
+  return `
+    <a class="comp-row" ${linkAttrs}>
+      <div class="comp-photo">${photo}</div>
+      <div class="comp-info">
+        <div class="comp-info-top">
+          <span class="comp-neighbourhood">${escapeHtml(comp.neighbourhood || '?')}</span>
+          ${source ? `<span class="comp-source-tag">${escapeHtml(source)}</span>` : ''}
+        </div>
+        <div class="comp-address">${escapeHtml(addr)}</div>
+        <div class="comp-stats">
+          <span class="comp-stat">${sqm}</span>
+          <span class="comp-stat">${rooms}</span>
+          <span class="comp-stat">${floor}</span>
+          <span class="comp-stat">${escapeHtml(condition)}</span>
+        </div>
+      </div>
+      <div class="comp-price">
+        <div class="comp-price-main">${priceDisp}</div>
+        <div class="comp-price-psqm">${psqmDisp}</div>
+        ${psqmDelta != null ? `<div class="comp-delta ${deltaCls}">${deltaStr}</div>` : ''}
+      </div>
+    </a>`;
+}
+
+// Click handler for comp rows. Sales open the detail page; rentals scroll
+// to the listing on the dashboard (rentals have no detail page yet).
+function openCompDetail(compId, type) {
+  if (type === 'sale' || type === 'sales') {
+    Router.openDetail(compId);
+    return;
+  }
+  const url = new URL(location);
+  url.searchParams.delete('view');
+  url.searchParams.set('l', String(compId));
+  location.href = url.toString();
+}
+
+// Friendly labels for the comparables-method tag (rentals + sales).
+// Restored after the sed delete swept these alongside detailVerdictHtml.
+const _METHOD_LABELS_RENT = {
+  'zone_condition_strict': 'same zone + same condition',
+  'zone_any_condition':    'same zone + condition adjusted',
+  'zone_wide_size':        'same zone + wider size band',
+  'fascia_tight':          'same fascia + tight size band',
+  'fascia_wide':           'same fascia + wider size band',
+  'citywide_size':         'citywide by size only',
+  'omi_benchmark':         'OMI benchmark fallback',
+  'no_data':               'no data',
+};
+const _METHOD_LABELS_SALE = {
+  'zone_stratified':         'same zone + same condition',
+  'zone_any_condition':      'same zone + condition adjusted',
+  'radius_800m_same_fascia': '≤800 m + same fascia',
+  'fascia_fallback':         'same fascia (citywide)',
+  'comps_500':               '≤500 m radius',
+  'comps_800':               '≤800 m radius',
+  'comps_1200':              '≤1200 m radius',
+  'omi_zone':                'OMI zone fallback',
+  'omi_only':                'OMI-only (no comps)',
+};
+
 function detailComparableRentalsHtml(listing) {
   const compIds  = listing.estimated_rent_comp_ids || [];
   const rentals  = (typeof ALL_RENT !== 'undefined') ? ALL_RENT : (window.ALL_RENT || []);
