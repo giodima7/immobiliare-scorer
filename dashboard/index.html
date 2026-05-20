@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-20 area-pill-with-ask">
+<meta name="lume-build" content="2026-05-20 area-pill-match-specs">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -3851,19 +3851,18 @@ body.detail-page-active .detail-header {
 .price-psqm { font-size: 12px; color: var(--muted); }
 /* Area-median €/m² pill — sits next to the listing's own €/m² so the
    reader can see at a glance how the asking price compares per-m² to
-   what the neighbourhood is fetching. Only rendered when the listing
-   is below market (delta < 0), where the comparison is interesting. */
+   what the neighbourhood is fetching. Sized to match .specs-pill so
+   the two pills in the price row are visually aligned. */
 .price-area-pill {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text-secondary);
+  gap: 4px;
   background: var(--bg-muted);
-  padding: 2px 8px;
   border-radius: var(--radius-full);
-  margin-left: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
   white-space: nowrap;
   vertical-align: middle;
 }
@@ -3873,17 +3872,16 @@ body.detail-page-active .detail-header {
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  margin: 0 1px;
 }
 /* Listing's own €/m² — colour-coded against the area median. Same
    colour vocabulary as the .vs-omi / .vs-below pill family so the
    page reads consistently: green = below market, red = above,
    amber = at market. */
-.price-area-ask          { font-weight: 700; }
-.price-area-ask.tone-good { color: #15803D; }
-.price-area-ask.tone-bad  { color: #B91C1C; }
-.price-area-ask.tone-at   { color: #B45309; }
-.price-area-ask.tone-neutral { color: var(--text-secondary); }
+.price-area-ask              { font-weight: 600; }
+.price-area-ask.tone-good    { color: #15803D; }
+.price-area-ask.tone-bad     { color: #B91C1C; }
+.price-area-ask.tone-at      { color: #B45309; }
+.price-area-ask.tone-neutral { color: var(--text-primary); }
 .vs-omi {
   font-size: 12px; font-weight: 600;
   padding: 2px 9px; border-radius: 6px; margin-left: auto;
