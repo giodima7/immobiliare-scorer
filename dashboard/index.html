@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-20 id-pill-and-search">
+<meta name="lume-build" content="2026-05-20 id-search-in-filter-bar">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -3175,52 +3175,16 @@ body.detail-page-active .detail-header {
   font-weight: 500;
 }
 
-/* Header ID search — pairs with .id-pill so the user can click a
-   card's ID pill to populate this input and isolate that listing
-   (or paste an ID they got from elsewhere). Sized to slot into the
-   header next to the city selector / status pills without
-   crowding the wordmark. */
-.id-search {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--bg-muted);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-full);
-  padding: 5px 12px;
-  height: 30px;
-  color: var(--text-muted);
-  transition: border-color 120ms ease, background 120ms ease;
-}
-.id-search:focus-within {
-  border-color: var(--green-deep, var(--accent));
-  background: var(--surface, var(--bg-card));
-  color: var(--text-primary);
-}
-.id-search svg { flex-shrink: 0; }
-.id-search input {
-  border: none;
-  background: transparent;
-  outline: none;
-  font-family: var(--font);
-  font-size: 13px;
-  color: var(--text-primary);
-  width: 130px;
+/* Filter-bar ID search input. Sized to match the other .filter-num
+   inputs (Max rent, Min m²…) so it slots into row 3 cleanly. The
+   tabular-nums variant keeps numeric IDs of varying width from
+   making the input width feel inconsistent. */
+.filters.filters-grid input.filter-id-search {
+  width: 140px;
   font-variant-numeric: tabular-nums;
 }
-.id-search input::placeholder {
-  color: var(--text-muted);
-  font-weight: 500;
-}
-/* Hide the native clear button on type=search so our muted look isn't
-   broken by the WebKit X badge. The label-level state already shows
-   when input is non-empty via the :focus-within ring. */
-.id-search input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
-@media (max-width: 700px) {
-  /* On phones the header gets crowded; let the search collapse to
-     just the icon and let users tap it to expand. Easier: just hide
-     the input until tap-focus. */
-  .id-search input { width: 90px; font-size: 12px; }
+.filters.filters-grid input.filter-id-search::-webkit-search-cancel-button {
+  -webkit-appearance: none; appearance: none;
 }
 .fascia-A { background: #FFF0E6; color: #B85C00; }
 .fascia-B { background: #E6F4ED; color: #1F6B45; }    /* Centrale */
@@ -6931,17 +6895,6 @@ function saveFilters() {
     <span class="ci-dot"></span>
     <span id="ciPillLabel">CI –</span>
   </a>
-  <!-- Search by Lume internal listing ID. Filters both the rentals
-       grid and the sales grid in lock-step. Click any card's #id pill
-       to populate this box. -->
-  <label class="id-search" title="Search by Lume listing ID">
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-         stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <circle cx="11" cy="11" r="7"/>
-      <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-    </svg>
-    <input type="search" id="idSearchInput" placeholder="Find by ID…" autocomplete="off">
-  </label>
   <div class="meta" id="meta" data-i18n="loading.listings">Lume is reading the listings…</div>
   <!-- "Run Lume now" + "Zones" header buttons removed (consolidation):
        scanner moved to Settings → Scanner; the OMI-zone fixer was a
@@ -7104,6 +7057,12 @@ function saveFilters() {
 
 <!-- ── Sales filter bar ── -->
 <div class="filters">
+  <div class="filter-group">
+    <label>Find by ID</label>
+    <input type="search" id="sIdSearch" placeholder="Lume ID"
+           autocomplete="off" style="width:120px;font-variant-numeric:tabular-nums">
+  </div>
+  <div class="filter-sep"></div>
   <div class="filter-group">
     <label>Area</label>
     <div class="msd-wrap" id="sFilterAreaWrap">
@@ -7436,6 +7395,12 @@ function saveFilters() {
 
     <!-- Row 3 — meta / utilities ───────────────────────────────── -->
     <div class="filter-row filter-row-bottom">
+      <div class="filter-group">
+        <label class="filter-label">Find by ID</label>
+        <input type="search" id="rIdSearch"
+               class="filter-control filter-id-search"
+               placeholder="Lume ID" autocomplete="off">
+      </div>
       <div class="filter-group">
         <label class="filter-label" data-i18n="filter.listed">Listed</label>
         <select id="rListed" class="filter-control">
@@ -9923,33 +9888,53 @@ document.getElementById('sScore').addEventListener('input', function () {
   saveFilters();
 });
 
-// ── Header ID search: filters rentals AND sales in lock-step ─────────────
-// The input lives in <header>, so we only attach once. Each keystroke
-// debounces a re-render of whichever grid is active (and the other one
-// the next time the user switches tabs — cheap, no harm).
+// ── ID search: one input per tab, lives inside each tab's filter bar ─
+// Each keystroke debounces a re-render of its own grid. The pill
+// click-to-search delegate populates BOTH inputs so switching tabs
+// keeps the same query in view.
 (function _wireIdSearch() {
-  const input = document.getElementById('idSearchInput');
-  if (!input) return;
-  let _idDeb = null;
-  const fire = () => {
-    if (_idDeb) clearTimeout(_idDeb);
-    _idDeb = setTimeout(() => {
-      _idDeb = null;
+  const rInput = document.getElementById('rIdSearch');
+  const sInput = document.getElementById('sIdSearch');
+  let _rDeb = null, _sDeb = null;
+  const fireRent = () => {
+    if (_rDeb) clearTimeout(_rDeb);
+    _rDeb = setTimeout(() => {
+      _rDeb = null;
       if (typeof renderRentals === 'function') try { renderRentals(); } catch (_) {}
-      if (typeof renderSales   === 'function') try { renderSales();   } catch (_) {}
+      if (typeof saveFilters === 'function')   try { saveFilters();   } catch (_) {}
     }, 120);
   };
-  input.addEventListener('input',  fire);
-  input.addEventListener('search', fire);   // fires on native ESC / clear-X
-  // Click-to-search from any card's #id pill — works for both rental
-  // and sales cards since both use .id-pill. Event-delegated so it
-  // covers cards that haven't been rendered yet.
+  const fireSale = () => {
+    if (_sDeb) clearTimeout(_sDeb);
+    _sDeb = setTimeout(() => {
+      _sDeb = null;
+      if (typeof renderSales === 'function') try { renderSales(); } catch (_) {}
+      if (typeof saveFilters === 'function') try { saveFilters(); } catch (_) {}
+    }, 120);
+  };
+  if (rInput) {
+    rInput.addEventListener('input',  fireRent);
+    rInput.addEventListener('search', fireRent);
+  }
+  if (sInput) {
+    sInput.addEventListener('input',  fireSale);
+    sInput.addEventListener('search', fireSale);
+  }
+  // Click-to-search from any card's #id pill. Populates BOTH inputs so
+  // the query persists if the user switches tabs to find the same listing
+  // in the other dataset.
   document.addEventListener('click', (e) => {
     const pill = e.target.closest && e.target.closest('.id-pill[data-listing-id]');
     if (!pill) return;
-    input.value = pill.dataset.listingId;
-    input.focus();
-    fire();
+    const id = pill.dataset.listingId;
+    if (rInput) rInput.value = id;
+    if (sInput) sInput.value = id;
+    // Focus the input in whichever tab is currently active.
+    const onSales = document.getElementById('salesView') &&
+                    !document.getElementById('salesView').hidden;
+    (onSales ? sInput : rInput)?.focus();
+    fireRent();
+    fireSale();
   });
 })();
 
@@ -9988,8 +9973,7 @@ try {
 } catch (_) {}
 
 document.getElementById('sBtnReset').addEventListener('click', () => {
-  // See rBtnReset — keep header search in sync with the bar reset.
-  const _idEl = document.getElementById('idSearchInput');
+  const _idEl = document.getElementById('sIdSearch');
   if (_idEl) _idEl.value = '';
   document.getElementById('sFascia').value    = '';
   document.getElementById('sOmiZone').value   = '';
@@ -12965,15 +12949,16 @@ function renderRentalCard(l) {
 }
 
 // ── Rentals — filter & render ─────────────────────────────────────────────────
-// Lume listing-ID search (header). Trimmed + lower-cased once here so
-// applyRentFilters / applySaleFilters can do a cheap substring match.
-function getIdQuery() {
-  return (document.getElementById('idSearchInput')?.value || '').trim().toLowerCase();
+// Lume listing-ID search — one input per tab, both sit inside their
+// own filter bar. Trimmed + lower-cased once here so the
+// applyRent/Sale filters can do a cheap substring match.
+function getIdQuery(inputId) {
+  return (document.getElementById(inputId)?.value || '').trim().toLowerCase();
 }
 
 function getRentFilters() {
   return {
-    idQuery:   getIdQuery(),
+    idQuery:   getIdQuery('rIdSearch'),
     areas:     rentSelectedAreas,
     fascia:    document.getElementById('rFascia').value,
     // OMI Zone filter removed from the bar — Area + Fascia cover the same
@@ -13405,7 +13390,7 @@ function computeSaleFasciaRanges(data) {
 
 function getSaleFilters() {
   return {
-    idQuery:  getIdQuery(),
+    idQuery:  getIdQuery('sIdSearch'),
     areas:    saleSelectedAreas,
     source:   document.querySelector('#sSourceFilter .sort-tab.active')?.dataset.ssource || '',
     fascia:   document.getElementById('sFascia').value,
@@ -18024,9 +18009,7 @@ document.querySelectorAll('#rentSortTabs .sort-tab').forEach(btn => {
 });
 
 document.getElementById('rBtnReset').addEventListener('click', () => {
-  // Header ID search lives outside the filter bar but it's still
-  // user-applied state; "Clear filters" should reset it too.
-  const _idEl = document.getElementById('idSearchInput');
+  const _idEl = document.getElementById('rIdSearch');
   if (_idEl) _idEl.value = '';
   filterAreaMsd.clear();
   rentSelectedAreas = [];
