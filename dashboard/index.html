@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-20 hidden-gem-tighten">
+<meta name="lume-build" content="2026-05-20 gem-gates-in-settings">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -19477,30 +19477,36 @@ const _SCORE_FIELDS = [
 ];
 
 // ── Badge threshold settings ───────────────────────────────────────────────
+// Keep these in lock-step with scoring.py's _DEFAULT_SETTINGS — defaults
+// shown here are what the UI hints, _GEM_DEFAULTS below is what we fall
+// back to when scoring_settings.json hasn't loaded yet.
 const _GEM_FIELDS = [
-  { key: 'gem_total_min',      label: 'Min total score',      desc: 'score_total ≥ this (default 72)',           step: 1,   min: 0,   max: 100  },
-  { key: 'gem_ldi_min',        label: 'Min LDI zone score',   desc: 'ldi_score ≥ this (default 65)',             step: 1,   min: 0,   max: 100  },
-  { key: 'gem_delta_max',      label: 'Max % vs comps',       desc: 'comps_delta_pct ≤ this, e.g. −8 (default −8.0)', step: 0.5, min: -50, max: 0 },
-  { key: 'gem_property_min',   label: 'Min property score',   desc: 'score_property ≥ this (default 50)',        step: 1,   min: 0,   max: 100  },
-  { key: 'gem_location_min',   label: 'Min location score',   desc: 'score_location ≥ this (default 45)',        step: 1,   min: 0,   max: 100  },
-  { key: 'gem_confidence_min', label: 'Min comps confidence', desc: 'comps_confidence ≥ this (default 40)',      step: 1,   min: 0,   max: 100  },
-  { key: 'gem_penalty_min',    label: 'Min penalty score',    desc: 'score_penalty ≥ this (default 70)',         step: 1,   min: 0,   max: 100  },
+  { key: 'gem_total_min',      label: 'Min total score',      desc: 'score_total ≥ this (default 80)',            step: 1,   min: 0,   max: 100  },
+  { key: 'gem_ldi_min',        label: 'Min LDI zone score',   desc: 'ldi_score ≥ this (default 70)',              step: 1,   min: 0,   max: 100  },
+  { key: 'gem_delta_max',      label: 'Max % vs comps',       desc: 'comps_delta_pct ≤ this, e.g. −12 (default −12.0)', step: 0.5, min: -50, max: 0 },
+  { key: 'gem_property_min',   label: 'Min property score',   desc: 'score_property ≥ this (default 62)',         step: 1,   min: 0,   max: 100  },
+  { key: 'gem_location_min',   label: 'Min location score',   desc: 'score_location ≥ this (default 62)',         step: 1,   min: 0,   max: 100  },
+  { key: 'gem_confidence_min', label: 'Min comps confidence', desc: 'comps_confidence ≥ this (default 60)',       step: 1,   min: 0,   max: 100  },
+  { key: 'gem_penalty_min',    label: 'Min penalty score',    desc: 'score_penalty ≥ this (default 75)',          step: 1,   min: 0,   max: 100  },
+  { key: 'gem_metro_max_m',    label: 'Max metro distance (m)', desc: 'metro_nearest_dist_m ≤ this (default 800 m, ≈ 10 min walk)', step: 50, min: 0, max: 5000 },
+  { key: 'gem_min_sqm_per_room', label: 'Min m² per room',    desc: 'sqm / rooms ≥ this — kills crammed flats (default 22)', step: 1, min: 0, max: 60 },
 ];
 const _GV_FIELDS = [
-  { key: 'gv_total_min',       label: 'Min total score',      desc: 'score_total ≥ this (default 65)',           step: 1,   min: 0,   max: 100  },
-  { key: 'gv_ldi_min',         label: 'Min LDI zone score',   desc: 'ldi_score ≥ this (default 45)',             step: 1,   min: 0,   max: 100  },
-  { key: 'gv_delta_max',       label: 'Max % vs comps',       desc: 'comps_delta_pct ≤ this, e.g. −5 (default −5.0)', step: 0.5, min: -50, max: 0 },
-  { key: 'gv_property_min',    label: 'Min property score',   desc: 'score_property ≥ this (default 40)',        step: 1,   min: 0,   max: 100  },
-  { key: 'gv_location_min',    label: 'Min location score',   desc: 'score_location ≥ this (default 35)',        step: 1,   min: 0,   max: 100  },
-  { key: 'gv_confidence_min',  label: 'Min comps confidence', desc: 'comps_confidence ≥ this (default 30)',      step: 1,   min: 0,   max: 100  },
-  { key: 'gv_penalty_min',     label: 'Min penalty score',    desc: 'score_penalty ≥ this (default 55)',         step: 1,   min: 0,   max: 100  },
+  { key: 'gv_total_min',       label: 'Min total score',      desc: 'score_total ≥ this (default 70)',            step: 1,   min: 0,   max: 100  },
+  { key: 'gv_ldi_min',         label: 'Min LDI zone score',   desc: 'ldi_score ≥ this (default 50)',              step: 1,   min: 0,   max: 100  },
+  { key: 'gv_delta_max',       label: 'Max % vs comps',       desc: 'comps_delta_pct ≤ this, e.g. −7 (default −7.0)', step: 0.5, min: -50, max: 0 },
+  { key: 'gv_property_min',    label: 'Min property score',   desc: 'score_property ≥ this (default 50)',         step: 1,   min: 0,   max: 100  },
+  { key: 'gv_location_min',    label: 'Min location score',   desc: 'score_location ≥ this (default 50)',         step: 1,   min: 0,   max: 100  },
+  { key: 'gv_confidence_min',  label: 'Min comps confidence', desc: 'comps_confidence ≥ this (default 45)',       step: 1,   min: 0,   max: 100  },
+  { key: 'gv_penalty_min',     label: 'Min penalty score',    desc: 'score_penalty ≥ this (default 60)',          step: 1,   min: 0,   max: 100  },
 ];
 
 const _GEM_DEFAULTS = {
-  gem_total_min:72, gem_ldi_min:65, gem_delta_max:-8.0, gem_property_min:50,
-  gem_location_min:45, gem_confidence_min:40, gem_penalty_min:70,
-  gv_total_min:65, gv_ldi_min:45, gv_delta_max:-5.0, gv_property_min:40,
-  gv_location_min:35, gv_confidence_min:30, gv_penalty_min:55,
+  gem_total_min:80, gem_ldi_min:70, gem_delta_max:-12.0, gem_property_min:62,
+  gem_location_min:62, gem_confidence_min:60, gem_penalty_min:75,
+  gem_metro_max_m:800, gem_min_sqm_per_room:22,
+  gv_total_min:70, gv_ldi_min:50, gv_delta_max:-7.0, gv_property_min:50,
+  gv_location_min:50, gv_confidence_min:45, gv_penalty_min:60,
 };
 
 function _buildGemGrid(fields, gridId, settings) {
