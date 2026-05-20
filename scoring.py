@@ -184,6 +184,118 @@ def get_appreciation_rate(listing: dict) -> float:
     return rates.get(fascia, rates.get("C", 0.020))
 
 
+# ── Investment scenario constants ─────────────────────────────────────────────
+# Used by the dashboard's 3×3 financing × contract matrix and by the
+# investor verdict / card metrics. Python is the authoritative copy —
+# the JS in index.html mirrors these numbers and MUST be updated in
+# lock-step. The JS engine (computeScenario / computeAllScenarios /
+# pickBestScenario) runs client-side so users can tweak assumptions
+# in the detail view without a round-trip.
+#
+# Source: Tecnocasa 2024, OMI Rapporto 2025, Italian tax law
+# (cedolare secca, Legge n. 431/1998). Last verified: May 2026.
+
+FINANCING_PROFILES: dict[str, dict] = {
+    "cash": {
+        "ltv":            0.0,
+        "rate":           0.0,
+        "term_years":     0,
+        "label_en":       "Cash buyer",
+        "label_it":       "Acquisto in contanti",
+        "description_en": "Full price paid upfront. No mortgage costs but maximum capital lock-up.",
+        "description_it": "Prezzo pagato integralmente. Nessun costo mutuo ma massimo capitale impegnato.",
+    },
+    "mortgage_invest": {
+        "ltv":            0.65,
+        "rate":           0.042,
+        "term_years":     20,
+        "label_en":       "Investment mortgage",
+        "label_it":       "Mutuo investimento",
+        "description_en": "65% LTV, 4.2% rate, 20yr. Standard buy-to-let financing.",
+        "description_it": "LTV 65%, tasso 4,2%, 20 anni. Finanziamento standard per investimento.",
+    },
+    "mortgage_primary": {
+        "ltv":            0.80,
+        "rate":           0.038,
+        "term_years":     25,
+        "label_en":       "Primary residence",
+        "label_it":       "Prima casa",
+        "description_en": "80% LTV, 3.8% rate, 25yr. Requires you live there 18mo+, lower tax, lower yield since you live in it.",
+        "description_it": "LTV 80%, tasso 3,8%, 25 anni. Richiede residenza 18+ mesi, tasse ridotte, rendimento ridotto in quanto la abiti.",
+    },
+}
+
+CONTRACT_PROFILES: dict[str, dict] = {
+    "libero": {
+        "rent_factor":    1.00,
+        "cedolare_rate":  0.21,
+        "imu_discount":   0.00,
+        "vacancy_months": 1.0,
+        "mgmt_pct":       0.05,
+        "label_en":       "Canone libero (4+4)",
+        "label_it":       "Canone libero (4+4)",
+        "description_en": "4-year lease, full market rent, standard 21% cedolare tax.",
+        "description_it": "Contratto 4+4 anni, canone di mercato, cedolare secca 21%.",
+    },
+    "concordato": {
+        "rent_factor":    0.72,     # ~28% below libero on average
+        "cedolare_rate":  0.10,
+        "imu_discount":   0.25,
+        "vacancy_months": 0.5,
+        "mgmt_pct":       0.03,
+        "label_en":       "Canone concordato (3+2)",
+        "label_it":       "Canone concordato (3+2)",
+        "description_en": "3+2 year lease, ~28% lower rent, 10% cedolare + 25% IMU discount.",
+        "description_it": "Contratto 3+2 anni, canone ~28% inferiore, cedolare 10% + IMU -25%.",
+    },
+    "transitorio": {
+        "rent_factor":    1.12,     # 10-15% above libero (often furnished)
+        "cedolare_rate":  0.10,
+        "imu_discount":   0.25,
+        "vacancy_months": 2.0,      # higher vacancy due to short terms
+        "mgmt_pct":       0.08,
+        "label_en":       "Transitorio (1-18mo)",
+        "label_it":       "Transitorio (1-18 mesi)",
+        "description_en": "Short-term lease 1-18mo, ~12% higher rent, 10% cedolare. Higher vacancy and management cost.",
+        "description_it": "Contratto breve 1-18 mesi, canone ~12% superiore, cedolare 10%. Maggior vacancy e costi gestione.",
+    },
+}
+
+# Cities where canone concordato is signed under an accordo territoriale
+# (high-tension housing markets). ANCI list 2024.
+CONCORDATO_ELIGIBLE_CITIES: set[str] = {"milano", "roma", "napoli"}
+
+# Zones suitable for transitorio (university districts, business hubs,
+# central commuter corridors). Matched as case-insensitive substrings
+# against omi_descr OR neighbourhood.
+TRANSITORIO_ZONE_KEYWORDS: dict[str, list[str]] = {
+    "milano": [
+        "duomo", "brera", "cordusio", "turati", "moscova", "porta venezia",
+        "cadorna", "cinque vie", "guastalla", "porta romana", "navigli",
+        "porta genova", "sant'ambrogio", "bocconi", "porta vittoria",
+        "citta' studi", "città studi", "lambrate", "isola", "porta nuova",
+        "garibaldi", "lima", "loreto", "piola",
+    ],
+    "roma": [
+        "centro storico", "trastevere", "monti", "esquilino", "san giovanni",
+        "prati", "flaminio", "parioli", "san lorenzo", "pigneto",
+        "sapienza", "tor vergata",
+    ],
+    "napoli": [
+        "chiaia", "centro storico", "vomero", "posillipo", "fuorigrotta",
+    ],
+}
+
+# Purchase-side closing costs as fraction of price.
+#   • prima casa (residence): 2% registro + ~2% notary/agency = 4%
+#   • seconda casa / pure investment: 9% registro + ~2% other  = 11%
+PURCHASE_COSTS: dict[str, float] = {
+    "mortgage_primary": 0.04,
+    "cash":             0.11,
+    "mortgage_invest":  0.11,
+}
+
+
 # ── Legacy module-level LDI (Milan-only) ──────────────────────────────────────
 # Kept so unchanged callers (`scoring.LDI["B12"]`, gem/value helpers below)
 # keep working. New code should call get_ldi(listing) which resolves the

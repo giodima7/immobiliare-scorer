@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-20 sales-idsearch-style">
+<meta name="lume-build" content="2026-05-20 scenario-engine">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -8389,6 +8389,26 @@ const STRINGS = {
     // dashboard, so the avatar menu is the canonical entry point for
     // signed-in account actions.
     'menu.my_alerts':'My alerts',
+    // Scenario engine (financing × contract matrix). Each scenario is
+    // labelled identically in the picker, the matrix, and the
+    // "why this is best" panel — these are the canonical strings.
+    'scenario.fin.cash':              'Cash buyer',
+    'scenario.fin.mortgage_invest':   'Investment mortgage',
+    'scenario.fin.mortgage_primary':  'Primary residence',
+    'scenario.con.libero':            'Canone libero (4+4)',
+    'scenario.con.concordato':        'Canone concordato (3+2)',
+    'scenario.con.transitorio':       'Transitorio (1-18mo)',
+    // Verdict tiers — keyed off bestScenario.annualised10yr.
+    'verdict.strong':                 'Strong investment',
+    'verdict.decent':                 'Decent investment',
+    'verdict.mediocre':               'Mediocre — beats BTP',
+    'verdict.weak':                   'Weak — below safer alternatives',
+    'verdict.avoid':                  'Negative return projected',
+    'verdict.no_data':                'Insufficient data',
+    // Ineligibility reasons (matrix cell tooltip on greyed-out cells).
+    'scenario.reason.no_rent_estimate':            'No rent estimate available',
+    'scenario.reason.concordato_not_available':    'Canone concordato unavailable in this city',
+    'scenario.reason.transitorio_zone_not_qualified': 'Zone not eligible for transitorio',
   },
   it: {
     // Tabs
@@ -8559,6 +8579,22 @@ const STRINGS = {
     'toast.alert_deleted':'Avviso eliminato',
     'toast.alert_delete_failed':'Impossibile eliminare l\'avviso:',
     'menu.my_alerts':'I miei avvisi',
+    // Scenario engine — IT mirror of the EN block above.
+    'scenario.fin.cash':              'Acquisto in contanti',
+    'scenario.fin.mortgage_invest':   'Mutuo investimento',
+    'scenario.fin.mortgage_primary':  'Prima casa',
+    'scenario.con.libero':            'Canone libero (4+4)',
+    'scenario.con.concordato':        'Canone concordato (3+2)',
+    'scenario.con.transitorio':       'Transitorio (1-18 mesi)',
+    'verdict.strong':                 'Investimento forte',
+    'verdict.decent':                 'Investimento discreto',
+    'verdict.mediocre':               'Mediocre — supera il BTP',
+    'verdict.weak':                   'Debole — sotto le alternative più sicure',
+    'verdict.avoid':                  'Rendimento previsto negativo',
+    'verdict.no_data':                'Dati insufficienti',
+    'scenario.reason.no_rent_estimate':            'Stima del canone non disponibile',
+    'scenario.reason.concordato_not_available':    'Canone concordato non disponibile in questa città',
+    'scenario.reason.transitorio_zone_not_qualified': 'Zona non idonea al transitorio',
   },
 };
 
@@ -8974,6 +9010,389 @@ const FASCIA_APPRECIATION_DEFAULTS = {
 function defaultAppreciationRate(sale) {
   const f = (sale.omi_fascia || 'C').toUpperCase();
   return FASCIA_APPRECIATION_DEFAULTS[f] ?? 2.0;
+}
+
+// ── Scenario engine constants ─────────────────────────────────────────────
+// Mirror of scoring.py's FINANCING_PROFILES / CONTRACT_PROFILES /
+// CONCORDATO_ELIGIBLE_CITIES / TRANSITORIO_ZONE_KEYWORDS / PURCHASE_COSTS.
+// Python is authoritative — when you change one, change BOTH or the
+// dashboard's "best scenario" will disagree with any future Python-side
+// pre-computation. Last synced: May 2026.
+const FINANCING_PROFILES = {
+  cash: {
+    ltv:             0.0,
+    rate:            0.0,
+    term_years:      0,
+    label_en:        'Cash buyer',
+    label_it:        'Acquisto in contanti',
+    description_en:  'Full price paid upfront. No mortgage costs but maximum capital lock-up.',
+    description_it: 'Prezzo pagato integralmente. Nessun costo mutuo ma massimo capitale impegnato.',
+  },
+  mortgage_invest: {
+    ltv:             0.65,
+    rate:            0.042,
+    term_years:      20,
+    label_en:        'Investment mortgage',
+    label_it:        'Mutuo investimento',
+    description_en:  '65% LTV, 4.2% rate, 20yr. Standard buy-to-let financing.',
+    description_it: 'LTV 65%, tasso 4,2%, 20 anni. Finanziamento standard per investimento.',
+  },
+  mortgage_primary: {
+    ltv:             0.80,
+    rate:            0.038,
+    term_years:      25,
+    label_en:        'Primary residence',
+    label_it:        'Prima casa',
+    description_en:  '80% LTV, 3.8% rate, 25yr. Requires you live there 18mo+, lower tax, lower yield since you live in it.',
+    description_it: 'LTV 80%, tasso 3,8%, 25 anni. Richiede residenza 18+ mesi, tasse ridotte, rendimento ridotto in quanto la abiti.',
+  },
+};
+
+const CONTRACT_PROFILES = {
+  libero: {
+    rent_factor:     1.00,
+    cedolare_rate:   0.21,
+    imu_discount:    0.00,
+    vacancy_months:  1.0,
+    mgmt_pct:        0.05,
+    label_en:        'Canone libero (4+4)',
+    label_it:        'Canone libero (4+4)',
+    description_en:  '4-year lease, full market rent, standard 21% cedolare tax.',
+    description_it: 'Contratto 4+4 anni, canone di mercato, cedolare secca 21%.',
+  },
+  concordato: {
+    rent_factor:     0.72,
+    cedolare_rate:   0.10,
+    imu_discount:    0.25,
+    vacancy_months:  0.5,
+    mgmt_pct:        0.03,
+    label_en:        'Canone concordato (3+2)',
+    label_it:        'Canone concordato (3+2)',
+    description_en:  '3+2 year lease, ~28% lower rent, 10% cedolare + 25% IMU discount.',
+    description_it: 'Contratto 3+2 anni, canone ~28% inferiore, cedolare 10% + IMU -25%.',
+  },
+  transitorio: {
+    rent_factor:     1.12,
+    cedolare_rate:   0.10,
+    imu_discount:    0.25,
+    vacancy_months:  2.0,
+    mgmt_pct:        0.08,
+    label_en:        'Transitorio (1-18mo)',
+    label_it:        'Transitorio (1-18 mesi)',
+    description_en:  'Short-term lease 1-18mo, ~12% higher rent, 10% cedolare. Higher vacancy and management cost.',
+    description_it: 'Contratto breve 1-18 mesi, canone ~12% superiore, cedolare 10%. Maggior vacancy e costi gestione.',
+  },
+};
+
+const CONCORDATO_ELIGIBLE_CITIES = ['milano', 'roma', 'napoli'];
+
+const TRANSITORIO_ZONE_KEYWORDS = {
+  milano: [
+    'duomo', 'brera', 'cordusio', 'turati', 'moscova', 'porta venezia',
+    'cadorna', 'cinque vie', 'guastalla', 'porta romana', 'navigli',
+    'porta genova', "sant'ambrogio", 'bocconi', 'porta vittoria',
+    "citta' studi", 'città studi', 'lambrate', 'isola', 'porta nuova',
+    'garibaldi', 'lima', 'loreto', 'piola',
+  ],
+  roma: [
+    'centro storico', 'trastevere', 'monti', 'esquilino', 'san giovanni',
+    'prati', 'flaminio', 'parioli', 'san lorenzo', 'pigneto',
+    'sapienza', 'tor vergata',
+  ],
+  napoli: [
+    'chiaia', 'centro storico', 'vomero', 'posillipo', 'fuorigrotta',
+  ],
+};
+
+const PURCHASE_COSTS = {
+  mortgage_primary: 0.04,
+  cash:             0.11,
+  mortgage_invest:  0.11,
+};
+
+// JS mirror of scoring.py's CITY_APPRECIATION_RATES so the scenario
+// engine can self-source appreciation without importing it. The old
+// FASCIA_APPRECIATION_DEFAULTS dict above stays for the legacy
+// projection panel; the new engine reads CITY_APPRECIATION_RATES.
+const CITY_APPRECIATION_RATES = {
+  milano:       { A: 0.030, B: 0.025, C: 0.020, D: 0.015, E: 0.010, R: 0.010 },
+  roma:         { A: 0.025, B: 0.020, C: 0.015, D: 0.010, E: 0.008, R: 0.008 },
+  napoli:       { A: 0.020, B: 0.015, C: 0.012, D: 0.010, E: 0.008, R: 0.008 },
+  la_maddalena: { A: 0.015, B: 0.010, C: 0.008, D: 0.005, E: 0.005, R: 0.005 },
+};
+
+// ── Scenario engine ──────────────────────────────────────────────────────
+// Compute one of the 9 financing × contract scenarios for a listing.
+// Returns a metrics object — never null. Ineligible scenarios (e.g.
+// transitorio in a non-qualifying zone) return { eligible: false, ... }
+// so the matrix UI can still display 9 cells.
+function computeScenario(listing, financingKey, contractKey) {
+  const fin    = FINANCING_PROFILES[financingKey];
+  const con    = CONTRACT_PROFILES[contractKey];
+  const city   = listing.city || 'milano';
+  const price  = listing.price || 0;
+  const fascia = (listing.omi_fascia || 'C').toUpperCase();
+
+  // Libero baseline rent comes from the existing OMI-adjusted rent estimate.
+  const liberoRentMo = listing.estimated_rent_mo || 0;
+  if (!liberoRentMo || !price) {
+    return { eligible: false, financingKey, contractKey,
+             reason: 'no_rent_estimate', annualisedReturn: null,
+             annualised10yr: null };
+  }
+
+  const scenarioRentMo = liberoRentMo * con.rent_factor;
+
+  // Eligibility gates.
+  if (contractKey === 'concordato' && !CONCORDATO_ELIGIBLE_CITIES.includes(city)) {
+    return { eligible: false, financingKey, contractKey,
+             reason: 'concordato_not_available', annualisedReturn: null,
+             annualised10yr: null };
+  }
+  if (contractKey === 'transitorio') {
+    const zoneKw   = TRANSITORIO_ZONE_KEYWORDS[city] || [];
+    const omiDescr = (listing.omi_descr     || '').toLowerCase();
+    const nbhd     = (listing.neighbourhood || '').toLowerCase();
+    const ok       = zoneKw.some(kw => omiDescr.includes(kw) || nbhd.includes(kw));
+    if (!ok) {
+      return { eligible: false, financingKey, contractKey,
+               reason: 'transitorio_zone_not_qualified',
+               annualisedReturn: null, annualised10yr: null };
+    }
+  }
+
+  // ── Income side ─────────────────────────────────────────────────────
+  const grossRentAnnual = scenarioRentMo * 12;
+  const vacancyAnnual   = scenarioRentMo * con.vacancy_months;
+  const mgmtAnnual      = grossRentAnnual * con.mgmt_pct;
+  const collectedRent   = grossRentAnnual - vacancyAnnual - mgmtAnnual;
+
+  const cedolareAnnual  = collectedRent * con.cedolare_rate;
+  const imuAnnual       = price * 0.004 * (1 - con.imu_discount);
+  const maintAnnual     = price * 0.003;
+  const condoAnnual     = (listing.condominium_fees || listing.spese_condominiali || 100) * 12;
+
+  const netRentAnnual   = collectedRent - cedolareAnnual - imuAnnual
+                        - maintAnnual  - condoAnnual;
+
+  // ── Financing side ──────────────────────────────────────────────────
+  const purchaseCostRate = PURCHASE_COSTS[financingKey] ?? 0.11;
+  const purchaseCosts    = price * purchaseCostRate;
+
+  let mortgageAnnual = 0;
+  let cashInvested   = 0;
+  let loan           = 0;
+
+  if (financingKey === 'cash') {
+    cashInvested = price + purchaseCosts;
+  } else {
+    loan = price * fin.ltv;
+    const downPayment = price * (1 - fin.ltv);
+    cashInvested      = downPayment + purchaseCosts;
+
+    const monthlyRate = fin.rate / 12;
+    const nMonths     = fin.term_years * 12;
+    const monthlyPmt  = monthlyRate > 0
+      ? loan * monthlyRate * Math.pow(1 + monthlyRate, nMonths)
+              / (Math.pow(1 + monthlyRate, nMonths) - 1)
+      : 0;
+    mortgageAnnual = monthlyPmt * 12;
+  }
+
+  const cashFlowAnnual = netRentAnnual - mortgageAnnual;
+  const cashFlowMonth  = cashFlowAnnual / 12;
+
+  // ── Total return (year-1 simple) ────────────────────────────────────
+  const apprRate = (CITY_APPRECIATION_RATES?.[city]?.[fascia])
+                 ?? (CITY_APPRECIATION_RATES?.[city]?.['C'])
+                 ?? 0.02;
+  const appreciationGain = price * apprRate;
+  const totalAnnualGain  = netRentAnnual - mortgageAnnual + appreciationGain;
+  const annualisedReturn = cashInvested > 0 ? totalAnnualGain / cashInvested : 0;
+
+  // ── Annualised over 10yr (the primary ranking metric) ───────────────
+  let annualised10yr;
+  if (financingKey === 'cash') {
+    // Cash: rent yield stays roughly flat; appreciation compounds.
+    // Approximation: cash-on-cash + compounded appreciation rate.
+    const yr1Return = (netRentAnnual + appreciationGain) / cashInvested;
+    annualised10yr  = yr1Return;
+  } else {
+    const monthlyRate = fin.rate / 12;
+    const remPayments = (fin.term_years - 10) * 12;
+    const loanRemaining = remPayments > 0 && monthlyRate > 0
+      ? (mortgageAnnual / 12)
+        * (1 - Math.pow(1 + monthlyRate, -remPayments)) / monthlyRate
+      : 0;
+    const exitPrice    = price * Math.pow(1 + apprRate, 10);
+    const exitProceeds = exitPrice - loanRemaining;
+    const totalCFOver10 = cashFlowAnnual * 10;
+    const totalReturn   = totalCFOver10 + exitProceeds - cashInvested;
+    const ratio = (totalReturn + cashInvested) / cashInvested;
+    annualised10yr = ratio > 0 ? Math.pow(ratio, 0.1) - 1 : -0.99;
+  }
+
+  return {
+    eligible:         true,
+    financingKey,
+    contractKey,
+    // Inputs
+    scenarioRentMo,
+    scenarioRentAnnual: grossRentAnnual,
+    cashInvested,
+    mortgageMonthly:    mortgageAnnual / 12,
+    // Costs
+    cedolareAnnual,
+    imuAnnual,
+    maintAnnual,
+    condoAnnual,
+    vacancyAnnual,
+    mgmtAnnual,
+    // Outputs
+    netRentAnnual,
+    cashFlowAnnual,
+    cashFlowMonth,
+    appreciationGain,
+    totalAnnualGain,
+    annualisedReturn,   // year-1 simple
+    annualised10yr,     // primary metric
+    // Display helpers (decimal fractions, not %)
+    grossYield: grossRentAnnual / price,
+    netYield:   cashInvested > 0 ? netRentAnnual / cashInvested : 0,
+    cashOnCash: cashInvested > 0 ? cashFlowAnnual / cashInvested : 0,
+  };
+}
+
+// Always returns 9 entries (3 financings × 3 contracts).
+// Sorted: eligible by annualised10yr desc, ineligible at the end.
+function computeAllScenarios(listing) {
+  const financings = ['cash', 'mortgage_invest', 'mortgage_primary'];
+  const contracts  = ['libero', 'concordato', 'transitorio'];
+  const scenarios  = [];
+  for (const f of financings) {
+    for (const c of contracts) {
+      scenarios.push(computeScenario(listing, f, c));
+    }
+  }
+  scenarios.sort((a, b) => {
+    if (a.eligible !== b.eligible) return a.eligible ? -1 : 1;
+    if (!a.eligible) return 0;
+    return b.annualised10yr - a.annualised10yr;
+  });
+  return scenarios;
+}
+
+// Deterministic best-scenario picker. Within 0.5 % of the top, prefer
+// simpler / lower-friction options (cash > invest > primary;
+// libero > concordato > transitorio).
+function pickBestScenario(listing) {
+  const all      = computeAllScenarios(listing);
+  const eligible = all.filter(s => s.eligible && s.annualised10yr > 0);
+  if (eligible.length === 0) {
+    return { scenario: null, allScenarios: all,
+             explanation: 'No scenario produces a positive return for this listing.' };
+  }
+  let best     = eligible[0];
+  const topR   = best.annualised10yr;
+  const within = eligible.filter(s => topR - s.annualised10yr < 0.005);
+  if (within.length > 1) {
+    const finOrder = ['cash', 'mortgage_invest', 'mortgage_primary'];
+    const conOrder = ['libero', 'concordato', 'transitorio'];
+    within.sort((a, b) => {
+      const fa = finOrder.indexOf(a.financingKey);
+      const fb = finOrder.indexOf(b.financingKey);
+      if (fa !== fb) return fa - fb;
+      return conOrder.indexOf(a.contractKey) - conOrder.indexOf(b.contractKey);
+    });
+    best = within[0];
+  }
+  return {
+    scenario:     best,
+    allScenarios: all,
+    explanation:  explainBestChoice(best, all, listing),
+  };
+}
+
+// Scenario-based investor verdict. Tier thresholds calibrated against
+// Italian alternative-asset benchmarks:
+//   BTP 10yr ~3.8 %, broad European RE index ~4.5 %, S&P 500 ~9 %.
+// Reads off the best scenario's annualised 10-yr return — the same
+// number that drives the picker — so the tier the user sees never
+// disagrees with the headline figure on the card.
+function getInvestorVerdict(bestScenario, city = 'milano') {
+  if (!bestScenario) {
+    return { tier: 'no_data', label: 'Insufficient data' };
+  }
+  const r = bestScenario.annualised10yr;
+  if (r == null || !Number.isFinite(r)) {
+    return { tier: 'no_data', label: 'Insufficient data' };
+  }
+  if (r >= 0.08) return { tier: 'strong',   label: 'Strong investment' };
+  if (r >= 0.05) return { tier: 'decent',   label: 'Decent investment' };
+  if (r >= 0.03) return { tier: 'mediocre', label: 'Mediocre — beats BTP' };
+  if (r >= 0.00) return { tier: 'weak',     label: 'Weak — below safer alternatives' };
+  return                  { tier: 'avoid',  label: 'Negative return projected' };
+}
+
+// Card-level metrics for the investor headline pills. Sources every
+// number from pickBestScenario(), so the card always reflects the
+// optimal financing × contract combo — never the legacy single-
+// assumption number. Returns { available: false } when the listing
+// can't produce a positive scenario (no rent estimate, etc.) so
+// callers can fall back to the buyer view.
+//
+// computeYieldMetrics / computeIRR stay untouched for the legacy
+// projection panel and any backward-compatible callers. New UI code
+// should prefer this wrapper.
+function investorCardMetrics(listing) {
+  const { scenario: best, explanation } = pickBestScenario(listing);
+  if (!best) return { available: false };
+  return {
+    available:        true,
+    // Headline pills (already in display units)
+    rentMo:           Math.round(best.scenarioRentMo),
+    grossYield:       best.grossYield * 100,
+    netYield:         best.netYield   * 100,
+    cashInvested:     best.cashInvested,
+    cashFlowMonth:    Math.round(best.cashFlowMonth),
+    annualised10yr:   best.annualised10yr * 100,
+    // Best-scenario description
+    financingKey:     best.financingKey,
+    contractKey:      best.contractKey,
+    financingLabel:   FINANCING_PROFILES[best.financingKey].label_en,
+    contractLabel:    CONTRACT_PROFILES[best.contractKey].label_en,
+    explanation,
+    // Raw scenario object — handy for the detail page / matrix view
+    bestScenario:     best,
+  };
+}
+
+function explainBestChoice(best, allScenarios, listing) {
+  const liberoCash = allScenarios.find(s =>
+    s.financingKey === 'cash' && s.contractKey === 'libero' && s.eligible);
+  const liberoCashReturn = liberoCash?.annualised10yr || 0;
+  const bestReturn       = best.annualised10yr;
+  const improvement      = ((bestReturn - liberoCashReturn) * 100).toFixed(1);
+
+  const finLabel = FINANCING_PROFILES[best.financingKey].label_en;
+  const conLabel = CONTRACT_PROFILES[best.contractKey].label_en;
+
+  if (best.financingKey === 'cash' && best.contractKey === 'concordato') {
+    return `Cedolare 10% + IMU discount more than offset 28% lower rent (+${improvement}% vs cash libero).`;
+  }
+  if (best.financingKey === 'cash' && best.contractKey === 'transitorio') {
+    return `Zone qualifies for transitorio — higher rent + tax advantages beat libero (+${improvement}% vs cash libero).`;
+  }
+  if (best.financingKey === 'mortgage_invest' && best.cashFlowMonth >= -200) {
+    return `Leverage amplifies appreciation gains. Manageable cash flow (€${Math.round(best.cashFlowMonth)}/mo).`;
+  }
+  if (best.financingKey === 'mortgage_invest') {
+    return `Leveraged appreciation play. Accept €${Math.abs(Math.round(best.cashFlowMonth))}/mo negative cash flow for higher total return.`;
+  }
+  if (best.financingKey === 'mortgage_primary') {
+    return `As primary residence first, then rent it out. Lower purchase tax + lower mortgage rate beats investment financing.`;
+  }
+  return `${finLabel} + ${conLabel} yields ${(bestReturn * 100).toFixed(1)}% annualised over 10yr.`;
 }
 
 // Escape a string for safe use inside an HTML attribute value.
