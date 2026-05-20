@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-20 restore-comp-helpers">
+<meta name="lume-build" content="2026-05-21 transitorio-real-costs">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -8920,6 +8920,12 @@ const STRINGS = {
     'breakdown.condo_fees':       'Condo fees',
     'breakdown.condo_fees_owner': 'Condo fees (owner share)',
     'breakdown.condo_fees_note':  'Total condo {total}/yr — tenant reimburses ~{tenant} for ordinary running costs',
+    // Transitorio-only cost lines (zero deductions for libero/concordato).
+    'breakdown.utilities':          'Utilities (owner pays)',
+    'breakdown.furnishing_amort':   'Furnishing amortisation',
+    'breakdown.insurance':          'Property insurance',
+    'breakdown.marketing':          'Marketing & listings',
+    'breakdown.furnishing_upfront': 'Furnishing setup (upfront)',
     // Fix 3: self-managed toggle + agency-managed label
     'breakdown.management_agency':'Agency management fee',
     'breakdown.management_self':  'Self-managed — no agency fee',
@@ -9185,6 +9191,11 @@ const STRINGS = {
     'breakdown.condo_fees':       'Spese condominiali',
     'breakdown.condo_fees_owner': 'Spese condominiali (quota proprietario)',
     'breakdown.condo_fees_note':  'Condominio totale {total}/anno — l\'inquilino rimborsa ~{tenant} per spese ordinarie',
+    'breakdown.utilities':          'Utenze (a carico proprietario)',
+    'breakdown.furnishing_amort':   'Ammortamento arredamento',
+    'breakdown.insurance':          'Assicurazione immobile',
+    'breakdown.marketing':          'Marketing e annunci',
+    'breakdown.furnishing_upfront': 'Arredamento iniziale',
     'breakdown.management_agency':'Commissione agenzia gestione',
     'breakdown.management_self':  'Gestione diretta — nessun costo agenzia',
     'scenarios.self_managed':     'Gestisco io l\'affitto',
@@ -9681,38 +9692,65 @@ const CONTRACT_PROFILES = {
   //   libero       8 %   full management of a 4-yr lease
   //   concordato   5 %   longer lease, less turnover, lighter agency work
   //   transitorio 12 %   high turnover, vet-and-sign every 6-18 months
+  //
+  // Transitorio also carries four ownership-side costs that libero /
+  // concordato do not: owner pays utilities (~€150/mo net of tenant
+  // forfait), furnishing depreciates (~2.5 %/yr of price), property
+  // insurance is mandatory because the unit is furnished, and the
+  // owner pays for marketing/agency placement between leases. Net
+  // effect: ~3-5 pp lower returns vs the rent-premium-only model.
   libero: {
-    rent_factor:     1.00,
-    cedolare_rate:   0.21,
-    imu_discount:    0.00,
-    vacancy_months:  1.0,
-    mgmt_pct:        0.08,
+    rent_factor:           1.00,
+    cedolare_rate:         0.21,
+    imu_discount:          0.00,
+    vacancy_months:        1.0,
+    mgmt_pct:              0.08,
+    utilities_owner_cost:  0,
+    furnishing_amort_pct:  0,
+    insurance_annual:      0,
+    marketing_annual:      0,
     label_en:        'Canone libero (4+4)',
     label_it:        'Canone libero (4+4)',
     description_en:  '4-year lease, full market rent, standard 21% cedolare tax.',
     description_it: 'Contratto 4+4 anni, canone di mercato, cedolare secca 21%.',
   },
   concordato: {
-    rent_factor:     0.72,
-    cedolare_rate:   0.10,
-    imu_discount:    0.25,
-    vacancy_months:  0.5,
-    mgmt_pct:        0.05,
+    rent_factor:           0.72,
+    cedolare_rate:         0.10,
+    imu_discount:          0.25,
+    vacancy_months:        0.5,
+    mgmt_pct:              0.05,
+    utilities_owner_cost:  0,
+    furnishing_amort_pct:  0,
+    insurance_annual:      0,
+    marketing_annual:      0,
     label_en:        'Canone concordato (3+2)',
     label_it:        'Canone concordato (3+2)',
     description_en:  '3+2 year lease, ~28% lower rent, 10% cedolare + 25% IMU discount.',
     description_it: 'Contratto 3+2 anni, canone ~28% inferiore, cedolare 10% + IMU -25%.',
   },
   transitorio: {
-    rent_factor:     1.12,
-    cedolare_rate:   0.10,
-    imu_discount:    0.25,
-    vacancy_months:  2.0,
-    mgmt_pct:        0.12,
+    rent_factor:           1.12,
+    cedolare_rate:         0.10,
+    imu_discount:          0.25,
+    vacancy_months:        2.0,
+    mgmt_pct:              0.12,
+    // Owner pays utilities at the 'domestico non residente' tariff (~€2,400/yr).
+    // Tenant forfait typically refunds ~€900/yr → owner eats ~€1,500/yr.
+    utilities_owner_cost:  1500,
+    // 2.5 % of price/yr → €8-15k furnishing on €400-600k property,
+    // amortised over 5-7 years. Capped on the cashInvested side at
+    // €15k upfront so very expensive properties don't get an unrealistic
+    // depreciation schedule.
+    furnishing_amort_pct:  0.025,
+    // Furnished property insurance + tenant damage cover.
+    insurance_annual:      300,
+    // Photos, listings, agency placement between leases.
+    marketing_annual:      300,
     label_en:        'Transitorio (1-18mo)',
     label_it:        'Transitorio (1-18 mesi)',
-    description_en:  'Short-term lease 1-18mo, ~12% higher rent, 10% cedolare. Higher vacancy and management cost.',
-    description_it: 'Contratto breve 1-18 mesi, canone ~12% superiore, cedolare 10%. Maggior vacancy e costi gestione.',
+    description_en:  'Short-term lease 1-18mo, ~12% higher rent BUT owner pays utilities (~€150/mo net) + furnishing amortisation (~2.5%/yr). Premium often eaten by these costs.',
+    description_it: 'Contratto breve 1-18 mesi, canone ~12% superiore MA proprietario paga utenze (~150€/me netti) + ammortamento mobili (~2,5%/anno). Il premio viene spesso eroso da questi costi.',
   },
 };
 
@@ -9863,8 +9901,17 @@ function computeScenario(listing, financingKey, contractKey) {
   const totalCondoAnnual = (listing.condominium_fees || listing.spese_condominiali || 100) * 12;
   const condoAnnual      = totalCondoAnnual * OWNER_CONDO_SHARE;
 
+  // Transitorio-only ownership-side costs (zero for libero/concordato).
+  // Together they typically erase ~3-5 pp of the rent premium.
+  const utilitiesAnnual  = Number(con.utilities_owner_cost) || 0;
+  const furnishingAnnual = (Number(con.furnishing_amort_pct) || 0) * price;
+  const insuranceAnnual  = Number(con.insurance_annual)      || 0;
+  const marketingAnnual  = Number(con.marketing_annual)      || 0;
+
   const netRentAnnual   = collectedRent - cedolareAnnual - imuAnnual
-                        - maintAnnual  - condoAnnual;
+                        - maintAnnual  - condoAnnual
+                        - utilitiesAnnual - furnishingAnnual
+                        - insuranceAnnual - marketingAnnual;
 
   // ── Financing side ──────────────────────────────────────────────────
   const purchaseCostRate = PURCHASE_COSTS[financingKey] ?? 0.11;
@@ -9890,6 +9937,17 @@ function computeScenario(listing, financingKey, contractKey) {
       : 0;
     mortgageAnnual = monthlyPmt * 12;
   }
+
+  // Transitorio needs a furnished property — the owner funds €8-15k of
+  // furniture before the first lease. Capped on both ends so cheap
+  // and expensive properties land in the realistic range.
+  // Added to cashInvested so per-cash yields correctly reflect the
+  // higher capital requirement (drops cashOnCash a few percentage
+  // points compared to the rent-premium-only model).
+  const upfrontFurnishing = contractKey === 'transitorio'
+    ? Math.min(15000, Math.max(8000, price * 0.025))
+    : 0;
+  cashInvested += upfrontFurnishing;
 
   let cashFlowAnnual = netRentAnnual - mortgageAnnual;
   let cashFlowMonth  = cashFlowAnnual / 12;
@@ -9985,6 +10043,12 @@ function computeScenario(listing, financingKey, contractKey) {
     mgmtAnnual,
     effectiveMgmtPct,        // 0 when self-managed; con.mgmt_pct otherwise
     selfManaged: window._selfManaged !== false,
+    // Transitorio-specific cost lines (zero for libero/concordato)
+    utilitiesAnnual,
+    furnishingAnnual,
+    insuranceAnnual,
+    marketingAnnual,
+    upfrontFurnishing,
     // Outputs
     netRentAnnual,
     cashFlowAnnual,
@@ -16489,7 +16553,11 @@ function renderScenarioBreakdown(scenario, listing) {
   const fmtPct = n => formatPct(n * 100);
 
   const downPayment = (listing.price || 0) * (1 - fin.ltv);
-  const purchaseCostsOnly = scenario.cashInvested - downPayment;
+  // cashInvested now also includes upfrontFurnishing for transitorio (Fix 1).
+  // Subtract it out so the "purchase costs" line stays clean — the furnishing
+  // outlay gets its own row below.
+  const upfrontFurn      = Number(scenario.upfrontFurnishing) || 0;
+  const purchaseCostsOnly = scenario.cashInvested - downPayment - upfrontFurn;
 
   // Fix 5: primary-residence phase split. Rendered above the 3-column
   // grid so the user reads the two distinct phases (housing cost vs
@@ -16555,6 +16623,26 @@ function renderScenarioBreakdown(scenario, listing) {
             tenant: fmt(scenario.totalCondoAnnual * (1 - OWNER_CONDO_SHARE)),
           })}</span>
         </div>
+        ${scenario.utilitiesAnnual > 0 ? `
+        <div class="breakdown-row breakdown-deduction">
+          <span>− ${t('breakdown.utilities')}</span>
+          <span>−${fmt(scenario.utilitiesAnnual)}</span>
+        </div>` : ''}
+        ${scenario.furnishingAnnual > 0 ? `
+        <div class="breakdown-row breakdown-deduction">
+          <span>− ${t('breakdown.furnishing_amort')}</span>
+          <span>−${fmt(scenario.furnishingAnnual)}</span>
+        </div>` : ''}
+        ${scenario.insuranceAnnual > 0 ? `
+        <div class="breakdown-row breakdown-deduction">
+          <span>− ${t('breakdown.insurance')}</span>
+          <span>−${fmt(scenario.insuranceAnnual)}</span>
+        </div>` : ''}
+        ${scenario.marketingAnnual > 0 ? `
+        <div class="breakdown-row breakdown-deduction">
+          <span>− ${t('breakdown.marketing')}</span>
+          <span>−${fmt(scenario.marketingAnnual)}</span>
+        </div>` : ''}
         <div class="breakdown-row breakdown-total">
           <span>${t('breakdown.net_rent_annual')}</span>
           <span>${fmt(scenario.netRentAnnual)}/yr</span>
@@ -16576,6 +16664,11 @@ function renderScenarioBreakdown(scenario, listing) {
           <span>${t('breakdown.purchase_costs')}</span>
           <span>${fmt(purchaseCostsOnly)}</span>
         </div>
+        ${upfrontFurn > 0 ? `
+        <div class="breakdown-row">
+          <span>${t('breakdown.furnishing_upfront')}</span>
+          <span>${fmt(upfrontFurn)}</span>
+        </div>` : ''}
         <div class="breakdown-row breakdown-total">
           <span>${t('breakdown.cash_invested')}</span>
           <span>${fmt(scenario.cashInvested)}</span>

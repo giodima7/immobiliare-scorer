@@ -230,39 +230,58 @@ FINANCING_PROFILES: dict[str, dict] = {
 #   libero       8 %   full management of a 4-yr lease
 #   concordato   5 %   longer lease, less turnover, lighter agency work
 #   transitorio 12 %   high turnover, vet-and-sign every 6-18 months
+#
+# Transitorio also carries four ownership-side costs that libero /
+# concordato do not: owner pays utilities (~€150/mo net of tenant
+# forfait), furnishing depreciates (~2.5 %/yr of price), property
+# insurance is mandatory because the unit is furnished, and the owner
+# pays marketing/agency placement between leases. Net effect: ~3-5 pp
+# lower returns vs the rent-premium-only model.
 CONTRACT_PROFILES: dict[str, dict] = {
     "libero": {
-        "rent_factor":    1.00,
-        "cedolare_rate":  0.21,
-        "imu_discount":   0.00,
-        "vacancy_months": 1.0,
-        "mgmt_pct":       0.08,
+        "rent_factor":          1.00,
+        "cedolare_rate":        0.21,
+        "imu_discount":         0.00,
+        "vacancy_months":       1.0,
+        "mgmt_pct":             0.08,
+        "utilities_owner_cost": 0,
+        "furnishing_amort_pct": 0,
+        "insurance_annual":     0,
+        "marketing_annual":     0,
         "label_en":       "Canone libero (4+4)",
         "label_it":       "Canone libero (4+4)",
         "description_en": "4-year lease, full market rent, standard 21% cedolare tax.",
         "description_it": "Contratto 4+4 anni, canone di mercato, cedolare secca 21%.",
     },
     "concordato": {
-        "rent_factor":    0.72,     # ~28% below libero on average
-        "cedolare_rate":  0.10,
-        "imu_discount":   0.25,
-        "vacancy_months": 0.5,
-        "mgmt_pct":       0.05,
+        "rent_factor":          0.72,
+        "cedolare_rate":        0.10,
+        "imu_discount":         0.25,
+        "vacancy_months":       0.5,
+        "mgmt_pct":             0.05,
+        "utilities_owner_cost": 0,
+        "furnishing_amort_pct": 0,
+        "insurance_annual":     0,
+        "marketing_annual":     0,
         "label_en":       "Canone concordato (3+2)",
         "label_it":       "Canone concordato (3+2)",
         "description_en": "3+2 year lease, ~28% lower rent, 10% cedolare + 25% IMU discount.",
         "description_it": "Contratto 3+2 anni, canone ~28% inferiore, cedolare 10% + IMU -25%.",
     },
     "transitorio": {
-        "rent_factor":    1.12,     # 10-15% above libero (often furnished)
-        "cedolare_rate":  0.10,
-        "imu_discount":   0.25,
-        "vacancy_months": 2.0,      # higher vacancy due to short terms
-        "mgmt_pct":       0.12,
+        "rent_factor":          1.12,
+        "cedolare_rate":        0.10,
+        "imu_discount":         0.25,
+        "vacancy_months":       2.0,
+        "mgmt_pct":             0.12,
+        "utilities_owner_cost": 1500,   # owner eats €1.5k/yr net of tenant forfait
+        "furnishing_amort_pct": 0.025,  # €8-15k furnishing / 5-7yr ≈ 2.5%/yr of price
+        "insurance_annual":     300,
+        "marketing_annual":     300,
         "label_en":       "Transitorio (1-18mo)",
         "label_it":       "Transitorio (1-18 mesi)",
-        "description_en": "Short-term lease 1-18mo, ~12% higher rent, 10% cedolare. Higher vacancy and management cost.",
-        "description_it": "Contratto breve 1-18 mesi, canone ~12% superiore, cedolare 10%. Maggior vacancy e costi gestione.",
+        "description_en": "Short-term lease 1-18mo, ~12% higher rent BUT owner pays utilities (~€150/mo net) + furnishing amortisation (~2.5%/yr). Premium often eaten by these costs.",
+        "description_it": "Contratto breve 1-18 mesi, canone ~12% superiore MA proprietario paga utenze (~150€/me netti) + ammortamento mobili (~2,5%/anno). Il premio viene spesso eroso da questi costi.",
     },
 }
 
