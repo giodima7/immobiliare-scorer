@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-20 pill-thumb-recount">
+<meta name="lume-build" content="2026-05-20 hidden-gem-tighten">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -12619,7 +12619,11 @@ function renderRentalCard(l) {
     if (dp != null && med != null) {
       const abs   = Math.abs(dp).toFixed(1);
       const psqm  = `€${med}/m²/mo`;
-      const vars  = { pct: abs, psqm: `${psqm} · ${confL}`, conf: confL, n };
+      // {psqm} and {conf} are interpolated separately by the callout
+      // templates ("...({psqm} · {conf})"). Pre-concatenating the
+      // confidence into psqm here used to double-print it, e.g.
+      // "(€31.5/m²/mo · Lume is fairly sure · Lume is fairly sure)".
+      const vars  = { pct: abs, psqm, conf: confL, n };
       // Wrap the badge name in <strong> in the templated output.
       // The translated headline contains placeholders, not literal HTML, so
       // we substitute the variable, then bold the leading badge phrase.

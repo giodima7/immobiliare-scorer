@@ -196,10 +196,34 @@ def is_hidden_gem(listing: dict, settings: dict | None = None) -> bool:
     A Hidden Gem must be excellent on ALL dimensions simultaneously.
     No single strong signal compensates for weakness elsewhere.
     Thresholds are read from settings (or _DEFAULT_SETTINGS if not provided).
+
+    Beyond the standard score gates this also enforces two physical
+    sanity-checks that the abstract scores can miss:
+      • metro within `gem_metro_max_m` (real walkability, not just a
+        "well-connected fascia" inference from the location score)
+      • at least `gem_min_sqm_per_room` of floor area per room (avoids
+        crammed 45 m² 2-locale flats slipping in as "gems")
     """
     if settings is None:
         settings = _load_settings()
     delta = listing.get("comps_delta_pct")
+
+    # Metro proximity gate. None = unknown; treat as failing the gate
+    # because we can't prove the listing is actually walk-to-metro.
+    metro_max = settings.get("gem_metro_max_m", 800)
+    metro_dist = listing.get("metro_nearest_dist_m")
+    if metro_max and (metro_dist is None or metro_dist > metro_max):
+        return False
+
+    # Cramped-flat gate. A 45 m² flat marketed as a 2-locale (≈22.5 m²
+    # per room) is borderline; anything below the threshold is too tight
+    # to be a "gem" no matter how cheap it is per m².
+    min_spr = settings.get("gem_min_sqm_per_room", 0)
+    sqm     = listing.get("sqm")
+    rooms   = listing.get("rooms")
+    if min_spr and sqm and rooms and rooms > 0 and (sqm / rooms) < min_spr:
+        return False
+
     return (
         (listing.get("score_total") or 0)                                      >= settings.get("gem_total_min",      72)   and
         (listing.get("ldi_score") or 0)                                        >= settings.get("gem_ldi_min",         65)   and
@@ -259,21 +283,26 @@ _DEFAULT_SETTINGS: dict = {
     "radii":    [500, 800, 1200],
     "min_comps": 5,
     # Hidden Gem badge thresholds
-    "gem_total_min":      72,
-    "gem_ldi_min":        65,
-    "gem_delta_max":      -8.0,
-    "gem_property_min":   50,
-    "gem_location_min":   45,
-    "gem_confidence_min": 40,
-    "gem_penalty_min":    70,
+    # Tightened 2026-05-20 — the old bar let a 45 m² 1-bed 10 min from
+    # the nearest metro pass as a "gem" purely on a -18 % comps delta.
+    # Hidden Gem now also requires walkable metro + non-cramped layout.
+    "gem_total_min":      80,
+    "gem_ldi_min":        70,
+    "gem_delta_max":      -12.0,
+    "gem_property_min":   62,
+    "gem_location_min":   62,
+    "gem_confidence_min": 60,
+    "gem_penalty_min":    75,
+    "gem_metro_max_m":    800,     # ≈ 10-min walk; None disables the gate
+    "gem_min_sqm_per_room": 22,    # crammed-flat filter
     # Great Value badge thresholds
-    "gv_total_min":       65,
-    "gv_ldi_min":         45,
-    "gv_delta_max":       -5.0,
-    "gv_property_min":    40,
-    "gv_location_min":    35,
-    "gv_confidence_min":  30,
-    "gv_penalty_min":     55,
+    "gv_total_min":       70,
+    "gv_ldi_min":         50,
+    "gv_delta_max":       -7.0,
+    "gv_property_min":    50,
+    "gv_location_min":    50,
+    "gv_confidence_min":  45,
+    "gv_penalty_min":     60,
 }
 
 
