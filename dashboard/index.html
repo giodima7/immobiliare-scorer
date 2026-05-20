@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-20 scenario-engine">
+<meta name="lume-build" content="2026-05-20 scenario-ui">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -3222,6 +3222,349 @@ body.detail-page-active .detail-header {
 }
 .gem-tab.active             { background: var(--green-deep); color: #fff; }
 .gem-tab:hover:not(.active) { background: var(--border-strong); color: var(--text-primary); }
+
+/* ── Investor scenario engine: card + detail page styles ───────────────── */
+
+/* Best-scenario banner (card investor view). Sits above the 4-pill row;
+   communicates which financing × contract combo the engine picked. */
+.best-scenario-banner {
+  background: linear-gradient(135deg, #E6F4ED 0%, #D8EDE0 100%);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  margin: 8px 16px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.best-scenario-tag {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--green-deep);
+}
+.best-scenario-combo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-align: right;
+}
+.best-scenario-fin, .best-scenario-con { white-space: nowrap; }
+.best-scenario-plus  { color: var(--text-muted); font-weight: 400; }
+
+/* 4-pill metric strip (card investor view). */
+.scenario-pills {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin: 0 16px 10px;
+}
+.scenario-pill {
+  background: var(--bg-muted);
+  border-radius: var(--radius-md);
+  padding: 8px 6px;
+  text-align: center;
+  border: 1px solid transparent;
+}
+.scenario-pill-label {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.scenario-pill-value {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1.1;
+}
+.scenario-pill-sub {
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--text-muted);
+  line-height: 1;
+  margin-top: 2px;
+}
+.scenario-pill-strong   { background: #E6F4ED; border-color: #2A7A5A; }
+.scenario-pill-strong   .scenario-pill-value { color: #2A7A5A; }
+.scenario-pill-decent   { background: #F0F7E8; border-color: #6BA84F; }
+.scenario-pill-decent   .scenario-pill-value { color: #6BA84F; }
+.scenario-pill-mediocre { background: #FFF9E6; border-color: #E8922A; }
+.scenario-pill-mediocre .scenario-pill-value { color: #B85C00; }
+.scenario-pill-weak     { background: #FDEEEC; border-color: #C0392B; }
+.scenario-pill-weak     .scenario-pill-value { color: #C0392B; }
+.scenario-pill-cf-positive .scenario-pill-value { color: #2A7A5A; }
+.scenario-pill-cf-neutral  .scenario-pill-value { color: var(--text-primary); }
+.scenario-pill-cf-negative .scenario-pill-value { color: #C0392B; }
+
+/* One-line explanation under the 4 pills. */
+.scenario-explanation {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  padding: 8px 12px;
+  background: var(--bg-muted);
+  border-radius: var(--radius-md);
+  margin: 0 16px 10px;
+}
+
+/* "See all 9 scenarios" CTA — opens the detail page. */
+.btn-full-analysis {
+  display: block;
+  width: calc(100% - 32px);
+  margin: 0 16px 12px;
+  padding: 10px 16px;
+  background: var(--green-deep);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+.btn-full-analysis:hover { background: #235F47; }
+
+.card-no-investor {
+  padding: 16px;
+  margin: 8px 16px;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+  background: var(--bg-muted);
+  border-radius: var(--radius-md);
+}
+
+/* ── Detail page scenarios section ─────────────────────────────────────── */
+.best-scenario-callout {
+  display: flex;
+  gap: 14px;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #E6F4ED 0%, #D8EDE0 100%);
+  border-radius: var(--radius-lg);
+  margin-bottom: 24px;
+  border-left: 4px solid var(--green-deep);
+}
+.best-scenario-callout-icon { font-size: 28px; line-height: 1; flex-shrink: 0; }
+.best-scenario-callout-content { flex: 1; min-width: 0; }
+.best-scenario-callout-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+.best-scenario-callout-explanation {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+.best-scenario-callout-metric {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--green-deep);
+  line-height: 1;
+}
+.best-scenario-callout-metric-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-left: 8px;
+}
+
+/* 3×3 matrix table. */
+.scenario-matrix-wrapper { margin-bottom: 24px; overflow-x: auto; }
+.scenario-matrix-header { margin-bottom: 12px; }
+.scenario-matrix-header-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.scenario-matrix {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 4px;
+  table-layout: fixed;
+  min-width: 540px;
+}
+.matrix-col-header, .matrix-row-header {
+  background: var(--bg-muted);
+  padding: 10px 8px;
+  font-weight: 700;
+  text-align: center;
+  border-radius: var(--radius-md);
+}
+.matrix-row-header { text-align: left; padding: 10px 12px; }
+.matrix-col-title, .matrix-row-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+.matrix-col-sub, .matrix-row-sub {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+.matrix-cell {
+  padding: 16px 8px;
+  text-align: center;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
+  border: 2px solid transparent;
+  position: relative;
+}
+.matrix-cell:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+}
+.matrix-cell-value {
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+.matrix-cell-sub {
+  font-size: 10px;
+  font-weight: 500;
+  margin-top: 3px;
+  opacity: 0.75;
+}
+.matrix-cell-star {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font-size: 12px;
+  pointer-events: none;
+}
+.matrix-cell-strong   { background: #E6F4ED; color: #2A7A5A; }
+.matrix-cell-decent   { background: #F0F7E8; color: #6BA84F; }
+.matrix-cell-mediocre { background: #FFF9E6; color: #B85C00; }
+.matrix-cell-weak     { background: #FDEEEC; color: #C0392B; }
+.matrix-cell-avoid    { background: #F5E0DD; color: #8B0000; }
+.matrix-cell-ineligible {
+  background: var(--bg-muted);
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.matrix-cell-ineligible:hover { transform: none; box-shadow: none; }
+.matrix-cell-selected {
+  border-color: var(--text-primary);
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--text-primary);
+}
+
+.matrix-legend {
+  display: flex;
+  gap: 16px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.matrix-legend-item { display: inline-flex; align-items: center; gap: 5px; }
+.legend-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  display: inline-block;
+}
+.legend-strong   { background: #2A7A5A; }
+.legend-decent   { background: #6BA84F; }
+.legend-mediocre { background: #E8922A; }
+.legend-weak     { background: #C0392B; }
+
+/* Selected-scenario 3-column breakdown. */
+.scenario-breakdown { margin-bottom: 24px; }
+.breakdown-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 760px) {
+  .breakdown-grid { grid-template-columns: 1fr; }
+}
+.breakdown-section {
+  background: var(--bg-muted);
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+}
+.breakdown-section-returns { background: #E6F4ED; }
+.breakdown-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0 0 12px 0;
+  color: var(--text-primary);
+}
+.breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 7px 0;
+  font-size: 13px;
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+}
+.breakdown-row:last-child { border-bottom: none; }
+.breakdown-row > span:first-child { color: var(--text-secondary); }
+.breakdown-row > span:last-child  { font-weight: 600; color: var(--text-primary); }
+.breakdown-deduction > span:last-child { color: #C0392B; }
+.breakdown-total {
+  padding-top: 10px;
+  margin-top: 6px;
+  border-top: 1.5px solid var(--border) !important;
+  border-bottom: none !important;
+  font-weight: 700;
+}
+.breakdown-total > span:first-child { color: var(--text-primary); font-weight: 700; }
+.breakdown-total > span:last-child  { color: var(--text-primary); font-size: 14px; }
+.breakdown-total-positive > span:last-child { color: #2A7A5A; }
+.breakdown-total-negative > span:last-child { color: #C0392B; }
+.breakdown-total-headline > span:last-child {
+  font-size: 20px;
+  color: var(--green-deep);
+}
+
+.scenario-assumptions {
+  margin-top: 16px;
+  font-size: 12px;
+}
+.scenario-assumptions summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-weight: 600;
+  padding: 6px 0;
+  user-select: none;
+}
+.scenario-assumptions summary:hover { color: var(--text-primary); }
+.assumptions-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 16px;
+  padding: 10px 0;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+@media (max-width: 500px) {
+  .assumptions-grid { grid-template-columns: 1fr; }
+}
+.detail-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-muted);
+  background: var(--bg-muted);
+  border-radius: var(--radius-md);
+}
 
 /* ── Variant A card layout ── */
 
@@ -8409,6 +8752,58 @@ const STRINGS = {
     'scenario.reason.no_rent_estimate':            'No rent estimate available',
     'scenario.reason.concordato_not_available':    'Canone concordato unavailable in this city',
     'scenario.reason.transitorio_zone_not_qualified': 'Zone not eligible for transitorio',
+    // Card investor view (Prompt 2)
+    'investor.best_scenario':     'Best for this property',
+    'investor.pill.annualised':   'Total',
+    'investor.pill.net_yield':    'Net yield',
+    'investor.pill.after_tax':    'after tax',
+    'investor.pill.rent':         'Rent',
+    'investor.pill.cf':           'Cash flow',
+    'investor.see_all_scenarios': '📊 See all 9 scenarios',
+    'investor.no_data':           'Limited data — full investor view not available',
+    // Detail page scenarios section
+    'detail.section.scenarios':    'Investment scenarios',
+    'detail.scenarios.subtitle':   'How does this property perform under different financing and rental strategies?',
+    'detail.scenarios.best_label': 'Best for your situation',
+    'detail.scenarios.compare_all':'Compare all combinations',
+    'detail.scenarios.assumptions':'Show calculation assumptions',
+    'detail.scenarios.annualised_label':'annualised 10yr return',
+    'detail.scenarios.no_positive':'No scenarios produce positive returns for this listing.',
+    'detail.scenarios.legend_strong':  'Strong',
+    'detail.scenarios.legend_decent':  'Decent',
+    'detail.scenarios.legend_mediocre':'Mediocre',
+    'detail.scenarios.legend_weak':    'Weak',
+    'detail.scenarios.ineligible_concordato_not_available':       'Canone concordato not available in this city',
+    'detail.scenarios.ineligible_transitorio_zone_not_qualified': 'Zone does not qualify for transitorio (need centro / university / business district)',
+    'detail.scenarios.ineligible_no_rent_estimate':               'Insufficient rental data',
+    // Breakdown labels
+    'breakdown.income':           'Income',
+    'breakdown.gross_rent':       'Gross rent',
+    'breakdown.vacancy':          'Vacancy',
+    'breakdown.management':       'Management',
+    'breakdown.cedolare':         'Cedolare secca',
+    'breakdown.imu':              'IMU',
+    'breakdown.maintenance':      'Maintenance',
+    'breakdown.condo_fees':       'Condo fees',
+    'breakdown.net_rent_annual':  'Net rental income',
+    'breakdown.financing':        'Financing',
+    'breakdown.profile':          'Profile',
+    'breakdown.purchase_price':   'Purchase price',
+    'breakdown.purchase_costs':   'Purchase costs (registro + notary)',
+    'breakdown.cash_invested':    'Total cash invested',
+    'breakdown.mortgage_monthly': 'Mortgage payment',
+    'breakdown.monthly_cash_flow':'Net monthly cash flow',
+    'breakdown.returns':          'Returns',
+    'breakdown.gross_yield':      'Gross yield',
+    'breakdown.net_yield_on_cash':'Net yield on cash',
+    'breakdown.appreciation':     'Capital appreciation',
+    'breakdown.annualised_10yr':  'Annualised 10yr return',
+    'assumptions.appreciation':   'Appreciation',
+    'assumptions.maintenance':    'Maintenance',
+    'assumptions.imu':            'IMU',
+    'assumptions.purchase_costs': 'Purchase costs',
+    'assumptions.mortgage_invest':'Mortgage invest',
+    'assumptions.mortgage_primary':'Mortgage primary',
   },
   it: {
     // Tabs
@@ -8595,6 +8990,58 @@ const STRINGS = {
     'scenario.reason.no_rent_estimate':            'Stima del canone non disponibile',
     'scenario.reason.concordato_not_available':    'Canone concordato non disponibile in questa città',
     'scenario.reason.transitorio_zone_not_qualified': 'Zona non idonea al transitorio',
+    // Card investor view (Prompt 2)
+    'investor.best_scenario':     'Migliore per questa proprietà',
+    'investor.pill.annualised':   'Totale',
+    'investor.pill.net_yield':    'Rendimento netto',
+    'investor.pill.after_tax':    'dopo tasse',
+    'investor.pill.rent':         'Canone',
+    'investor.pill.cf':           'Cash flow',
+    'investor.see_all_scenarios': '📊 Vedi tutti i 9 scenari',
+    'investor.no_data':           'Dati limitati — vista investitore completa non disponibile',
+    // Detail page scenarios section
+    'detail.section.scenarios':    'Scenari di investimento',
+    'detail.scenarios.subtitle':   'Come performa questa proprietà con diverse strategie di finanziamento e affitto?',
+    'detail.scenarios.best_label': 'Migliore per la tua situazione',
+    'detail.scenarios.compare_all':'Confronta tutte le combinazioni',
+    'detail.scenarios.assumptions':'Mostra ipotesi di calcolo',
+    'detail.scenarios.annualised_label':'rendimento annualizzato 10 anni',
+    'detail.scenarios.no_positive':'Nessuno scenario produce un rendimento positivo per questo annuncio.',
+    'detail.scenarios.legend_strong':  'Forte',
+    'detail.scenarios.legend_decent':  'Discreto',
+    'detail.scenarios.legend_mediocre':'Mediocre',
+    'detail.scenarios.legend_weak':    'Debole',
+    'detail.scenarios.ineligible_concordato_not_available':       'Canone concordato non disponibile in questa città',
+    'detail.scenarios.ineligible_transitorio_zone_not_qualified': 'Zona non qualificata per il transitorio (serve centro / università / zona business)',
+    'detail.scenarios.ineligible_no_rent_estimate':               'Dati affitto insufficienti',
+    // Breakdown labels
+    'breakdown.income':           'Entrate',
+    'breakdown.gross_rent':       'Canone lordo',
+    'breakdown.vacancy':          'Vacanza',
+    'breakdown.management':       'Gestione',
+    'breakdown.cedolare':         'Cedolare secca',
+    'breakdown.imu':              'IMU',
+    'breakdown.maintenance':      'Manutenzione',
+    'breakdown.condo_fees':       'Spese condominiali',
+    'breakdown.net_rent_annual':  'Reddito netto da locazione',
+    'breakdown.financing':        'Finanziamento',
+    'breakdown.profile':          'Profilo',
+    'breakdown.purchase_price':   'Prezzo di acquisto',
+    'breakdown.purchase_costs':   'Costi di acquisto (registro + notaio)',
+    'breakdown.cash_invested':    'Capitale impegnato totale',
+    'breakdown.mortgage_monthly': 'Rata mutuo',
+    'breakdown.monthly_cash_flow':'Flusso di cassa netto mensile',
+    'breakdown.returns':          'Rendimenti',
+    'breakdown.gross_yield':      'Rendimento lordo',
+    'breakdown.net_yield_on_cash':'Rendimento netto sul capitale',
+    'breakdown.appreciation':     'Apprezzamento capitale',
+    'breakdown.annualised_10yr':  'Rendimento annualizzato 10 anni',
+    'assumptions.appreciation':   'Apprezzamento',
+    'assumptions.maintenance':    'Manutenzione',
+    'assumptions.imu':            'IMU',
+    'assumptions.purchase_costs': 'Costi di acquisto',
+    'assumptions.mortgage_invest':'Mutuo investimento',
+    'assumptions.mortgage_primary':'Mutuo prima casa',
   },
 };
 
@@ -14568,6 +15015,86 @@ function investorHeadline(l) {
   return `Yield not computable — limited rental data for this zone/size`;
 }
 
+// ── Scenario-based card investor block ────────────────────────────────────
+// Replaces the old 5-pill row + projection summary + full-analysis button
+// stack with a single focused view: best scenario banner → 4 metric pills
+// → one-line explanation → button to the detail page (where the 3×3
+// matrix lives). All numbers come from pickBestScenario() so the card
+// always reflects the optimal financing × contract combo.
+function investorCardHtml(listing) {
+  const m = investorCardMetrics(listing);
+  if (!m.available) {
+    return `<div class="card-no-investor">
+      ⚠ ${t('investor.no_data') || 'Limited data — full investor view not available'}
+    </div>`;
+  }
+
+  const cfColor = m.cashFlowMonth >=    0 ? 'positive'
+                 : m.cashFlowMonth >= -300 ? 'neutral'
+                                           : 'negative';
+
+  const returnColor = m.annualised10yr >= 8 ? 'strong'
+                    : m.annualised10yr >= 5 ? 'decent'
+                    : m.annualised10yr >= 3 ? 'mediocre'
+                    :                          'weak';
+
+  const finLabel = t(`scenario.fin.${m.financingKey}`) || m.financingLabel;
+  const conLabel = t(`scenario.con.${m.contractKey}`)  || m.contractLabel;
+
+  // Italian locale uses dot for thousands; English uses comma. Currency
+  // numbers in the rest of the card use it-IT throughout, so match.
+  const _locale = (currentLang === 'it') ? 'it-IT' : 'en-US';
+  const fmtN = n => Number(n).toLocaleString(_locale);
+  const cfSign = m.cashFlowMonth >= 0 ? '+' : '−';
+  const cfAbs  = Math.abs(m.cashFlowMonth);
+
+  return `
+    <!-- Best scenario summary banner -->
+    <div class="best-scenario-banner">
+      <div class="best-scenario-tag">${t('investor.best_scenario')}</div>
+      <div class="best-scenario-combo">
+        <span class="best-scenario-fin">${escapeHtml(finLabel)}</span>
+        <span class="best-scenario-plus">+</span>
+        <span class="best-scenario-con">${escapeHtml(conLabel)}</span>
+      </div>
+    </div>
+
+    <!-- Key metrics row (4 pills) -->
+    <div class="scenario-pills">
+      <div class="scenario-pill scenario-pill-${returnColor}">
+        <div class="scenario-pill-label">${t('investor.pill.annualised')}</div>
+        <div class="scenario-pill-value">${m.annualised10yr.toFixed(1)}%</div>
+        <div class="scenario-pill-sub">10yr</div>
+      </div>
+      <div class="scenario-pill">
+        <div class="scenario-pill-label">${t('investor.pill.net_yield')}</div>
+        <div class="scenario-pill-value">${m.netYield.toFixed(1)}%</div>
+        <div class="scenario-pill-sub">${t('investor.pill.after_tax')}</div>
+      </div>
+      <div class="scenario-pill">
+        <div class="scenario-pill-label">${t('investor.pill.rent')}</div>
+        <div class="scenario-pill-value">€${fmtN(m.rentMo)}</div>
+        <div class="scenario-pill-sub">/mo</div>
+      </div>
+      <div class="scenario-pill scenario-pill-cf-${cfColor}">
+        <div class="scenario-pill-label">${t('investor.pill.cf')}</div>
+        <div class="scenario-pill-value">${cfSign}€${fmtN(cfAbs)}</div>
+        <div class="scenario-pill-sub">/mo</div>
+      </div>
+    </div>
+
+    <!-- Explanation -->
+    <div class="scenario-explanation">
+      💡 ${escapeHtml(m.explanation)}
+    </div>
+
+    <!-- Link to full analysis -->
+    <button class="btn-full-analysis"
+            onclick="event.stopPropagation(); Router.openDetail('${escapeAttr(String(listing.id))}')">
+      ${t('investor.see_all_scenarios')}
+    </button>`;
+}
+
 // ── Investor view: appreciation projection ─────────────────────────────────
 // Total return at 1Y / 5Y / 10Y horizons, combining cumulative cash flow,
 // principal pay-down (mortgage amortisation), and price appreciation.
@@ -15038,12 +15565,19 @@ function renderDetailPage(listingId) {
     return;
   }
 
+  // selectScenario() needs the current listing — stash it on window so
+  // the top-level click handler (a non-closure function) can read it.
+  window._currentDetailListing = listing;
+
   const body = document.getElementById('detail-body');
   if (!body) return;
   body.innerHTML = [
     detailHeroHtml(listing),
     detailVerdictHtml(listing),
-    detailFinancialAnalysisHtml(listing),
+    // Scenario engine view replaces the old IRR/DSCR/multiplier section.
+    // detailCostBreakdownHtml + detailMortgageScenariosHtml stay below as
+    // supplementary detail for users who want the legacy breakdown.
+    detailScenariosHtml(listing),
     detailCostBreakdownHtml(listing),
     detailMortgageScenariosHtml(listing),
     detailComparableRentalsHtml(listing),
@@ -15482,6 +16016,321 @@ function detailVerdictHtml(listing) {
 }
 
 // ── Investment analysis (Phase A: pro metrics + IRR + tax + sensitivity) ──
+// ── Detail page: 3×3 investment scenarios matrix ─────────────────────────
+// Centrepiece of the investor detail view. Three regions:
+//   1. Best-scenario callout — the winning combo + explanation + the
+//      annualised 10yr headline figure
+//   2. 3×3 matrix — financing rows × contract columns, colour-coded by
+//      annualised return tier, click to drill in
+//   3. Selected-scenario breakdown — income / financing / returns
+//      side-by-side, swapped out by selectScenario() on every cell click
+function detailScenariosHtml(listing) {
+  const { scenario: best, allScenarios, explanation } = pickBestScenario(listing);
+  if (!best) {
+    return `<div class="detail-section detail-scenarios">
+      <div class="detail-section-header">
+        <h2>${t('detail.section.scenarios')}</h2>
+      </div>
+      <div class="detail-empty">${t('detail.scenarios.no_positive') || 'No scenarios produce positive returns for this listing.'}</div>
+    </div>`;
+  }
+
+  // Selected scenario starts as the picker's choice; selectScenario()
+  // updates this on click. Kept on window so the click handler (a
+  // top-level function, not a closure) can read it back.
+  window._selectedScenario = {
+    financingKey: best.financingKey,
+    contractKey:  best.contractKey,
+  };
+
+  const finLabel = t(`scenario.fin.${best.financingKey}`) || FINANCING_PROFILES[best.financingKey].label_en;
+  const conLabel = t(`scenario.con.${best.contractKey}`)  || CONTRACT_PROFILES[best.contractKey].label_en;
+
+  return `
+    <div class="detail-section detail-scenarios">
+      <div class="detail-section-header">
+        <h2>${t('detail.section.scenarios')}</h2>
+        <span class="detail-section-sub">${t('detail.scenarios.subtitle')}</span>
+      </div>
+
+      <!-- Best scenario callout -->
+      <div class="best-scenario-callout">
+        <div class="best-scenario-callout-icon">⭐</div>
+        <div class="best-scenario-callout-content">
+          <div class="best-scenario-callout-title">
+            ${t('detail.scenarios.best_label')}: ${escapeHtml(finLabel)} + ${escapeHtml(conLabel)}
+          </div>
+          <div class="best-scenario-callout-explanation">${escapeHtml(explanation)}</div>
+          <div class="best-scenario-callout-metric">
+            ${(best.annualised10yr * 100).toFixed(1)}%
+            <span class="best-scenario-callout-metric-label">${t('detail.scenarios.annualised_label') || 'annualised 10yr return'}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3×3 matrix -->
+      <div class="scenario-matrix-wrapper">
+        <div class="scenario-matrix-header">
+          <div class="scenario-matrix-header-label">${t('detail.scenarios.compare_all')}</div>
+        </div>
+        ${renderScenarioMatrix(allScenarios, best.financingKey, best.contractKey)}
+      </div>
+
+      <!-- Selected scenario breakdown (swapped on cell click) -->
+      <div id="scenario-breakdown" class="scenario-breakdown">
+        ${renderScenarioBreakdown(best, listing)}
+      </div>
+
+      <!-- Assumptions disclosure -->
+      <details class="scenario-assumptions">
+        <summary>${t('detail.scenarios.assumptions')}</summary>
+        ${renderScenarioAssumptions(listing)}
+      </details>
+    </div>`;
+}
+
+// 3×3 matrix renderer. Cells are colour-coded by annualised 10yr return
+// tier (strong / decent / mediocre / weak / avoid) so the eye can pick
+// the winning quadrant before reading any numbers. The best-scenario
+// cell carries a ⭐ and starts as the selected (clicked) cell.
+function renderScenarioMatrix(scenarios, bestFin, bestCon) {
+  const financings = ['cash', 'mortgage_invest', 'mortgage_primary'];
+  const contracts  = ['libero', 'concordato', 'transitorio'];
+  const finOrder   = financings;
+  const conOrder   = contracts;
+
+  // Map keyed by "fin_con" for O(1) cell lookup.
+  const cellByKey = {};
+  for (const s of scenarios) {
+    if (s.financingKey && s.contractKey) {
+      cellByKey[`${s.financingKey}_${s.contractKey}`] = s;
+    }
+  }
+
+  const cellHtml = (fin, con) => {
+    const s = cellByKey[`${fin}_${con}`];
+    if (!s) return '<td class="matrix-cell matrix-cell-ineligible"><div class="matrix-cell-value">—</div></td>';
+
+    const isBest     = fin === bestFin && con === bestCon;
+    const isSelected = isBest;   // initial state — selectScenario() flips on click
+
+    if (!s.eligible) {
+      const reasonKey = `detail.scenarios.ineligible_${s.reason || 'no_rent_estimate'}`;
+      const reason    = t(reasonKey) || 'Not available for this listing';
+      return `<td class="matrix-cell matrix-cell-ineligible" title="${escapeAttr(reason)}">
+        <div class="matrix-cell-value">—</div>
+        <div class="matrix-cell-sub">n/a</div>
+      </td>`;
+    }
+
+    const r    = s.annualised10yr * 100;
+    const tier = r >= 8 ? 'strong'
+               : r >= 5 ? 'decent'
+               : r >= 3 ? 'mediocre'
+               : r >= 0 ? 'weak'
+               :          'avoid';
+    const cfStr = s.cashFlowMonth >= 0
+      ? `+€${Math.round(s.cashFlowMonth).toLocaleString(currentLang === 'it' ? 'it-IT' : 'en-US')}`
+      : `−€${Math.abs(Math.round(s.cashFlowMonth)).toLocaleString(currentLang === 'it' ? 'it-IT' : 'en-US')}`;
+
+    const classes = ['matrix-cell', `matrix-cell-${tier}`];
+    if (isSelected) classes.push('matrix-cell-selected');
+    if (isBest)     classes.push('matrix-cell-best');
+
+    return `<td class="${classes.join(' ')}"
+                data-fin="${fin}" data-con="${con}"
+                onclick="selectScenario('${fin}','${con}')">
+      ${isBest ? '<div class="matrix-cell-star">⭐</div>' : ''}
+      <div class="matrix-cell-value">${r.toFixed(1)}%</div>
+      <div class="matrix-cell-sub">${cfStr}/mo</div>
+    </td>`;
+  };
+
+  // Column subtitle keys (tax / leverage shorthand). Hardcoded — these
+  // are the same across cities.
+  const conSub = {
+    libero:      '21% tax',
+    concordato:  '10% tax · −25% IMU',
+    transitorio: '10% tax · short-term',
+  };
+  const finSub = {
+    cash:             '100% down',
+    mortgage_invest:  '65% LTV · 4.2%',
+    mortgage_primary: '80% LTV · 3.8%',
+  };
+
+  return `
+    <table class="scenario-matrix">
+      <thead>
+        <tr>
+          <th></th>
+          ${conOrder.map(c => `
+            <th class="matrix-col-header">
+              <div class="matrix-col-title">${escapeHtml(t(`scenario.con.${c}`) || CONTRACT_PROFILES[c].label_en)}</div>
+              <div class="matrix-col-sub">${conSub[c]}</div>
+            </th>`).join('')}
+        </tr>
+      </thead>
+      <tbody>
+        ${finOrder.map(f => `
+          <tr>
+            <th class="matrix-row-header">
+              <div class="matrix-row-title">${escapeHtml(t(`scenario.fin.${f}`) || FINANCING_PROFILES[f].label_en)}</div>
+              <div class="matrix-row-sub">${finSub[f]}</div>
+            </th>
+            ${conOrder.map(c => cellHtml(f, c)).join('')}
+          </tr>`).join('')}
+      </tbody>
+    </table>
+    <div class="matrix-legend">
+      <span class="matrix-legend-item"><span class="legend-dot legend-strong"></span>${t('detail.scenarios.legend_strong')} (≥8%)</span>
+      <span class="matrix-legend-item"><span class="legend-dot legend-decent"></span>${t('detail.scenarios.legend_decent')} (5-8%)</span>
+      <span class="matrix-legend-item"><span class="legend-dot legend-mediocre"></span>${t('detail.scenarios.legend_mediocre')} (3-5%)</span>
+      <span class="matrix-legend-item"><span class="legend-dot legend-weak"></span>${t('detail.scenarios.legend_weak')} (0-3%)</span>
+    </div>`;
+}
+
+// Click handler for matrix cells. Updates the selected-cell border and
+// swaps the breakdown panel below. Ineligible cells short-circuit.
+function selectScenario(financingKey, contractKey) {
+  const listing = window._currentDetailListing;
+  if (!listing) return;
+  const scenario = computeScenario(listing, financingKey, contractKey);
+  if (!scenario.eligible) return;
+
+  window._selectedScenario = { financingKey, contractKey };
+
+  // Flip the .matrix-cell-selected class on the right cell.
+  document.querySelectorAll('.scenario-matrix .matrix-cell-selected')
+    .forEach(el => el.classList.remove('matrix-cell-selected'));
+  const cell = document.querySelector(
+    `.scenario-matrix td[data-fin="${financingKey}"][data-con="${contractKey}"]`);
+  if (cell) cell.classList.add('matrix-cell-selected');
+
+  // Swap the breakdown panel.
+  const bkEl = document.getElementById('scenario-breakdown');
+  if (bkEl) bkEl.innerHTML = renderScenarioBreakdown(scenario, listing);
+}
+
+function renderScenarioBreakdown(scenario, listing) {
+  const fin = FINANCING_PROFILES[scenario.financingKey];
+  const con = CONTRACT_PROFILES[scenario.contractKey];
+  const _locale = (currentLang === 'it') ? 'it-IT' : 'en-US';
+  const fmt    = n => '€' + Math.round(n).toLocaleString(_locale);
+  const fmtPct = n => (n * 100).toFixed(1) + '%';
+
+  const downPayment = (listing.price || 0) * (1 - fin.ltv);
+  const purchaseCostsOnly = scenario.cashInvested - downPayment;
+
+  return `
+    <div class="breakdown-grid">
+      <!-- Income -->
+      <div class="breakdown-section">
+        <h4 class="breakdown-section-title">💰 ${t('breakdown.income')}</h4>
+        <div class="breakdown-row">
+          <span>${t('breakdown.gross_rent')}</span>
+          <span>${fmt(scenario.scenarioRentAnnual)}/yr</span>
+        </div>
+        <div class="breakdown-row breakdown-deduction">
+          <span>− ${t('breakdown.vacancy')} (${con.vacancy_months} mo)</span>
+          <span>−${fmt(scenario.vacancyAnnual)}</span>
+        </div>
+        <div class="breakdown-row breakdown-deduction">
+          <span>− ${t('breakdown.management')} (${(con.mgmt_pct*100).toFixed(0)}%)</span>
+          <span>−${fmt(scenario.mgmtAnnual)}</span>
+        </div>
+        <div class="breakdown-row breakdown-deduction">
+          <span>− ${t('breakdown.cedolare')} (${(con.cedolare_rate*100).toFixed(0)}%)</span>
+          <span>−${fmt(scenario.cedolareAnnual)}</span>
+        </div>
+        <div class="breakdown-row breakdown-deduction">
+          <span>− ${t('breakdown.imu')}</span>
+          <span>−${fmt(scenario.imuAnnual)}</span>
+        </div>
+        <div class="breakdown-row breakdown-deduction">
+          <span>− ${t('breakdown.maintenance')} (0.3%)</span>
+          <span>−${fmt(scenario.maintAnnual)}</span>
+        </div>
+        <div class="breakdown-row breakdown-deduction">
+          <span>− ${t('breakdown.condo_fees')}</span>
+          <span>−${fmt(scenario.condoAnnual)}</span>
+        </div>
+        <div class="breakdown-row breakdown-total">
+          <span>${t('breakdown.net_rent_annual')}</span>
+          <span>${fmt(scenario.netRentAnnual)}/yr</span>
+        </div>
+      </div>
+
+      <!-- Financing -->
+      <div class="breakdown-section">
+        <h4 class="breakdown-section-title">🏦 ${t('breakdown.financing')}</h4>
+        <div class="breakdown-row">
+          <span>${t('breakdown.profile')}</span>
+          <span>${escapeHtml(t(`scenario.fin.${scenario.financingKey}`) || fin.label_en)}</span>
+        </div>
+        <div class="breakdown-row">
+          <span>${t('breakdown.purchase_price')}</span>
+          <span>${fmt(listing.price || 0)}</span>
+        </div>
+        <div class="breakdown-row">
+          <span>${t('breakdown.purchase_costs')}</span>
+          <span>${fmt(purchaseCostsOnly)}</span>
+        </div>
+        <div class="breakdown-row breakdown-total">
+          <span>${t('breakdown.cash_invested')}</span>
+          <span>${fmt(scenario.cashInvested)}</span>
+        </div>
+        ${scenario.mortgageMonthly > 0 ? `
+        <div class="breakdown-row">
+          <span>${t('breakdown.mortgage_monthly')}</span>
+          <span>−${fmt(scenario.mortgageMonthly)}/mo</span>
+        </div>` : ''}
+        <div class="breakdown-row breakdown-total ${scenario.cashFlowMonth >= 0 ? 'breakdown-total-positive' : 'breakdown-total-negative'}">
+          <span>${t('breakdown.monthly_cash_flow')}</span>
+          <span>${scenario.cashFlowMonth >= 0 ? '+' : ''}${fmt(scenario.cashFlowMonth)}/mo</span>
+        </div>
+      </div>
+
+      <!-- Returns -->
+      <div class="breakdown-section breakdown-section-returns">
+        <h4 class="breakdown-section-title">📈 ${t('breakdown.returns')}</h4>
+        <div class="breakdown-row">
+          <span>${t('breakdown.gross_yield')}</span>
+          <span>${fmtPct(scenario.grossYield)}</span>
+        </div>
+        <div class="breakdown-row">
+          <span>${t('breakdown.net_yield_on_cash')}</span>
+          <span>${fmtPct(scenario.netYield)}</span>
+        </div>
+        <div class="breakdown-row">
+          <span>${t('breakdown.appreciation')}</span>
+          <span>+${fmt(scenario.appreciationGain)}/yr</span>
+        </div>
+        <div class="breakdown-row breakdown-total breakdown-total-headline">
+          <span>${t('breakdown.annualised_10yr')}</span>
+          <span>${fmtPct(scenario.annualised10yr)}</span>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderScenarioAssumptions(listing) {
+  const city    = listing.city || 'milano';
+  const fascia  = (listing.omi_fascia || 'C').toUpperCase();
+  const aprRate = ((CITY_APPRECIATION_RATES[city]?.[fascia])
+                 || (CITY_APPRECIATION_RATES[city]?.['C'])
+                 || 0.02) * 100;
+  return `
+    <div class="assumptions-grid">
+      <div><strong>${t('assumptions.appreciation') || 'Appreciation'}:</strong> ${aprRate.toFixed(1)}%/yr (${city} fascia ${fascia})</div>
+      <div><strong>${t('assumptions.maintenance') || 'Maintenance'}:</strong> 0.3% of price/yr</div>
+      <div><strong>${t('assumptions.imu') || 'IMU'}:</strong> 0.4% of price/yr (second home)</div>
+      <div><strong>${t('assumptions.purchase_costs') || 'Purchase costs'}:</strong> 11% (2nd home), 4% (prima casa)</div>
+      <div><strong>${t('assumptions.mortgage_invest') || 'Mortgage invest'}:</strong> 65% LTV, 4.2% rate, 20yr</div>
+      <div><strong>${t('assumptions.mortgage_primary') || 'Mortgage primary'}:</strong> 80% LTV, 3.8% rate, 25yr</div>
+    </div>`;
+}
+
 function detailFinancialAnalysisHtml(listing) {
   const yields   = computeYieldMetrics(listing);
   const mortgage = computeMortgageScenarios(listing.price);
@@ -17373,14 +18222,11 @@ function renderSaleCard(l) {
     ${compsSugHtml}
     ${compsBarHtml}
 
-    ${salesViewMode === 'investor' ? investorStatPillsHtml(l) : statPillsHtml(l, false)}
+    ${salesViewMode === 'investor' ? '' : statPillsHtml(l, false)}
 
     ${salesViewMode === 'investor'
-      ? `<div class="why-sentence">${investorHeadline(l)}${investorReasonsBulletsHtml(l)}</div>`
+      ? investorCardHtml(l)
       : (whySentence ? `<div class="${whyClass}">${whySentence}${reasonsBulletsHtml(l)}</div>` : '')}
-
-    ${salesViewMode === 'investor' ? cardProjectionSummaryHtml(l) : ''}
-    ${salesViewMode === 'investor' ? cardFullAnalysisButtonHtml(l) : ''}
 
     <div class="card-footer-a">
       <button class="btn-bookmark${Collections.isInAnyCollection(l.id) ? ' active' : ''}"
