@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-20 area-pill-match-specs">
+<meta name="lume-build" content="2026-05-20 id-pill-and-search">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -3147,6 +3147,80 @@ body.detail-page-active .detail-header {
   margin-left: 6px;
   cursor: default;
   letter-spacing: 0;
+}
+/* Lume internal listing-ID pill — replaces the OMI fascia badge in
+   card headers. The full ID is shown so users can copy/paste it
+   into the header search box. Click-to-copy via JS.
+   Monospace digits so two-digit + four-digit ids line up vertically
+   when stacked in the grid. */
+.id-pill {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: var(--radius-full);
+  margin-left: 6px;
+  background: var(--bg-muted);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-light, var(--border));
+  cursor: pointer;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+  user-select: all;
+}
+.id-pill:hover { background: var(--surface, #FFFFFF); color: var(--text-primary); }
+.id-pill::before {
+  content: '#';
+  margin-right: 2px;
+  opacity: 0.55;
+  font-weight: 500;
+}
+
+/* Header ID search — pairs with .id-pill so the user can click a
+   card's ID pill to populate this input and isolate that listing
+   (or paste an ID they got from elsewhere). Sized to slot into the
+   header next to the city selector / status pills without
+   crowding the wordmark. */
+.id-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  padding: 5px 12px;
+  height: 30px;
+  color: var(--text-muted);
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.id-search:focus-within {
+  border-color: var(--green-deep, var(--accent));
+  background: var(--surface, var(--bg-card));
+  color: var(--text-primary);
+}
+.id-search svg { flex-shrink: 0; }
+.id-search input {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--text-primary);
+  width: 130px;
+  font-variant-numeric: tabular-nums;
+}
+.id-search input::placeholder {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+/* Hide the native clear button on type=search so our muted look isn't
+   broken by the WebKit X badge. The label-level state already shows
+   when input is non-empty via the :focus-within ring. */
+.id-search input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+@media (max-width: 700px) {
+  /* On phones the header gets crowded; let the search collapse to
+     just the icon and let users tap it to expand. Easier: just hide
+     the input until tap-focus. */
+  .id-search input { width: 90px; font-size: 12px; }
 }
 .fascia-A { background: #FFF0E6; color: #B85C00; }
 .fascia-B { background: #E6F4ED; color: #1F6B45; }    /* Centrale */
@@ -6857,6 +6931,17 @@ function saveFilters() {
     <span class="ci-dot"></span>
     <span id="ciPillLabel">CI –</span>
   </a>
+  <!-- Search by Lume internal listing ID. Filters both the rentals
+       grid and the sales grid in lock-step. Click any card's #id pill
+       to populate this box. -->
+  <label class="id-search" title="Search by Lume listing ID">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="11" cy="11" r="7"/>
+      <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+    </svg>
+    <input type="search" id="idSearchInput" placeholder="Find by ID…" autocomplete="off">
+  </label>
   <div class="meta" id="meta" data-i18n="loading.listings">Lume is reading the listings…</div>
   <!-- "Run Lume now" + "Zones" header buttons removed (consolidation):
        scanner moved to Settings → Scanner; the OMI-zone fixer was a
@@ -9838,6 +9923,36 @@ document.getElementById('sScore').addEventListener('input', function () {
   saveFilters();
 });
 
+// ── Header ID search: filters rentals AND sales in lock-step ─────────────
+// The input lives in <header>, so we only attach once. Each keystroke
+// debounces a re-render of whichever grid is active (and the other one
+// the next time the user switches tabs — cheap, no harm).
+(function _wireIdSearch() {
+  const input = document.getElementById('idSearchInput');
+  if (!input) return;
+  let _idDeb = null;
+  const fire = () => {
+    if (_idDeb) clearTimeout(_idDeb);
+    _idDeb = setTimeout(() => {
+      _idDeb = null;
+      if (typeof renderRentals === 'function') try { renderRentals(); } catch (_) {}
+      if (typeof renderSales   === 'function') try { renderSales();   } catch (_) {}
+    }, 120);
+  };
+  input.addEventListener('input',  fire);
+  input.addEventListener('search', fire);   // fires on native ESC / clear-X
+  // Click-to-search from any card's #id pill — works for both rental
+  // and sales cards since both use .id-pill. Event-delegated so it
+  // covers cards that haven't been rendered yet.
+  document.addEventListener('click', (e) => {
+    const pill = e.target.closest && e.target.closest('.id-pill[data-listing-id]');
+    if (!pill) return;
+    input.value = pill.dataset.listingId;
+    input.focus();
+    fire();
+  });
+})();
+
 ['sFascia', 'sOmiZone', 'sMaxMetro', 'sMinFloor', 'sMinEnergy'].forEach(id => {
   const el = document.getElementById(id);
   if (el) el.addEventListener('change', () => { renderSales(); saveFilters(); });
@@ -9873,6 +9988,9 @@ try {
 } catch (_) {}
 
 document.getElementById('sBtnReset').addEventListener('click', () => {
+  // See rBtnReset — keep header search in sync with the bar reset.
+  const _idEl = document.getElementById('idSearchInput');
+  if (_idEl) _idEl.value = '';
   document.getElementById('sFascia').value    = '';
   document.getElementById('sOmiZone').value   = '';
   document.getElementById('sMaxPrice').value  = '';
@@ -12759,7 +12877,8 @@ function renderRentalCard(l) {
       <div class="card-header-text">
         <div class="card-neighbourhood-row">
           <span class="card-neighbourhood">${formatAddress(l.neighbourhood) || '–'}</span>
-          <span class="fascia-badge fascia-${fascia}" title="OMI fascia ${fascia}">${l.omi_zona || ('Fascia ' + fascia)}</span>
+          <span class="id-pill" data-listing-id="${escapeHtml(String(l.id))}"
+                title="Lume listing ID — click to search">${escapeHtml(String(l.id))}</span>
         </div>
         <div class="card-address-row">
           <span class="card-address">${l.address ? formatAddress(l.address) : (formatAddress(l.neighbourhood) || '–')}</span>
@@ -12846,8 +12965,15 @@ function renderRentalCard(l) {
 }
 
 // ── Rentals — filter & render ─────────────────────────────────────────────────
+// Lume listing-ID search (header). Trimmed + lower-cased once here so
+// applyRentFilters / applySaleFilters can do a cheap substring match.
+function getIdQuery() {
+  return (document.getElementById('idSearchInput')?.value || '').trim().toLowerCase();
+}
+
 function getRentFilters() {
   return {
+    idQuery:   getIdQuery(),
     areas:     rentSelectedAreas,
     fascia:    document.getElementById('rFascia').value,
     // OMI Zone filter removed from the bar — Area + Fascia cover the same
@@ -12888,6 +13014,12 @@ function applyRentFilters(data, f) {
   const showStale = document.getElementById('rShowStale')?.checked || false;
   if (!showStale) data = data.filter(l => !l.is_stale);
   return data.filter(l => {
+    // Header ID search short-circuits the rest of the filters — when
+    // it's active the user is looking for one specific listing, not
+    // narrowing by other criteria.
+    if (f.idQuery) {
+      if (!String(l.id ?? '').toLowerCase().includes(f.idQuery)) return false;
+    }
     if (f.areas.length) {
       const nb = (l.neighbourhood || '').toLowerCase();
       // Bidirectional substring match so both sources work:
@@ -13273,6 +13405,7 @@ function computeSaleFasciaRanges(data) {
 
 function getSaleFilters() {
   return {
+    idQuery:  getIdQuery(),
     areas:    saleSelectedAreas,
     source:   document.querySelector('#sSourceFilter .sort-tab.active')?.dataset.ssource || '',
     fascia:   document.getElementById('sFascia').value,
@@ -13317,6 +13450,12 @@ function applySaleFilters(data, f) {
   const showStale = document.getElementById('sShowStale')?.checked || false;
   if (!showStale) data = data.filter(l => !l.is_stale);
   return data.filter(l => {
+    // Header ID search short-circuits the rest — same intent as
+    // applyRentFilters: when the user is hunting one listing they
+    // don't care about the other filters.
+    if (f.idQuery) {
+      if (!String(l.id ?? '').toLowerCase().includes(f.idQuery)) return false;
+    }
     // Hide judicial auctions and nuda-proprietà sales unless explicitly opted in
     if (l.is_auction        && !f.showAuctions) return false;
     if (l.is_nuda_proprieta && !f.showNuda)     return false;
@@ -16791,7 +16930,8 @@ function renderSaleCard(l) {
       <div class="card-header-text">
         <div class="card-neighbourhood-row">
           <span class="card-neighbourhood">${formatAddress(l.neighbourhood) || '–'}</span>
-          <span class="fascia-badge fascia-${fascia}" title="${omiBenchTitle}">${l.omi_zona || ('Fascia ' + fascia)}</span>
+          <span class="id-pill" data-listing-id="${escapeHtml(String(l.id))}"
+                title="Lume listing ID — click to search">${escapeHtml(String(l.id))}</span>
         </div>
         <div class="card-address-row">
           <span class="card-address">${l.address ? formatAddress(l.address) : (formatAddress(l.neighbourhood) || '–')}</span>
@@ -17884,6 +18024,10 @@ document.querySelectorAll('#rentSortTabs .sort-tab').forEach(btn => {
 });
 
 document.getElementById('rBtnReset').addEventListener('click', () => {
+  // Header ID search lives outside the filter bar but it's still
+  // user-applied state; "Clear filters" should reset it too.
+  const _idEl = document.getElementById('idSearchInput');
+  if (_idEl) _idEl.value = '';
   filterAreaMsd.clear();
   rentSelectedAreas = [];
   document.getElementById('rFascia').value    = '';
