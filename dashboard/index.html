@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-20 pill-rail-focus-fix">
+<meta name="lume-build" content="2026-05-20 pill-thumb-recount">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -12976,6 +12976,12 @@ function renderRentals() {
       const label = gem === 'hidden' ? '✦ Hidden Gems' : gem === 'good' ? 'Great Value' : 'All';
       btn.textContent = `${label} (${n})`;
     });
+    // The active button just changed width (e.g. "All" → "All (7107)"),
+    // so the sliding thumb is now narrower than its target pill. Defer
+    // one frame so layout has flushed before we measure.
+    if (typeof _updateAllPillThumbs === 'function') {
+      requestAnimationFrame(_updateAllPillThumbs);
+    }
     const nNew = ALL_RENT.filter(isNew).length;
     const newStatEl  = document.getElementById('rNewStat');
     const newCountEl = document.getElementById('rNewCount');
