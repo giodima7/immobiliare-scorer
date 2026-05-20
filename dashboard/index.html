@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-20 filter-restore-after-login">
+<meta name="lume-build" content="2026-05-20 pill-rail-focus-fix">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -486,6 +486,18 @@ header h1 span { color: var(--accent); }
   border-radius: var(--radius-full);
   height: 36px;
   box-sizing: border-box;
+}
+/* Pill groups carry the `.filter-control` class to inherit the 36 px
+   sizing grid, which means they also pick up the generic
+   `.filter-control:focus-within` rule that flips background to
+   var(--bg-card) (white). On a pill group that's lethal — the rail
+   turns the same colour as the sliding thumb, so the bubble appears
+   to vanish on click. Pin the muted rail + border explicitly so focus
+   inside a pill (which happens on every click) doesn't repaint it. */
+.filters.filters-grid .filter-pill-group:focus,
+.filters.filters-grid .filter-pill-group:focus-within {
+  background: var(--bg-muted);
+  border-color: var(--border);
 }
 .filters.filters-grid .filter-pill-group::before {
   content: '';
