@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-19 filter-persistence">
+<meta name="lume-build" content="2026-05-20 filter-restore-after-login">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -6120,6 +6120,14 @@ const Auth = (() => {
       // Cache the Clerk user ID so other static pages (e.g. favourites.html)
       // can scope their localStorage keys without re-loading the Clerk SDK.
       try { localStorage.setItem('lume_clerk_user_id', user.id); } catch (_) {}
+      // Re-apply persisted filters now that Storage.key() resolves to the
+      // real user ID. showApp() called restoreFilters() before Clerk had
+      // loaded, so that first pass read the empty `scorer_filters_guest`
+      // bucket; the saves from the user's previous session live under
+      // `scorer_filters_<realUserId>` and only become readable here.
+      if (typeof restoreFilters === 'function') {
+        try { restoreFilters(); } catch (_) {}
+      }
       updateUserAvatar();
       updateFavBadge?.();
       // Show the "🔔 Save alert" buttons (desktop pill + mobile drawer)
