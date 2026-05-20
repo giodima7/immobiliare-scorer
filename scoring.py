@@ -225,13 +225,18 @@ FINANCING_PROFILES: dict[str, dict] = {
     },
 }
 
+# mgmt_pct values are realistic agency rates — only applied when the
+# dashboard's self-managed toggle is OFF.
+#   libero       8 %   full management of a 4-yr lease
+#   concordato   5 %   longer lease, less turnover, lighter agency work
+#   transitorio 12 %   high turnover, vet-and-sign every 6-18 months
 CONTRACT_PROFILES: dict[str, dict] = {
     "libero": {
         "rent_factor":    1.00,
         "cedolare_rate":  0.21,
         "imu_discount":   0.00,
         "vacancy_months": 1.0,
-        "mgmt_pct":       0.05,
+        "mgmt_pct":       0.08,
         "label_en":       "Canone libero (4+4)",
         "label_it":       "Canone libero (4+4)",
         "description_en": "4-year lease, full market rent, standard 21% cedolare tax.",
@@ -242,7 +247,7 @@ CONTRACT_PROFILES: dict[str, dict] = {
         "cedolare_rate":  0.10,
         "imu_discount":   0.25,
         "vacancy_months": 0.5,
-        "mgmt_pct":       0.03,
+        "mgmt_pct":       0.05,
         "label_en":       "Canone concordato (3+2)",
         "label_it":       "Canone concordato (3+2)",
         "description_en": "3+2 year lease, ~28% lower rent, 10% cedolare + 25% IMU discount.",
@@ -253,7 +258,7 @@ CONTRACT_PROFILES: dict[str, dict] = {
         "cedolare_rate":  0.10,
         "imu_discount":   0.25,
         "vacancy_months": 2.0,      # higher vacancy due to short terms
-        "mgmt_pct":       0.08,
+        "mgmt_pct":       0.12,
         "label_en":       "Transitorio (1-18mo)",
         "label_it":       "Transitorio (1-18 mesi)",
         "description_en": "Short-term lease 1-18mo, ~12% higher rent, 10% cedolare. Higher vacancy and management cost.",

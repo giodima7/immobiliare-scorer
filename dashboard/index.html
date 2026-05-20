@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-20 scenario-fixes">
+<meta name="lume-build" content="2026-05-20 scenario-consolidation">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -3382,6 +3382,32 @@ body.detail-page-active .detail-header {
   margin: 0;
 }
 
+/* Fix 3: self-managed toggle bar above the best-scenario callout.
+   Single line on desktop; wraps on narrow viewports. The hint is
+   muted so the eye reads the label first. */
+.scenarios-options-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 14px;
+}
+.scenarios-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+.scenarios-toggle input[type="checkbox"] {
+  width: 16px; height: 16px;
+  accent-color: var(--green-deep);
+  cursor: pointer;
+  margin: 0;
+}
+.scenarios-toggle-label { font-weight: 600; color: var(--text-primary); }
+.scenarios-toggle-hint  { font-size: 12px; color: var(--text-muted); }
+
 .best-scenario-callout {
   display: flex;
   gap: 14px;
@@ -3500,6 +3526,15 @@ body.detail-page-active .detail-header {
   opacity: 0.5;
 }
 .matrix-cell-ineligible:hover { transform: none; box-shadow: none; }
+/* Fix 6: short reason label rendered inside the cell when the
+   scenario isn't applicable. The tooltip carries the full sentence. */
+.matrix-cell-ineligible-text {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  line-height: 1.3;
+  font-style: italic;
+}
 .matrix-cell-selected {
   border-color: var(--text-primary);
   box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--text-primary);
@@ -3603,6 +3638,20 @@ body.detail-page-active .detail-header {
 .breakdown-row > span:first-child { color: var(--text-secondary); }
 .breakdown-row > span:last-child  { font-weight: 600; color: var(--text-primary); }
 .breakdown-deduction > span:last-child { color: #C0392B; }
+/* Faint single-cell sub-note used under the condo fees row and under
+   the self-managed indicator. Sits in the same .breakdown-row grid
+   so it stays aligned with the surrounding lines. */
+.breakdown-subnote {
+  padding: 2px 0 6px;
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+}
+.breakdown-subnote > span:first-child {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  font-style: italic;
+  font-weight: 400;
+}
 .breakdown-total {
   padding-top: 10px;
   margin-top: 6px;
@@ -8869,6 +8918,18 @@ const STRINGS = {
     'breakdown.imu':              'IMU',
     'breakdown.maintenance':      'Maintenance',
     'breakdown.condo_fees':       'Condo fees',
+    'breakdown.condo_fees_owner': 'Condo fees (owner share)',
+    'breakdown.condo_fees_note':  'Total condo {total}/yr — tenant reimburses ~{tenant} for ordinary running costs',
+    // Fix 3: self-managed toggle + agency-managed label
+    'breakdown.management_agency':'Agency management fee',
+    'breakdown.management_self':  'Self-managed — no agency fee',
+    'scenarios.self_managed':     'I self-manage the rental',
+    'scenarios.self_managed_hint':'(no agency fees)',
+    // Fix 6: short labels rendered inside ineligible matrix cells.
+    'scenarios.ineligible.zone':    'Zone not eligible',
+    'scenarios.ineligible.city':    'Not in this city',
+    'scenarios.ineligible.no_rent': 'No rent estimate',
+    'scenarios.ineligible.generic': 'Not available',
     'breakdown.net_rent_annual':  'Net rental income',
     'breakdown.financing':        'Financing',
     'breakdown.profile':          'Profile',
@@ -9122,6 +9183,16 @@ const STRINGS = {
     'breakdown.imu':              'IMU',
     'breakdown.maintenance':      'Manutenzione',
     'breakdown.condo_fees':       'Spese condominiali',
+    'breakdown.condo_fees_owner': 'Spese condominiali (quota proprietario)',
+    'breakdown.condo_fees_note':  'Condominio totale {total}/anno — l\'inquilino rimborsa ~{tenant} per spese ordinarie',
+    'breakdown.management_agency':'Commissione agenzia gestione',
+    'breakdown.management_self':  'Gestione diretta — nessun costo agenzia',
+    'scenarios.self_managed':     'Gestisco io l\'affitto',
+    'scenarios.self_managed_hint':'(senza costi agenzia)',
+    'scenarios.ineligible.zone':    'Zona non idonea',
+    'scenarios.ineligible.city':    'Non in questa città',
+    'scenarios.ineligible.no_rent': 'Senza stima affitto',
+    'scenarios.ineligible.generic': 'Non disponibile',
     'breakdown.net_rent_annual':  'Reddito netto da locazione',
     'breakdown.financing':        'Finanziamento',
     'breakdown.profile':          'Profilo',
@@ -9605,12 +9676,17 @@ const FINANCING_PROFILES = {
 };
 
 const CONTRACT_PROFILES = {
+  // mgmt_pct values are realistic agency rates — only applied when the
+  // self-managed toggle in the detail page is OFF (Fix 3 + Fix 8).
+  //   libero       8 %   full management of a 4-yr lease
+  //   concordato   5 %   longer lease, less turnover, lighter agency work
+  //   transitorio 12 %   high turnover, vet-and-sign every 6-18 months
   libero: {
     rent_factor:     1.00,
     cedolare_rate:   0.21,
     imu_discount:    0.00,
     vacancy_months:  1.0,
-    mgmt_pct:        0.05,
+    mgmt_pct:        0.08,
     label_en:        'Canone libero (4+4)',
     label_it:        'Canone libero (4+4)',
     description_en:  '4-year lease, full market rent, standard 21% cedolare tax.',
@@ -9621,7 +9697,7 @@ const CONTRACT_PROFILES = {
     cedolare_rate:   0.10,
     imu_discount:    0.25,
     vacancy_months:  0.5,
-    mgmt_pct:        0.03,
+    mgmt_pct:        0.05,
     label_en:        'Canone concordato (3+2)',
     label_it:        'Canone concordato (3+2)',
     description_en:  '3+2 year lease, ~28% lower rent, 10% cedolare + 25% IMU discount.',
@@ -9632,7 +9708,7 @@ const CONTRACT_PROFILES = {
     cedolare_rate:   0.10,
     imu_discount:    0.25,
     vacancy_months:  2.0,
-    mgmt_pct:        0.08,
+    mgmt_pct:        0.12,
     label_en:        'Transitorio (1-18mo)',
     label_it:        'Transitorio (1-18 mesi)',
     description_en:  'Short-term lease 1-18mo, ~12% higher rent, 10% cedolare. Higher vacancy and management cost.',
@@ -9673,6 +9749,32 @@ const PURCHASE_COSTS = {
   cash:             0.11,
   mortgage_invest:  0.11,
 };
+
+// Italian Tabelle Oneri Accessori — owner's share of total condo fees.
+// The tenant covers ordinary running costs (cleaning, lift, heating,
+// water, doorman); the owner pays extraordinary + admin. Conservative
+// nationwide estimate; some buildings split closer to 25/75 (heavy
+// services) or 35/65 (lean buildings).
+const OWNER_CONDO_SHARE = 0.30;
+
+// Fix 7: locale-consistent currency + percent formatters used by the
+// scenario engine. currentLang === 'it' → it-IT (€1.400, 4,7%);
+// otherwise en-GB (€1,400, 4.7%). Centralising prevents the mixed-
+// format leak the previous code shipped (€595.000 next to €98,547).
+function formatCurrency(value, opts) {
+  opts = opts || {};
+  const locale = currentLang === 'it' ? 'it-IT' : 'en-GB';
+  const dec    = opts.decimals || 0;
+  return '€' + Math.round(value).toLocaleString(locale, {
+    minimumFractionDigits: dec,
+    maximumFractionDigits: dec,
+  });
+}
+function formatPct(value, decimals) {
+  if (decimals == null) decimals = 1;
+  const v = value.toFixed(decimals);
+  return (currentLang === 'it' ? v.replace('.', ',') : v) + '%';
+}
 
 // JS mirror of scoring.py's CITY_APPRECIATION_RATES so the scenario
 // engine can self-source appreciation without importing it. The old
@@ -9736,7 +9838,14 @@ function computeScenario(listing, financingKey, contractKey) {
   // ── Income side (assumes property is rented out) ────────────────────
   const grossRentAnnual = scenarioRentMo * 12;
   const vacancyAnnual   = scenarioRentMo * con.vacancy_months;
-  const mgmtAnnual      = grossRentAnnual * con.mgmt_pct;
+  // Fix 3: most Milan landlords self-manage. When the toggle is on
+  // (the default) zero out the agency fee; the original con.mgmt_pct
+  // only kicks in when the user explicitly chooses "agency-managed".
+  // _selfManaged defaults to true (set lazily on window for the very
+  // first computeScenario call after page load).
+  if (typeof window._selfManaged === 'undefined') window._selfManaged = true;
+  const effectiveMgmtPct = window._selfManaged ? 0 : con.mgmt_pct;
+  const mgmtAnnual       = grossRentAnnual * effectiveMgmtPct;
   const collectedRent   = grossRentAnnual - vacancyAnnual - mgmtAnnual;
 
   const cedolareAnnual  = collectedRent * con.cedolare_rate;
@@ -9746,7 +9855,13 @@ function computeScenario(listing, financingKey, contractKey) {
   // non-primary financings.
   const imuAnnual       = price * 0.004 * (1 - con.imu_discount);
   const maintAnnual     = price * 0.003;
-  const condoAnnual     = (listing.condominium_fees || listing.spese_condominiali || 100) * 12;
+  // Italian Tabelle Oneri Accessori split (Fix 2): the tenant
+  // reimburses the ~70 % "ordinary running costs" (cleaning, lift
+  // maintenance, heating, water, doorman), so the owner only carries
+  // the ~30 % extraordinary + admin slice. Previous version charged
+  // the full bill to the owner — overstated the burden by ~70 %.
+  const totalCondoAnnual = (listing.condominium_fees || listing.spese_condominiali || 100) * 12;
+  const condoAnnual      = totalCondoAnnual * OWNER_CONDO_SHARE;
 
   const netRentAnnual   = collectedRent - cedolareAnnual - imuAnnual
                         - maintAnnual  - condoAnnual;
@@ -9864,9 +9979,12 @@ function computeScenario(listing, financingKey, contractKey) {
     cedolareAnnual,
     imuAnnual,
     maintAnnual,
-    condoAnnual,
+    condoAnnual,             // owner share only (Fix 2)
+    totalCondoAnnual,        // tenant-reimbursement note in breakdown
     vacancyAnnual,
     mgmtAnnual,
+    effectiveMgmtPct,        // 0 when self-managed; con.mgmt_pct otherwise
+    selfManaged: window._selfManaged !== false,
     // Outputs
     netRentAnnual,
     cashFlowAnnual,
@@ -9922,10 +10040,23 @@ function pickBestScenario(listing) {
     return { scenario: null, allScenarios: all,
              explanation: 'No scenario produces a positive return for this listing.' };
   }
-  let best     = eligible[0];
+
+  // Fix 4: prefer investment scenarios. Primary residence asks the user
+  // to live there for 2 years before any return materialises — a major
+  // lifestyle constraint, not just a slightly different return profile.
+  // It still shows in the matrix; we just don't crown it best unless
+  // every investment scenario fails outright.
+  const investmentOnly = eligible.filter(s =>
+    s.financingKey !== 'mortgage_primary'
+  );
+  const candidatePool = investmentOnly.length > 0 ? investmentOnly : eligible;
+
+  let best     = candidatePool[0];
   const topR   = best.annualised10yr;
-  const within = eligible.filter(s => topR - s.annualised10yr < 0.005);
+  const within = candidatePool.filter(s => topR - s.annualised10yr < 0.005);
   if (within.length > 1) {
+    // Tie-breaking: prefer simpler financings + leases. Primary residence
+    // is last on the financing ladder so even if it leaks in, it loses.
     const finOrder = ['cash', 'mortgage_invest', 'mortgage_primary'];
     const conOrder = ['libero', 'concordato', 'transitorio'];
     within.sort((a, b) => {
@@ -15253,22 +15384,22 @@ function investorCardHtml(listing) {
     <div class="scenario-pills">
       <div class="scenario-pill scenario-pill-${returnColor}">
         <div class="scenario-pill-label">${t('investor.pill.annualised')}</div>
-        <div class="scenario-pill-value">${m.annualised10yr.toFixed(1)}%</div>
+        <div class="scenario-pill-value">${formatPct(m.annualised10yr)}</div>
         <div class="scenario-pill-sub">10yr</div>
       </div>
       <div class="scenario-pill">
         <div class="scenario-pill-label">${t('investor.pill.net_yield')}</div>
-        <div class="scenario-pill-value">${m.netYield.toFixed(1)}%</div>
+        <div class="scenario-pill-value">${formatPct(m.netYield)}</div>
         <div class="scenario-pill-sub">${t('investor.pill.after_tax')}</div>
       </div>
       <div class="scenario-pill">
         <div class="scenario-pill-label">${t('investor.pill.rent')}</div>
-        <div class="scenario-pill-value">€${fmtN(m.rentMo)}</div>
+        <div class="scenario-pill-value">${formatCurrency(m.rentMo)}</div>
         <div class="scenario-pill-sub">/mo</div>
       </div>
       <div class="scenario-pill scenario-pill-cf-${cfColor}">
         <div class="scenario-pill-label">${t('investor.pill.cf')}</div>
-        <div class="scenario-pill-value">${cfSign}€${fmtN(cfAbs)}</div>
+        <div class="scenario-pill-value">${cfSign}${formatCurrency(cfAbs)}</div>
         <div class="scenario-pill-sub">/mo</div>
       </div>
     </div>
@@ -15763,13 +15894,11 @@ function renderDetailPage(listingId) {
   if (!body) return;
   body.innerHTML = [
     detailHeroHtml(listing),
-    detailVerdictHtml(listing),
-    // Scenario engine view replaces the old IRR/DSCR/multiplier section.
-    // detailCostBreakdownHtml + detailMortgageScenariosHtml stay below as
-    // supplementary detail for users who want the legacy breakdown.
+    // The Investment Scenarios section is the single source of investment
+    // analysis. The old verdict / mortgage-scenarios / operating-cost-
+    // breakdown panels were removed (Fix 1) — they gave different numbers
+    // for the same questions and conflicted with the matrix above.
     detailScenariosHtml(listing),
-    detailCostBreakdownHtml(listing),
-    detailMortgageScenariosHtml(listing),
     detailComparableRentalsHtml(listing),
     detailComparableSalesHtml(listing),
     detailNeighbourhoodHtml(listing),
@@ -16116,104 +16245,6 @@ function computeSensitivityMatrix(listing, mortgage, yields) {
   return { appreciationRates, rentGrowthRates, matrix };
 }
 
-function detailVerdictHtml(listing) {
-  const yields   = computeYieldMetrics(listing);
-  const mortgage = computeMortgageScenarios(listing.price);
-  if (!yields || !mortgage) {
-    return `
-      <section class="detail-verdict">
-        <h2><span class="section-icon">🎯</span> Investment verdict</h2>
-        <p class="verdict-no-data">Unable to compute investment metrics — insufficient rental data for this zone/size.</p>
-      </section>`;
-  }
-
-  const defaultRate = defaultAppreciationRate(listing);
-  const metrics     = computeProInvestorMetrics(listing, mortgage, yields, defaultRate);
-  const irr5yr      = metrics ? metrics.irr_5yr : null;
-
-  // Verdict tier driven by IRR — the standard pro metric — not the
-  // simple "annualised total return" the earlier version used. IRR
-  // properly weighs CF timing and exit proceeds.
-  let tierKey, tierLabel, tierDesc;
-  if (irr5yr == null) {
-    tierKey = 'mediocre';
-    tierLabel = 'Insufficient data';
-    tierDesc  = 'Lume could not compute a full IRR — likely limited rental data for this zone or size band.';
-  } else if (irr5yr >= 10) {
-    tierKey = 'strong';
-    tierLabel = 'Strong investment';
-    tierDesc  = `${irr5yr.toFixed(1)}% IRR is above typical Milan thresholds. Combination of yield, leverage and appreciation is favourable.`;
-  } else if (irr5yr >= 7) {
-    tierKey = 'decent';
-    tierLabel = 'Decent investment';
-    tierDesc  = `${irr5yr.toFixed(1)}% IRR is reasonable for leveraged Milan residential — above BTP and European property benchmarks.`;
-  } else if (irr5yr >= 3) {
-    tierKey = 'mediocre';
-    tierLabel = 'Mediocre as pure investment';
-    tierDesc  = `${irr5yr.toFixed(1)}% IRR trails most financial alternatives unleveraged. May still make sense for capital preservation, eventual primary residence, or long holds.`;
-  } else {
-    tierKey = 'weak';
-    tierLabel = 'Weak as pure investment';
-    tierDesc  = `${irr5yr.toFixed(1)}% IRR is below risk-free alternatives. Buy only with strong non-financial rationale.`;
-  }
-
-  const benchmarkRows = INVESTMENT_BENCHMARKS.map(b => `
-    <div class="benchmark-row">
-      <span class="benchmark-name">${escapeHtml(b.name)}</span>
-      <span class="benchmark-rate">+${b.rate}%</span>
-      <span class="benchmark-source">${escapeHtml(b.source)}</span>
-    </div>`).join('');
-
-  const irrLabel = irr5yr != null ? `${irr5yr >= 0 ? '+' : ''}${irr5yr.toFixed(1)}% IRR` : '—';
-
-  return `
-    <section class="detail-verdict">
-      <h2><span class="section-icon">🎯</span> Investment verdict</h2>
-
-      <div class="verdict-card verdict-${tierKey}">
-        <div class="verdict-headline">
-          <span class="verdict-tier-label">${tierLabel}</span>
-          <span class="verdict-rate">${irrLabel}</span>
-        </div>
-        <p class="verdict-desc">${tierDesc}</p>
-        <p class="verdict-note">
-          5-year IRR at ${defaultRate.toFixed(1)}% appreciation + 0% rent growth
-          (Lume's default for fascia ${listing.omi_fascia || '?'}). Includes
-          mortgage interest + amortisation, operating costs and 6% selling costs.
-        </p>
-      </div>
-
-      <div class="benchmark-strip">
-        <div class="benchmark-title">vs alternative investments</div>
-        <div class="benchmark-grid">
-          <div class="benchmark-row benchmark-this">
-            <span class="benchmark-name">This listing</span>
-            <span class="benchmark-rate ${irr5yr != null && irr5yr >= 5 ? 'positive' : 'neutral'}">
-              ${irrLabel}
-            </span>
-            <span class="benchmark-source">5-yr IRR, leveraged</span>
-          </div>
-          ${benchmarkRows}
-        </div>
-        <p class="benchmark-disclaimer">
-          Benchmarks are approximate long-term averages. Real estate returns include
-          leverage and appreciation; financial alternatives are unleveraged. Comparing
-          leveraged real estate to unleveraged equities understates the equity risk
-          premium. Use with judgement.
-        </p>
-      </div>
-    </section>`;
-}
-
-// ── Investment analysis (Phase A: pro metrics + IRR + tax + sensitivity) ──
-// ── Detail page: 3×3 investment scenarios matrix ─────────────────────────
-// Centrepiece of the investor detail view. Three regions:
-//   1. Best-scenario callout — the winning combo + explanation + the
-//      annualised 10yr headline figure
-//   2. 3×3 matrix — financing rows × contract columns, colour-coded by
-//      annualised return tier, click to drill in
-//   3. Selected-scenario breakdown — income / financing / returns
-//      side-by-side, swapped out by selectScenario() on every cell click
 function detailScenariosHtml(listing) {
   const { scenario: best, allScenarios, explanation } = pickBestScenario(listing);
   if (!best) {
@@ -16236,11 +16267,28 @@ function detailScenariosHtml(listing) {
   const finLabel = t(`scenario.fin.${best.financingKey}`) || FINANCING_PROFILES[best.financingKey].label_en;
   const conLabel = t(`scenario.con.${best.contractKey}`)  || CONTRACT_PROFILES[best.contractKey].label_en;
 
+  // Self-managed defaults to true if untouched. The user can flip it
+  // via the toggle below — when they do, toggleSelfManaged() re-renders
+  // this whole section so every scenario is recomputed with the new
+  // assumption. The state lives on window, not localStorage, so each
+  // listing starts fresh.
+  if (typeof window._selfManaged === 'undefined') window._selfManaged = true;
+  const _selfManagedChecked = window._selfManaged ? 'checked' : '';
+
   return `
     <section class="detail-section detail-scenarios">
       <div class="detail-section-header">
         <h2 class="detail-section-title">${t('detail.section.scenarios')}</h2>
         <p class="detail-section-subtitle">${t('detail.scenarios.subtitle')}</p>
+      </div>
+
+      <div class="scenarios-options-bar">
+        <label class="scenarios-toggle">
+          <input type="checkbox" id="selfManagedToggle" ${_selfManagedChecked}
+                 onchange="toggleSelfManaged(this.checked)">
+          <span class="scenarios-toggle-label">${t('scenarios.self_managed')}</span>
+          <span class="scenarios-toggle-hint">${t('scenarios.self_managed_hint')}</span>
+        </label>
       </div>
 
       <!-- Best scenario callout -->
@@ -16252,7 +16300,7 @@ function detailScenariosHtml(listing) {
           </div>
           <div class="best-scenario-callout-explanation">${escapeHtml(explanation)}</div>
           <div class="best-scenario-callout-metric">
-            ${(best.annualised10yr * 100).toFixed(1)}%
+            ${formatPct(best.annualised10yr * 100)}
             <span class="best-scenario-callout-metric-label">${t('detail.scenarios.annualised_label') || 'annualised 10yr return'}</span>
           </div>
         </div>
@@ -16305,11 +16353,18 @@ function renderScenarioMatrix(scenarios, bestFin, bestCon) {
     const isSelected = isBest;   // initial state — selectScenario() flips on click
 
     if (!s.eligible) {
-      const reasonKey = `detail.scenarios.ineligible_${s.reason || 'no_rent_estimate'}`;
-      const reason    = t(reasonKey) || 'Not available for this listing';
-      return `<td class="matrix-cell matrix-cell-ineligible" title="${escapeAttr(reason)}">
-        <div class="matrix-cell-value">—</div>
-        <div class="matrix-cell-sub">n/a</div>
+      // Fix 6: surface a short reason inside the cell so the user knows
+      // why it's dim without hovering. The full sentence stays on the
+      // tooltip for the curious.
+      const reasonShort = ({
+        'transitorio_zone_not_qualified': t('scenarios.ineligible.zone'),
+        'concordato_not_available':       t('scenarios.ineligible.city'),
+        'no_rent_estimate':                t('scenarios.ineligible.no_rent'),
+      })[s.reason] || t('scenarios.ineligible.generic') || 'n/a';
+      const reasonLong = t(`detail.scenarios.ineligible_${s.reason || 'no_rent_estimate'}`)
+                      || 'Not available for this listing';
+      return `<td class="matrix-cell matrix-cell-ineligible" title="${escapeAttr(reasonLong)}">
+        <div class="matrix-cell-ineligible-text">${escapeHtml(reasonShort)}</div>
       </td>`;
     }
 
@@ -16322,14 +16377,13 @@ function renderScenarioMatrix(scenarios, bestFin, bestCon) {
                : r >= 3.0   ? 'reasonable'
                : r >= 0     ? 'weak'
                :              'avoid';
-    const _loc  = (currentLang === 'it') ? 'it-IT' : 'en-US';
-    const cfAbs = Math.abs(Math.round(s.cashFlowMonth)).toLocaleString(_loc);
+    // Fix 7: route through shared locale-aware formatters so the
+    // matrix doesn't show "€1.400" next to a "€1,400" in the breakdown.
     // Fix 5: primary-residence cells label the cash flow as "Rental yr 3+"
     // so the user understands the money flow only kicks in once the
     // occupancy phase ends.
-    const cfNum = s.cashFlowMonth >= 0
-      ? `+€${cfAbs}`
-      : `−€${cfAbs}`;
+    const cfAbs = formatCurrency(Math.abs(s.cashFlowMonth));
+    const cfNum = s.cashFlowMonth >= 0 ? `+${cfAbs}` : `−${cfAbs}`;
     const cfStr = s.primaryResidencePhase
       ? `Rental yr 3+: ${cfNum}`
       : `${cfNum}/mo`;
@@ -16342,8 +16396,8 @@ function renderScenarioMatrix(scenarios, bestFin, bestCon) {
                 data-fin="${fin}" data-con="${con}"
                 onclick="selectScenario('${fin}','${con}')">
       ${isBest ? '<div class="matrix-cell-star">⭐</div>' : ''}
-      <div class="matrix-cell-value">${r.toFixed(1)}%</div>
-      <div class="matrix-cell-sub">${cfStr}/mo</div>
+      <div class="matrix-cell-value">${formatPct(r)}</div>
+      <div class="matrix-cell-sub">${cfStr}</div>
     </td>`;
   };
 
@@ -16413,12 +16467,26 @@ function selectScenario(financingKey, contractKey) {
   if (bkEl) bkEl.innerHTML = renderScenarioBreakdown(scenario, listing);
 }
 
+// Self-managed toggle handler. Flips window._selfManaged (read by
+// computeScenario for the mgmt-fee gate) and re-renders the whole
+// scenarios section so every cell + the picker's best choice reflect
+// the new assumption.
+function toggleSelfManaged(value) {
+  window._selfManaged = !!value;
+  const listing = window._currentDetailListing;
+  if (!listing) return;
+  const section = document.querySelector('section.detail-scenarios');
+  if (section) section.outerHTML = detailScenariosHtml(listing);
+}
+
 function renderScenarioBreakdown(scenario, listing) {
   const fin = FINANCING_PROFILES[scenario.financingKey];
   const con = CONTRACT_PROFILES[scenario.contractKey];
-  const _locale = (currentLang === 'it') ? 'it-IT' : 'en-US';
-  const fmt    = n => '€' + Math.round(n).toLocaleString(_locale);
-  const fmtPct = n => (n * 100).toFixed(1) + '%';
+  // Fix 7: route through the shared locale-aware helpers so the
+  // breakdown matches what the matrix + card pills render. Single
+  // locale per render, no mixed-format leaks.
+  const fmt    = n => formatCurrency(n);
+  const fmtPct = n => formatPct(n * 100);
 
   const downPayment = (listing.price || 0) * (1 - fin.ltv);
   const purchaseCostsOnly = scenario.cashInvested - downPayment;
@@ -16457,10 +16525,14 @@ function renderScenarioBreakdown(scenario, listing) {
           <span>− ${t('breakdown.vacancy')} (${con.vacancy_months} mo)</span>
           <span>−${fmt(scenario.vacancyAnnual)}</span>
         </div>
+        ${scenario.selfManaged ? `
+        <div class="breakdown-row breakdown-subnote">
+          <span>✓ ${t('breakdown.management_self')}</span>
+        </div>` : `
         <div class="breakdown-row breakdown-deduction">
-          <span>− ${t('breakdown.management')} (${(con.mgmt_pct*100).toFixed(0)}%)</span>
+          <span>− ${t('breakdown.management_agency')} (${(con.mgmt_pct*100).toFixed(0)}%)</span>
           <span>−${fmt(scenario.mgmtAnnual)}</span>
-        </div>
+        </div>`}
         <div class="breakdown-row breakdown-deduction">
           <span>− ${t('breakdown.cedolare')} (${(con.cedolare_rate*100).toFixed(0)}%)</span>
           <span>−${fmt(scenario.cedolareAnnual)}</span>
@@ -16474,8 +16546,14 @@ function renderScenarioBreakdown(scenario, listing) {
           <span>−${fmt(scenario.maintAnnual)}</span>
         </div>
         <div class="breakdown-row breakdown-deduction">
-          <span>− ${t('breakdown.condo_fees')}</span>
+          <span>− ${t('breakdown.condo_fees_owner')}</span>
           <span>−${fmt(scenario.condoAnnual)}</span>
+        </div>
+        <div class="breakdown-row breakdown-subnote">
+          <span>${t('breakdown.condo_fees_note', {
+            total:  fmt(scenario.totalCondoAnnual),
+            tenant: fmt(scenario.totalCondoAnnual * (1 - OWNER_CONDO_SHARE)),
+          })}</span>
         </div>
         <div class="breakdown-row breakdown-total">
           <span>${t('breakdown.net_rent_annual')}</span>
@@ -16553,7 +16631,7 @@ function renderScenarioAssumptions(listing) {
                  || 0.02) * 100;
   return `
     <div class="assumptions-grid">
-      <div><strong>${t('assumptions.appreciation') || 'Appreciation'}:</strong> ${aprRate.toFixed(1)}%/yr (${city} fascia ${fascia})</div>
+      <div><strong>${t('assumptions.appreciation') || 'Appreciation'}:</strong> ${formatPct(aprRate)}/yr (${city} fascia ${fascia})</div>
       <div><strong>${t('assumptions.maintenance') || 'Maintenance'}:</strong> 0.3% of price/yr</div>
       <div><strong>${t('assumptions.imu') || 'IMU'}:</strong> 0.4% of price/yr (second home)</div>
       <div><strong>${t('assumptions.purchase_costs') || 'Purchase costs'}:</strong> 11% (2nd home), 4% (prima casa)</div>
@@ -16881,200 +16959,6 @@ function updateMetricStrip(m) {
 }
 
 // ── Cost breakdown ────────────────────────────────────────────────────────
-function detailCostBreakdownHtml(listing) {
-  const yields = computeYieldMetrics(listing);
-  if (!yields || !yields.cost_breakdown) return '';
-
-  const c           = yields.cost_breakdown;
-  const monthlyRent = listing.estimated_rent_mo || 0;
-  const condoLbl    = c.condo_known ? 'from listing' : 'estimated €5/m²/mo';
-
-  const items = [
-    { name: 'Vacancy reserve',     monthly: c.vacancy/12,     annual: c.vacancy,     note: '1 month/year' },
-    { name: 'Management',          monthly: c.management/12,  annual: c.management,  note: '5% — self-managed' },
-    { name: 'IMU',                 monthly: c.imu/12,         annual: c.imu,         note: 'second-home tax, ~0.4% of price' },
-    { name: 'Maintenance reserve', monthly: c.maintenance/12, annual: c.maintenance, note: '0.3% of price (in-flat repairs)' },
-    { name: 'Condo fees',          monthly: c.condo/12,       annual: c.condo,       note: condoLbl },
-  ];
-  const totalMonthly = items.reduce((s, i) => s + i.monthly, 0);
-  const totalAnnual  = items.reduce((s, i) => s + i.annual,  0);
-
-  const pctOfRent = (annual) => monthlyRent ? Math.round((annual / (monthlyRent * 12)) * 100) + '%' : '—';
-
-  return `
-    <section class="detail-costs">
-      <h2><span class="section-icon">💸</span> Operating cost breakdown</h2>
-      <p class="costs-intro">
-        What it costs to hold this property each month, before mortgage payments.
-        These are realistic Milan estimates — adjust mentally if your situation differs.
-      </p>
-      <table class="cost-table">
-        <thead>
-          <tr>
-            <th>Item</th>
-            <th>Monthly</th>
-            <th>Annual</th>
-            <th>% of rent</th>
-            <th>Note</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${items.map(item => `
-            <tr>
-              <td>${escapeHtml(item.name)}</td>
-              <td>€${fmt(Math.round(item.monthly))}</td>
-              <td>€${fmt(Math.round(item.annual))}</td>
-              <td>${pctOfRent(item.annual)}</td>
-              <td class="cost-note">${escapeHtml(item.note)}</td>
-            </tr>`).join('')}
-          <tr class="cost-total">
-            <td><strong>Total operating costs</strong></td>
-            <td><strong>€${fmt(Math.round(totalMonthly))}</strong></td>
-            <td><strong>€${fmt(Math.round(totalAnnual))}</strong></td>
-            <td><strong>${pctOfRent(totalAnnual)}</strong></td>
-            <td></td>
-          </tr>
-        </tbody>
-      </table>
-    </section>`;
-}
-
-// ── Mortgage scenarios (reuse existing breakdown) ─────────────────────────
-function detailMortgageScenariosHtml(listing) {
-  const inner = investorMortgageBreakdownHtml(listing);
-  if (!inner) return '';
-  return `
-    <section class="detail-mortgage">
-      <h2><span class="section-icon">🏦</span> Mortgage scenarios</h2>
-      ${inner}
-    </section>`;
-}
-
-// ── Phase 2: Comparable rentals / sales / neighbourhood / mini-map ───────
-// Sales carry `comps_sale_comp_ids` (added by comps_engine.py post-Phase 2)
-// and `estimated_rent_comp_ids` (added by computeEstimatedRents). Older
-// datasets won't have these arrays — sections gracefully show an empty state.
-
-const _METHOD_LABELS_RENT = {
-  // New distance-capped methods (current)
-  'zone_cond_600m':     'same zone + same condition + 600m radius',
-  'zone_any_600m':      'same zone + 600m radius',
-  'zone_any_1000m':     'same zone + 1km radius',
-  'zone_wide_1000m':    'same zone + wider size + 1km radius',
-  'zone_any_full':      'same zone (full extent)',
-  'fascia_tight_1500m': 'same fascia + 1.5km radius',
-  // Legacy keys kept so older cached sales still display readable labels
-  'zone_condition_strict': 'same zone + same condition',
-  'zone_any_condition':    'same zone + condition adjusted',
-  'zone_wide_size':        'same zone + wider size band',
-  'fascia_tight':          'same fascia + tight size band',
-  // Shared fallback methods
-  'fascia_wide':           'same fascia + wider size band',
-  'citywide_size':         'citywide by size only',
-  'omi_benchmark':         'OMI benchmark fallback',
-  'no_data':               'no data',
-};
-
-const _METHOD_LABELS_SALE = {
-  'zone_stratified':         'same zone + same condition',
-  'zone_any_condition':      'same zone + condition adjusted',
-  'radius_800m_same_fascia': '≤800 m + same fascia',
-  'fascia_fallback':         'same fascia (citywide)',
-  'comps_500':               '≤500 m radius',
-  'comps_800':               '≤800 m radius',
-  'comps_1200':              '≤1200 m radius',
-  'omi_zone':                'OMI zone fallback',
-  'omi_only':                'OMI-only (no comps)',
-};
-
-// Floor label helper that gracefully handles strings or numbers
-function _compFloorLabel(c) {
-  if (c.floor_label) return c.floor_label;
-  if (c.floor_n == null) return '—';
-  if (c.floor_n < 0) return 'basement';
-  if (c.floor_n === 0) return 'ground';
-  return c.floor_n + '°';
-}
-
-// One row per comp listing — used by both rental and sale comp lists.
-// `target` is the listing being analysed; we render a "vs target" delta so
-// the user sees relative pricing at a glance.
-function compRowHtml(comp, type, target) {
-  const isRent       = type === 'rent';
-  const compPsqm     = isRent
-    ? (comp.ask_psqm_effective || comp.ask_psqm || comp.effective_psqm_rent || 0)
-    : (comp.ask_psqm || 0);
-  const targetPsqm   = isRent ? (target.estimated_rent_psqm || 0) : (target.ask_psqm || 0);
-  const compPrice    = isRent ? (comp.rent_mo || comp.effective_rent_mo) : comp.price;
-  const psqmDelta    = (compPsqm && targetPsqm)
-    ? ((compPsqm - targetPsqm) / targetPsqm) * 100
-    : null;
-
-  const photo = comp.thumbnail
-    ? `<img src="${escapeAttr(comp.thumbnail)}" alt="" loading="lazy">`
-    : `<div class="comp-photo-placeholder">🏠</div>`;
-
-  const condition = comp.condition || '—';
-  const floor     = _compFloorLabel(comp);
-  const rooms     = (comp.rooms != null) ? comp.rooms + ' loc.' : '—';
-  const sqm       = (comp.sqm != null) ? comp.sqm + ' m²' : '—';
-  const addr      = (comp.address || '').slice(0, 60);
-  const source    = comp.source || '';
-
-  // Rentals stay on the dashboard (no detail view); sales open detail.
-  // Both use openCompDetail() — it picks the right path by looking the id up.
-  const linkAttrs = `href="?l=${encodeURIComponent(String(comp.id))}" onclick="event.preventDefault(); openCompDetail('${escapeAttr(String(comp.id))}', '${type}')"`;
-
-  const psqmDisp = compPsqm
-    ? '€' + (isRent ? compPsqm.toFixed(1) : fmt(Math.round(compPsqm))) + '/m²' + (isRent ? '/mo' : '')
-    : '—';
-  const priceDisp = compPrice != null
-    ? '€' + fmt(compPrice) + (isRent ? '<span class="suffix">/mo</span>' : '')
-    : '—';
-
-  const deltaCls = psqmDelta == null ? '' : (psqmDelta < 0 ? 'positive' : psqmDelta > 0 ? 'negative' : '');
-  const deltaStr = psqmDelta == null ? '' : (psqmDelta >= 0 ? '+' : '') + psqmDelta.toFixed(1) + '%';
-
-  return `
-    <a class="comp-row" ${linkAttrs}>
-      <div class="comp-photo">${photo}</div>
-      <div class="comp-info">
-        <div class="comp-info-top">
-          <span class="comp-neighbourhood">${escapeHtml(comp.neighbourhood || '?')}</span>
-          ${source ? `<span class="comp-source-tag">${escapeHtml(source)}</span>` : ''}
-        </div>
-        <div class="comp-address">${escapeHtml(addr)}</div>
-        <div class="comp-stats">
-          <span class="comp-stat">${sqm}</span>
-          <span class="comp-stat">${rooms}</span>
-          <span class="comp-stat">${floor}</span>
-          <span class="comp-stat">${escapeHtml(condition)}</span>
-        </div>
-      </div>
-      <div class="comp-price">
-        <div class="comp-price-main">${priceDisp}</div>
-        <div class="comp-price-psqm">${psqmDisp}</div>
-        ${psqmDelta != null ? `<div class="comp-delta ${deltaCls}">${deltaStr}</div>` : ''}
-      </div>
-    </a>`;
-}
-
-// Click handler for comp rows. Sales open the detail page; rentals scroll
-// to the listing on the dashboard (rentals have no detail page yet).
-function openCompDetail(compId, type) {
-  if (type === 'sale' || type === 'sales') {
-    Router.openDetail(compId);
-    return;
-  }
-  // Rentals → close detail (if open) and navigate to dashboard with ?l=ID
-  // so the existing single-listing-share scroll-to-and-highlight kicks in.
-  const url = new URL(location);
-  url.searchParams.delete('view');
-  url.searchParams.set('l', String(compId));
-  location.href = url.toString();
-}
-
-// ── Comparable rentals ─────────────────────────────────────────────────────
 function detailComparableRentalsHtml(listing) {
   const compIds  = listing.estimated_rent_comp_ids || [];
   const rentals  = (typeof ALL_RENT !== 'undefined') ? ALL_RENT : (window.ALL_RENT || []);
