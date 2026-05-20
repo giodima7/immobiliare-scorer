@@ -87,6 +87,12 @@ SCHEMA_COLUMNS: frozenset[str] = frozenset({
     "is_auction", "is_nuda_proprieta",
     # ── Fake / foreign-property bait (migration 010) ────────────────────
     "is_fake",
+    # ── Misrepresented-address detection (migration 012) ────────────────
+    # Listings titled as {city} but actually located in a nearby comune
+    # (Opera / Rozzano / San Donato for Milan, etc.). is_outside_city is
+    # the geometric proof; is_misrepresented_address is the text signal.
+    # Either sets is_fake too so the existing exclusion path filters them.
+    "is_misrepresented_address", "is_outside_city", "misrep_reason",
     # ── Sanity gates (migration 008 + 009) ──────────────────────────────
     "excluded", "excluded_reason",
     "price_floor_gate_applied", "price_floor_reason",

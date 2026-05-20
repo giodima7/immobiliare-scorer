@@ -204,6 +204,149 @@ def detect_fake_listing(title: str, description: str, city: str = "milano") -> b
     return False
 
 
+# ── Misrepresented-address detection ──────────────────────────────────────────
+# A second fraud pattern, separate from outright "foreign property" bait:
+# agencies post a Milan title but the actual property sits in a nearby comune
+# (Opera, Rozzano, San Donato, etc.). Comps then read the listing as a
+# bargain on the Milan curve when in fact it's normally priced for its real
+# location. Three signals — text, distance phrase, coordinate bbox.
+
+# Comuni near each major city but legally separate (own ISTAT codes, own
+# OMI tables). Listings claiming to be in {city} but mentioning one of
+# these comuni in the description are almost certainly misrepresented.
+# Comparable lookups should not run against {city} comps for them.
+MILAN_ADJACENT_COMUNI: frozenset[str] = frozenset({
+    # Hinterland sud
+    "opera", "rozzano", "locate di triulzi", "locate triulzi",
+    "san donato milanese", "san giuliano milanese", "pieve emanuele",
+    "pantigliate", "mediglia", "buccinasco", "corsico", "cesano boscone",
+    "trezzano sul naviglio", "assago",
+    # Hinterland est
+    "segrate", "pioltello", "cologno monzese", "sesto san giovanni",
+    "cinisello balsamo", "cusano milanino", "cormano", "bresso",
+    "vimodrone", "cernusco sul naviglio",
+    # Hinterland nord
+    "paderno dugnano", "rho", "pero", "settimo milanese",
+    "novate milanese", "baranzate",
+    # Hinterland ovest
+    "cusago", "corbetta", "magenta", "arluno",
+})
+
+ROMA_ADJACENT_COMUNI: frozenset[str] = frozenset({
+    "fiumicino", "ciampino", "guidonia", "guidonia montecelio",
+    "pomezia", "tivoli", "monterotondo", "frascati", "albano",
+    "castel gandolfo", "marino", "grottaferrata",
+})
+
+NAPOLI_ADJACENT_COMUNI: frozenset[str] = frozenset({
+    "pozzuoli", "casoria", "afragola", "portici", "ercolano",
+    "torre del greco", "castellammare di stabia", "pompei",
+    "san giorgio a cremano", "casalnuovo di napoli", "marano di napoli",
+    "arzano", "frattamaggiore", "mugnano di napoli", "qualiano",
+})
+
+ADJACENT_COMUNI_BY_CITY: dict[str, frozenset[str]] = {
+    "milano": MILAN_ADJACENT_COMUNI,
+    "roma":   ROMA_ADJACENT_COMUNI,
+    "napoli": NAPOLI_ADJACENT_COMUNI,
+}
+
+# Tight per-comune bounding boxes (the actual administrative boundary, not
+# the loose Lombardy/Lazio rectangle the map filter uses). Coordinates
+# outside these win a "definitely not in this city" verdict regardless of
+# what the title says — the strongest of the three signals.
+CITY_COMUNE_BBOX: dict[str, dict[str, float]] = {
+    "milano": {"lat_min": 45.388, "lat_max": 45.535,
+               "lng_min":  9.065, "lng_max":  9.280},
+    "roma":   {"lat_min": 41.755, "lat_max": 42.085,
+               "lng_min": 12.235, "lng_max": 12.730},
+    "napoli": {"lat_min": 40.782, "lat_max": 40.920,
+               "lng_min": 14.140, "lng_max": 14.380},
+    "la_maddalena": {"lat_min": 41.165, "lat_max": 41.250,
+                     "lng_min":  9.345, "lng_max":  9.475},
+}
+
+# Distance phrase: "a X km da Milano" / "a soli X km" — listings that
+# admit they're 3+ km away from the claimed city are misrepresented.
+# "a (soli) X km (ca/circa) da [milano/roma/napoli]"
+#   - The optional "circa"/"ca." carries its own leading space so the
+#     pattern still matches "a 8 km da Milano" without it.
+#   - "\d*" lets the decimal "5,5" notation through ("a 5,5 km da Milano").
+_DISTANCE_PATTERN = _re.compile(
+    r"a\s+(?:solo|soli)?\s*(\d+)[\s,.]?\d*\s*km(?:\s+(?:ca\.?|circa))?\s+da"
+)
+
+
+def detect_misrepresented_address(title: str,
+                                  description: str,
+                                  city: str = "milano") -> tuple[bool, str]:
+    """
+    Returns (is_misrepresented, reason). Three signals, checked in order:
+      A) Comune name immediately followed by its province code parenthetical
+         — e.g. "Opera (MI)" inside a "Milano" listing.
+      B) "a X km da [city]" admission with X ≥ 3.
+      C) Adjacent comune name in the first 300 chars (description preamble).
+
+    Conservative on false-positives: legitimate Milan listings sometimes
+    say "Milano (MI)" or reference a comune as a landmark deep in the body
+    — neither pattern fires.
+    """
+    adjacent = ADJACENT_COMUNI_BY_CITY.get((city or "milano").lower())
+    if not adjacent:
+        return False, ""
+
+    desc_lower = (description or "")[:1500].lower()
+    if not desc_lower:
+        return False, ""
+
+    # A) Comune + province parenthetical. The (MI) / (RM) / (NA) sticker is
+    #    a deliberate marker agencies write so the buyer doesn't get confused
+    #    — which is exactly the smoking gun we want to flag.
+    for comune in adjacent:
+        for marker in (f"{comune} (mi)", f"{comune}(mi)", f"{comune}, mi",
+                       f"{comune} (rm)", f"{comune}, rm",
+                       f"{comune} (na)", f"{comune}, na"):
+            if marker in desc_lower:
+                return True, f'Listed as {city} but description says "{comune}"'
+
+    # B) Distance-disclaimer phrase. Anything < 3 km is plausible Milan
+    #    (a 2-km radius covers a lot of the city); ≥ 3 km is definitively
+    #    out of the central comune.
+    m = _DISTANCE_PATTERN.search(desc_lower)
+    if m:
+        try:
+            km = int(m.group(1))
+        except (TypeError, ValueError):
+            km = 0
+        if km >= 3:
+            return True, f"Description admits property is {km} km away from claimed location"
+
+    # C) Adjacent comune name in the opening 300 chars without the
+    #    province sticker. Catches "Ad Opera proponiamo bilocale…"-style
+    #    openings where the marker convention isn't used.
+    head = desc_lower[:300]
+    for comune in adjacent:
+        if f" {comune} " in head or head.startswith(comune + " "):
+            return True, f'Description opens with reference to "{comune}"'
+
+    return False, ""
+
+
+def is_outside_city_bbox(lat: float | None,
+                         lng: float | None,
+                         city: str) -> bool:
+    """
+    True when the listing has coordinates AND those coordinates fall
+    outside the city's comune bounding box. Listings without coords
+    return False (we can't prove they're misrepresented either way).
+    """
+    bbox = CITY_COMUNE_BBOX.get((city or "milano").lower())
+    if not bbox or not lat or not lng:
+        return False
+    return not (bbox["lat_min"] <= lat <= bbox["lat_max"] and
+                bbox["lng_min"] <= lng <= bbox["lng_max"])
+
+
 # ── City config ───────────────────────────────────────────────────────────────
 # url_slug: the /vendita-case/{slug}/ URL segment
 CITIES = {
@@ -924,12 +1067,39 @@ def parse_listing(item: dict, city_key: str, city_label: str) -> Optional[dict]:
               f"{(re_data.get('title') or '')[:70]}",
               flush=True)
 
+    # Misrepresented-address detection — Milan-titled listings that
+    # actually sit in Opera / Rozzano / San Donato / etc. Two layers:
+    #   1) text — comune name + province sticker in description
+    #   2) geometry — coordinates outside the city comune bbox (strongest)
+    # Either signal sets is_fake so the existing exclusion path filters
+    # them out the same way as foreign-bait listings.
+    is_misrep_addr   = False
+    is_outside_city  = False
+    misrep_reason    = ""
+    if not is_fake:
+        is_misrep_addr, misrep_reason = detect_misrepresented_address(
+            title       = re_data.get("title") or "",
+            description = description,
+            city        = city_key,
+        )
+        if is_outside_city_bbox(latitude, longitude, city_key):
+            is_outside_city = True
+            if not misrep_reason:
+                misrep_reason = f"Coordinates outside {city_key} comune"
+        if is_misrep_addr or is_outside_city:
+            is_fake = True
+            print(f"  [misrep-address] {listing_id} ({city_key}) — {misrep_reason}",
+                  flush=True)
+
     omi = match_omi(city_key, neighbourhood)
 
     return {
         "is_auction":         is_auction,
         "is_nuda_proprieta":  is_nuda,
         "is_fake":            is_fake,
+        "is_misrepresented_address": is_misrep_addr,
+        "is_outside_city":           is_outside_city,
+        "misrep_reason":             misrep_reason or None,
         "id":              str(listing_id),
         "source":          "sale",
         # `city` = lowercase code (Supabase listings.city); `city_label`

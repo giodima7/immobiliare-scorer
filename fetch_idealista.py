@@ -982,6 +982,8 @@ def parse_idealista_listing(raw: dict) -> Optional[dict]:
     # title + first 1000 chars of description.
     try:
         from fetch_listings import detect_fake_listing as _detect_fake
+        from fetch_listings import detect_misrepresented_address as _detect_misrep
+        from fetch_listings import is_outside_city_bbox as _outside_bbox
         _is_fake = _detect_fake(
             title       = raw.get("title", "") or "",
             description = raw.get("description", "") or "",
@@ -989,10 +991,31 @@ def parse_idealista_listing(raw: dict) -> Optional[dict]:
         )
     except Exception:
         _is_fake = False
+        _detect_misrep = lambda **_: (False, "")  # noqa: E731
+        _outside_bbox  = lambda *a, **_: False    # noqa: E731
     if _is_fake:
         print(f"  [fake] id_{listing_id} ({CITY_KEY}) — "
               f"{(raw.get('title') or '')[:70]}",
               flush=True)
+
+    # Misrepresented-address detection — same two layers as fetch_listings.
+    _is_misrep   = False
+    _outside     = False
+    _misrep_why  = ""
+    if not _is_fake:
+        _is_misrep, _misrep_why = _detect_misrep(
+            title       = raw.get("title", "") or "",
+            description = raw.get("description", "") or "",
+            city        = CITY_KEY,
+        )
+        if _outside_bbox(lat, lon, CITY_KEY):
+            _outside = True
+            if not _misrep_why:
+                _misrep_why = f"Coordinates outside {CITY_KEY} comune"
+        if _is_misrep or _outside:
+            _is_fake = True
+            print(f"  [misrep-address] id_{listing_id} ({CITY_KEY}) — {_misrep_why}",
+                  flush=True)
 
     return {
         # ── Identity ──────────────────────────────────────────────────────────
@@ -1013,6 +1036,9 @@ def parse_idealista_listing(raw: dict) -> Optional[dict]:
         "is_auction":         is_auction,
         "is_nuda_proprieta":  is_nuda,
         "is_fake":            _is_fake,
+        "is_misrepresented_address": _is_misrep,
+        "is_outside_city":           _outside,
+        "misrep_reason":             _misrep_why or None,
         # ── Price ─────────────────────────────────────────────────────────────
         "rent_mo":            price,        # monthly rent € — same field name as fetch_rentals
         "sqm":                sqm,
@@ -1129,6 +1155,8 @@ def parse_idealista_sale_listing(raw: dict) -> Optional[dict]:
     # Same fake-listing scan as the rentals path above (shared helper).
     try:
         from fetch_listings import detect_fake_listing as _detect_fake
+        from fetch_listings import detect_misrepresented_address as _detect_misrep
+        from fetch_listings import is_outside_city_bbox as _outside_bbox
         _is_fake = _detect_fake(
             title       = raw.get("title", "") or "",
             description = raw.get("description", "") or "",
@@ -1136,10 +1164,31 @@ def parse_idealista_sale_listing(raw: dict) -> Optional[dict]:
         )
     except Exception:
         _is_fake = False
+        _detect_misrep = lambda **_: (False, "")  # noqa: E731
+        _outside_bbox  = lambda *a, **_: False    # noqa: E731
     if _is_fake:
         print(f"  [fake-sale] id_{listing_id} ({CITY_KEY}) — "
               f"{(raw.get('title') or '')[:70]}",
               flush=True)
+
+    # Misrepresented-address detection — same two layers, sales path.
+    _is_misrep  = False
+    _outside    = False
+    _misrep_why = ""
+    if not _is_fake:
+        _is_misrep, _misrep_why = _detect_misrep(
+            title       = raw.get("title", "") or "",
+            description = raw.get("description", "") or "",
+            city        = CITY_KEY,
+        )
+        if _outside_bbox(lat, lon, CITY_KEY):
+            _outside = True
+            if not _misrep_why:
+                _misrep_why = f"Coordinates outside {CITY_KEY} comune"
+        if _is_misrep or _outside:
+            _is_fake = True
+            print(f"  [misrep-sale] id_{listing_id} ({CITY_KEY}) — {_misrep_why}",
+                  flush=True)
 
     return {
         "id":              f"id_{listing_id}",
@@ -1160,6 +1209,9 @@ def parse_idealista_sale_listing(raw: dict) -> Optional[dict]:
         "is_auction":      is_auction,
         "is_nuda_proprieta": is_nuda,
         "is_fake":         _is_fake,
+        "is_misrepresented_address": _is_misrep,
+        "is_outside_city":           _outside,
+        "misrep_reason":             _misrep_why or None,
         "price":           price,                # total purchase price €
         "sqm":             sqm,
         "ask_psqm":        ask_psqm,             # €/m²  (purchase, not monthly)

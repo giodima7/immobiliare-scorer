@@ -973,13 +973,20 @@ def apply_price_floor_gate(listing: dict) -> bool:
 
 
 # ── Extreme-underpricing suspicion flag ──────────────────────────────────
-# A legitimate listing is rarely more than ~40% below comps. Beyond -60%
-# the probability of fraud / data error / undetected fake spikes. We
-# don't auto-exclude — genuine distressed sales exist — but cap the
-# score at 55 and strip gem badges so the row never lands at the top
-# of the user's grid. Dashboard surfaces a "verify this listing"
-# banner via the _extreme_underpricing flag.
-EXTREME_UNDERPRICING_THRESHOLD_PCT: float = -60.0
+# A legitimate listing is rarely more than ~40 % below comps. Anything
+# beyond that is almost always one of: undetected auction, nuda
+# proprietà that slipped the auction filter, mis-categorised square
+# metreage, or a misrepresented-address listing comparing against the
+# wrong comps. We don't auto-exclude — genuine distressed sales exist
+# — but cap the score at 55 and strip gem badges so the row never
+# lands at the top of the user's grid. Dashboard surfaces a "verify
+# this listing" banner via the _extreme_underpricing flag.
+#
+# Threshold tightened 2026-05-21: −60 → −40. The previous bar let
+# obvious misrepresented-Opera-as-Milan listings (-54.5 % vs comps)
+# slip through as "Great Value". −40 % is still wide enough to keep
+# real distressed sales in play.
+EXTREME_UNDERPRICING_THRESHOLD_PCT: float = -40.0
 EXTREME_UNDERPRICING_CAP:           int   = 55
 
 
