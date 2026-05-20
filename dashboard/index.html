@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-21 transitorio-real-costs">
+<meta name="lume-build" content="2026-05-21 investor-profile-filters">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -1190,6 +1190,16 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--green-deep); }
 }
 /* Filter / sort widgets that only make sense in investor mode */
 body:not(.is-investor) .investor-only { display: none !important; }
+/* Inline ⓘ marker on the Transitorio pill — calls out that the
+   premium often gets eaten by the new utility + furnishing costs. */
+.pill-info-icon {
+  font-size: 10px;
+  margin-left: 4px;
+  opacity: 0.55;
+  cursor: help;
+  vertical-align: middle;
+}
+.pill-info-icon:hover { opacity: 1; }
 
 /* Investor-specific reason-component pill colours
    (extends the existing reason-component-* set from buyer mode) */
@@ -7665,6 +7675,41 @@ function saveFilters() {
     </div>
   </div>
   <div class="filter-sep investor-only"></div>
+  <!-- Investor profile filters: Financing + Contract. Visible only in
+       investor mode via body.is-investor (set by setSalesViewMode).
+       Pills don't re-render the whole filter bar on click — each click
+       flips classes via setInvestorFinancing / setInvestorContract and
+       triggers renderSales(), which routes through pickBestScenario
+       (now filter-aware). -->
+  <div class="filter-group investor-only">
+    <label>Financing</label>
+    <div class="sort-tabs" id="sInvestorFinancing">
+      <button class="sort-tab" data-financing="all"
+              onclick="setInvestorFinancing('all')">All</button>
+      <button class="sort-tab" data-financing="cash"
+              onclick="setInvestorFinancing('cash')">Cash</button>
+      <button class="sort-tab" data-financing="mortgage"
+              onclick="setInvestorFinancing('mortgage')">Mortgage</button>
+    </div>
+  </div>
+  <div class="filter-sep investor-only"></div>
+  <div class="filter-group investor-only">
+    <label>Contract</label>
+    <div class="sort-tabs" id="sInvestorContract">
+      <button class="sort-tab" data-contract="all"
+              onclick="setInvestorContract('all')">All</button>
+      <button class="sort-tab" data-contract="libero"
+              onclick="setInvestorContract('libero')">Libero</button>
+      <button class="sort-tab" data-contract="concordato"
+              onclick="setInvestorContract('concordato')">Concordato</button>
+      <button class="sort-tab" data-contract="transitorio"
+              onclick="setInvestorContract('transitorio')"
+              title="Short-term lease (1-18mo). Rent is 10-15% higher than libero BUT the landlord pays utilities (~€1,500/yr net), funds €8-15k furnishing upfront (amortised), and bears higher turnover.">
+        Transitorio <span class="pill-info-icon">ⓘ</span>
+      </button>
+    </div>
+  </div>
+  <div class="filter-sep investor-only"></div>
   <div class="filter-group investor-only">
     <label>Min yield</label>
     <select id="sMinYield">
@@ -8926,6 +8971,20 @@ const STRINGS = {
     'breakdown.insurance':          'Property insurance',
     'breakdown.marketing':          'Marketing & listings',
     'breakdown.furnishing_upfront': 'Furnishing setup (upfront)',
+    // Investor profile filters (shown in the sales filter bar when
+    // investor mode is on). Narrow the candidate scenarios that
+    // pickBestScenario considers — matrix is unaffected.
+    'investor.filter.financing':           'Financing',
+    'investor.filter.contract':            'Contract',
+    'investor.filter.all':                 'All',
+    'investor.filter.cash':                'Cash',
+    'investor.filter.mortgage':            'Mortgage',
+    'investor.filter.libero':              'Libero',
+    'investor.filter.concordato':          'Concordato',
+    'investor.filter.transitorio':         'Transitorio',
+    'investor.filter.transitorio_tooltip': 'Short-term lease (1-18mo). Rent is 10-15% higher than libero BUT the landlord pays utilities (~€1,500/yr net), funds €8-15k furnishing upfront (amortised), and bears higher turnover. The premium is often largely consumed by these costs — transitorio only beats libero in prime corporate/student zones with very high occupancy.',
+    'investor.best_with_filters':          'Best matching your filters',
+    'scenarios.no_match_filters':          'No positive scenario matches your filters',
     // Fix 3: self-managed toggle + agency-managed label
     'breakdown.management_agency':'Agency management fee',
     'breakdown.management_self':  'Self-managed — no agency fee',
@@ -9196,6 +9255,17 @@ const STRINGS = {
     'breakdown.insurance':          'Assicurazione immobile',
     'breakdown.marketing':          'Marketing e annunci',
     'breakdown.furnishing_upfront': 'Arredamento iniziale',
+    'investor.filter.financing':           'Finanziamento',
+    'investor.filter.contract':            'Contratto',
+    'investor.filter.all':                 'Tutti',
+    'investor.filter.cash':                'Contanti',
+    'investor.filter.mortgage':            'Mutuo',
+    'investor.filter.libero':              'Libero',
+    'investor.filter.concordato':          'Concordato',
+    'investor.filter.transitorio':         'Transitorio',
+    'investor.filter.transitorio_tooltip': 'Contratto breve (1-18 mesi). Canone 10-15% superiore al libero MA il proprietario paga le utenze (~1.500€/anno netti), anticipa 8.000-15.000€ di arredamento (ammortizzato), e sopporta maggiori costi di turnover. Il premio è spesso largamente eroso da questi costi — il transitorio batte il libero solo in zone corporate/universitarie prime con altissima occupazione.',
+    'investor.best_with_filters':          'Migliore con i tuoi filtri',
+    'scenarios.no_match_filters':          'Nessuno scenario positivo corrisponde ai filtri',
     'breakdown.management_agency':'Commissione agenzia gestione',
     'breakdown.management_self':  'Gestione diretta — nessun costo agenzia',
     'scenarios.self_managed':     'Gestisco io l\'affitto',
@@ -10097,27 +10167,59 @@ function computeAllScenarios(listing) {
 // Deterministic best-scenario picker. Within 0.5 % of the top, prefer
 // simpler / lower-friction options (cash > invest > primary;
 // libero > concordato > transitorio).
-function pickBestScenario(listing) {
-  const all      = computeAllScenarios(listing);
-  const eligible = all.filter(s => s.eligible && s.annualised10yr > 0);
-  if (eligible.length === 0) {
-    return { scenario: null, allScenarios: all,
-             explanation: 'No scenario produces a positive return for this listing.' };
+function pickBestScenario(listing, constraintsOverride) {
+  const all = computeAllScenarios(listing);
+  let   eligible = all.filter(s => s.eligible && s.annualised10yr > 0);
+
+  // Active filter constraints — read from the investor profile pills
+  // when running in investor mode. Callers can override (e.g. the detail
+  // page might want to ask "what would the best be with no filters").
+  const inInvestorMode = (typeof window !== 'undefined' && window.salesViewMode === 'investor');
+  const filters = constraintsOverride || (inInvestorMode ? {
+    financing: (typeof window !== 'undefined' && window.investorFinancing) || 'all',
+    contract:  (typeof window !== 'undefined' && window.investorContract)  || 'all',
+  } : { financing: 'all', contract: 'all' });
+
+  // Financing filter. "mortgage" matches both invest + primary so the
+  // user gets the better of the two when they're in leverage mode.
+  if (filters.financing === 'cash') {
+    eligible = eligible.filter(s => s.financingKey === 'cash');
+  } else if (filters.financing === 'mortgage') {
+    eligible = eligible.filter(s => s.financingKey === 'mortgage_invest'
+                                 || s.financingKey === 'mortgage_primary');
+  }
+
+  // Contract filter
+  if (filters.contract !== 'all') {
+    eligible = eligible.filter(s => s.contractKey === filters.contract);
   }
 
   // Fix 4: prefer investment scenarios. Primary residence asks the user
   // to live there for 2 years before any return materialises — a major
   // lifestyle constraint, not just a slightly different return profile.
-  // It still shows in the matrix; we just don't crown it best unless
-  // every investment scenario fails outright.
-  const investmentOnly = eligible.filter(s =>
-    s.financingKey !== 'mortgage_primary'
-  );
-  const candidatePool = investmentOnly.length > 0 ? investmentOnly : eligible;
+  // Skip the auto-exclude when the user explicitly picked Mortgage —
+  // they're signalling they're open to either invest or primary mortgage.
+  if (filters.financing !== 'mortgage') {
+    const investmentOnly = eligible.filter(s => s.financingKey !== 'mortgage_primary');
+    if (investmentOnly.length > 0) eligible = investmentOnly;
+  }
 
-  let best     = candidatePool[0];
+  const isFiltered = filters.financing !== 'all' || filters.contract !== 'all';
+
+  if (eligible.length === 0) {
+    return {
+      scenario:     null,
+      allScenarios: all,
+      explanation:  isFiltered
+        ? (t('scenarios.no_match_filters') || 'No positive scenario matches your filters')
+        : 'No scenario produces a positive return for this listing.',
+      filtered:     isFiltered,
+    };
+  }
+
+  let best     = eligible[0];
   const topR   = best.annualised10yr;
-  const within = candidatePool.filter(s => topR - s.annualised10yr < 0.005);
+  const within = eligible.filter(s => topR - s.annualised10yr < 0.005);
   if (within.length > 1) {
     // Tie-breaking: prefer simpler financings + leases. Primary residence
     // is last on the financing ladder so even if it leaks in, it loses.
@@ -10135,6 +10237,7 @@ function pickBestScenario(listing) {
     scenario:     best,
     allScenarios: all,
     explanation:  explainBestChoice(best, all, listing),
+    filtered:     isFiltered,
   };
 }
 
@@ -10176,10 +10279,11 @@ function getInvestorVerdict(bestScenario, city = 'milano') {
 // projection panel and any backward-compatible callers. New UI code
 // should prefer this wrapper.
 function investorCardMetrics(listing) {
-  const { scenario: best, explanation } = pickBestScenario(listing);
-  if (!best) return { available: false };
+  const { scenario: best, explanation, filtered } = pickBestScenario(listing);
+  if (!best) return { available: false, filtered: !!filtered, explanation };
   return {
     available:        true,
+    filtered:         !!filtered,
     // Headline pills (already in display units)
     rentMo:           Math.round(best.scenarioRentMo),
     grossYield:       best.grossYield * 100,
@@ -10238,6 +10342,24 @@ function escapeAttr(s) {
 // Sales view mode: 'buyer' (default, owner-occupier) or 'investor'.
 // Persisted per user via Storage so the toggle state survives reloads.
 let salesViewMode = 'buyer';
+
+// Investor profile filters — only consulted when salesViewMode === 'investor'.
+// pickBestScenario reads these to narrow the candidate pool to scenarios
+// the user actually wants (cash-only buyer, transitorio-only landlord,
+// etc.). The 3×3 matrix on the detail page is unaffected — it always
+// shows every combination.
+//   investorFinancing  'all' | 'cash' | 'mortgage'   (mortgage = invest or primary)
+//   investorContract   'all' | 'libero' | 'concordato' | 'transitorio'
+// Persisted in localStorage (not Storage.set/Auth-scoped) so the choice
+// rides through guest-mode → signed-in transitions cleanly.
+let investorFinancing = 'all';
+let investorContract  = 'all';
+try {
+  investorFinancing = localStorage.getItem('lume_investor_financing') || 'all';
+  investorContract  = localStorage.getItem('lume_investor_contract')  || 'all';
+} catch (_) { /* private mode → keep defaults */ }
+window.investorFinancing = investorFinancing;
+window.investorContract  = investorContract;
 
 // Per-listing yield/mortgage caches — populated lazily, cleared if rates change.
 // _yieldCache is keyed on the sale-listing object (WeakMap → auto-evicts).
@@ -11245,6 +11367,10 @@ try {
 document.getElementById('sBtnReset').addEventListener('click', () => {
   const _idEl = document.getElementById('sIdSearch');
   if (_idEl) _idEl.value = '';
+  // Investor profile filters — wipe persistence too so a refresh
+  // doesn't bring them back.
+  if (typeof setInvestorFinancing === 'function') setInvestorFinancing('all');
+  if (typeof setInvestorContract  === 'function') setInvestorContract('all');
   document.getElementById('sFascia').value    = '';
   document.getElementById('sOmiZone').value   = '';
   document.getElementById('sMaxPrice').value  = '';
@@ -15408,9 +15534,14 @@ function investorHeadline(l) {
 function investorCardHtml(listing) {
   const m = investorCardMetrics(listing);
   if (!m.available) {
-    return `<div class="card-no-investor">
-      ⚠ ${t('investor.no_data') || 'Limited data — full investor view not available'}
-    </div>`;
+    // Two distinct empty states: "no positive scenario at all" (no
+    // rent data, all 9 cells negative) vs "your filters knocked out
+    // every viable scenario". The latter copy nudges the user to
+    // relax the filters rather than think the listing is bad.
+    const msg = m.filtered
+      ? t('scenarios.no_match_filters')
+      : (t('investor.no_data') || 'Limited data — full investor view not available');
+    return `<div class="card-no-investor">⚠ ${escapeHtml(msg)}</div>`;
   }
 
   const cfColor = m.cashFlowMonth >=    0 ? 'positive'
@@ -15434,9 +15565,10 @@ function investorCardHtml(listing) {
   const cfAbs  = Math.abs(m.cashFlowMonth);
 
   return `
-    <!-- Best scenario summary banner -->
+    <!-- Best scenario summary banner — tag switches when investor
+         profile filters narrowed the candidate pool. -->
     <div class="best-scenario-banner">
-      <div class="best-scenario-tag">${t('investor.best_scenario')}</div>
+      <div class="best-scenario-tag">${t(m.filtered ? 'investor.best_with_filters' : 'investor.best_scenario')}</div>
       <div class="best-scenario-combo">
         <span class="best-scenario-fin">${escapeHtml(finLabel)}</span>
         <span class="best-scenario-plus">+</span>
@@ -18254,6 +18386,44 @@ function investorMortgageBreakdownHtml(l) {
 }
 
 // ── Investor view: toggle wiring ─────────────────────────────────────────────
+// Investor profile filter handlers. Flip the .active class on the
+// matching pill group, persist the choice, then re-render. renderSales
+// → renderSaleCard → investorCardHtml → pickBestScenario reads the
+// updated values via window.investor* on the next paint.
+function setInvestorFinancing(value) {
+  if (!['all','cash','mortgage'].includes(value)) value = 'all';
+  investorFinancing = value;
+  window.investorFinancing = value;
+  try { localStorage.setItem('lume_investor_financing', value); } catch (_) {}
+  document.querySelectorAll('#sInvestorFinancing .sort-tab').forEach(el =>
+    el.classList.toggle('active', el.dataset.financing === value)
+  );
+  if (typeof renderSales === 'function') renderSales();
+}
+function setInvestorContract(value) {
+  if (!['all','libero','concordato','transitorio'].includes(value)) value = 'all';
+  investorContract = value;
+  window.investorContract = value;
+  try { localStorage.setItem('lume_investor_contract', value); } catch (_) {}
+  document.querySelectorAll('#sInvestorContract .sort-tab').forEach(el =>
+    el.classList.toggle('active', el.dataset.contract === value)
+  );
+  if (typeof renderSales === 'function') renderSales();
+}
+
+// Sync the persisted filter state onto the pill .active classes once
+// the DOM has the pills available. setSalesViewMode runs later in the
+// boot path and will trigger renderSales anyway — this is purely so
+// the right pill looks active on first paint.
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('#sInvestorFinancing .sort-tab').forEach(el =>
+    el.classList.toggle('active', el.dataset.financing === investorFinancing)
+  );
+  document.querySelectorAll('#sInvestorContract .sort-tab').forEach(el =>
+    el.classList.toggle('active', el.dataset.contract === investorContract)
+  );
+});
+
 function setSalesViewMode(mode) {
   if (mode !== 'buyer' && mode !== 'investor') mode = 'buyer';
   salesViewMode = mode;
