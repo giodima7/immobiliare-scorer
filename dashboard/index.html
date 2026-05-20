@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-20 gem-gates-in-settings">
+<meta name="lume-build" content="2026-05-20 area-median-pill">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -3849,6 +3849,32 @@ body.detail-page-active .detail-header {
 }
 .price-main { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; color: var(--text); }
 .price-psqm { font-size: 12px; color: var(--muted); }
+/* Area-median €/m² pill — sits next to the listing's own €/m² so the
+   reader can see at a glance how the asking price compares per-m² to
+   what the neighbourhood is fetching. Only rendered when the listing
+   is below market (delta < 0), where the comparison is interesting. */
+.price-area-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  background: var(--bg-muted);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  margin-left: 4px;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.price-area-vs {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-right: 1px;
+}
 .vs-omi {
   font-size: 12px; font-weight: 600;
   padding: 2px 9px; border-radius: 6px; margin-left: auto;
@@ -12286,6 +12312,39 @@ function compsRowHtml(l, isRental) {
   </div>`;
 }
 
+// Area-median €/m² pill — sits next to the listing's own €/m² in the
+// price row so the reader can see at a glance how this listing's
+// asking-€/m² compares to what the surrounding neighbourhood is going
+// for. Only rendered when the listing is below market (delta < 0),
+// since that's where the comparison adds information.
+//
+// Derivation: prefer the actual comps median when present
+// (comps_median for rentals, comps_sale_median for sales — already
+// per-m²). Fall back to deriving it from ask_psqm + delta when only
+// the delta is available, since that's a near-perfect proxy
+// (area_median ≈ ask_psqm / (1 + delta/100)).
+function areaPsqmPillHtml(l, isRental) {
+  const askPsqm = Number((isRental ? (l.ask_psqm_rent ?? l.ask_psqm) : l.ask_psqm) || 0);
+  const delta   = isRental ? l.comps_delta_pct : l.comps_sale_delta_pct;
+  if (delta == null || delta >= 0) return '';
+
+  let med = isRental ? l.comps_median : l.comps_sale_median;
+  med = Number(med);
+  if (!Number.isFinite(med) || med <= 0) {
+    if (!(askPsqm > 0)) return '';
+    med = askPsqm / (1 + delta / 100);
+  }
+
+  const psqmStr = isRental ? `€${Math.round(med)}/m²/mo` : `€${Math.round(med)}/m²`;
+  const nComps  = isRental ? (l.comps_n || 0) : (l.comps_sale_n || 0);
+  const title   = nComps
+    ? `Area median €/m² from ${nComps} comparables`
+    : 'Area median €/m² for similar nearby listings';
+  return `<span class="price-area-pill" title="${title}">
+            <span class="price-area-vs">vs</span>${psqmStr}
+          </span>`;
+}
+
 // Stale-banner footer for cards — only renders when is_stale is set and
 // the "Show expired" toggle has been flipped on (otherwise stale listings
 // are filtered out entirely by applyRentFilters/applySaleFilters).
@@ -12689,6 +12748,7 @@ function renderRentalCard(l) {
       ${l.ask_psqm != null
         ? `<span style="font-size:12px;color:var(--muted);white-space:nowrap">· €${l.ask_psqm.toFixed(1)}/m²</span>`
         : ''}
+      ${areaPsqmPillHtml(l, true)}
     </div>
     ${(() => {
       // Show effective (all-in) cost when condo fees push it >5% above asking
@@ -16721,6 +16781,7 @@ function renderSaleCard(l) {
       ${l.ask_psqm != null
         ? `<span style="font-size:12px;color:var(--muted);white-space:nowrap">· €${fmt(l.ask_psqm)}/m²</span>`
         : ''}
+      ${areaPsqmPillHtml(l, false)}
     </div>
 
     ${compsSugHtml}
