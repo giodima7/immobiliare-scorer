@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-20 map-city-rerender">
+<meta name="lume-build" content="2026-05-20 sales-idsearch-style">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -713,7 +713,8 @@ header h1 span { color: var(--accent); }
 
 select,
 .filter-group input[type=number],
-.filter-group input[type=text] {
+.filter-group input[type=text],
+.filter-group input[type=search] {
   background: var(--bg-muted);
   border: 1px solid transparent;
   color: var(--text-primary);
@@ -728,16 +729,26 @@ select,
 }
 select:hover,
 .filter-group input[type=number]:hover,
-.filter-group input[type=text]:hover { background: var(--border-strong); }
+.filter-group input[type=text]:hover,
+.filter-group input[type=search]:hover { background: var(--border-strong); }
 select:focus,
 .filter-group input[type=number]:focus,
-.filter-group input[type=text]:focus {
+.filter-group input[type=text]:focus,
+.filter-group input[type=search]:focus {
   background: #fff;
   border-color: var(--green-deep);
   box-shadow: 0 0 0 3px rgba(42,122,90,0.15);
 }
 .filter-group input[type=number]::placeholder,
-.filter-group input[type=text]::placeholder { color: var(--text-muted); }
+.filter-group input[type=text]::placeholder,
+.filter-group input[type=search]::placeholder { color: var(--text-muted); }
+/* Strip the native WebKit X-clear button so the input keeps the
+   muted pill look. The bar's own "Start fresh" / "Clear filters"
+   button already wipes the field. */
+.filter-group input[type=search]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
 input[type=range] { padding: 0; width: 100px; accent-color: var(--green-deep); }
 .range-val { color: var(--green-deep); font-size: 12px; min-width: 26px; font-weight: 600; }
 .filter-sep { width: 1px; height: 28px; background: var(--border-light); flex-shrink: 0; }
