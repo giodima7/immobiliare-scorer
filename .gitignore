@@ -9,6 +9,9 @@ netlify_config.json
 .env
 
 # Local-only runtime files
+*.json.lock
+.last_scan_*
+.sweep_coverage_*.json
 .digest_sent_date
 scanner.log
 scanner_idealista.log

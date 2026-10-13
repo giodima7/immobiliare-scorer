@@ -232,6 +232,138 @@ def get_size_band(sqm: float) -> tuple[float, float]:
 
 # ── Public API ───────────────────────────────────────────────────────────────
 
+# Suspect flags set by the scrapers' detectors — the same ones
+# scoring._apply_exclusion_gates uses to hide a listing. Their prices
+# aren't market prices (bait rents, auctions, bare ownership), so they
+# must not feed anyone else's benchmark either.
+SUSPECT_FLAGS = ("is_fake", "is_misrepresented_address", "is_outside_city",
+                 "is_auction", "is_nuda_proprieta")
+
+# Duplicates: the same flat listed on Immobiliare AND Idealista, or by
+# several agencies, or relisted under a new id. Measured on Milan rentals:
+# ~12 % of the pool is extra copies. Left in, they over-weight one flat's
+# price and — worse — a listing's own twin sits in its comps at exactly
+# its price, pulling the benchmark toward its ask and hiding mispricing.
+DUP_MAX_M = 300   # Idealista coords are geocoded, often a few hundred m off
+
+
+def _ll(l: dict) -> tuple:
+    return (l.get("latitude") or l.get("lat"),
+            l.get("longitude") or l.get("lng") or l.get("lon"))
+
+
+def _dup_key(l: dict) -> tuple | None:
+    """Same asking price + size + rooms + floor. Rentals carry rent_mo,
+    sales carry price."""
+    price = l.get("rent_mo") or l.get("price")
+    if not price or not l.get("sqm") or l.get("rooms") is None:
+        return None
+    return (price, l.get("sqm"), l.get("rooms"), l.get("floor_n"))
+
+
+def _dup_near(a: dict, b: dict) -> bool:
+    la, lb = _ll(a), _ll(b)
+    if all(la) and all(lb):
+        return _haversine_m(*la, *lb) <= DUP_MAX_M
+    return bool(a.get("omi_zona")) and a.get("omi_zona") == b.get("omi_zona")
+
+
+def _dup_rank(l: dict) -> tuple:
+    """Which copy of a duplicate group stays in the pool: one still on the
+    market, then Immobiliare (scraped coords beat geocoded ones), then the
+    most recently seen. max() keeps pool order on ties."""
+    return (not l.get("excluded"), l.get("source") == "immobiliare",
+            l.get("last_seen_date") or "")
+
+
+def build_comps_index(all_listings: list[dict]) -> dict:
+    """
+    Prepare the comps pool once per scoring run:
+
+    • Bucket by OMI zone and fascia, preserving pool order. Every comps
+      pass except the legacy radius fallback filters on omi_zona or
+      omi_fascia equality, so scanning one bucket gives the same candidates
+      (same order) as scanning the whole pool — without it every listing
+      re-scans the pool: O(n²), ~9 min for Milan rentals.
+    • Drop suspect listings (SUSPECT_FLAGS).
+    • Collapse duplicate groups to one copy (see DUP_MAX_M); remember the
+      groups so a listing never gets its own twins as comps.
+
+    Pass to get_comps_benchmark(index=...). Rebuild if zone/fascia,
+    suspect, price/size/floor or coordinate fields in the pool change.
+    """
+    skip: set[int] = set()                    # suspect + non-kept duplicates
+    by_key: dict[tuple, list[dict]] = {}
+    for l in all_listings:
+        if any(l.get(f) for f in SUSPECT_FLAGS):
+            skip.add(id(l))
+            continue
+        k = _dup_key(l)
+        if k is not None:
+            by_key.setdefault(k, []).append(l)
+
+    # Single-link clusters inside each key: A~B and B~C → one group.
+    groups: list[list[int]] = []
+    group_of: dict[int, int] = {}
+    for members in by_key.values():
+        if len(members) < 2:
+            continue
+        unassigned = list(members)
+        while unassigned:
+            cluster = [unassigned.pop(0)]
+            grew = True
+            while grew:
+                grew = False
+                for m in list(unassigned):
+                    if any(_dup_near(m, c) for c in cluster):
+                        cluster.append(m)
+                        unassigned.remove(m)
+                        grew = True
+            if len(cluster) < 2:
+                continue
+            keep = max(cluster, key=_dup_rank)
+            gid = len(groups)
+            groups.append([id(m) for m in cluster])
+            for m in cluster:
+                group_of[id(m)] = gid
+                if m is not keep:
+                    skip.add(id(m))
+
+    by_zone: dict[str, list[dict]] = {}
+    by_fascia: dict[str, list[dict]] = {}
+    for l in all_listings:
+        if id(l) in skip:
+            continue
+        z = l.get("omi_zona")
+        if z:
+            by_zone.setdefault(z, []).append(l)
+        f = l.get("omi_fascia")
+        if f:
+            by_fascia.setdefault(f, []).append(l)
+    return {"by_zone": by_zone, "by_fascia": by_fascia, "skip": skip,
+            "by_key": by_key, "groups": groups, "group_of": group_of}
+
+
+def _twin_ids(listing: dict, index: dict) -> set[int]:
+    """Object ids of the listing's own duplicates in the pool. Works for
+    listings outside the pool too (matched by key + distance)."""
+    twins: set[int] = set()
+    g = index["group_of"].get(id(listing))
+    if g is not None:
+        twins.update(index["groups"][g])
+    k = _dup_key(listing)
+    if k is not None:
+        for m in index["by_key"].get(k, ()):
+            if m is listing or not _dup_near(listing, m):
+                continue
+            twins.add(id(m))
+            mg = index["group_of"].get(id(m))
+            if mg is not None:
+                twins.update(index["groups"][mg])
+    twins.discard(id(listing))
+    return twins
+
+
 def get_comps_benchmark(
     listing: dict,
     all_listings: list[dict],
@@ -239,6 +371,8 @@ def get_comps_benchmark(
     min_comps: int = 5,
     settings: dict | None = None,
     mode: str = 'rent',   # 'rent' or 'sale'
+    index: dict | None = None,
+    want_comp_ids: bool = True,
 ) -> dict:
     """
     Build a comps benchmark for *listing* from *all_listings*.
@@ -249,6 +383,10 @@ def get_comps_benchmark(
     mode='rent' uses omi_loc_mid as the OMI anchor (€/m²/month).
     mode='sale' uses omi_compr_mid (€/m²) and applies a more conservative
     OMI blend when fewer than 15 sale comps are available.
+
+    index: build_comps_index(all_listings), shared across a scoring run.
+    want_comp_ids: False skips the distance sort behind `comp_ids` (the
+    rental scorer doesn't store them); comp_ids is then [].
     """
     if settings:
         radii = tuple(settings.get("radii", list(radii)))
@@ -285,6 +423,8 @@ def get_comps_benchmark(
             return False
         if _psqm(l) <= 0:
             return False
+        if id(l) in skip_ids or id(l) in twin_ids:   # set below, from the index
+            return False
         if sqm_t > 0:
             comp_sqm = l.get("sqm") or 0
             if comp_sqm == 0 or not (min_sqm <= comp_sqm <= max_sqm):
@@ -295,13 +435,20 @@ def get_comps_benchmark(
         return bool((l.get("latitude") or l.get("lat")) and
                     (l.get("longitude") or l.get("lng") or l.get("lon")))
 
+    if index is None:
+        index = build_comps_index(all_listings)
+    skip_ids = index["skip"]
+    twin_ids = _twin_ids(listing, index)
+    zone_pool   = index["by_zone"].get(omi_zone, [])     if omi_zone   else []
+    fascia_pool = index["by_fascia"].get(omi_fascia, []) if omi_fascia else []
+
     # ── Pass 1: same OMI zone + same condition group (ideal pool) ─────────────
     pool: list[dict] = []
     pass_used: str = ""
     radius_used = None
 
     if omi_zone and listing_cgroup != 'unknown':
-        candidates = [l for l in all_listings
+        candidates = [l for l in zone_pool
                       if _is_candidate(l)
                       and l.get("omi_zona") == omi_zone
                       and condition_group(l) == listing_cgroup]
@@ -311,7 +458,7 @@ def get_comps_benchmark(
 
     # ── Pass 2: same OMI zone, any condition (with adjustment) ────────────────
     if not pass_used and omi_zone:
-        candidates = [l for l in all_listings
+        candidates = [l for l in zone_pool
                       if _is_candidate(l) and l.get("omi_zona") == omi_zone]
         if len(candidates) >= 15:
             pool = candidates
@@ -320,7 +467,7 @@ def get_comps_benchmark(
     # ── Pass 3: 800 m radius + same fascia ───────────────────────────────────
     if not pass_used and lat and lon and omi_fascia:
         radius_p3 = 800
-        candidates = [l for l in all_listings
+        candidates = [l for l in fascia_pool
                       if _is_candidate(l)
                       and l.get("omi_fascia") == omi_fascia
                       and _has_geo(l)
@@ -335,7 +482,7 @@ def get_comps_benchmark(
 
     # ── Pass 4: full fascia fallback ─────────────────────────────────────────
     if not pass_used and omi_fascia:
-        candidates = [l for l in all_listings
+        candidates = [l for l in fascia_pool
                       if _is_candidate(l) and l.get("omi_fascia") == omi_fascia]
         if len(candidates) >= min_comps:
             pool = candidates
@@ -359,7 +506,7 @@ def get_comps_benchmark(
 
     # ── OMI zone fallback (any size for thin pools) ──────────────────────────
     if not pass_used and omi_zone:
-        candidates = [l for l in all_listings
+        candidates = [l for l in zone_pool
                       if _is_candidate(l) and l.get("omi_zona") == omi_zone]
         if len(candidates) >= min_comps:
             pool = candidates
@@ -459,8 +606,11 @@ def get_comps_benchmark(
         # No coords on the listing or this comp → fall back to psqm
         return (same_zone, _psqm(l) or 0)
 
-    sorted_pool = sorted(pool, key=_comp_sort_key)
-    comp_ids = [l.get("id") for l in sorted_pool[:30] if l.get("id") is not None]
+    if want_comp_ids:
+        sorted_pool = sorted(pool, key=_comp_sort_key)
+        comp_ids = [l.get("id") for l in sorted_pool[:30] if l.get("id") is not None]
+    else:
+        comp_ids = []
 
     return {
         "median":            round(median, 2),

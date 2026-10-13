@@ -16,7 +16,7 @@
      Lets you verify which deploy you're looking at when iOS Safari
      serves a stale cached copy. Bump by editing this line in any commit
      that changes user-visible HTML/CSS/JS — no build pipeline needed. -->
-<meta name="lume-build" content="2026-05-21 investor-listing-level-filter">
+<meta name="lume-build" content="2026-05-29 exclusion-gates-milan-context-valuation">
 <title>Lume — see through the listings</title>
 <!--
   HOSTING: deployed on Cloudflare Pages (dashboard/ is the publish root).
@@ -2897,11 +2897,126 @@ body.detail-page-active .detail-header {
 }
 .val-result-empty p { color: var(--text-muted, #A09990); font-style: italic; font-size: 13px; }
 
+/* OMI benchmark card — full-width row below the two estimate cards. */
+.val-omi-card { margin-top: 16px; }
+.val-omi-card h3 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.val-omi-zone {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted, #71717a);
+}
+.val-omi-rows { display: flex; flex-direction: column; gap: 14px; margin-top: 12px; }
+.val-omi-row {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  align-items: center;
+  gap: 14px;
+}
+.val-omi-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #475569);
+}
+.val-omi-track {
+  position: relative;
+  height: 32px;
+}
+.val-omi-marker {
+  position: absolute;
+  top: -2px;
+  transform: translateX(-50%);
+  font-size: 12px;
+  color: var(--green-deep, #16a34a);
+  font-weight: 800;
+  pointer-events: none;
+}
+.val-omi-range {
+  position: absolute;
+  inset: 14px 0 0 0;
+  height: 6px;
+  background: linear-gradient(to right,
+    var(--coral-light, #fee2e2),
+    var(--bg-muted, #f4f4f5),
+    var(--green-light, #dcfce7));
+  border-radius: 999px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted, #71717a);
+}
+.val-omi-mid {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: -16px;
+  color: var(--text-primary, #18181b);
+}
+.val-omi-min, .val-omi-max {
+  position: absolute;
+  top: -16px;
+}
+.val-omi-min { left: 4px; }
+.val-omi-max { right: 4px; }
+.val-omi-hint {
+  font-size: 11px;
+  color: var(--text-muted, #71717a);
+  margin: 12px 0 0;
+}
+
+/* Comparables card — tabbed table. */
+.val-comps-card { margin-top: 16px; }
+.val-comps-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 12px 0;
+}
+.val-comps-tab {
+  padding: 6px 14px;
+  border: 1.5px solid var(--border, #e4e4e7);
+  background: var(--bg-card, #fff);
+  border-radius: var(--radius-md, 8px);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #475569);
+}
+.val-comps-tab.is-active {
+  background: var(--green-light, #dcfce7);
+  border-color: var(--green-deep, #16a34a);
+  color: var(--green-deep, #16a34a);
+}
+.val-comps-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.val-comps-table th, .val-comps-table td {
+  padding: 6px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border, #e4e4e7);
+}
+.val-comps-table th {
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted, #71717a);
+}
+.val-comps-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.val-comps-table a { color: var(--green-deep, #16a34a); text-decoration: none; }
+.val-comps-table a:hover { text-decoration: underline; }
+
 @media (max-width: 768px) {
   .val-form-grid     { grid-template-columns: 1fr; }
   .val-results-grid  { grid-template-columns: 1fr; }
   .url-input-row     { flex-direction: column; }
   .val-main-number   { font-size: 28px; }
+  .val-omi-row       { grid-template-columns: 1fr; }
+  .val-comps-table   { font-size: 11px; }
+  .val-comps-table th, .val-comps-table td { padding: 4px 6px; }
 }
 
 /* Mortgage breakdown panel (rendered inside the expandable details panel) */
@@ -3390,6 +3505,36 @@ body.detail-page-active .detail-header {
   color: var(--text-secondary);
   line-height: 1.55;
   margin: 0;
+}
+
+/* Milan market-context note — explains why Cash usually wins, so
+   users don't think the engine is rigged when 90%+ of listings
+   recommend cash. Only renders on city=milano. */
+.scenarios-market-note {
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--bg-muted);
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  margin: 14px 0 0;
+  line-height: 1.5;
+  border-left: 3px solid var(--border-strong);
+}
+
+/* Subtle chip showing "Typical for Milan" next to the best-scenario
+   callout when Cash wins by default — same idea as the note above
+   but works inline at card level. */
+.cash-market-chip {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  background: var(--bg-muted);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  margin-left: 8px;
+  vertical-align: middle;
 }
 
 /* Fix 3: self-managed toggle bar above the best-scenario callout.
@@ -5492,6 +5637,123 @@ body.detail-page-active .detail-header {
   gap: 8px;
   flex-wrap: wrap;
 }
+.scan-skipped-details {
+  margin: 0 0 14px;
+  font-size: 12px;
+  background: rgba(217, 119, 6, 0.06);
+  border: 1px solid rgba(217, 119, 6, 0.18);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+}
+.scan-skipped-details > summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #92400E;
+  user-select: none;
+  list-style: none;
+}
+.scan-skipped-details > summary::-webkit-details-marker { display: none; }
+.scan-skipped-details > summary::before { content: '▸ '; display: inline-block; transition: transform 0.15s; }
+.scan-skipped-details[open] > summary::before { transform: rotate(90deg); }
+.scan-skipped-list {
+  margin: 10px 0 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.scan-skipped-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 4px 0;
+  color: var(--text);
+}
+.scan-skipped-item code {
+  background: rgba(0,0,0,0.05);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+.scan-fix-hint {
+  font-size: 11px;
+  color: var(--green);
+}
+.scan-skipped-help {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+/* ── Archive-listing banner stack (bottom-right floating prompt) ─────────────
+   Fires when the user clicks the "View" link on a card. Lets them flip
+   is_stale=true on a listing they just confirmed is no longer available
+   on the source site, without leaving the dashboard. */
+.archive-banner-stack {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 360px;
+  pointer-events: none;       /* container is invisible; children re-enable */
+}
+.archive-banner {
+  pointer-events: auto;
+  background: var(--bg-card, #fff);
+  border: 1.5px solid var(--border-strong, #d4d4d8);
+  border-left: 4px solid var(--amber, #d97706);
+  border-radius: var(--radius-md, 8px);
+  padding: 10px 14px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  font-size: 13px;
+  color: var(--text-primary, #18181b);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  animation: archive-banner-slide-in 200ms ease-out;
+}
+@keyframes archive-banner-slide-in {
+  from { transform: translateX(24px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+.archive-banner.is-done   { border-left-color: var(--green, #16a34a); }
+.archive-banner.is-error  { border-left-color: var(--coral, #ef4444); }
+.archive-banner-text { flex: 1; min-width: 0; line-height: 1.35; }
+.archive-banner-sub  { font-size: 11px; color: var(--text-muted, #71717a); margin-top: 2px; }
+.archive-banner-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.archive-banner-btn {
+  border: 1.5px solid var(--border, #e4e4e7);
+  background: var(--bg-card, #fff);
+  border-radius: var(--radius-sm, 4px);
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text-primary, #18181b);
+}
+.archive-banner-btn.primary {
+  border-color: var(--amber, #d97706);
+  color: var(--amber, #d97706);
+}
+.archive-banner-btn.primary:hover {
+  background: var(--amber, #d97706);
+  color: #fff;
+}
+.archive-banner-btn.subtle {
+  color: var(--text-muted, #71717a);
+  border-color: transparent;
+  background: transparent;
+  font-weight: 500;
+}
+.archive-banner-btn.subtle:hover {
+  background: var(--bg-muted, #f4f4f5);
+}
+.archive-banner-btn[disabled] { opacity: 0.5; cursor: progress; }
 .scan-actions {
   display: flex;
   gap: 10px;
@@ -5553,6 +5815,80 @@ body.detail-page-active .detail-header {
   border-color: var(--green-deep);
   color: var(--green-deep);
 }
+
+/* ── Scan Areas: macro-area card grid ─────────────────────────────── */
+.scan-areas-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.scan-areas-actions .btn-secondary {
+  padding: 6px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.scan-areas-actions .btn-secondary:hover {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+.scan-areas-count {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.scan-areas-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.scan-area-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--bg-muted);
+  border-radius: var(--radius-md);
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+  user-select: none;
+}
+.scan-area-card:hover { border-color: var(--border-strong); }
+.scan-area-card.scan-area-card-on {
+  background: var(--green-light);
+  border-color: var(--green-deep);
+}
+.scan-area-card input { display: none; }
+.scan-area-card-content {
+  flex: 1;
+  min-width: 0;
+}
+.scan-area-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.3;
+  margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scan-area-meta {
+  font-size: 11px;
+  color: var(--muted);
+}
+.scan-area-toggle { flex-shrink: 0; }
 .scan-areas-city-tab .city-tab-count {
   font-size: 11px;
   font-weight: 600;
@@ -8337,6 +8673,20 @@ function saveFilters() {
       <button id="scannerSkippedWarn" style="display:none;border:none;background:rgba(217,119,6,0.12);color:#92400E;border-radius:6px;padding:2px 10px;font-size:11px;font-weight:600;cursor:pointer;margin-left:4px" title="Some areas were skipped on the last scan"></button>
     </div>
 
+    <!-- Skipped-areas drill-down — populated by updateScannerStatus().
+         Hidden when skipped_areas is empty. The <details> stays closed
+         by default so it doesn't shout when 1-2 areas glitch; clicking
+         expands the list with per-area reasons + suggested slug fixes. -->
+    <details class="scan-skipped-details" id="scanSkippedDetails" hidden>
+      <summary id="scanSkippedSummary"></summary>
+      <div class="scan-skipped-list" id="scanSkippedList"></div>
+      <div class="scan-skipped-help" data-i18n="scan.skipped_help">
+        These areas need slug mapping in <code>area_slug_mapping.json</code>. The scanner
+        falls back to a single city-wide search when any area returns 0 results — those
+        listings are still captured but not attributed to the specific area.
+      </div>
+    </details>
+
     <!-- Listing types — pick which feeds to scrape. Persisted in
          localStorage["lume_scan_kinds"]. Default = both. Wired to the
          existing /start-scanner (rentals) + /start-sale-fetch (sales)
@@ -8417,60 +8767,48 @@ function saveFilters() {
   <div class="settings-card" id="scanAreasCard" hidden>
     <div class="settings-card-header">
       <div>
-        <h2 class="settings-card-title">📍 Scan Areas</h2>
-        <p class="settings-card-subtitle">
-          Choose which neighbourhoods of each city Lume scans. Active areas
-          are passed to both <strong>Immobiliare.it</strong> and
-          <strong>Idealista.it</strong>. Saved per city in
-          <code>area_settings_{city}.json</code>. Click an area on the left
-          to highlight, then → to add. ← clears all.
+        <h2 class="settings-card-title">📍 <span data-i18n="settings.scan_areas">Scan Areas</span></h2>
+        <p class="settings-card-subtitle" data-i18n="settings.scan_areas_sub">
+          Choose which areas of each city Lume scans. Each area = one search
+          request to Immobiliare and Idealista. Saved per city in
+          <code>area_settings_{city}.json</code>.
         </p>
       </div>
     </div>
 
-    <!-- Per-city tab row. Click a tab to load that city's saved areas.
-         The active tab drives /area-settings?city= for both GET + POST. -->
-    <div class="settings-section-label">City</div>
+    <!-- Per-city tab row. Click a tab to load that city's macro-areas. -->
+    <div class="settings-section-label" data-i18n="settings.city">City</div>
     <div class="scan-areas-city-tabs" id="scanAreasCityTabs">
       <!-- populated by _renderScanAreasCityTabs() -->
     </div>
 
-    <!-- Non-Milan cities don't have a baked-in neighbourhood list yet —
-         show a friendly note so the user knows the picker is Milan-only
-         for now. fetch_rentals.py treats an empty area list as "scan
-         entire city", so a blank Roma/Napoli config still works. -->
+    <!-- Mapping-empty notice — shown when the selected city has no
+         macro-area mapping entries yet (Roma / Napoli / La Maddalena). -->
     <div id="scanAreasNoPicker" style="display:none;padding:12px 14px;background:var(--bg-muted);border-radius:var(--radius-md);font-size:13px;color:var(--text-secondary);line-height:1.6">
-      No pre-baked neighbourhood list for this city yet — the scanner will
-      cover the entire municipality. Leaving this card empty is the right
-      default for Roma, Napoli, and La Maddalena until per-city area lists
-      land. Saved areas (if any) are still honoured by
-      <code>area_settings_{city}.json</code>.
+      <span data-i18n="settings.mapping_missing">Mapping not yet configured for this city.</span>
+      The scanner will fall back to a single city-wide search. Add entries
+      to <code>area_slug_mapping.json</code> for finer control.
     </div>
 
-    <div id="settingsLoading" style="color:var(--muted);font-size:13px;margin-top:14px">Loading areas…</div>
+    <div id="settingsLoading" style="color:var(--muted);font-size:13px;margin-top:14px">
+      <span data-i18n="settings.loading_areas">Loading areas…</span>
+    </div>
+
+    <!-- Card-grid picker — one card per macro-area. Active cards are
+         saved as the macro slug directly (no display-name detour). -->
     <div id="areaPickerUI" style="display:none;margin-top:14px">
-      <div style="display:grid;grid-template-columns:1fr 44px 1fr;gap:12px;align-items:start">
-        <!-- Left: available areas -->
-        <div>
-          <div class="settings-section-label">Available</div>
-          <input type="text" id="areaPickerSearch" placeholder="Search areas…" autocomplete="off"
-                 style="width:100%;box-sizing:border-box;border:1.5px solid var(--border);border-radius:var(--radius-md);padding:8px 10px;font-size:13px;background:var(--bg-muted);color:var(--text-primary);margin-bottom:6px;outline:none">
-          <div id="areaPickerAvail" style="border:1.5px solid var(--border);border-radius:var(--radius-md);overflow-y:auto;height:280px;background:var(--bg-muted)"></div>
-        </div>
-        <!-- Center: add / remove buttons -->
-        <div style="display:flex;flex-direction:column;gap:8px;padding-top:38px;align-items:center">
-          <button id="btnAreaAdd"    title="Add selected (or all filtered)" style="width:40px;height:40px;border-radius:var(--radius-md);border:1.5px solid var(--border);background:var(--bg-card);cursor:pointer;font-size:16px;color:var(--green-deep)">→</button>
-          <button id="btnAreaRemove" title="Clear all active areas"         style="width:40px;height:40px;border-radius:var(--radius-md);border:1.5px solid var(--border);background:var(--bg-card);cursor:pointer;font-size:16px;color:var(--text-muted)">←</button>
-        </div>
-        <!-- Right: active areas -->
-        <div>
-          <div class="settings-section-label">Active <span id="areaActiveCount" style="font-weight:400;text-transform:none"></span></div>
-          <div id="areaPickerActive" style="border:1.5px solid var(--border);border-radius:var(--radius-md);overflow-y:auto;height:280px;background:var(--bg-muted);margin-top:23px"></div>
-        </div>
+      <div class="scan-areas-actions">
+        <button class="btn-secondary" id="btnAreaSelectAll" data-i18n="settings.select_all">✓ Select all</button>
+        <button class="btn-secondary" id="btnAreaClearAll"  data-i18n="settings.clear_all">✗ Clear all</button>
+        <span class="scan-areas-count" id="scanAreasCount"></span>
+      </div>
+      <div class="scan-areas-grid" id="scanAreasGrid">
+        <!-- populated by _renderScanAreasGrid() -->
       </div>
     </div>
+
     <div style="display:flex;align-items:center;gap:12px;margin-top:18px">
-      <button class="btn-scan-start" id="btnSettingsSave">💾 Save areas</button>
+      <button class="btn-scan-start" id="btnSettingsSave">💾 <span data-i18n="settings.save_areas">Save areas</span></button>
       <span class="settings-status" id="settingsStatus"></span>
     </div>
   </div>
@@ -8741,6 +9079,20 @@ const STRINGS = {
     // Tabs
     'tab.sales':'Sales','tab.rentals':'Rentals','tab.map':'Map','tab.stats':'Stats',
     'tab.valuation':'Valuation','tab.settings':'Settings',
+    'scan.areas_skipped': 'areas skipped',
+    'scan.skipped_help':  'These areas need slug mapping in area_slug_mapping.json. The scanner falls back to a single city-wide search when any area returns 0 results — those listings are still captured but not attributed to the specific area.',
+    'settings.scan_areas':       'Scan Areas',
+    'settings.scan_areas_sub':   'Choose which areas of each city Lume scans. Each area = one search request to Immobiliare and Idealista.',
+    'settings.city':             'City',
+    'settings.loading_areas':    'Loading areas…',
+    'settings.mapping_missing':  'Mapping not yet configured for this city.',
+    'settings.select_all':       '✓ Select all',
+    'settings.clear_all':        '✗ Clear all',
+    'settings.areas_active':     'active',
+    'settings.zones':            'zones',
+    'settings.save_areas':       'Save areas',
+    'settings.areas_saved':      'Scan areas saved',
+    'settings.areas_save_error': 'Could not save scan areas',
     // Header
     'header.listings_count':'{n} listings in {city} · {date}',
     'header.favourites':'Favourites','header.sign_in':'Sign in',
@@ -8779,6 +9131,10 @@ const STRINGS = {
     'badge.new':'New','badge.expired':'Expired',
     // Card footer
     'card.view':'↗ View','card.fav':'♡ Fav','card.share':'Share',
+    'card.archive_prompt': 'This listing appears to be unavailable.',
+    'card.archive':        'Archive',
+    'card.archived_ok':    'Archived — hidden from results',
+    'card.archive_failed': 'Could not archive listing',
     'card.how_lume_scored':'How Lume scored this',
     'card.full_analysis':'📊 Full investment analysis',
     // Confidence labels
@@ -8947,6 +9303,9 @@ const STRINGS = {
     'detail.scenarios.assumptions':'Show calculation assumptions',
     'detail.scenarios.annualised_label':'annualised 10yr return',
     'detail.scenarios.no_positive':'No scenarios produce positive returns for this listing.',
+    'scenarios.milan_market_note':
+      '💡 Milan is an appreciation-driven market. With current mortgage rates (4.3%) above rental yields (~3%), cash purchase typically outperforms leveraged strategies on raw IRR. Mortgage wins only for above-average-yield peripheral properties.',
+    'investor.cash_typical_milan': 'Typical for Milan',
     'detail.scenarios.legend_strong':     'Strong',
     'detail.scenarios.legend_decent':     'Decent',
     'detail.scenarios.legend_reasonable': 'Reasonable',
@@ -9034,6 +9393,20 @@ const STRINGS = {
     // Tabs
     'tab.sales':'Vendita','tab.rentals':'Affitti','tab.map':'Mappa','tab.stats':'Statistiche',
     'tab.valuation':'Valutazione','tab.settings':'Impostazioni',
+    'scan.areas_skipped': 'aree saltate',
+    'scan.skipped_help':  'Queste aree richiedono mappatura slug in area_slug_mapping.json. Lo scanner ricade su una sola ricerca city-wide quando un\'area restituisce 0 risultati — quegli annunci sono comunque catturati ma non attribuiti alla zona specifica.',
+    'settings.scan_areas':       'Aree di scansione',
+    'settings.scan_areas_sub':   'Scegli quali aree di ogni città Lume scansiona. Ogni area = una richiesta di ricerca a Immobiliare e Idealista.',
+    'settings.city':             'Città',
+    'settings.loading_areas':    'Caricamento aree…',
+    'settings.mapping_missing':  'Mappatura non ancora configurata per questa città.',
+    'settings.select_all':       '✓ Seleziona tutte',
+    'settings.clear_all':        '✗ Deseleziona tutte',
+    'settings.areas_active':     'attive',
+    'settings.zones':            'zone',
+    'settings.save_areas':       'Salva aree',
+    'settings.areas_saved':      'Aree salvate',
+    'settings.areas_save_error': 'Impossibile salvare le aree',
     // Header
     'header.listings_count':'{n} annunci a {city} · {date}',
     'header.favourites':'Preferiti','header.sign_in':'Accedi',
@@ -9072,6 +9445,10 @@ const STRINGS = {
     'badge.new':'Nuovo','badge.expired':'Scaduto',
     // Card footer
     'card.view':'↗ Vedi','card.fav':'♡ Preferito','card.share':'Condividi',
+    'card.archive_prompt': 'Questo annuncio sembra non essere più disponibile.',
+    'card.archive':        'Archivia',
+    'card.archived_ok':    'Archiviato — nascosto dai risultati',
+    'card.archive_failed': 'Impossibile archiviare l\'annuncio',
     'card.how_lume_scored':'Come ha valutato Lume',
     'card.full_analysis':'📊 Analisi investimento completa',
     // Confidence labels
@@ -9232,6 +9609,9 @@ const STRINGS = {
     'detail.scenarios.assumptions':'Mostra ipotesi di calcolo',
     'detail.scenarios.annualised_label':'rendimento annualizzato 10 anni',
     'detail.scenarios.no_positive':'Nessuno scenario produce un rendimento positivo per questo annuncio.',
+    'scenarios.milan_market_note':
+      '💡 Milano è un mercato trainato dalla rivalutazione. Con i tassi mutuo attuali (4,3%) superiori ai rendimenti locativi (~3%), l\'acquisto in contanti supera tipicamente le strategie con leva sull\'IRR puro. Il mutuo conviene solo per immobili periferici con rendimento sopra la media.',
+    'investor.cash_typical_milan': 'Tipico per Milano',
     'detail.scenarios.legend_strong':     'Forte',
     'detail.scenarios.legend_decent':     'Discreto',
     'detail.scenarios.legend_reasonable': 'Ragionevole',
@@ -9738,21 +10118,21 @@ const FINANCING_PROFILES = {
   },
   mortgage_invest: {
     ltv:             0.65,
-    rate:            0.042,
+    rate:            0.043,
     term_years:      20,
     label_en:        'Investment mortgage',
     label_it:        'Mutuo investimento',
-    description_en:  '65% LTV, 4.2% rate, 20yr. Standard buy-to-let financing.',
-    description_it: 'LTV 65%, tasso 4,2%, 20 anni. Finanziamento standard per investimento.',
+    description_en:  '65% LTV, 4.3% rate, 20yr. Standard buy-to-let financing.',
+    description_it: 'LTV 65%, tasso 4,3%, 20 anni. Finanziamento standard per investimento.',
   },
   mortgage_primary: {
     ltv:             0.80,
-    rate:            0.038,
+    rate:            0.040,
     term_years:      25,
     label_en:        'Primary residence',
     label_it:        'Prima casa',
-    description_en:  '80% LTV, 3.8% rate, 25yr. Requires you live there 18mo+, lower tax, lower yield since you live in it.',
-    description_it: 'LTV 80%, tasso 3,8%, 25 anni. Richiede residenza 18+ mesi, tasse ridotte, rendimento ridotto in quanto la abiti.',
+    description_en:  '80% LTV, 4.0% rate, 25yr. Requires you live there 18mo+, lower tax, lower yield since you live in it.',
+    description_it: 'LTV 80%, tasso 4,0%, 25 anni. Richiede residenza 18+ mesi, tasse ridotte, rendimento ridotto in quanto la abiti.',
   },
 };
 
@@ -9785,7 +10165,7 @@ const CONTRACT_PROFILES = {
     description_it: 'Contratto 4+4 anni, canone di mercato, cedolare secca 21%.',
   },
   concordato: {
-    rent_factor:           0.72,
+    rent_factor:           0.80,
     cedolare_rate:         0.10,
     imu_discount:          0.25,
     vacancy_months:        0.5,
@@ -9796,8 +10176,8 @@ const CONTRACT_PROFILES = {
     marketing_annual:      0,
     label_en:        'Canone concordato (3+2)',
     label_it:        'Canone concordato (3+2)',
-    description_en:  '3+2 year lease, ~28% lower rent, 10% cedolare + 25% IMU discount.',
-    description_it: 'Contratto 3+2 anni, canone ~28% inferiore, cedolare 10% + IMU -25%.',
+    description_en:  '3+2 year lease, ~20% lower rent, 10% cedolare + 25% IMU discount.',
+    description_it: 'Contratto 3+2 anni, canone ~20% inferiore, cedolare 10% + IMU -25%.',
   },
   transitorio: {
     rent_factor:           1.12,
@@ -9864,6 +10244,11 @@ const PURCHASE_COSTS = {
 // nationwide estimate; some buildings split closer to 25/75 (heavy
 // services) or 35/65 (lean buildings).
 const OWNER_CONDO_SHARE = 0.30;
+
+// Selling costs at exit (year 10): ~3% agency + ~1% notary + ~2% tax/misc.
+// Symmetric across financings — applied to cash and leveraged exits alike
+// so the IRR comparison stays honest.
+const SELLING_COSTS_PCT = 0.06;
 
 // Fix 7: locale-consistent currency + percent formatters used by the
 // scenario engine. currentLang === 'it' → it-IT (€1.400, 4,7%);
@@ -10032,15 +10417,36 @@ function computeScenario(listing, financingKey, contractKey) {
   const annualisedReturn = cashInvested > 0 ? totalAnnualGain / cashInvested : 0;
 
   // ── Annualised over 10yr (the primary ranking metric) ───────────────
-  // Three paths:
-  //   • cash               — yield + compounded appreciation
-  //   • mortgage_invest    — full rental income years 1-10 + exit proceeds
-  //   • mortgage_primary   — Fix 1: live there years 1-2 (mortgage out of
-  //                          pocket, no rent), rent it out years 3-10
+  // All three financing paths now use a real IRR on annual cash flows:
+  //   t=0   : -cashInvested (down payment + purchase costs + furnishing)
+  //   t=1..9: rental cash flow (rent net of costs, minus mortgage if any)
+  //   t=10  : final-year cash flow + net exit proceeds
+  //
+  // Exit proceeds = price·(1+appr)^10 · (1 - SELLING_COSTS_PCT) - loanRemaining
+  //
+  // Selling costs are symmetric across financings — cash and leveraged
+  // are both charged the same ~6% at exit (agency + notary + tax).
+  // mortgage_primary additionally models 2 years of owner-occupancy
+  // (mortgage + maintenance + condo out of pocket, no rent), then
+  // 8 years of rental.
   let annualised10yr;
   let primaryResidencePhase = false;
   let occupancyYears  = 0;
   let occupancyCostAnnual = 0;
+
+  // Helper: remaining loan principal after `yearsPaid` years of a level-
+  // payment amortisation. Returns 0 for cash or a fully amortised loan.
+  function _loanRemainingAfter(yearsPaid) {
+    if (financingKey === 'cash') return 0;
+    const remPayments = (fin.term_years - yearsPaid) * 12;
+    if (remPayments <= 0 || monthlyRate <= 0) return 0;
+    return (mortgageAnnual / 12)
+         * (1 - Math.pow(1 + monthlyRate, -remPayments))
+         / monthlyRate;
+  }
+
+  const exitPriceGross = price * Math.pow(1 + apprRate, 10);
+  const exitPriceNet   = exitPriceGross * (1 - SELLING_COSTS_PCT);
 
   if (financingKey === 'mortgage_primary') {
     primaryResidencePhase = true;
@@ -10050,48 +10456,32 @@ function computeScenario(listing, financingKey, contractKey) {
     // Years 1-2 occupancy: mortgage + maintenance + condo paid out of
     // pocket (prima casa IMU is 0 %, so excluded). Pure outflow.
     occupancyCostAnnual = mortgageAnnual + maintAnnual + condoAnnual;
-    const totalOccupancyCost = occupancyCostAnnual * occupancyYears;
 
     // Years 3-10 rental: same numbers we just computed.
     const rentalCashFlowAnnual = netRentAnnual - mortgageAnnual;
 
-    // Exit at year 10. Remaining loan after 10 yrs of payments on a
-    // 25-yr amortisation.
-    const remPayments = (fin.term_years - 10) * 12;
-    const loanRemaining = remPayments > 0 && monthlyRate > 0
-      ? (mortgageAnnual / 12)
-        * (1 - Math.pow(1 + monthlyRate, -remPayments)) / monthlyRate
-      : 0;
-    const exitPrice    = price * Math.pow(1 + apprRate, 10);
-    const exitProceeds = exitPrice - loanRemaining;
+    const exitProceeds = exitPriceNet - _loanRemainingAfter(10);
 
-    const totalReturn = -totalOccupancyCost
-                      + rentalCashFlowAnnual * rentalYears
-                      + exitProceeds
-                      - cashInvested;
-    const ratio = (totalReturn + cashInvested) / cashInvested;
-    annualised10yr = ratio > 0 ? Math.pow(ratio, 0.1) - 1 : -0.99;
+    const flows = [-cashInvested];
+    for (let y = 1; y <= occupancyYears; y++) flows.push(-occupancyCostAnnual);
+    for (let y = 1; y < rentalYears;    y++) flows.push(rentalCashFlowAnnual);
+    flows.push(rentalCashFlowAnnual + exitProceeds);
+    const irr = computeIRR(flows, 0.05);
+    annualised10yr = (irr == null || !isFinite(irr)) ? -0.99 : irr;
 
     // Display: the headline cash flow is the rental-phase cash flow.
     // The two-phase UI surfaces the occupancy cost separately.
     cashFlowAnnual = rentalCashFlowAnnual;
     cashFlowMonth  = cashFlowAnnual / 12;
-  } else if (financingKey === 'cash') {
-    // Cash: rent yield stays roughly flat; appreciation compounds.
-    const yr1Return = (netRentAnnual + appreciationGain) / cashInvested;
-    annualised10yr  = yr1Return;
   } else {
-    const remPayments = (fin.term_years - 10) * 12;
-    const loanRemaining = remPayments > 0 && monthlyRate > 0
-      ? (mortgageAnnual / 12)
-        * (1 - Math.pow(1 + monthlyRate, -remPayments)) / monthlyRate
-      : 0;
-    const exitPrice    = price * Math.pow(1 + apprRate, 10);
-    const exitProceeds = exitPrice - loanRemaining;
-    const totalCFOver10 = cashFlowAnnual * 10;
-    const totalReturn   = totalCFOver10 + exitProceeds - cashInvested;
-    const ratio = (totalReturn + cashInvested) / cashInvested;
-    annualised10yr = ratio > 0 ? Math.pow(ratio, 0.1) - 1 : -0.99;
+    // Cash and mortgage_invest share the same 10yr rental model.
+    // mortgageAnnual is 0 for cash, so cashFlowAnnual = netRentAnnual there.
+    const exitProceeds = exitPriceNet - _loanRemainingAfter(10);
+    const flows = [-cashInvested];
+    for (let y = 1; y < 10; y++) flows.push(cashFlowAnnual);
+    flows.push(cashFlowAnnual + exitProceeds);
+    const irr = computeIRR(flows, 0.05);
+    annualised10yr = (irr == null || !isFinite(irr)) ? -0.99 : irr;
   }
 
   return {
@@ -10219,10 +10609,14 @@ function pickBestScenario(listing, constraintsOverride) {
 
   let best     = eligible[0];
   const topR   = best.annualised10yr;
-  const within = eligible.filter(s => topR - s.annualised10yr < 0.005);
+  // Tie band: 0.1pp. A 0.3pp IRR advantage on a 10-yr investment is real
+  // money (~€6k cumulative on a €200k stake) — don't paper it over with
+  // "simplicity preference." Only collapse genuinely-flat ties.
+  const within = eligible.filter(s => topR - s.annualised10yr < 0.001);
   if (within.length > 1) {
-    // Tie-breaking: prefer simpler financings + leases. Primary residence
-    // is last on the financing ladder so even if it leaks in, it loses.
+    // Tie-breaking inside the 0.1pp band: prefer simpler financings +
+    // leases. Primary residence is last on the financing ladder so even
+    // if it leaks in, it loses.
     const finOrder = ['cash', 'mortgage_invest', 'mortgage_primary'];
     const conOrder = ['libero', 'concordato', 'transitorio'];
     within.sort((a, b) => {
@@ -10312,11 +10706,26 @@ function explainBestChoice(best, allScenarios, listing) {
   const finLabel = FINANCING_PROFILES[best.financingKey].label_en;
   const conLabel = CONTRACT_PROFILES[best.contractKey].label_en;
 
+  const inMilan = (typeof currentCity !== 'undefined' && currentCity === 'milano');
+
+  if (best.contractKey === 'concordato' && inMilan) {
+    // Concordato winning in Milan is rare — the 20% rent sacrifice
+    // usually outweighs cedolare 10% + IMU discount. Explain it as a
+    // discovery rather than the default phrasing.
+    return `Concordato's 10% tax advantage beats the ~20% lower rent on this specific listing — unusual for Milan; happens when the asking rent sits near the top of the concordato-eligible range for this zone.`;
+  }
   if (best.financingKey === 'cash' && best.contractKey === 'concordato') {
-    return `Cedolare 10% + IMU discount more than offset 28% lower rent (+${improvement}% vs cash libero).`;
+    return `Cedolare 10% + IMU discount more than offset 20% lower rent (+${improvement}% vs cash libero).`;
   }
   if (best.financingKey === 'cash' && best.contractKey === 'transitorio') {
     return `Zone qualifies for transitorio — higher rent + tax advantages beat libero (+${improvement}% vs cash libero).`;
+  }
+  if (best.financingKey === 'mortgage_invest' && inMilan) {
+    // Mortgage winning in Milan is the exception — Milan rates (4.3%)
+    // exceed yields (~3%) so leverage usually has negative carry. Frame
+    // it as a high-yield discovery.
+    const yieldStr = ((best.grossYield || 0) * 100).toFixed(1);
+    return `Above-average yield (${yieldStr}%) makes leverage viable here — unusual for Milan. Mortgage amplifies appreciation gains while rental income covers most of the financing cost.`;
   }
   if (best.financingKey === 'mortgage_invest' && best.cashFlowMonth >= -200) {
     return `Leverage amplifies appreciation gains. Manageable cash flow (€${Math.round(best.cashFlowMonth)}/mo).`;
@@ -10743,7 +11152,8 @@ function renderCard(l) {
               title="${isFavourite(l.id) ? 'Remove from favourites' : 'Add to favourites'}">
         ${isFavourite(l.id) ? '♥' : '♡'} Fav
       </button>
-      <a class="link-btn" href="${l.url}" target="_blank" rel="noopener">${escapeHtml(t('card.view'))}</a>
+      <a class="link-btn" href="${l.url}" target="_blank" rel="noopener"
+         onclick="_promptArchiveListing('${l.id}', '${l.rent_mo ? 'rental' : 'sale'}', this)">${escapeHtml(t('card.view'))}</a>
     </div>
   `;
 
@@ -11218,6 +11628,20 @@ async function init() {
       pill.style.display = '';
       const lbl = document.getElementById('statusPillLabel');
       if (lbl) lbl.textContent = 'Live';
+    }
+    // Late-binding fix: if the user already clicked Settings BEFORE the
+    // /api-ping above resolved, switchTab('settings') ran with IS_LIVE
+    // still false and left #scannerCard hidden. Re-run the IS_LIVE-gated
+    // side-effects now that the flag is finally true. Without this the
+    // user has to switch away and back for the Scanner card to appear.
+    if (activeTab === 'settings') {
+      const _scannerCard = document.getElementById('scannerCard');
+      if (_scannerCard) {
+        _scannerCard.hidden = false;
+        if (typeof _renderCityScanGrid === 'function') _renderCityScanGrid();
+        if (typeof _renderScanKindGrid === 'function') _renderScanKindGrid();
+      }
+      if (typeof startScannerPoll === 'function') startScannerPoll();
     }
   }
 
@@ -14314,7 +14738,8 @@ function renderRentalCard(l) {
               title="${isRentFav(l.id) ? 'Remove from favourites' : 'Add to favourites'}">
         ${isRentFav(l.id) ? '♥' : '♡'} Fav
       </button>
-      <a class="link-btn" href="${l.url}" target="_blank" rel="noopener">${escapeHtml(t('card.view'))}</a>
+      <a class="link-btn" href="${l.url}" target="_blank" rel="noopener"
+         onclick="_promptArchiveListing('${l.id}', 'rental', this)">${escapeHtml(t('card.view'))}</a>
     </div>
     ${detailsHtml}
     ${extremeUnderpricingBannerHtml(l)}
@@ -15584,11 +16009,24 @@ function investorCardHtml(listing) {
   const cfSign = m.cashFlowMonth >= 0 ? '+' : '−';
   const cfAbs  = Math.abs(m.cashFlowMonth);
 
+  // "Typical for Milan" chip when cash wins by default (i.e. user
+  // hasn't narrowed the candidate pool with the financing pill).
+  // Avoids the false impression that Lume is rigging the picker —
+  // cash genuinely beats leveraged strategies at current Milan rates.
+  const _showCashChip = (
+    !m.filtered
+    && m.financingKey === 'cash'
+    && typeof currentCity !== 'undefined' && currentCity === 'milano'
+  );
+  const _cashChip = _showCashChip
+    ? `<span class="cash-market-chip">${escapeHtml(t('investor.cash_typical_milan') || 'Typical for Milan')}</span>`
+    : '';
+
   return `
     <!-- Best scenario summary banner — tag switches when investor
          profile filters narrowed the candidate pool. -->
     <div class="best-scenario-banner">
-      <div class="best-scenario-tag">${t(m.filtered ? 'investor.best_with_filters' : 'investor.best_scenario')}</div>
+      <div class="best-scenario-tag">${t(m.filtered ? 'investor.best_with_filters' : 'investor.best_scenario')}${_cashChip}</div>
       <div class="best-scenario-combo">
         <span class="best-scenario-fin">${escapeHtml(finLabel)}</span>
         <span class="best-scenario-plus">+</span>
@@ -16491,12 +16929,21 @@ function detailScenariosHtml(listing) {
   if (typeof window._selfManaged === 'undefined') window._selfManaged = true;
   const _selfManagedChecked = window._selfManaged ? 'checked' : '';
 
+  // Milan-only market-context note. Explains why cash usually wins
+  // (rates > yields) so users don't think the scenario matrix is rigged
+  // when 90%+ of listings show "Cash buyer" as the recommended pick.
+  const _inMilan = (typeof currentCity !== 'undefined' && currentCity === 'milano');
+  const _milanMarketNote = _inMilan
+    ? `<div class="scenarios-market-note">${t('scenarios.milan_market_note')}</div>`
+    : '';
+
   return `
     <section class="detail-section detail-scenarios">
       <div class="detail-section-header">
         <h2 class="detail-section-title">${t('detail.section.scenarios')}</h2>
         <p class="detail-section-subtitle">${t('detail.scenarios.subtitle')}</p>
       </div>
+      ${_milanMarketNote}
 
       <div class="scenarios-options-bar">
         <label class="scenarios-toggle">
@@ -16624,10 +17071,15 @@ function renderScenarioMatrix(scenarios, bestFin, bestCon) {
     concordato:  '10% tax · −25% IMU',
     transitorio: '10% tax · short-term',
   };
+  // Read straight off FINANCING_PROFILES so the label can't drift from
+  // the actual rate used by computeScenario (the previous hard-coded
+  // 4.2% / 3.8% leaked through two rate bumps before this).
+  const _ltvPct  = key => Math.round(FINANCING_PROFILES[key].ltv  * 100);
+  const _ratePct = key => (FINANCING_PROFILES[key].rate * 100).toFixed(1).replace(/\.0$/, '.0');
   const finSub = {
     cash:             '100% down',
-    mortgage_invest:  '65% LTV · 4.2%',
-    mortgage_primary: '80% LTV · 3.8%',
+    mortgage_invest:  `${_ltvPct('mortgage_invest')}% LTV · ${_ratePct('mortgage_invest')}%`,
+    mortgage_primary: `${_ltvPct('mortgage_primary')}% LTV · ${_ratePct('mortgage_primary')}%`,
   };
 
   return `
@@ -16880,8 +17332,8 @@ function renderScenarioAssumptions(listing) {
       <div><strong>${t('assumptions.maintenance') || 'Maintenance'}:</strong> 0.3% of price/yr</div>
       <div><strong>${t('assumptions.imu') || 'IMU'}:</strong> 0.4% of price/yr (second home)</div>
       <div><strong>${t('assumptions.purchase_costs') || 'Purchase costs'}:</strong> 11% (2nd home), 4% (prima casa)</div>
-      <div><strong>${t('assumptions.mortgage_invest') || 'Mortgage invest'}:</strong> 65% LTV, 4.2% rate, 20yr</div>
-      <div><strong>${t('assumptions.mortgage_primary') || 'Mortgage primary'}:</strong> 80% LTV, 3.8% rate, 25yr</div>
+      <div><strong>${t('assumptions.mortgage_invest') || 'Mortgage invest'}:</strong> ${Math.round(FINANCING_PROFILES.mortgage_invest.ltv * 100)}% LTV, ${(FINANCING_PROFILES.mortgage_invest.rate * 100).toFixed(1)}% rate, ${FINANCING_PROFILES.mortgage_invest.term_years}yr</div>
+      <div><strong>${t('assumptions.mortgage_primary') || 'Mortgage primary'}:</strong> ${Math.round(FINANCING_PROFILES.mortgage_primary.ltv * 100)}% LTV, ${(FINANCING_PROFILES.mortgage_primary.rate * 100).toFixed(1)}% rate, ${FINANCING_PROFILES.mortgage_primary.term_years}yr</div>
     </div>`;
 }
 
@@ -18753,7 +19205,8 @@ function renderSaleCard(l) {
               title="${isFavourite(l.id) ? 'Remove from favourites' : 'Add to favourites'}">
         ${isFavourite(l.id) ? '♥' : '♡'} Fav
       </button>
-      <a class="link-btn" href="${l.url}" target="_blank" rel="noopener">${escapeHtml(t('card.view'))}</a>
+      <a class="link-btn" href="${l.url}" target="_blank" rel="noopener"
+         onclick="_promptArchiveListing('${l.id}', 'sale', this)">${escapeHtml(t('card.view'))}</a>
     </div>
     ${detailsHtml}
     ${extremeUnderpricingBannerHtml(l)}
@@ -19097,17 +19550,53 @@ async function updateScannerStatus() {
       badge.classList.remove('visible');
     }
 
-    // Skipped areas warning — amber pill linking to Settings tab
+    // Skipped areas — amber pill (compact, in the Rentals header) +
+    // expandable drill-down in the Settings → Scanner card.
     const skipWarn = document.getElementById('scannerSkippedWarn');
     const skipped  = st.immobiliare?.skipped_areas;
     if (skipWarn) {
       if (skipped && skipped.length > 0) {
         skipWarn.style.display = '';
-        skipWarn.textContent   = `⚠ ${skipped.length} area${skipped.length > 1 ? 's' : ''} skipped`;
+        const lbl = t('scan.areas_skipped') || 'areas skipped';
+        skipWarn.textContent   = `⚠ ${skipped.length} ${lbl}`;
         skipWarn.title         = skipped.map(s => `${s.name}: ${s.reason}`).join('\n');
-        skipWarn.onclick       = () => { switchTab('settings'); };
+        skipWarn.onclick       = () => {
+          switchTab('settings');
+          // Defer to next tick so the Settings DOM is laid out before
+          // we expand + scroll to the details block.
+          setTimeout(() => {
+            const d = document.getElementById('scanSkippedDetails');
+            if (d) { d.open = true; d.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+          }, 50);
+        };
       } else {
         skipWarn.style.display = 'none';
+      }
+    }
+    // Settings-tab drill-down: per-area reason + suggested slug fix.
+    const skipDet = document.getElementById('scanSkippedDetails');
+    if (skipDet) {
+      if (skipped && skipped.length > 0) {
+        skipDet.hidden = false;
+        const sum = document.getElementById('scanSkippedSummary');
+        if (sum) {
+          const lbl = t('scan.areas_skipped') || 'areas skipped';
+          sum.textContent = `⚠ ${skipped.length} ${lbl}`;
+        }
+        const list = document.getElementById('scanSkippedList');
+        if (list) {
+          list.innerHTML = skipped.map(s => {
+            const hint = s.suggested_slug
+              ? ` <span class="scan-fix-hint">→ try slug: <code>${escapeHtml(s.suggested_slug)}</code></span>`
+              : '';
+            return `<div class="scan-skipped-item">`
+                 + `<code>${escapeHtml(s.name || '?')}</code> — ${escapeHtml(s.reason || '')}`
+                 + hint
+                 + `</div>`;
+          }).join('');
+        }
+      } else {
+        skipDet.hidden = true;
       }
     }
 
@@ -19186,6 +19675,10 @@ async function updateScannerStatus() {
       // the per-city progress bars feel live instead of the default 10 s
       // scanner cadence. _maybeArmEnrichmentFastPoll() handles arm/disarm.
       _maybeArmEnrichmentFastPoll(st);
+      // Auto-fire Run-all when new pending listings arrive (e.g. after a
+      // sales fetch or a cache invalidation), so the panel doesn't sit
+      // at "done" forever waiting for a manual click.
+      _maybeAutoEnqueueEnrichment(st);
     }
   } catch { /* /scanner-status unavailable — no-op */ }
 }
@@ -19209,6 +19702,164 @@ function _maybeArmEnrichmentFastPoll(st) {
     clearInterval(_enrichFastPollTimer);
     _enrichFastPollTimer = null;
   }
+}
+
+// ── Auto-enqueue enrichment when new pending work appears ───────────────────
+// Listings keep arriving (sales fetches, scanner ticks, manual cache
+// invalidations). Previously the Settings panel would sit at "all done"
+// until the user clicked Run-all again. Now we auto-fire the same POST
+// the button does, with two guards:
+//   1. _enrichAutoPausedUntilReload — set when the user clicks Stop, so
+//      we don't undo their intent until the page reloads.
+//   2. 60 s cooldown between auto-fires — caps the failure-loop blast
+//      radius if a worker can't make progress on the same batch.
+// ── Archive-listing prompt (fired by the card's View button) ────────────────
+// When the user clicks View, a small floating banner appears bottom-right.
+// If they confirm the listing is gone from the source site, one click
+// flips is_stale=true + excluded=true in Supabase AND in the local JSON,
+// and the card disappears from the grid immediately.
+function _archiveBannerHost() {
+  let host = document.getElementById('archiveBannerStack');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'archiveBannerStack';
+    host.className = 'archive-banner-stack';
+    document.body.appendChild(host);
+  }
+  return host;
+}
+
+// Per-listing probe lock — if the user clicks View on the same listing
+// twice in quick succession, we skip the second probe (the first one's
+// banner, if any, is already on its way).
+const _probedListings = new Set();
+
+async function _promptArchiveListing(lid, listingType, anchorEl) {
+  if (!lid || !IS_LIVE) return true;   // static mode: just let the link open
+  if (_probedListings.has(lid))  return true;
+  _probedListings.add(lid);
+  // Clear the per-listing lock after a generous window so subsequent
+  // clicks on the same card (after a re-render) can probe again.
+  setTimeout(() => _probedListings.delete(lid), 60000);
+
+  // Pull a short title hint NOW (the card may scroll out of view by the
+  // time the probe finishes).
+  const card = anchorEl?.closest?.('.sale-card, .rental-card, .lume-card, .card');
+  const titleHint = (card?.querySelector('.card-title, .listing-title, h2, h3')
+                      ?.textContent || `#${lid}`).trim().slice(0, 50);
+  const listingUrl = anchorEl?.href || '';
+
+  // Probe in the background. Fire-and-forget — the link is already
+  // opening in a new tab via target=_blank.
+  let probe = null;
+  try {
+    const r = await fetch('/api/check-listing-availability', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ listing_id: lid, url: listingUrl,
+                                listing_type: listingType || 'rental' }),
+    });
+    probe = r.ok ? await r.json() : null;
+  } catch { /* network blip — treat as inconclusive */ }
+
+  // Only surface the banner when the probe is CONFIDENT the listing is
+  // gone. 'unknown' / probe failure / available = no banner (silent).
+  if (!probe || probe.available !== false) return true;
+
+  const host = _archiveBannerHost();
+  if (host.querySelector(`[data-lid="${lid}"]`)) return true;   // double-fire safety
+
+  const reasonHint = ({
+    redirected: 'page redirected away',
+    no_data:    'no listing data on page',
+  })[probe.reason] || probe.reason || '';
+
+  const banner = document.createElement('div');
+  banner.className = 'archive-banner';
+  banner.dataset.lid = lid;
+  banner.innerHTML = `
+    <div class="archive-banner-text">
+      ${escapeHtml((typeof t === 'function' && t('card.archive_prompt')) || 'This listing appears to be unavailable.')}
+      <div class="archive-banner-sub">${escapeHtml(titleHint)}${reasonHint ? ' — ' + escapeHtml(reasonHint) : ''}</div>
+    </div>
+    <div class="archive-banner-actions">
+      <button class="archive-banner-btn primary" data-action="archive">📦 ${escapeHtml((typeof t === 'function' && t('card.archive')) || 'Archive')}</button>
+      <button class="archive-banner-btn subtle"  data-action="dismiss" aria-label="Dismiss">✕</button>
+    </div>
+  `;
+  host.appendChild(banner);
+
+  // Auto-dismiss after 30 s so banners don't pile up if the user
+  // browses through many listings.
+  const autoDismiss = setTimeout(() => banner.remove(), 30000);
+
+  banner.addEventListener('click', async (ev) => {
+    const action = ev.target?.dataset?.action;
+    if (!action) return;
+    clearTimeout(autoDismiss);
+    if (action === 'dismiss') { banner.remove(); return; }
+    if (action !== 'archive') return;
+    const btn = ev.target;
+    btn.disabled = true;
+    try {
+      const r = await fetch('/api/archive-listing', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          listing_id:   lid,
+          listing_type: listingType || 'rental',
+          reason:       'User-archived from View-button banner',
+        }),
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      banner.classList.add('is-done');
+      banner.innerHTML = `<div class="archive-banner-text">✓ ${escapeHtml((typeof t === 'function' && t('card.archived_ok')) || 'Archived')}</div>`;
+      // Hide the card immediately so the dashboard reflects the change
+      // without waiting for the next render.
+      if (card) card.style.display = 'none';
+      setTimeout(() => banner.remove(), 2500);
+    } catch (err) {
+      banner.classList.add('is-error');
+      const lbl = (typeof t === 'function' && t('card.archive_failed')) || 'Could not archive listing';
+      banner.innerHTML = `<div class="archive-banner-text" style="color:var(--coral,#ef4444)">✗ ${escapeHtml(lbl)}: ${escapeHtml(err.message)}</div>`;
+      setTimeout(() => banner.remove(), 4500);
+    }
+  });
+  return true;   // don't block the View link from opening
+}
+
+let _enrichAutoLastFireAt        = 0;
+let _enrichAutoPausedUntilReload = false;
+const _ENRICH_AUTO_COOLDOWN_MS   = 60 * 1000;
+async function _maybeAutoEnqueueEnrichment(st) {
+  if (!IS_LIVE) return;
+  if (_enrichAutoPausedUntilReload) return;
+  const jobs       = (st && st.geo_jobs) || {};
+  const queue      = (st && st.geo_queue) || [];
+  const pending    = (st && st.geo_pending) || {};
+  const queueLive  = !!(st && st.geo_queue_running);
+  const anyRunning = Object.values(jobs).some(j => j && j.running);
+  if (queueLive || queue.length || anyRunning) return;
+  const totalPending = Object.values(pending).reduce(
+    (s, p) => s + ((p && p.count) || 0), 0);
+  if (totalPending <= 0) return;
+  const now = Date.now();
+  if (now - _enrichAutoLastFireAt < _ENRICH_AUTO_COOLDOWN_MS) return;
+  _enrichAutoLastFireAt = now;
+  try {
+    const r = await fetch('/geo-enrich-queue', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        cities: _ENRICH_CITY_ORDER, kinds: _ENRICH_KINDS,
+      }),
+    });
+    // 409 = orchestrator already running (race with manual click). Either
+    // outcome is fine — both mean the queue is now alive.
+    if (r.ok || r.status === 409) {
+      if (typeof updateScannerStatus === 'function') updateScannerStatus();
+    }
+  } catch { /* network blip — next poll will retry after cooldown */ }
 }
 
 // ── Multi-city enrichment panel ──────────────────────────────────────────────
@@ -19447,6 +20098,10 @@ function _renderEnrichmentPanel(st) {
     if (!IS_LIVE) return;
     btn.disabled    = true;
     btn.textContent = '■ Stopping…';
+    // Manual Stop = user-intent override. Disable the auto-enqueue path
+    // until the page reloads, otherwise the next 10 s poll would re-fire
+    // the queue and immediately undo the Stop.
+    _enrichAutoPausedUntilReload = true;
 
     // Optimistic UI: synthesise a status payload where every queued slot
     // is already "stopped" + the running slot reads "Stopping…". The next
@@ -21366,24 +22021,22 @@ async function _settingsLoad() {
     return;
   }
 
-  // Non-Milan cities: no neighbourhood list yet → hide the 3-pane picker
-  // and surface a "scan whole city" note instead. The save button still
-  // works (writes an empty list to area_settings_{city}.json, which
-  // fetch_rentals treats as "scan the entire municipality").
-  const isMilan = city === 'milano';
-  if (noPickerEl) noPickerEl.style.display = isMilan ? 'none' : '';
+  // Macro-area grid works for every city the slug mapping covers.
+  // Cities with an empty mapping (Roma / Napoli / La Maddalena pre-
+  // verification) show the "mapping not configured" note instead.
   if (pickerEl)   pickerEl.style.display   = 'none';
+  if (noPickerEl) noPickerEl.style.display = 'none';
   if (loadEl)     loadEl.style.display     = '';
 
   try {
-    const resp = await fetch(`/area-settings?city=${encodeURIComponent(city)}`);
+    const [resp] = await Promise.all([
+      fetch(`/area-settings?city=${encodeURIComponent(city)}`),
+      _loadSlugMapping(),
+    ]);
     if (!resp.ok) throw new Error(`API error (${resp.status})`);
     const data = await resp.json();
     _settingsCurrentAreas = (data.areas || []).map(a => ({...a}));
-    if (isMilan) {
-      _renderAreaPicker();
-      if (pickerEl) pickerEl.style.display = '';
-    }
+    await _renderScanAreasGrid();
     if (loadEl) loadEl.style.display = 'none';
     _settingsLoaded    = true;
     _settingsLoadedFor = city;
@@ -21392,90 +22045,200 @@ async function _settingsLoad() {
   }
 }
 
+// ── Macro-area card grid (Scan Areas Settings redesign) ─────────────
+// One card per Immobiliare macro-area = one HTTP request to the site.
+// The macro list comes from /api/slug-mapping (single source of truth);
+// the user's active selection is the union of macro slugs currently
+// flagged active in _settingsCurrentAreas — keeping that in-memory state
+// alive means the existing scanAreaMsd / drawer chip sync paths still
+// work without modification.
+
+let _SLUG_MAPPING = null;   // { city: { internal_slug: macro_slug } }
+
+// Mirror of area_slug_mapper._PRETTIFY_OVERRIDES so the client renders
+// the same labels without an extra round-trip. Single point of truth in
+// Python; this is the dashboard's locked copy.
+const _MACRO_PRETTY = {
+  'abbiategrasso-chiesa-rossa':           'Abbiategrasso, Chiesa Rossa',
+  'affori-bovisa':                        'Affori, Bovisa',
+  'arco-della-pace-arena-pagano':         'Arco della Pace, Arena, Pagano',
+  'bande-nere-inganni':                   'Bande Nere, Inganni',
+  'bicocca-niguarda':                     'Bicocca, Niguarda',
+  'bisceglie-baggio-olmi':                'Bisceglie, Baggio, Olmi',
+  'cenisio-sarpi-isola':                  'Cenisio, Sarpi, Isola',
+  'centrale-repubblica':                  'Centrale, Repubblica',
+  'centro':                               'Centro',
+  'cimiano-crescenzago-adriano':          'Cimiano, Crescenzago, Adriano',
+  'citta-studi-susa':                     'Città Studi, Susa',
+  'citta-studi':                          'Città Studi',
+  'corvetto-rogoredo':                    'Corvetto, Rogoredo',
+  'famagosta-barona':                     'Famagosta, Barona',
+  'fiera-sempione-city-life-portello':     'Fiera, Sempione, CityLife, Portello',
+  'forlanini':                            'Forlanini',
+  'garibaldi-moscova-porta-nuova':        'Garibaldi, Moscova, Porta Nuova',
+  'genova-ticinese':                      'Genova, Ticinese',
+  'maggiolina-istria':                    'Maggiolina, Istria',
+  'napoli-soderini':                      'Napoli, Soderini',
+  'navigli':                              'Navigli',
+  'pasteur-rovereto':                     'Pasteur, Rovereto',
+  'ponte-lambro-santa-giulia':            'Ponte Lambro, Santa Giulia',
+  'porta-romana-cadore-montenero':        'Porta Romana, Cadore, Montenero',
+  'porta-venezia-indipendenza':           'Porta Venezia, Indipendenza',
+  'porta-vittoria-lodi':                  'Porta Vittoria, Lodi',
+  'precotto-turro':                       'Precotto, Turro',
+  'quadronno-palestro-guastalla':         'Quadronno, Palestro, Guastalla',
+  'ripamonti-vigentino':                  'Ripamonti, Vigentino',
+  'san-siro-trenno':                      'San Siro, Trenno',
+  'solari-washington':                    'Solari, Washington',
+  'udine-lambrate':                       'Udine, Lambrate',
+  'uptown-cascina-merlata-viale-certosa': 'Uptown, Cascina Merlata, Viale Certosa',
+  'bocconi':          'Bocconi',
+  'de-angeli':        'De Angeli',
+  'giambellino':      'Giambellino',
+  'city-life':        'CityLife',
+  'citylife':         'CityLife',
+  'qt8':              'QT8',
+};
+
+function _prettifyMacroSlug(slug) {
+  if (!slug) return '';
+  if (_MACRO_PRETTY[slug]) return _MACRO_PRETTY[slug];
+  // Fallback: title-case each hyphen-token and comma-join. Imperfect
+  // for unknown slugs but the override table covers everything verified.
+  return slug.split('-')
+    .map(w => w ? w[0].toUpperCase() + w.slice(1) : '')
+    .join(', ');
+}
+
+async function _loadSlugMapping() {
+  if (_SLUG_MAPPING) return _SLUG_MAPPING;
+  try {
+    const r = await fetch('/api/slug-mapping');
+    _SLUG_MAPPING = r.ok ? await r.json() : {};
+  } catch {
+    _SLUG_MAPPING = {};
+  }
+  return _SLUG_MAPPING;
+}
+
+function _getMacroAreasForCity(city) {
+  const cityMap = (_SLUG_MAPPING || {})[city] || {};
+  const grouped = {};
+  for (const [internal, macro] of Object.entries(cityMap)) {
+    if (internal.startsWith('_')) continue;          // skip _doc / _comment / _notes
+    if (typeof macro !== 'string' || !macro) continue;
+    (grouped[macro] = grouped[macro] || []).push(internal);
+  }
+  return Object.entries(grouped)
+    .map(([slug, internals]) => ({
+      slug,
+      displayName: _prettifyMacroSlug(slug),
+      coversCount: internals.length,
+    }))
+    .sort((a, b) => a.displayName.localeCompare(b.displayName));
+}
+
+function _getActiveMacroSlugs() {
+  // Source of truth: _settingsCurrentAreas. Each entry has id = macro slug
+  // (after the redesign) and an active flag. The id field maps cleanly
+  // to the URL slug fetch_rentals / fetch_listings expect.
+  return new Set(_settingsCurrentAreas
+    .filter(a => a && a.active)
+    .map(a => a.id || a.name || ''));
+}
+
 function _renderAreaPicker() {
-  const availEl  = document.getElementById('areaPickerAvail');
-  const activeEl = document.getElementById('areaPickerActive');
-  const countEl  = document.getElementById('areaActiveCount');
-  if (!availEl || !activeEl) return;
-
-  const activeSet = new Set(_settingsCurrentAreas.filter(a => a.active).map(a => a.name));
-  const q         = (document.getElementById('areaPickerSearch')?.value || '').toLowerCase();
-
-  // Available panel — all MILAN_AREAS not yet active, filtered by search
-  availEl.innerHTML = '';
-  for (const [fascia, names] of Object.entries(MILAN_AREAS)) {
-    const visible = names.filter(n => !activeSet.has(n) && (!q || n.toLowerCase().includes(q)));
-    if (!visible.length) continue;
-    const hdr = document.createElement('div');
-    hdr.style.cssText = 'font-size:10px;font-weight:700;color:var(--muted);padding:6px 10px 2px;text-transform:uppercase;letter-spacing:.05em;pointer-events:none';
-    hdr.textContent = FASCIA_LABEL[fascia];
-    availEl.appendChild(hdr);
-    for (const name of visible) {
-      const row = document.createElement('div');
-      row.style.cssText = 'padding:5px 10px;cursor:pointer;font-size:12px;color:var(--text);border-bottom:1px solid var(--border)';
-      row.textContent = name;
-      row.dataset.name = name;
-      row.addEventListener('mouseenter', () => { if (row.dataset.sel !== '1') row.style.background = 'var(--hover,rgba(0,0,0,.04))'; });
-      row.addEventListener('mouseleave', () => { if (row.dataset.sel !== '1') row.style.background = ''; });
-      row.addEventListener('click', () => {
-        availEl.querySelectorAll('[data-sel="1"]').forEach(r => { r.dataset.sel = ''; r.style.background = ''; });
-        row.dataset.sel = '1';
-        row.style.background = 'var(--accent-light,rgba(99,102,241,.1))';
-      });
-      row.addEventListener('dblclick', () => _areaMove(name, 'add'));
-      availEl.appendChild(row);
-    }
-  }
-
-  // Active panel
-  const activeOnes = _settingsCurrentAreas.filter(a => a.active);
-  activeEl.innerHTML = '';
-  for (const area of activeOnes) {
-    const row = document.createElement('div');
-    row.style.cssText = 'padding:5px 10px;display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--text);border-bottom:1px solid var(--border)';
-    const nameSpan = document.createElement('span');
-    nameSpan.textContent = area.name;
-    const rmBtn = document.createElement('button');
-    rmBtn.textContent = '×';
-    rmBtn.title = 'Remove';
-    rmBtn.style.cssText = 'border:none;background:none;cursor:pointer;color:var(--muted);font-size:14px;padding:0 4px;line-height:1;flex-shrink:0';
-    rmBtn.addEventListener('click', () => _areaMove(area.name, 'remove'));
-    row.addEventListener('mouseenter', () => row.style.background = 'var(--hover,rgba(0,0,0,.04))');
-    row.addEventListener('mouseleave', () => row.style.background = '');
-    row.appendChild(nameSpan);
-    row.appendChild(rmBtn);
-    activeEl.appendChild(row);
-  }
-
-  if (countEl) countEl.textContent = `(${activeOnes.length})`;
+  // Repurposed name — kept so existing call sites still trigger a re-render.
+  _renderScanAreasGrid();
 }
 
-function _areaMove(name, direction) {
-  const existing = _settingsCurrentAreas.find(a => a.name === name);
-  if (direction === 'add') {
-    if (existing) { existing.active = true; }
-    else { _settingsCurrentAreas.push({ id: _toAreaId(name), name, active: true }); }
-  } else if (direction === 'remove') {
-    if (existing) existing.active = false;
+async function _renderScanAreasGrid() {
+  const grid    = document.getElementById('scanAreasGrid');
+  const noPick  = document.getElementById('scanAreasNoPicker');
+  const pickEl  = document.getElementById('areaPickerUI');
+  if (!grid) return;
+  await _loadSlugMapping();
+  const city = _activeScanCity();
+  const macros = _getMacroAreasForCity(city);
+  if (!macros.length) {
+    if (noPick) noPick.style.display = '';
+    if (pickEl) pickEl.style.display = 'none';
+    return;
   }
-  _renderAreaPicker();
+  if (noPick) noPick.style.display = 'none';
+  if (pickEl) pickEl.style.display = '';
+  const active = _getActiveMacroSlugs();
+  const zonesLabel = (typeof t === 'function' && t('settings.zones')) || 'zones';
+  grid.innerHTML = macros.map(m => {
+    const on = active.has(m.slug);
+    return `<label class="scan-area-card${on ? ' scan-area-card-on' : ''}" data-slug="${m.slug}">
+              <input type="checkbox" ${on ? 'checked' : ''}>
+              <div class="scan-area-card-content">
+                <div class="scan-area-name">${escapeHtml(m.displayName)}</div>
+                <div class="scan-area-meta">${m.coversCount} ${zonesLabel}</div>
+              </div>
+              <div class="scan-area-toggle">
+                <div class="toggle-track${on ? ' toggle-on' : ''}"><div class="toggle-thumb"></div></div>
+              </div>
+            </label>`;
+  }).join('');
+  // Single delegated click — avoid one listener per card.
+  grid.onclick = (ev) => {
+    const card = ev.target.closest?.('.scan-area-card');
+    if (!card) return;
+    ev.preventDefault();
+    const slug = card.dataset.slug;
+    const wasOn = card.classList.contains('scan-area-card-on');
+    _toggleMacroArea(slug, !wasOn);
+  };
+  _updateScanAreasCount();
 }
 
-document.getElementById('areaPickerSearch')?.addEventListener('input', _renderAreaPicker);
-
-document.getElementById('btnAreaAdd')?.addEventListener('click', () => {
-  const avail    = document.getElementById('areaPickerAvail');
-  const selected = avail?.querySelectorAll('[data-sel="1"]');
-  if (selected?.length) {
-    selected.forEach(el => _areaMove(el.dataset.name, 'add'));
-  } else {
-    avail?.querySelectorAll('[data-name]').forEach(el => _areaMove(el.dataset.name, 'add'));
+function _toggleMacroArea(slug, enabled) {
+  if (!slug) return;
+  const existing = _settingsCurrentAreas.find(a => (a.id || a.name) === slug);
+  if (existing) {
+    existing.active = !!enabled;
+  } else if (enabled) {
+    _settingsCurrentAreas.push({
+      id:     slug,
+      name:   _prettifyMacroSlug(slug),
+      active: true,
+    });
   }
+  // Cheap DOM update (no full re-render) so toggling 32 cards isn't N²
+  const card = document.querySelector(`.scan-area-card[data-slug="${slug}"]`);
+  if (card) {
+    card.classList.toggle('scan-area-card-on', !!enabled);
+    const trk = card.querySelector('.toggle-track');
+    if (trk) trk.classList.toggle('toggle-on', !!enabled);
+    const cb = card.querySelector('input[type="checkbox"]');
+    if (cb) cb.checked = !!enabled;
+  }
+  _updateScanAreasCount();
+}
+
+function _updateScanAreasCount() {
+  const el = document.getElementById('scanAreasCount');
+  if (!el) return;
+  const total  = _getMacroAreasForCity(_activeScanCity()).length;
+  const active = _getActiveMacroSlugs().size;
+  const lbl    = (typeof t === 'function' && t('settings.areas_active')) || 'active';
+  el.textContent = `${active} / ${total} ${lbl}`;
+}
+
+document.getElementById('btnAreaSelectAll')?.addEventListener('click', () => {
+  const city  = _activeScanCity();
+  const macros = _getMacroAreasForCity(city);
+  for (const m of macros) _toggleMacroArea(m.slug, true);
 });
 
-document.getElementById('btnAreaRemove')?.addEventListener('click', () => {
+document.getElementById('btnAreaClearAll')?.addEventListener('click', () => {
+  // Flip every currently-active entry off — _settingsCurrentAreas may
+  // hold legacy display-name entries too, so we deactivate them all
+  // to avoid silently keeping stale Milan zones active across saves.
   _settingsCurrentAreas.forEach(a => { a.active = false; });
-  _renderAreaPicker();
+  _renderScanAreasGrid();
 });
 
 // ── Scoring settings panel ────────────────────────────────────────────────────
@@ -21680,28 +22443,35 @@ document.getElementById('btnSettingsSave')?.addEventListener('click', async () =
   const setStatus = (msg, color = '') => { if (statusEl) { statusEl.textContent = msg; statusEl.style.color = color; } };
   const city = _activeScanCity();
   setStatus('Saving…');
+  // New endpoint writes {active_areas:[slug,...]} directly + syncs
+  // scan_prefs.json for Milan so the scan daemon picks up the change
+  // without a separate POST.
+  const activeSlugs = [..._getActiveMacroSlugs()];
   try {
-    const r = await fetch(`/area-settings?city=${encodeURIComponent(city)}`, {
+    const r = await fetch('/api/save-areas', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ areas: _settingsCurrentAreas, city }),
+      body: JSON.stringify({ city, areas: activeSlugs }),
     });
-    const j = await r.json();
-    if (!r.ok) throw new Error(j.error || 'Error');
-    const activeNames = _settingsCurrentAreas.filter(a => a.active).map(a => a.name);
-    setStatus(`✓ Saved ${city} — ${activeNames.length} active area(s)`, 'var(--green)');
-    // Only sync the legacy Milan-anchored MSDs when we just saved Milan.
-    // For other cities, those multi-selects (drawer + sale-fetch picker)
-    // stay anchored to the user's last Milan selection — separate concern.
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+    const savedLbl = (typeof t === 'function' && t('settings.areas_saved')) || 'Scan areas saved';
+    setStatus(`✓ ${savedLbl} — ${city} (${activeSlugs.length})`, 'var(--green)');
+    // Drawer chips + sale-fetch picker still speak display names. Hand
+    // them the prettified macro labels so the user sees the same set
+    // the Settings card just confirmed (Milan only — other cities don't
+    // anchor those multi-selects).
     if (city === 'milano') {
-      if (typeof scanAreaMsd      !== 'undefined') scanAreaMsd.setSelected(activeNames);
-      if (typeof saleAreaFetchMsd !== 'undefined') saleAreaFetchMsd.setSelected(activeNames);
-      if (typeof saveScanPrefs    === 'function') saveScanPrefs();
-      if (typeof saveSaleFetchPrefs === 'function') saveSaleFetchPrefs();
+      const displayNames = activeSlugs.map(_prettifyMacroSlug);
+      if (typeof scanAreaMsd      !== 'undefined') scanAreaMsd.setSelected(displayNames);
+      if (typeof saleAreaFetchMsd !== 'undefined') saleAreaFetchMsd.setSelected(displayNames);
+      if (typeof saveScanPrefs       === 'function') saveScanPrefs();
+      if (typeof saveSaleFetchPrefs  === 'function') saveSaleFetchPrefs();
       if (typeof _populateDrawerAreaFromActive === 'function') _populateDrawerAreaFromActive();
     }
   } catch (e) {
-    setStatus('✗ ' + e.message, 'var(--red)');
+    const errLbl = (typeof t === 'function' && t('settings.areas_save_error')) || 'Could not save scan areas';
+    setStatus('✗ ' + errLbl + ': ' + e.message, 'var(--red)');
   }
   setTimeout(() => setStatus(''), 4000);
 });
@@ -22140,6 +22910,41 @@ const VAL_ADJUSTMENT_FACTORS = {
   parking:            { rent: +0.05, sale: +0.05 },
   furnished_rent:     +0.10,   // rentals only
   concierge:          +0.03,
+  cellar:             { rent: +0.01, sale: +0.02 },
+  aircon:             { rent: +0.03, sale: +0.02 },
+  // Condition coefficients — mirror scoring.py for parity with the
+  // scoring engine. Sale-side spreads are wider because renovation
+  // shows up more in capital value than in rental.
+  condition: {
+    rent: { 'ottimo': +0.08, 'ristrutturato': +0.05, 'buono': 0, 'abitabile': -0.03, 'da_ristrutturare': -0.10, 'fatiscente': -0.20 },
+    sale: { 'ottimo': +0.10, 'ristrutturato': +0.07, 'buono': 0, 'abitabile': -0.05, 'da_ristrutturare': -0.15, 'fatiscente': -0.25 },
+  },
+  // Energy class — sale weighs energy more heavily (capital value).
+  energy: {
+    rent: { 'A4': +0.05, 'A3': +0.05, 'A2': +0.04, 'A1': +0.04, 'A': +0.03, 'B': +0.02, 'C': +0.01, 'D': 0, 'E': -0.01, 'F': -0.03, 'G': -0.04 },
+    sale: { 'A4': +0.08, 'A3': +0.08, 'A2': +0.06, 'A1': +0.06, 'A': +0.06, 'B': +0.04, 'C': +0.02, 'D': 0, 'E': -0.02, 'F': -0.04, 'G': -0.06 },
+  },
+  // Heating — autonomous is the gold standard. Centralized w/ valves
+  // (TRV) is the legal minimum in Milan; pure centralized is a strong
+  // negative because tenants can't control their costs.
+  heating: {
+    rent: { 'autonomous': +0.04, 'centralizzato_valvole': +0.02, 'centralizzato': -0.02, 'pompa_calore': +0.03 },
+    sale: { 'autonomous': +0.05, 'centralizzato_valvole': +0.02, 'centralizzato':  0,    'pompa_calore': +0.03 },
+  },
+  // Exposure — doppia (dual-aspect) is the premium; interna (courtyard-
+  // only) is the discount.
+  exposure: {
+    rent: { 'doppia': +0.03, 'esterna': +0.01, 'interna': -0.04 },
+    sale: { 'doppia': +0.04, 'esterna': +0.01, 'interna': -0.06 },
+  },
+  // Year built — newer buildings command a premium; pre-war can either
+  // (heritage-rich centro) or kill (worn-out periphery). We apply a
+  // mild premium for post-2000 and a mild discount for pre-1960
+  // (overridden by condition if renovated).
+  year_built: {
+    rent: { post_2000: +0.04, between_1960_2000: 0, pre_1960: -0.02 },
+    sale: { post_2000: +0.06, between_1960_2000: 0, pre_1960: -0.03 },
+  },
 };
 
 let _valuationRendered = false;
@@ -22233,6 +23038,42 @@ function renderValuationTab() {
           </select>
         </div>
 
+        <div class="val-field">
+          <label for="val-energy">Energy class</label>
+          <select id="val-energy">
+            <option value="">Unknown</option>
+            <option value="A4">A4</option><option value="A3">A3</option>
+            <option value="A2">A2</option><option value="A1">A1</option>
+            <option value="A">A</option><option value="B">B</option>
+            <option value="C">C</option><option value="D">D</option>
+            <option value="E">E</option><option value="F">F</option>
+            <option value="G">G</option>
+          </select>
+        </div>
+        <div class="val-field">
+          <label for="val-heating">Heating type</label>
+          <select id="val-heating">
+            <option value="">Unknown</option>
+            <option value="autonomous">Autonomo</option>
+            <option value="centralizzato_valvole">Centralizzato con valvole</option>
+            <option value="centralizzato">Centralizzato (no valvole)</option>
+            <option value="pompa_calore">Pompa di calore</option>
+          </select>
+        </div>
+        <div class="val-field">
+          <label for="val-year">Year built</label>
+          <input type="number" id="val-year" placeholder="1965" min="1880" max="2026">
+        </div>
+        <div class="val-field">
+          <label for="val-exposure">Exposure</label>
+          <select id="val-exposure">
+            <option value="">Unknown</option>
+            <option value="doppia">Doppia esposizione</option>
+            <option value="esterna">Esterna</option>
+            <option value="interna">Interna / cortile</option>
+          </select>
+        </div>
+
         <div class="val-field val-field-checkboxes val-field-full">
           <label>Features</label>
           <div class="val-checkboxes">
@@ -22240,6 +23081,8 @@ function renderValuationTab() {
             <label class="val-check"><input type="checkbox" id="val-parking"> Parking / box</label>
             <label class="val-check"><input type="checkbox" id="val-furnished"> Furnished</label>
             <label class="val-check"><input type="checkbox" id="val-concierge"> Concierge</label>
+            <label class="val-check"><input type="checkbox" id="val-cellar"> Cellar (cantina)</label>
+            <label class="val-check"><input type="checkbox" id="val-aircon"> Air conditioning</label>
           </div>
         </div>
       </div>
@@ -22346,6 +23189,34 @@ function fillValuationForm(listing) {
   chk('val-balcony',  listing.has_balcony);
   chk('val-parking',  listing.has_parking);
   chk('val-furnished', listing.furnished);
+  chk('val-cellar',   listing.has_cellar);
+  chk('val-aircon',   listing.has_aircon
+                       || /aria condizionata|aircon|a\.?c\.?/i.test(String(listing.description || '')));
+  // Energy/heating/year/exposure — only set when the scraped row has
+  // them. Idealista listings often omit; manual user input is the
+  // backstop.
+  if (listing.energy_class) {
+    const ee = document.getElementById('val-energy');
+    if (ee) ee.value = String(listing.energy_class).toUpperCase();
+  }
+  if (listing.heating_type) {
+    const hk = String(listing.heating_type).toLowerCase();
+    let mapped = '';
+    if (/auton/i.test(hk))                     mapped = 'autonomous';
+    else if (/valvol|trv|individual/i.test(hk)) mapped = 'centralizzato_valvole';
+    else if (/centralizz/i.test(hk))           mapped = 'centralizzato';
+    else if (/pompa|heat.?pump/i.test(hk))     mapped = 'pompa_calore';
+    if (mapped) document.getElementById('val-heating').value = mapped;
+  }
+  if (listing.year_built) set('val-year', listing.year_built);
+  if (listing.exposure) {
+    const xk = String(listing.exposure).toLowerCase();
+    let mapped = '';
+    if (/doppia|dual/i.test(xk))     mapped = 'doppia';
+    else if (/intern|cortile/i.test(xk)) mapped = 'interna';
+    else if (/estern/i.test(xk))     mapped = 'esterna';
+    if (mapped) document.getElementById('val-exposure').value = mapped;
+  }
 
   document.getElementById('val-omi-zona').value   = listing.omi_zona   || '';
   document.getElementById('val-omi-fascia').value = listing.omi_fascia || '';
@@ -22492,12 +23363,17 @@ function estimateSaleValue(listing) {
     const psqm = med(c.pool);
     if (!psqm) continue;
     const adjusted = applyConditionAdjustment(psqm, c.pool, saleCondGroup);
+    // Sort comps by proximity to the target sqm so the "Comparables"
+    // panel shows the most relevant ones first.
+    const sorted = c.pool.slice().sort((a, b) =>
+      Math.abs(Number(a.sqm) - sqm) - Math.abs(Number(b.sqm) - sqm)
+    );
     return {
       psqm:       Math.round(adjusted),
       n_comps:    c.pool.length,
       method:     c.method,
       confidence: c.confidence,
-      comp_ids:   c.pool.slice(0, 5).map(s => String(s.id)),
+      comp_ids:   sorted.slice(0, 10).map(s => String(s.id)),
     };
   }
   return { psqm: null, n_comps: 0, method: 'no_data', confidence: 'none' };
@@ -22530,8 +23406,50 @@ function applyValuationAdjustments(basePsqm, listing, mode) {
   if (listing.has_parking) push('Parking / box',     VAL_ADJUSTMENT_FACTORS.parking[mode]);
   // Furnished — rentals only
   if (mode === 'rent' && listing.furnished) push('Furnished', VAL_ADJUSTMENT_FACTORS.furnished_rent);
-  // Concierge — both modes
-  if (listing.has_concierge) push('Concierge', VAL_ADJUSTMENT_FACTORS.concierge);
+  // Concierge / cellar / aircon — both modes
+  if (listing.has_concierge) push('Concierge',  VAL_ADJUSTMENT_FACTORS.concierge);
+  if (listing.has_cellar)    push('Cellar',     VAL_ADJUSTMENT_FACTORS.cellar[mode]);
+  if (listing.has_aircon)    push('Air conditioning', VAL_ADJUSTMENT_FACTORS.aircon[mode]);
+
+  // Condition
+  if (listing.condition) {
+    const condKey = String(listing.condition).toLowerCase();
+    const condTab = VAL_ADJUSTMENT_FACTORS.condition[mode] || {};
+    // Direct hit first; fall back to a fuzzy match (Immobiliare's
+    // strings come through with prefixes like "Ottimo / Ristrutturato").
+    let condFactor = condTab[condKey];
+    if (condFactor == null) {
+      for (const k of Object.keys(condTab)) {
+        if (condKey.includes(k)) { condFactor = condTab[k]; break; }
+      }
+    }
+    if (condFactor) push(`Condition: ${listing.condition}`, condFactor);
+  }
+  // Energy class
+  if (listing.energy_class) {
+    const ek = String(listing.energy_class).toUpperCase();
+    const ef = (VAL_ADJUSTMENT_FACTORS.energy[mode] || {})[ek];
+    if (ef) push(`Energy class ${ek}`, ef);
+  }
+  // Heating
+  if (listing.heating_type) {
+    const ht = (VAL_ADJUSTMENT_FACTORS.heating[mode] || {})[listing.heating_type];
+    if (ht) push(`Heating: ${listing.heating_type.replace(/_/g, ' ')}`, ht);
+  }
+  // Exposure
+  if (listing.exposure) {
+    const ex = (VAL_ADJUSTMENT_FACTORS.exposure[mode] || {})[listing.exposure];
+    if (ex) push(`Exposure: ${listing.exposure}`, ex);
+  }
+  // Year built — three coarse buckets, condition overrides if renovated
+  if (listing.year_built && !/ottim|ristruttur|nuovo/i.test(String(listing.condition || ''))) {
+    let yBucket;
+    if (listing.year_built >= 2000)      yBucket = 'post_2000';
+    else if (listing.year_built >= 1960) yBucket = 'between_1960_2000';
+    else                                  yBucket = 'pre_1960';
+    const yf = (VAL_ADJUSTMENT_FACTORS.year_built[mode] || {})[yBucket];
+    if (yf) push(`Year built ${listing.year_built}`, yf);
+  }
 
   const finalPsqm  = Math.round(psqm);
   const finalTotal = Math.round(psqm * listing.sqm);
@@ -22574,6 +23492,12 @@ function runValuation() {
     has_parking:  _chk('val-parking'),
     furnished:    _chk('val-furnished'),
     has_concierge: _chk('val-concierge'),
+    has_cellar:   _chk('val-cellar'),
+    has_aircon:   _chk('val-aircon'),
+    energy_class: _sel('val-energy').toUpperCase() || null,
+    heating_type: _sel('val-heating') || null,
+    year_built:   _num('val-year'),
+    exposure:     _sel('val-exposure') || null,
     omi_zona:     zona,
     omi_fascia:   _sel('val-omi-fascia'),
     latitude:     _num('val-lat'),
@@ -22690,6 +23614,106 @@ function renderValuationResults({ listing, rentResult, saleResult, rentEstimate,
       </div>`;
   };
 
+  // ── OMI benchmark card ─────────────────────────────────────────────
+  // Pulls OMI mid/min/max from any existing listing in the same zone
+  // (saved during the geo-enrich pass on every fetched listing).
+  // No new API call needed — values are already on disk.
+  const _omiSrc = (typeof ALL_SALE !== 'undefined' ? ALL_SALE : [])
+                    .find(l => l.omi_zona === listing.omi_zona
+                              && l.omi_compr_mid && l.omi_loc_mid);
+  let omiBlock = '';
+  if (_omiSrc) {
+    const omiSaleMid = _omiSrc.omi_compr_mid;
+    const omiSaleMin = _omiSrc.omi_compr_min || omiSaleMid * 0.85;
+    const omiSaleMax = _omiSrc.omi_compr_max || omiSaleMid * 1.15;
+    const omiRentMid = _omiSrc.omi_loc_mid;
+    const omiRentMin = _omiSrc.omi_loc_min   || omiRentMid * 0.85;
+    const omiRentMax = _omiSrc.omi_loc_max   || omiRentMid * 1.15;
+    const _markerSale = saleEstimate
+      ? `<div class="omi-marker" style="left:${Math.max(0, Math.min(100,
+          ((saleEstimate.psqm - omiSaleMin) / (omiSaleMax - omiSaleMin)) * 100))}%">▼</div>`
+      : '';
+    const _markerRent = rentEstimate
+      ? `<div class="omi-marker" style="left:${Math.max(0, Math.min(100,
+          ((rentEstimate.psqm - omiRentMin) / (omiRentMax - omiRentMin)) * 100))}%">▼</div>`
+      : '';
+    omiBlock = `
+      <div class="val-result-card val-omi-card">
+        <h3>📊 OMI benchmark
+          <span class="val-omi-zone">${escapeHtml(listing.omi_zona || '?')} · ${escapeHtml(_omiSrc.omi_descr || '')}</span>
+        </h3>
+        <div class="val-omi-rows">
+          <div class="val-omi-row">
+            <div class="val-omi-label">Sale €/m²</div>
+            <div class="val-omi-track">
+              ${_markerSale}
+              <div class="val-omi-range">
+                <span class="val-omi-min">${fmtEuro(omiSaleMin)}</span>
+                <span class="val-omi-mid">${fmtEuro(omiSaleMid)}</span>
+                <span class="val-omi-max">${fmtEuro(omiSaleMax)}</span>
+              </div>
+            </div>
+          </div>
+          <div class="val-omi-row">
+            <div class="val-omi-label">Rent €/m²/mo</div>
+            <div class="val-omi-track">
+              ${_markerRent}
+              <div class="val-omi-range">
+                <span class="val-omi-min">${fmtEuro(omiRentMin)}</span>
+                <span class="val-omi-mid">${fmtEuro(omiRentMid)}</span>
+                <span class="val-omi-max">${fmtEuro(omiRentMax)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="val-omi-hint">
+          ▼ marks Lume's estimate. Inside the range = market-consistent.
+          OMI is the official Italian tax-authority benchmark per zone.
+        </p>
+      </div>`;
+  }
+
+  // ── Comparables card ───────────────────────────────────────────────
+  const _byId = id => ((typeof ALL_SALE !== 'undefined' ? ALL_SALE : []).find(s => String(s.id) === id))
+                   || ((typeof ALL_RENT !== 'undefined' ? ALL_RENT : []).find(s => String(s.id) === id));
+  const _compRow = (l, isRent) => {
+    const price = isRent ? (l.rent_mo || l.price) : l.price;
+    const psqm  = isRent ? (l.ask_psqm_rent || l.ask_psqm) : l.ask_psqm;
+    const url   = l.url || (l.source === 'idealista'
+                            ? `https://www.idealista.it/immobile/${String(l.id).replace(/^id_/,'')}/`
+                            : `https://www.immobiliare.it/annunci/${l.id}/`);
+    return `<tr>
+      <td><a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml((l.address || l.neighbourhood || '—').slice(0, 40))}</a></td>
+      <td class="num">${l.sqm || '?'} m²</td>
+      <td class="num">${l.rooms ?? '?'}</td>
+      <td class="num">${price ? fmtEuro(price) + (isRent ? '/mo' : '') : '—'}</td>
+      <td class="num">${psqm ? fmtEuro(psqm) + '/m²' : '—'}</td>
+    </tr>`;
+  };
+  const _saleComps = (saleResult.comp_ids || []).map(_byId).filter(Boolean);
+  const _rentComps = (rentResult.comp_ids || []).map(_byId).filter(Boolean);
+  let compsBlock = '';
+  if (_saleComps.length || _rentComps.length) {
+    compsBlock = `
+      <div class="val-result-card val-comps-card">
+        <h3>🔍 Comparables Lume used</h3>
+        <div class="val-comps-tabs">
+          ${_saleComps.length ? `<button class="val-comps-tab is-active" data-tab="sale">Sale (${_saleComps.length})</button>` : ''}
+          ${_rentComps.length ? `<button class="val-comps-tab${!_saleComps.length ? ' is-active' : ''}" data-tab="rent">Rental (${_rentComps.length})</button>` : ''}
+        </div>
+        ${_saleComps.length ? `
+          <table class="val-comps-table" data-pane="sale" ${!_saleComps.length ? 'hidden' : ''}>
+            <thead><tr><th>Address</th><th>Sqm</th><th>Rooms</th><th>Price</th><th>€/m²</th></tr></thead>
+            <tbody>${_saleComps.map(l => _compRow(l, false)).join('')}</tbody>
+          </table>` : ''}
+        ${_rentComps.length ? `
+          <table class="val-comps-table" data-pane="rent" ${_saleComps.length ? 'hidden' : ''}>
+            <thead><tr><th>Address</th><th>Sqm</th><th>Rooms</th><th>Rent</th><th>€/m²/mo</th></tr></thead>
+            <tbody>${_rentComps.map(l => _compRow(l, true)).join('')}</tbody>
+          </table>` : ''}
+      </div>`;
+  }
+
   const totalListings = (ALL_RENT?.length || 0) + (ALL_SALE?.length || 0);
   el.innerHTML = `
     <div class="val-results-grid">
@@ -22697,6 +23721,8 @@ function renderValuationResults({ listing, rentResult, saleResult, rentEstimate,
       ${card('Sale value',   '🏷️', saleEstimate, saleResult, '')}
     </div>
     ${askingBlock}
+    ${omiBlock}
+    ${compsBlock}
     <button type="button" class="btn-val-reset" onclick="resetValuation()">
       Value another property
     </button>
@@ -22706,6 +23732,17 @@ function renderValuationResults({ listing, rentResult, saleResult, rentEstimate,
       ranges, not appraised values. Always verify with a licensed agent or
       surveyor before financial decisions.
     </p>`;
+
+  // Tab wiring for the Comparables card (sale ↔ rent panes).
+  el.querySelectorAll('.val-comps-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const want = btn.dataset.tab;
+      el.querySelectorAll('.val-comps-tab').forEach(b =>
+        b.classList.toggle('is-active', b.dataset.tab === want));
+      el.querySelectorAll('.val-comps-table').forEach(t =>
+        t.hidden = (t.dataset.pane !== want));
+    });
+  });
 
   el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }

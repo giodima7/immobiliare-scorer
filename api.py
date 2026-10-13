@@ -135,6 +135,20 @@ _geo_queue_lock = threading.Lock()
 _geo_queue_stop = threading.Event()       # global cancel for the orchestrator
 _geo_orchestrator_thread: threading.Thread | None = None
 
+def _geo_stop_requested(own_stop: threading.Event) -> bool:
+    """True when the user pressed Stop — either the worker's own flag or
+    the queue-wide one. Workers clear their own flag on start, so a Stop
+    that lands between queue jobs (POI download, pending preview) is only
+    visible through _geo_queue_stop."""
+    return own_stop.is_set() or _geo_queue_stop.is_set()
+
+def _clear_stale_queue_stop() -> None:
+    """_geo_queue_stop stays set after a Stop until the next queue run.
+    Standalone starts (POST /geo-enrich, /geo-enrich-sales) clear it when
+    no queue is alive, otherwise the new worker would stop immediately."""
+    if not (_geo_orchestrator_thread and _geo_orchestrator_thread.is_alive()):
+        _geo_queue_stop.clear()
+
 def _geo_job_key(city: str, kind: str) -> str:
     return f"{city}:{kind}"
 
@@ -153,7 +167,13 @@ def _geo_job_init(city: str, kind: str, state: str = "queued") -> dict:
 
 def _geo_set_phase(slot: dict, phase: str, label: str | None = None) -> None:
     """Mark which sub-step of enrichment the worker is in. Picked up by
-    the dashboard so the user can see WHAT is happening, not just IF."""
+    the dashboard so the user can see WHAT is happening, not just IF.
+
+    No-op once DELETE /geo-enrich has marked the slot "stopping" — the
+    worker may still be finishing a step, and flipping the label back to
+    "Rescoring…" makes the Stop button look ignored."""
+    if slot.get("phase") == "stopping":
+        return
     slot["phase"]       = phase
     slot["phase_label"] = label or {
         "polygon":   "Applying OMI zones",
@@ -204,6 +224,33 @@ def _has_geocodable_data(l: dict) -> bool:
             and not _RE_POSIZIONE_APPROSSIMATIVA.search(nbhd)):
         return True
     return False
+
+
+def _geo_contaminated(entry: dict | None) -> bool:
+    """A nearest-metro distance > 50 km is always wrong: every supported
+    city fits inside a 50 km radius. Catches the pre-fix Roma/Napoli/
+    La-Maddalena rows matched against Milan POIs (~600 km away)."""
+    md = entry.get("metro_nearest_dist_m") if entry else None
+    return md is not None and md > 50_000
+
+
+def _geo_is_current(entry: dict | None, pois_version: str | None) -> bool:
+    """True when a listing (or its cache entry) already carries usable geo
+    data computed from the city's current POI file. A re-downloaded POI
+    file changes the version, so every listing gets recomputed once —
+    locally, no network for listings that have coordinates.
+
+    Single predicate for both workers AND _count_pending_for, so the
+    preview number matches the job the worker actually runs."""
+    if not entry or entry.get("geo_score") is None or _geo_contaminated(entry):
+        return False
+    return not pois_version or entry.get("geo_pois_version") == pois_version
+
+
+def _geo_needs_enrich(l: dict, cached: dict | None, pois_version: str | None) -> bool:
+    if _geo_is_current(l, pois_version):
+        return False
+    return not (_geo_is_current(cached, pois_version) and not _geo_contaminated(l))
 
 
 def _resolve_city_path(city: str, kind: str) -> Path:
@@ -263,32 +310,20 @@ def _count_pending_for(city: str, kind: str) -> dict:
     # Cache key source. Sales always use "sale"; rentals derive per listing
     # (immobiliare vs idealista) so they hit the right cache entry.
     src_key = "sale" if kind == "sale" else None
+    try:
+        from enrich_geo import current_pois_version
+        pois_version = current_pois_version(city)
+    except Exception:
+        pois_version = None
     pending = 0
     for l in data:
-        # Cross-city contamination check: a nearest-metro distance > 50 km
-        # is always wrong (every supported city fits inside a 50 km radius),
-        # so listings carrying such a value need re-enrichment even though
-        # their geo_score is non-null. Matches _needs_overpass() in both
-        # workers so the preview number matches the actual job size.
-        def _contaminated(entry):
-            md = entry.get("metro_nearest_dist_m") if entry else None
-            return md is not None and md > 50_000
-
-        if l.get("geo_score") is not None and not _contaminated(l):
-            continue
-        src = src_key or l.get("source") or "immobiliare"
         lid = l.get("id")
         if not lid:
             continue
-        cached_entry = _ecache.get(src, lid)
-        if (cached_entry
-                and cached_entry.get("geo_score") is not None
-                and not _contaminated(cached_entry)
-                and not _contaminated(l)):
-            continue
-        # Single source of truth shared with both workers — guarantees the
-        # preview number matches the actual job size.
-        if _has_geocodable_data(l):
+        src = src_key or l.get("source") or "immobiliare"
+        # Same predicates as both workers — guarantees the preview number
+        # matches the actual job size.
+        if _geo_needs_enrich(l, _ecache.get(src, lid), pois_version) and _has_geocodable_data(l):
             pending += 1
 
     _GEO_PENDING_CACHE[key] = {
@@ -338,10 +373,21 @@ _dq_sale_cache_ts: float = 0.0
 _DQ_CACHE_TTL = 60.0  # seconds
 
 
-def _apply_omi_polygon(data: list, ecache=None) -> int:
+def _omi_norm(v):
+    """Values dashboard_io.slim_listing drops on write read back as None."""
+    return None if v in (None, "", [], {}) else v
+
+
+def _apply_omi_polygon(data: list, ecache=None, city: str | None = None) -> int:
     """
-    Apply omi_lookup.lookup() to every listing that has coordinates but is
-    missing omi_loc_mid (polygon-matched OMI data).
+    Apply omi_lookup.lookup_for_city() to every listing that has coordinates
+    but no OMI data from its own city.
+
+    Each listing is matched against its city's polygons (its `city` field,
+    else `city`, else Milan). A listing whose stored zone/price isn't in its
+    city's zone table is re-matched too: the old Milan-only lookup gave some
+    Roma/Napoli rows Milan zones (nearest-centroid fallback, ~600 km away),
+    and the "already has omi_loc_mid" skip kept them wrong forever.
 
     Runs in-memory (no network calls) — typically completes in < 1 s for 1 000+
     listings.  Updates the listing dicts in-place and, if an ecache module is
@@ -351,23 +397,43 @@ def _apply_omi_polygon(data: list, ecache=None) -> int:
     """
     try:
         import omi_lookup as _omi
-        if not _omi.ZONES:
-            return 0
     except Exception as exc:
         print(f"  [omi] omi_lookup unavailable: {exc}", file=sys.stderr)
         return 0
 
+    zone_tables: dict = {}
+    def _zones_for(c: str):
+        if c not in zone_tables:
+            try:
+                zone_tables[c] = _omi.load_city_zones(c)
+            except Exception as exc:
+                print(f"  [omi] no OMI data for {c}: {exc}", file=sys.stderr)
+                zone_tables[c] = None
+        return zone_tables[c]
+
     updated = 0
     cache_updates: list = []
     for l in data:
-        if l.get("omi_loc_mid") is not None:
-            continue   # already polygon-matched
+        l_city = (l.get("city") or city or "milano").strip().lower().replace(" ", "_")
+        zones = _zones_for(l_city)
+        if zones is None:
+            continue
+        stored = l.get("omi_loc_mid")
+        if stored is not None:
+            z = zones.get(l.get("omi_zona"))
+            # fascia too: the sales scraper's legacy scorer (fetch_listings
+            # score_listing) writes its own neighbourhood-table fascia over
+            # the polygon zone's — 82 % of Milan sales carried e.g. zone D34
+            # with fascia B, feeding the wrong fascia-fallback comps pool.
+            if (z is not None and z.get("loc_mid") == stored
+                    and z.get("fascia") == l.get("omi_fascia")):
+                continue   # already polygon-matched against its own city
         lat = l.get("latitude") or l.get("lat")
         lng = l.get("longitude") or l.get("lng")
         if not lat or not lng:
             continue
         try:
-            zone, src = _omi.lookup(float(lat), float(lng))
+            zone, src = _omi.lookup_for_city(float(lat), float(lng), city=l_city)
         except Exception:
             continue
         if not zone:
@@ -385,6 +451,12 @@ def _apply_omi_polygon(data: list, ecache=None) -> int:
             "omi_compr_mid": zone["compr_mid"],
             "omi_source":    src,
         }
+        # Zones without OMI prices (e.g. Milan R2) yield None/"" fields,
+        # which slim_listing strips on write — so the listing comes back
+        # without them and would count as "updated" on every run, forcing
+        # a pointless full-city rescore. Only count real changes.
+        if all(_omi_norm(l.get(k)) == _omi_norm(v) for k, v in omi_fields.items()):
+            continue
         l.update(omi_fields)
         updated += 1
         cache_updates.append((l.get("source", "immobiliare"), l["id"], omi_fields))
@@ -461,7 +533,13 @@ def _geo_enrich_worker(city: str = "milano"):
         # Fixes all listings that have coordinates but were cached before
         # omi_lookup existed (no Overpass call needed).
         _geo_set_phase(slot, "polygon")
-        n_omi = _apply_omi_polygon(data, _ecache)
+        n_omi = _apply_omi_polygon(data, _ecache, city=city)
+        # Stop before the full-city rescore, not after: it takes minutes on
+        # Milan and can't be interrupted. The OMI fields applied in memory
+        # are cheap to redo on the next run.
+        if _geo_stop_requested(_geo_stop):
+            print(f"  [geo][{city}] stopped by request")
+            return
         if n_omi > 0:
             _geo_set_phase(slot, "rescoring", "Rescoring after OMI pass")
             _flush_geo(data, rent_path, _scoring)
@@ -471,32 +549,12 @@ def _geo_enrich_worker(city: str = "milano"):
         # A cache entry with only OMI polygon fields (no geo_score) still needs
         # Overpass enrichment — this happens when the scan's inline enrich_batch
         # timed out but the OMI polygon pass ran and partially populated the cache.
+        from enrich_geo import current_pois_version
+        pois_version = current_pois_version(city)
+
         def _needs_overpass(l):
-            # Sanity check first — applies to both the JSON-carried value
-            # and the cached entry. A nearest-metro distance > 50 km is
-            # always wrong: every city in CITY_REGISTRY fits inside a 50 km
-            # radius. This catches the pre-fix Roma/Napoli/La-Maddalena
-            # listings that were matched against Milan POIs (San Donato
-            # ~600 km from Rome → metro_nearest_dist_m ≈ 600 000).
-            def _is_contaminated(d):
-                return d is not None and d > 50_000
-
-            # Fast path: listing already carries geo_score AND it's not
-            # cross-city contaminated.
-            if l.get("geo_score") is not None:
-                if _is_contaminated(l.get("metro_nearest_dist_m")):
-                    return True   # re-enrich to repair the bad cache row
-                return False
-
             cached = _ecache.get(l.get("source", "immobiliare"), l["id"])
-            if cached is None:
-                return True
-
-            if cached.get("geo_score") is None:
-                return True
-            if _is_contaminated(cached.get("metro_nearest_dist_m")):
-                return True
-            return False
+            return _geo_needs_enrich(l, cached, pois_version)
 
         # _has_geocodable_data is the module-level helper — same predicate
         # the dashboard's preview count uses, so the worker's processed
@@ -534,8 +592,8 @@ def _geo_enrich_worker(city: str = "milano"):
         # the public server only exposes foot-profile routing,
         # not the table service, so walk times are haversine-derived.
         for chunk_start in range(0, len(need_idx), CHUNK_SIZE):
-            if _geo_stop.is_set():
-                print("  [geo] stopped by request")
+            if _geo_stop_requested(_geo_stop):
+                print(f"  [geo][{city}] stopped by request")
                 break
             if null_streak >= MAX_NULL_STREAK:
                 remaining = len(need_idx) - chunk_start
@@ -561,24 +619,31 @@ def _geo_enrich_worker(city: str = "milano"):
             null_streak  = null_streak + chunk_nulls if chunk_nulls == len(chunk_idxs) else 0
             _mark_progress(n_omi + done_count, slot["total"])
 
-            # Flush after every chunk so the dashboard reflects progress in real time
-            clean = [{k: v for k, v in l.items() if k != "omi"} for l in data]
-            tmp = rent_path.with_suffix(".tmp")
-            from dashboard_io import write_snapshot
-            write_snapshot(tmp, clean)
-            tmp.replace(rent_path)
+            # Flush after every chunk so the dashboard reflects progress in real time.
+            # Cross-process flock + merge-by-id: protects against the
+            # scanner-vs-enrich race AND the scanner-vs-scanner race.
+            _atomic_merge_write(data, rent_path)
             print(f"  [geo][{city}] {done_count}/{len(need_idx)} done")
+
+        # Stopped mid-run: skip the final rescore + push. Enriched chunks are
+        # already in the JSON and the cache; their scores catch up on the
+        # next rescore.
+        if _geo_stop_requested(_geo_stop):
+            return
 
         # Final flush — mark total complete so UI shows 100 %.
         _mark_progress(slot["total"], slot["total"])
         # Skip the rescore + supabase push when nothing actually changed
         # (n_omi was 0 AND no overpass batches ran). Otherwise we spend
-        # 10–30 s rescoring a city whose data is byte-identical to disk.
+        # minutes rescoring a city whose data is byte-identical to disk.
         if n_omi == 0 and done_count == 0:
             print(f"  [geo][{city}] nothing to enrich — skipping rescore")
             return
-        _geo_set_phase(slot, "rescoring")
-        _flush_geo(data, rent_path, _scoring)
+        # The OMI pass already rescored + flushed; only rescore again if
+        # the chunk loop added geo data on top of it.
+        if done_count > 0:
+            _geo_set_phase(slot, "rescoring")
+            _flush_geo(data, rent_path, _scoring)
         # Push the enriched rows back to Supabase so the deployed
         # dashboard sees the new geo fields without waiting for the
         # next scan. Quiet failure if creds aren't set — the local
@@ -603,7 +668,7 @@ def _geo_enrich_worker(city: str = "milano"):
         # _geo_status uses error for the same signal (kept for back-compat).
         if slot.get("error"):
             slot["state"] = "error"
-        elif _geo_stop.is_set() or _geo_queue_stop.is_set():
+        elif _geo_stop_requested(_geo_stop):
             slot["state"] = "stopped"
         else:
             slot["state"] = "done"
@@ -618,37 +683,119 @@ def _geo_enrich_worker(city: str = "milano"):
         _invalidate_pending_cache(city, "rental")
 
 
+def _merge_by_id_with_disk(in_memory: list, path: Path) -> list:
+    """Combine our in-memory list with whatever's currently on disk.
+
+    The geo-enrich worker holds its `data` array for the entire
+    enrichment pass (often 10+ minutes). During that window the
+    scanner subprocess may write fresh listings to the same file.
+    Without re-reading at flush time we'd wipe those writes — the
+    bug that ate every "new" Immobiliare row on 2026-05-25.
+
+    Strategy: for every ID present in our in-memory copy, our enriched
+    version wins (we have geo/OMI/score updates the disk doesn't).
+    For IDs only on disk (added by another writer mid-pass), preserve
+    them verbatim. Preserves the disk ordering for stability; appends
+    our memory-only rows at the end (rare path — happens only when
+    a row was loaded by us but later deleted by another writer).
+    """
+    try:
+        disk = _json.loads(path.read_text())
+    except Exception:
+        # File missing / corrupted — fall back to our in-memory only.
+        return list(in_memory)
+    by_id = {str(l.get("id")): l for l in in_memory if l.get("id") is not None}
+    merged: list = []
+    seen: set = set()
+    for l in disk:
+        lid = str(l.get("id"))
+        if lid in by_id:
+            merged.append(by_id[lid])
+            seen.add(lid)
+        else:
+            merged.append(l)
+    for lid, l in by_id.items():
+        if lid not in seen:
+            merged.append(l)
+    return merged
+
+
+def _atomic_merge_write(in_memory: list, path: Path,
+                        finalize=None) -> list:
+    """Merge `in_memory` with the on-disk file and write the result, all
+    under the same flock the scanners use. Returns the merged list (post-
+    finalize) so the caller can use it for downstream operations.
+
+    `finalize(merged)` is an optional callback that runs AFTER the merge
+    and BEFORE the write — used to apply rescoring / explain / cleanup
+    before persisting. Defaults to a no-op pass-through.
+
+    Cross-process safety: acquires the SAME .lock file fetch_rentals's
+    write_output uses, so a scanner can't sneak a write in between our
+    re-read and our write. Without this lock, the bug that ate every
+    new Immobiliare listing on 2026-05-25 would re-emerge any time the
+    enrich worker and a scanner finished a chunk in the same second.
+    """
+    import fcntl
+    from dashboard_io import write_snapshot as _ws
+    lock_path = path.with_suffix(path.suffix + ".lock")
+    lock_fh = open(lock_path, "w")
+    try:
+        fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX)
+        merged = _merge_by_id_with_disk(in_memory, path)
+        if finalize is not None:
+            merged = finalize(merged)
+        clean = [{k: v for k, v in l.items() if k != "omi"} for l in merged]
+        tmp = path.with_suffix(".tmp")
+        _ws(tmp, clean)
+        tmp.replace(path)
+        return merged
+    finally:
+        try:
+            fcntl.flock(lock_fh.fileno(), fcntl.LOCK_UN)
+        except Exception:
+            pass
+        lock_fh.close()
+
+
 def _flush_geo(data: list, path: Path, scoring_mod):
-    """Rescore and write JSON atomically."""
+    """Rescore and write JSON atomically — race-safe across processes.
+
+    Uses _atomic_merge_write so the read-merge-rescore-write block runs
+    under the same flock the scanners use. score_all + explain_all run
+    inside the finalize callback, so the rescored result is what gets
+    persisted.
+    """
     global _dq_cache
     _dq_cache = None  # invalidate data-quality cache after new data is written
-    scored = scoring_mod.score_all(list(data))
-    # Refresh score_reasons too — without this the bullets stay anchored
-    # to the previous scan's scores and can contradict the new ones (e.g.
-    # "Quieter / less-connected pocket" on a listing whose location score
-    # just got recomputed to 80+ after geo enrichment landed).
-    from explain import explain_all
-    explain_all(scored)
-    clean  = [{k: v for k, v in l.items() if k != "omi"} for l in scored]
-    tmp = path.with_suffix(".tmp")
-    from dashboard_io import write_snapshot
-    write_snapshot(tmp, clean)
-    tmp.replace(path)
+
+    def _finalize(merged):
+        scored = scoring_mod.score_all(list(merged))
+        # Refresh score_reasons too — without this the bullets stay
+        # anchored to the previous scan's scores and can contradict
+        # the new ones (e.g. "Quieter / less-connected pocket" on a
+        # listing whose location score just got recomputed to 80+
+        # after geo enrichment landed).
+        from explain import explain_all
+        explain_all(scored)
+        return scored
+
+    _atomic_merge_write(data, path, finalize=_finalize)
 
 
 def _flush_sale_geo(data: list, path: Path):
-    """Rescore sales and write JSON atomically."""
+    """Rescore sales and write JSON atomically — race-safe across processes."""
     global _DQ_SALE_CACHE
     _DQ_SALE_CACHE = None  # invalidate sales DQ cache
     from scoring import score_all_sales
     from explain import explain_all_sales
-    scored = score_all_sales(list(data))
-    explain_all_sales(scored)
-    clean  = [{k: v for k, v in l.items() if k != "omi"} for l in scored]
-    tmp = path.with_suffix(".tmp")
-    from dashboard_io import write_snapshot
-    write_snapshot(tmp, clean)
-    tmp.replace(path)
+
+    def _finalize(merged):
+        scored = score_all_sales(list(merged))
+        explain_all_sales(scored)
+        return scored
+
+    _atomic_merge_write(data, path, finalize=_finalize)
 
 
 def _geo_enrich_sales_worker(city: str = "milano"):
@@ -694,13 +841,13 @@ def _geo_enrich_sales_worker(city: str = "milano"):
         _ecache.load()
 
         # Fast OMI polygon pass
-        n_omi = _apply_omi_polygon(data, _ecache)
+        n_omi = _apply_omi_polygon(data, _ecache, city=city)
 
         # Backfill from cache: apply any cached geo fields that aren't yet in the
         # file (e.g. from a previous enrichment run whose flush was incomplete).
         GEO_FIELDS = ("geo_score", "metro_nearest_dist_m", "metro_nearest_name",
                       "pois", "walk_score", "park_nearest_dist_m",
-                      "supermarket_nearest_dist_m")
+                      "supermarket_nearest_dist_m", "geo_pois_version")
         n_backfill = 0
         for l in data:
             if l.get("geo_score") is not None:
@@ -712,25 +859,21 @@ def _geo_enrich_sales_worker(city: str = "milano"):
                         l[f] = cached[f]
                 n_backfill += 1
 
+        # Same as the rental worker: bail before the full rescore, not after.
+        if _geo_stop_requested(_geo_sale_stop):
+            print(f"  [geo-sale][{city}] stopped by request")
+            return
         if n_omi > 0 or n_backfill > 0:
             print(f"  [geo-sale][{city}] backfill: {n_backfill} from cache, {n_omi} OMI polygon")
             _geo_set_phase(slot, "rescoring", "Rescoring after OMI pass")
             _flush_sale_geo(data, sale_path)
 
+        from enrich_geo import current_pois_version
+        pois_version = current_pois_version(city)
+
         def _needs_overpass(l):
             cached = _ecache.get(l.get("source", "sale"), l["id"])
-            if cached is None:
-                return True
-            if cached.get("geo_score") is None:
-                return True
-            # Pre-fix Roma/Napoli/La-Maddalena rows were matched against
-            # Milan POIs (San Donato ~600 km from Rome). Any cached
-            # nearest-metro distance > 50 km is cross-city contamination —
-            # re-enrich so the listing's own city's POIs land.
-            md = cached.get("metro_nearest_dist_m")
-            if md is not None and md > 50_000:
-                return True
-            return False
+            return _geo_needs_enrich(l, cached, pois_version)
 
         # Match the dashboard preview exactly — same _has_geocodable_data the
         # rental worker (and _count_pending_for) use. The old loose check
@@ -757,8 +900,8 @@ def _geo_enrich_sales_worker(city: str = "milano"):
         done_count = 0
 
         for chunk_start in range(0, len(need_idx), CHUNK_SIZE):
-            if _geo_sale_stop.is_set():
-                print("  [geo-sale] stopped by request")
+            if _geo_stop_requested(_geo_sale_stop):
+                print(f"  [geo-sale][{city}] stopped by request")
                 break
 
             chunk_idxs     = need_idx[chunk_start:chunk_start + CHUNK_SIZE]
@@ -775,19 +918,22 @@ def _geo_enrich_sales_worker(city: str = "milano"):
             done_count += len(chunk_idxs)
             _mark_progress(n_omi + done_count, slot["total"])
 
-            clean = [{k: v for k, v in l.items() if k != "omi"} for l in data]
-            tmp = sale_path.with_suffix(".tmp")
-            from dashboard_io import write_snapshot
-            write_snapshot(tmp, clean)
-            tmp.replace(sale_path)
+            # Cross-process flock + merge-by-id.
+            _atomic_merge_write(data, sale_path)
             print(f"  [geo-sale][{city}] {done_count}/{len(need_idx)} done")
+
+        if _geo_stop_requested(_geo_sale_stop):
+            return
 
         _mark_progress(slot["total"], slot["total"])
         if n_omi == 0 and n_backfill == 0 and done_count == 0:
             print(f"  [geo-sale][{city}] nothing to enrich — skipping rescore")
             return
-        _geo_set_phase(slot, "rescoring")
-        _flush_sale_geo(data, sale_path)
+        # OMI/backfill pass already rescored + flushed; only rescore again
+        # if the chunk loop added geo data on top of it.
+        if done_count > 0:
+            _geo_set_phase(slot, "rescoring")
+            _flush_sale_geo(data, sale_path)
         _geo_set_phase(slot, "pushing")
         try:
             from supabase_sync import push_local_json
@@ -805,7 +951,7 @@ def _geo_enrich_sales_worker(city: str = "milano"):
         slot["running"] = False
         if slot.get("error"):
             slot["state"] = "error"
-        elif _geo_sale_stop.is_set() or _geo_queue_stop.is_set():
+        elif _geo_stop_requested(_geo_sale_stop):
             slot["state"] = "stopped"
         else:
             slot["state"] = "done"
@@ -1312,6 +1458,7 @@ def start_geo_enrich():
             "milano").lower()
     if _geo_job(city, "rental").get("running"):
         return jsonify({"ok": False, "error": f"{city} rental enrichment already running"}), 409
+    _clear_stale_queue_stop()
     t = threading.Thread(target=_geo_enrich_worker, args=(city,), daemon=True)
     t.start()
     return jsonify({"ok": True, "message": f"{city} rental enrichment started"})
@@ -1434,6 +1581,17 @@ def _geo_orchestrator_worker(jobs: list[tuple[str, str]]):
             except Exception as exc:
                 print(f"  [geo-orch] {city} POI bulk download failed: {exc} — "
                       f"falling back to per-listing Overpass (slow + rate-limited)")
+
+            # Stop pressed during the preview / POI download: this job was
+            # already popped off the queue, so the loop-top sweep won't
+            # flip it — mark it here and let the loop top break out.
+            if _geo_queue_stop.is_set():
+                _geo_job(city, kind).update({
+                    "state": "stopped", "running": False,
+                    "phase": None, "phase_label": None,
+                    "finished_at": _time.time(),
+                })
+                continue
 
             # The per-city worker also calls _geo_stop.clear() — but since
             # the orchestrator is the only producer here we don't need
@@ -1746,15 +1904,44 @@ def _area_settings_path(city: str) -> Path:
 
 def _load_area_settings_v2(city: str = "milano") -> dict:
     """Load the new-format area settings (list of areas with active flag).
-    Falls back to migrating active areas from scan_prefs.json if the Milan
-    file is missing; non-Milan cities just return an empty list when their
-    per-city file doesn't exist yet."""
+
+    Supports both file shapes for the macro-area redesign transition:
+      • Legacy:  {"areas": [{"id", "name", "active"}, ...]}
+      • New:     {"active_areas": ["macro-slug-1", "macro-slug-2", ...]}
+
+    Legacy is surfaced as-is. New is translated back into the legacy
+    {"areas": [...]} shape on the wire so downstream consumers (drawer
+    multi-select, scan_prefs sync, scanner status badge) keep working
+    without changes. The display name comes from prettify_slug().
+
+    Falls back to migrating active areas from scan_prefs.json if the
+    Milan file is missing; non-Milan cities just return an empty list
+    when their per-city file doesn't exist yet.
+    """
     path = _area_settings_path(city)
     if path.exists():
         try:
             data = _json.loads(path.read_text())
-            if isinstance(data, dict) and "areas" in data:
-                return data
+            if isinstance(data, dict):
+                # New format wins when both keys are present.
+                if isinstance(data.get("active_areas"), list):
+                    try:
+                        from area_slug_mapper import prettify_slug as _pretty
+                    except Exception:
+                        _pretty = lambda s: s
+                    areas = [
+                        {"id": slug, "name": _pretty(slug), "active": True}
+                        for slug in data["active_areas"]
+                        if isinstance(slug, str) and slug
+                    ]
+                    return {
+                        "areas":       areas,
+                        "active_areas": data["active_areas"],
+                        "last_saved":  data.get("last_saved"),
+                        "city":        city,
+                    }
+                if "areas" in data:
+                    return data
         except Exception:
             pass
     # Migrate: seed from scan_prefs.json areas — Milan only (the legacy
@@ -1777,6 +1964,179 @@ def get_area_settings_v2():
     """Return the new-format area settings for ?city= (defaults to milano)."""
     city = (request.args.get("city") or "milano").lower()
     return jsonify(_load_area_settings_v2(city))
+
+
+# ── Macro-area Settings redesign ─────────────────────────────────────────────
+# The dashboard reads /api/slug-mapping once on startup to build the macro-
+# area card grid, then POSTs /api/save-areas with the active macro slugs.
+# Both endpoints are localhost-only because they mutate scan configuration.
+
+@app.route("/api/slug-mapping", methods=["GET"])
+def api_slug_mapping():
+    """Return the full area_slug_mapping.json. Cached client-side; the
+    file is small (~10 KB) so we just serve it verbatim."""
+    path = BASE_DIR / "area_slug_mapping.json"
+    if not path.exists():
+        return jsonify({}), 200
+    try:
+        return jsonify(_json.loads(path.read_text()))
+    except Exception as exc:
+        return jsonify({"error": f"could not load mapping: {exc}"}), 500
+
+
+@app.route("/api/save-areas", methods=["POST"])
+def api_save_areas():
+    """Save macro slugs the user toggled on in the Settings card.
+
+    Body: {"city": "milano", "areas": ["centro", "navigli", ...]}
+    Writes area_settings_{city}.json with the new shape:
+      {"active_areas": [...], "last_saved": ISO, "city": ...}
+    For Milan, also syncs scan_prefs.json["areas"] so the scan daemon
+    picks up the new selection without reading area_settings directly.
+    """
+    from datetime import datetime as _dt
+    body  = request.get_json(force=True, silent=True) or {}
+    city  = (body.get("city") or "milano").lower()
+    areas = body.get("areas")
+    if not isinstance(areas, list):
+        return jsonify({"error": "areas must be a list of slug strings"}), 400
+    if city not in ("milano", "roma", "napoli", "la_maddalena"):
+        return jsonify({"error": f"unknown city: {city}"}), 400
+
+    # Deduplicate + sanitise + drop empties — the scanner can crash on
+    # a stray non-string slipping through from a client bug.
+    cleaned: list[str] = []
+    seen: set = set()
+    for s in areas:
+        if not isinstance(s, str):
+            continue
+        s = s.strip()
+        if s and s not in seen:
+            seen.add(s)
+            cleaned.append(s)
+
+    settings = {
+        "active_areas": cleaned,
+        "last_saved":   _dt.now().isoformat(timespec="seconds"),
+        "city":         city,
+    }
+    path = _area_settings_path(city)
+    path.write_text(_json.dumps(settings, ensure_ascii=False, indent=2))
+
+    # Sync scan_prefs.json — Milan-only side channel that the existing
+    # scan daemon already reads. Storing macro slugs there is safe
+    # because fetch_rentals' _load_active_areas + normalise_active_areas
+    # accept both display names and macro slugs.
+    if city == "milano":
+        try:
+            prefs = _json.loads(SCAN_PREFS_PATH.read_text())
+        except Exception:
+            prefs = {}
+        prefs["areas"] = cleaned
+        SCAN_PREFS_PATH.write_text(_json.dumps(prefs, indent=2))
+
+    return jsonify({"ok": True, "city": city, "count": len(cleaned)})
+
+
+# ── User-archive a listing (View-button helper) ─────────────────────────────
+# Flips `is_stale=true` + `excluded=true` on a single row, both in the
+# local JSON snapshot (under the same flock the scanners use) and in
+# Supabase. Wired to the floating "Was this listing not available?" banner
+# the dashboard shows when the user clicks the View link.
+
+@app.route("/api/archive-listing", methods=["POST"])
+def api_archive_listing():
+    body = request.get_json(force=True, silent=True) or {}
+    lid  = str(body.get("listing_id") or "").strip()
+    listing_type = (body.get("listing_type") or "rental").strip().lower()
+    reason = (body.get("reason") or "User-archived via dashboard banner").strip()
+    if not lid:
+        return jsonify({"error": "listing_id required"}), 400
+    if listing_type not in ("rental", "sale"):
+        return jsonify({"error": "listing_type must be rental or sale"}), 400
+
+    updates = {
+        "is_stale":        True,
+        "excluded":        True,
+        "excluded_reason": reason,
+    }
+
+    # ── 1. Local JSON snapshot — match across the small set of files
+    # the scanners write. Use the same flock that write_output uses.
+    import fcntl
+    candidates = []
+    if listing_type == "rental":
+        candidates = [
+            DASHBOARD_DIR / "milano_rentals_latest.json",
+            DASHBOARD_DIR / "rentals_latest.json",
+        ]
+    else:
+        candidates = [
+            DASHBOARD_DIR / "milano_sales_latest.json",
+            DASHBOARD_DIR / "sales_latest.json",
+        ]
+    local_hit = False
+    for p in candidates:
+        if not p.exists():
+            continue
+        lock_path = p.with_suffix(p.suffix + ".lock")
+        lock_fh   = open(lock_path, "w")
+        try:
+            fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX)
+            try:
+                rows = _json.loads(p.read_text())
+            except Exception:
+                continue
+            changed = False
+            for row in rows:
+                if str(row.get("id", "")) == lid:
+                    for k, v in updates.items():
+                        if row.get(k) != v:
+                            row[k] = v
+                            changed = True
+                    break
+            if changed:
+                from dashboard_io import write_snapshot
+                tmp = p.with_suffix(".tmp")
+                clean = [{k: v for k, v in r.items() if k != "omi"} for r in rows]
+                write_snapshot(tmp, clean)
+                tmp.replace(p)
+                local_hit = True
+        finally:
+            try:
+                fcntl.flock(lock_fh.fileno(), fcntl.LOCK_UN)
+            except Exception:
+                pass
+            lock_fh.close()
+
+    # ── 2. Supabase — PATCH the same row. Quiet failure when creds
+    # aren't configured (local update still landed).
+    import os as _os
+    supabase_err = None
+    base = (_os.environ.get("SUPABASE_URL") or "").rstrip("/")
+    key  = _os.environ.get("SUPABASE_SERVICE_KEY")
+    if base and key:
+        try:
+            import urllib.request as _ur
+            import urllib.parse as _up
+            url = f"{base}/rest/v1/listings?id=eq.{_up.quote(lid)}"
+            data = _json.dumps(updates).encode("utf-8")
+            req = _ur.Request(url, data=data, method="PATCH", headers={
+                "apikey":        key,
+                "Authorization": f"Bearer {key}",
+                "Content-Type":  "application/json",
+                "Prefer":        "return=minimal",
+            })
+            with _ur.urlopen(req, timeout=15) as resp:
+                if resp.status not in (200, 204):
+                    supabase_err = f"HTTP {resp.status}"
+        except Exception as exc:
+            supabase_err = f"{type(exc).__name__}: {exc}"
+
+    out = {"ok": True, "listing_id": lid, "local_updated": local_hit}
+    if supabase_err:
+        out["supabase_error"] = supabase_err
+    return jsonify(out)
 
 
 @app.route("/area-settings", methods=["POST"])
@@ -2104,6 +2464,7 @@ def start_geo_enrich_sales():
             "milano").lower()
     if _geo_job(city, "sale").get("running"):
         return jsonify({"ok": False, "error": f"{city} sale enrichment already running"}), 409
+    _clear_stale_queue_stop()
     t = threading.Thread(target=_geo_enrich_sales_worker, args=(city,), daemon=True)
     t.start()
     return jsonify({"ok": True, "message": f"{city} sale enrichment started"})
@@ -2495,6 +2856,251 @@ def api_scrape_listing():
     if not listing:
         return jsonify({"error": "could not parse listing — try filling the form manually"}), 422
     return jsonify({"listing": listing})
+
+
+## ── Listing-availability probe ────────────────────────────────────────────
+# Goal: detect when an Immobiliare listing has been delisted (page redirects
+# off /annunci/{id}/). Headless Edge fails this — Cloudflare's JS challenge
+# blocks every fresh browser session before any URL state can be read. The
+# fix is a SINGLE long-lived headed Edge instance that solves Cloudflare's
+# challenge once at startup, then keeps the cookies. First probe ~10-20 s
+# (cold start + challenge), every subsequent probe ~1-2 s.
+#
+# Architecture: a dedicated daemon thread owns an asyncio event loop + the
+# browser. Flask handlers submit probe jobs via asyncio.run_coroutine_threadsafe
+# and block on the result Future. The browser closes only when api.py exits.
+
+import asyncio as _probe_asyncio
+import threading as _probe_threading
+import time as _probe_time
+
+_probe_loop:   "_probe_asyncio.AbstractEventLoop | None" = None
+_probe_thread: "_probe_threading.Thread | None"          = None
+_probe_browser_ready = _probe_threading.Event()
+_probe_init_lock     = _probe_threading.Lock()
+_PROBE_NAVIGATE_TIMEOUT = 12.0
+
+
+def _ensure_probe_thread():
+    """Lazily spin up the probe worker thread + Edge browser. Idempotent;
+    safe to call from any Flask handler thread."""
+    global _probe_thread, _probe_loop
+    with _probe_init_lock:
+        if _probe_thread is not None and _probe_thread.is_alive():
+            return
+        _probe_browser_ready.clear()
+        _probe_thread = _probe_threading.Thread(
+            target=_probe_thread_main, name="probe-worker", daemon=True)
+        _probe_thread.start()
+    # Wait up to 30 s for the browser to be ready (first launch is slow
+    # because Cloudflare's JS challenge has to resolve). Subsequent
+    # _ensure_probe_thread calls return instantly since the event is set.
+    _probe_browser_ready.wait(timeout=30.0)
+
+
+def _probe_thread_main():
+    """Owns the asyncio loop + the persistent Edge browser."""
+    global _probe_loop
+    _probe_loop = _probe_asyncio.new_event_loop()
+    _probe_asyncio.set_event_loop(_probe_loop)
+    try:
+        _probe_loop.run_until_complete(_probe_browser_main())
+    finally:
+        try: _probe_loop.close()
+        except Exception: pass
+        _probe_loop = None
+
+
+async def _probe_browser_main():
+    """Open the persistent Edge browser, prime the Cloudflare cookie by
+    visiting the Immobiliare homepage, then idle. Probes are scheduled
+    on this same loop via asyncio.run_coroutine_threadsafe — they share
+    `_probe_browser` via the module-level binding below."""
+    import nodriver as uc
+    from fetch_rentals import EDGE_PATH
+
+    global _probe_browser
+    print("  [probe] starting persistent Edge (headed, one-time)…")
+    _probe_browser = await uc.start(
+        browser_executable_path=EDGE_PATH,
+        headless=False, lang="it-IT",
+    )
+    try:
+        # Warm-up: hit the homepage so Cloudflare's challenge resolves
+        # once. Future probes inherit the cookie and skip the challenge.
+        tab = await _probe_browser.get("https://www.immobiliare.it/")
+        await _probe_asyncio.sleep(4.0)
+        try: await tab.activate()
+        except Exception: pass
+        print("  [probe] Edge ready — Cloudflare cookie primed.")
+        _probe_browser_ready.set()
+
+        # Idle forever — probes execute on this loop via
+        # run_coroutine_threadsafe.
+        while True:
+            await _probe_asyncio.sleep(3600)
+    finally:
+        try: _probe_browser.stop()
+        except Exception: pass
+
+
+_probe_browser = None
+_probe_inflight_lock = _probe_threading.Lock()   # one probe at a time
+
+
+async def _probe_one(url: str, listing_id: str) -> dict:
+    """Single probe — assumes the browser is already alive and Cloudflare-
+    primed.
+
+    Source-agnostic redirect detection: extract the listing's numeric
+    id from the URL we sent and check it's still present in the post-
+    navigation URL. Works for both Immobiliare (`/annunci/{id}/`) and
+    Idealista (`/immobile/{id}/`) without hard-coding either path.
+
+    Per-source not-available text fingerprints:
+      • Immobiliare → title "Immobiliare.it" + body "non è più disponibile"
+      • Idealista   → 404 / "annuncio non più disponibile" / redirected
+                      to /case-affitto-milano/ etc. (no detail-page path)
+    """
+    if _probe_browser is None:
+        return {"available": True, "reason": "unknown",
+                "note": "probe browser not initialised"}
+
+    from urllib.parse import urlparse
+    import re as _re
+    try:
+        original = urlparse(url)
+        expected_host = original.netloc.lower()
+        # Numeric id appearing in the path — both sites use this shape.
+        m = _re.search(r"/(\d+)/?(?:$|\?|#)", original.path)
+        expected_id = m.group(1) if m else (
+            _re.sub(r"\D", "", str(listing_id or "")) or None)
+        # The path segment that "we're still on the listing" means.
+        # For Immobiliare: /annunci/{id}/   →  /annunci/{id}
+        # For Idealista:   /immobile/{id}/  →  /immobile/{id}
+        expected_segment = None
+        seg = _re.search(r"(/[a-z\-]+/\d+)", original.path)
+        if seg:
+            expected_segment = seg.group(1)
+    except Exception:
+        expected_host = ""
+        expected_id = None
+        expected_segment = None
+
+    try:
+        tab = await _probe_browser.get(url)
+        await _probe_asyncio.sleep(2.5)
+        try:
+            current = await tab.evaluate("window.location.href")
+        except Exception:
+            current = None
+        if current:
+            cur = urlparse(current)
+            same_host = (cur.netloc.lower() == expected_host) if expected_host else True
+            on_listing = True
+            if expected_segment and expected_segment not in cur.path:
+                on_listing = False
+            elif expected_id and expected_id not in cur.path:
+                on_listing = False
+            if not same_host or not on_listing:
+                return {"available": False, "reason": "redirected",
+                        "current_url": current}
+
+        # Title + body fingerprint — strongest signal for "the page
+        # rendered an 'ad gone' placeholder while staying on the URL".
+        try:
+            title = await tab.evaluate("document.title || ''")
+        except Exception:
+            title = ""
+        try:
+            body_snip = await tab.evaluate(
+                "(document.body && document.body.innerText || '').slice(0, 1500)"
+            )
+        except Exception:
+            body_snip = ""
+        title_str = str(title or "").strip()
+        body_lc   = (body_snip or "").lower()
+
+        # Immobiliare placeholder.
+        immob_markers = (
+            "la pagina che stai cercando non è presente",
+            "non è più disponibile",
+            "la pagina che stai cercando non e' presente",
+        )
+        if "immobiliare.it" in expected_host:
+            if title_str == "Immobiliare.it" and any(m in body_lc for m in immob_markers):
+                return {"available": False, "reason": "not_available_page",
+                        "title": title_str}
+
+        # Idealista placeholder — verified empirically 2026-05-25.
+        # Delisted/bogus IDs stay on /immobile/{id}/ (no URL redirect)
+        # but the page falls back to Idealista's generic homepage:
+        #   title:  "Case vendita. Case affitto. Appartamenti. Ville — idealista, N.1 in Italia"
+        #   body:   only the cookie banner (consent prompt)
+        # Live listings carry a descriptive title that always starts
+        # with "Attico/Bilocale/Trilocale/Quadrilocale/.../affitto/vendita".
+        # The simplest invariant: a real listing title NEVER starts with
+        # "Case vendita. Case affitto" — that's the homepage.
+        if "idealista.it" in expected_host:
+            tl = title_str.lower()
+            if (tl.startswith("case vendita")
+                    or tl.startswith("case affitto")
+                    or "case vendita. case affitto" in tl):
+                return {"available": False, "reason": "not_available_page",
+                        "title": title_str}
+
+        # Positive signal: id is in the page title → almost certainly live.
+        if expected_id and expected_id in title_str:
+            return {"available": True, "reason": "ok"}
+        try:
+            raw = await tab.evaluate("JSON.stringify(window.__NEXT_DATA__)")
+        except Exception:
+            raw = None
+        if raw:
+            return {"available": True, "reason": "ok"}
+        # No fingerprint matched — default to available so we never show
+        # a false-positive archive prompt.
+        return {"available": True, "reason": "unknown",
+                "note": "no fingerprint matched — defaulting to available"}
+    except Exception as exc:
+        return {"available": True, "reason": "unknown",
+                "note": f"probe error: {exc}"}
+
+
+@app.route("/api/check-listing-availability", methods=["POST"])
+def api_check_listing_availability():
+    """Probe a listing's detail page and report availability.
+
+    Body: {listing_id, url, listing_type?}
+    Returns {available: bool, reason: 'ok'|'redirected'|'unknown', ...}
+
+    First call after server start blocks 10-20 s while the persistent
+    Edge instance starts + clears Cloudflare. Subsequent calls take
+    ~2-3 s each. Probes are serialised by _probe_inflight_lock to keep
+    the single browser tab consistent.
+    """
+    body = request.get_json(force=True, silent=True) or {}
+    lid  = str(body.get("listing_id") or "").strip()
+    url  = (body.get("url") or "").strip()
+    if not lid:
+        return jsonify({"error": "listing_id required"}), 400
+    if not url:
+        url = f"https://www.immobiliare.it/annunci/{lid}/"
+
+    _ensure_probe_thread()
+    if _probe_loop is None or not _probe_browser_ready.is_set():
+        return jsonify({"available": True, "reason": "unknown",
+                        "note": "probe browser not yet ready"}), 200
+
+    with _probe_inflight_lock:
+        try:
+            fut = _probe_asyncio.run_coroutine_threadsafe(
+                _probe_one(url, lid), _probe_loop)
+            result = fut.result(timeout=_PROBE_NAVIGATE_TIMEOUT)
+        except Exception as exc:
+            return jsonify({"available": True, "reason": "unknown",
+                            "note": f"probe crashed: {exc}"}), 200
+    return jsonify(result)
 
 
 def _scrape_listing_sync(url: str) -> dict | None:

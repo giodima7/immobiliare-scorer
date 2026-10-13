@@ -29,12 +29,26 @@ import re as _re
 import sys
 import unicodedata
 import time
-from datetime import datetime
+from datetime import datetime, date
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urlencode
 
+import random
+
 import nodriver as uc
+
+from browser_session import BrowserSession, PageTimeout, timed
+
+# Shared slug mapper — see area_slug_mapper.py. Translates internal area
+# names (e.g. "cadore") into the real Immobiliare.it macro-area slug
+# ("porta-romana-cadore-montenero") and dedupes when several internal
+# areas collapse into one macro-area.
+from area_slug_mapper import (
+    group_by_immobiliare_slug,
+    resolve_immobiliare_slug,
+    verify_slug_mapping,
+)
 
 # Microsoft Edge is preferred over Chrome — Immobiliare's bot detection lets
 # Edge through more reliably. Override via $BROWSER_EXECUTABLE_PATH.
@@ -119,6 +133,32 @@ def to_url_slug(name: str) -> str:
     name = name.lower().strip()
     name = _re.sub(r"[^a-z0-9]+", "-", name)
     return name.strip("-")
+
+
+def _parse_count_plus(raw) -> Optional[int]:
+    """Parse Immobiliare count fields tolerantly.
+
+    Immobiliare returns string values like '3', '5+', '3+' for rooms /
+    bathrooms / bedRoomsNumber. Plain int() chokes on the '+' and used
+    to silently null large units. Strip non-digits before converting
+    so '5+' → 5 (the lower bound, which matches the spec sheet on the
+    listing detail page).
+    """
+    if raw is None:
+        return None
+    if isinstance(raw, (int, float)):
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            return None
+    s = _re.sub(r"[^\d]", "", str(raw))
+    if not s:
+        return None
+    try:
+        return int(s)
+    except (TypeError, ValueError):
+        return None
+
 
 # ── Fake / foreign-property bait detection ────────────────────────────────────
 # Some agencies post listings claiming to be in Milan / Rome but actually
@@ -794,12 +834,11 @@ def parse_listing(item: dict, city_key: str, city_label: str) -> Optional[dict]:
 
     ask_psqm = round(price / sqm)
 
-    # rooms
-    rooms_raw = prop.get("rooms")
-    try:
-        rooms = int(rooms_raw) if rooms_raw is not None else None
-    except (TypeError, ValueError):
-        rooms = None
+    # rooms — Immobiliare returns string values like '5+' / '3+' for
+    # large units (display cap). _parse_count_plus strips the trailing
+    # '+' so '5+' → 5; plain int() used to silently null these listings
+    # (matching the bug discovered in fetch_rentals on 2026-05-22).
+    rooms = _parse_count_plus(prop.get("rooms"))
 
     # neighbourhood — macrozone/microzone are plain strings in the real API
     def _str_or_name(val):
@@ -861,32 +900,32 @@ def parse_listing(item: dict, city_key: str, city_label: str) -> Optional[dict]:
         except (TypeError, ValueError):
             year_built = None
 
-    # bathrooms (= "bagni")
-    baths_raw = prop.get("bathrooms") or prop.get("bathRooms")
-    bathrooms = None
-    if baths_raw is not None:
-        try:
-            bathrooms = int(baths_raw)
-        except (TypeError, ValueError):
-            pass
+    # bathrooms (= "bagni") — same '3+' caveat as rooms above.
+    bathrooms = _parse_count_plus(prop.get("bathrooms") or prop.get("bathRooms"))
 
     # bedrooms (= "camere da letto" — bedrooms only, NOT total locali)
     beds_raw = prop.get("bedRoomsNumber") or prop.get("bedrooms")
-    bedrooms = None
-    if beds_raw not in (None, '', '0', 0):
-        try:
-            bedrooms = int(beds_raw)
-        except (TypeError, ValueError):
-            pass
+    if beds_raw in (None, '', '0', 0):
+        bedrooms = None
+    else:
+        bedrooms = _parse_count_plus(beds_raw)
     if bedrooms is not None and rooms is not None and bedrooms > rooms:
         bedrooms = None
 
-    # features[] array — collect type/label keywords for quick lookup
+    # features[] array — collect type/label keywords for quick lookup.
+    # Tolerates both search-page shape ([{type, label}, ...]) and the
+    # detail-page shape (bare strings like ["balcony", "elevator"]).
     _feature_types: set = set()
     for feat in (prop.get("features") or re_data.get("features") or []):
-        ft = feat.get("type") or feat.get("name") or ""
-        _feature_types.add(str(ft).lower())
-        lbl = str(feat.get("label") or "").lower()
+        if isinstance(feat, dict):
+            ft = feat.get("type") or feat.get("name") or ""
+            _feature_types.add(str(ft).lower())
+            lbl = str(feat.get("label") or "").lower()
+        elif isinstance(feat, str):
+            _feature_types.add(feat.lower())
+            lbl = feat.lower()
+        else:
+            continue
         for kw in ("balcon", "terrazza", "giardino", "box", "garage", "parcheggio",
                    "arredato", "autonomo", "centralizzato"):
             if kw in lbl:
@@ -1147,11 +1186,18 @@ def parse_listing(item: dict, city_key: str, city_label: str) -> Optional[dict]:
 
 async def _fetch_city_async(city_key: str, pages: int, extra_filters: dict,
                              delay: float, browser,
-                             area_slugs: list | None = None) -> list:
+                             area_slugs: list | None = None,
+                             area_delay: float = 6.0) -> list:
     """Async inner: navigate pages for one city and extract __NEXT_DATA__.
 
     When area_slugs is provided each area is fetched in its own page loop;
     a shared seen_ids set prevents cross-area duplicates.
+
+    Same three rate-limit countermeasures as fetch_rentals._fetch_async:
+      • Option 1 — per-area pacing (sleep `area_delay` between macros)
+      • Option 2 — randomized macro order
+      • Option 3 — end-of-scan retry pass on JUST the 0-result areas at
+        3× page delay + 2× area delay
     """
     cfg = CITIES[city_key]
     slug = cfg["url_slug"]
@@ -1160,16 +1206,17 @@ async def _fetch_city_async(city_key: str, pages: int, extra_filters: dict,
     # Cross-area deduplication: IDs accumulated across all areas.
     seen_ids: set = set()
 
-    # None sentinel means city-level (no area sub-path)
-    targets = area_slugs if area_slugs else [None]
+    # Per-area 0-result tracking so the retry pass can revisit them.
+    zero_result_areas: list = []
 
-    for area_slug in targets:
-        page_ids_seen: set = set()   # recycled-page detector, reset per area
+    async def _scan_one_area(area_slug, page_delay):
+        """Per-macro-area fetch. Closure over outer state — keeps the
+        main pass / retry pass logic deduplicated."""
+        page_ids_seen: set = set()
         max_pages = pages
+        area_got_results = False
 
         for page in range(1, pages + 1):
-            # Embed filters directly in the URL — the site pre-filters server-side,
-            # so we get fewer results per page and need fewer pages overall.
             params = {}
             if extra_filters.get("max_price"): params["prezzoMassimo"]     = extra_filters["max_price"]
             if extra_filters.get("min_price"): params["prezzoMinimo"]      = extra_filters["min_price"]
@@ -1184,17 +1231,53 @@ async def _fetch_city_async(city_key: str, pages: int, extra_filters: dict,
                 f"https://www.immobiliare.it/vendita-case/{slug}/"
             )
             url = base + ("?" + urlencode(params) if params else "")
-
             tab = await browser.get(url)
-            await asyncio.sleep(delay)
+            await asyncio.sleep(page_delay)
 
-            try:
-                raw = await tab.evaluate("JSON.stringify(window.__NEXT_DATA__)")
-                nd = json.loads(raw)
-                queries = nd["props"]["pageProps"]["dehydratedState"]["queries"]
-                data = queries[0]["state"]["data"]
-            except Exception as e:
-                print(f"\n  ⚠  Could not parse __NEXT_DATA__ on page {page}: {e}")
+            # Immobiliare redirects some macro slugs (navigli → navigli-darsena)
+            # and the redirect drops the query string — every page would land
+            # on unfiltered page 1. Follow it once, then reload with filters.
+            if page == 1 and area_slug:
+                try:
+                    href = await timed(tab.evaluate("window.location.href"), what="read location")
+                    m = _re.search(rf"/vendita-case/{_re.escape(slug)}/([^/?#]+)", href or "")
+                    if m and m.group(1) != area_slug:
+                        print(f" [→{m.group(1)}]", end="", flush=True)
+                        area_slug = m.group(1)
+                        if params and "?" not in href:
+                            url = (f"https://www.immobiliare.it/vendita-case/{slug}/{area_slug}/"
+                                   + "?" + urlencode(params))
+                            tab = await browser.get(url)
+                            await asyncio.sleep(page_delay)
+                except PageTimeout:
+                    raise
+                except Exception:
+                    pass
+
+            # One retry: a single parse failure usually means an anti-bot
+            # challenge, not a real empty page. Without it 22 of 41 sale
+            # runs returned nothing.
+            data = None
+            for _attempt in (1, 2):
+                try:
+                    raw = await timed(tab.evaluate("JSON.stringify(window.__NEXT_DATA__)"),
+                                      what="read __NEXT_DATA__")
+                    nd = json.loads(raw)
+                    queries = nd["props"]["pageProps"]["dehydratedState"]["queries"]
+                    data = queries[0]["state"]["data"]
+                    break
+                except PageTimeout:
+                    raise
+                except Exception as e:
+                    if _attempt == 1:
+                        print(f"\n  [retry] page {page}: parse failed ({e}); "
+                              f"re-navigating in 4s", flush=True)
+                        await asyncio.sleep(4.0)
+                        tab = await browser.get(url)
+                        await asyncio.sleep(page_delay)
+                        continue
+                    print(f"\n  ⚠  Could not parse __NEXT_DATA__ on page {page}: {e}")
+            if data is None:
                 break
 
             results = data.get("results", [])
@@ -1202,8 +1285,6 @@ async def _fetch_city_async(city_key: str, pages: int, extra_filters: dict,
                 print(f" (empty, done)", end="", flush=True)
                 break
 
-            # Detect recycled content: if every ID on this page was seen in a prior
-            # page of this same area, the site is looping (pag= param being ignored).
             page_ids = {
                 str(item.get("realEstate", {}).get("id", ""))
                 for item in results
@@ -1214,7 +1295,6 @@ async def _fetch_city_async(city_key: str, pages: int, extra_filters: dict,
                 break
             page_ids_seen.update(page_ids)
 
-            # Client-side guard (belt-and-suspenders in case site leaks a listing through)
             for item in results:
                 parsed = parse_listing(item, city_key, cfg["label"])
                 if not parsed:
@@ -1233,6 +1313,7 @@ async def _fetch_city_async(city_key: str, pages: int, extra_filters: dict,
                     continue
                 seen_ids.add(parsed["id"])
                 all_items.append(parsed)
+                area_got_results = True
 
             site_max  = data.get("maxPages") or pages
             max_pages = min(pages, site_max)
@@ -1242,21 +1323,58 @@ async def _fetch_city_async(city_key: str, pages: int, extra_filters: dict,
             if page >= max_pages:
                 break
 
+        if area_slug and not area_got_results:
+            zero_result_areas.append(area_slug)
+
+    async def _scan_area_safe(area_slug, page_delay):
+        """One area failing must not stop the scan. A hung or dead browser
+        would fail every remaining area too, so restart it; the area goes
+        to the retry pass."""
+        try:
+            await _scan_one_area(area_slug, page_delay)
+        except Exception as exc:
+            print(f"\n  [error] area {area_slug or 'all'} failed: "
+                  f"{type(exc).__name__}: {exc} — skipping", flush=True)
+            if area_slug and area_slug not in zero_result_areas:
+                zero_result_areas.append(area_slug)
+            if isinstance(exc, PageTimeout) or not await browser.alive():
+                await browser.restart()
+
+    # ── Pass 1 — full sweep, randomised order, paced between macros ──────
+    targets = list(area_slugs) if area_slugs else [None]
+    if area_slugs:
+        random.shuffle(targets)
+    for i, area_slug in enumerate(targets):
+        await _scan_area_safe(area_slug, delay)
+        if area_slug and i < len(targets) - 1:
+            jitter = random.uniform(0.0, area_delay * 0.4)
+            await asyncio.sleep(area_delay + jitter)
+
+    # ── Pass 2 — retry the 0-result areas at 3× page delay ────────────────
+    if area_slugs and zero_result_areas:
+        retry_targets = list(zero_result_areas)
+        zero_result_areas.clear()
+        print(f"\n  [retry-pass] revisiting {len(retry_targets)} skipped "
+              f"area(s) at 3× delay…", flush=True)
+        random.shuffle(retry_targets)
+        for i, area_slug in enumerate(retry_targets):
+            await _scan_area_safe(area_slug, delay * 3.0)
+            if i < len(retry_targets) - 1:
+                jitter = random.uniform(0.0, area_delay * 0.6)
+                await asyncio.sleep(area_delay * 2.0 + jitter)
+
     return all_items
 
 
-def fetch_city(city_key: str, pages: int = 3, extra_filters: dict = None,
+def fetch_city(city_key: str, pages: int = 8, extra_filters: dict = None,
                delay: float = 2.5, area_slugs: list | None = None) -> list:
     """Fetch listings for one city using a real Edge browser via nodriver."""
     cfg = CITIES[city_key]
     print(f"  Fetching {cfg['label']}...", end="", flush=True)
 
     async def _run():
-        browser = await uc.start(
-            browser_executable_path=EDGE_PATH,
-            headless=False,
-            lang="it-IT",
-        )
+        browser = BrowserSession("immobiliare-sales")
+        await browser.start()
         try:
             items = await _fetch_city_async(
                 city_key, pages, extra_filters or {}, delay, browser, area_slugs
@@ -1468,7 +1586,10 @@ def parse_args():
     p.add_argument("--city",       choices=list(CITIES.keys()), help="Single city to fetch")
     p.add_argument("--cities",     nargs="+", choices=list(CITIES.keys()), help="One or more cities (e.g. --cities napoli milano)")
     p.add_argument("--all-cities", action="store_true",         help="Fetch all configured cities")
-    p.add_argument("--pages",      type=int, default=3,         help="Pages per city (25 listings/page, default 3)")
+    # Was 3 — dense Milan macros (32 of them) routinely have 5-8 pages of
+    # active listings, so 3-page scans left ~30-40% of the corpus stale.
+    # Empty-page short-circuit keeps the cost bounded on sparse slugs.
+    p.add_argument("--pages",      type=int, default=8,         help="Pages per macro-area (25 listings/page, default 8)")
     p.add_argument("--max-price",  type=int,                    help="Max listing price €")
     p.add_argument("--min-price",  type=int,                    help="Min listing price €")
     p.add_argument("--min-sqm",    type=int,                    help="Min surface m²")
@@ -1509,9 +1630,10 @@ def main():
     else:
         cities = ["milano"]   # last-resort default
 
-    # Pages: use prefs when arg is at its default value
+    # Pages: use prefs when arg is at its default value. Keep this
+    # default value in lock-step with the argparse default above (8).
     pages = args.pages
-    if pages == 3 and _prefs.get("pages"):
+    if pages == 8 and _prefs.get("pages"):
         try:
             pages = int(_prefs["pages"])
         except (ValueError, TypeError):
@@ -1537,6 +1659,25 @@ def main():
         area_slugs = [to_url_slug(a) for a in raw_areas]
     elif _prefs.get("areas"):
         area_slugs = [to_url_slug(a) for a in _prefs["areas"] if a.strip()]
+
+    # ── Fix 2/3: collapse internal slugs onto Immobiliare macro-area slugs
+    # so we never scan the same combined page twice. One Immobiliare slug
+    # like porta-romana-cadore-montenero serves three internal areas — we
+    # want one HTTP call, not three. The sales scanner currently runs one
+    # city at a time, so verify against the first city in the loop.
+    if area_slugs and cities:
+        _city_for_verify = cities[0]
+        verify_slug_mapping(_city_for_verify, area_slugs)
+        _grouped = group_by_immobiliare_slug(area_slugs, _city_for_verify)
+        _before = len(area_slugs)
+        area_slugs = list(_grouped.keys())
+        _after = len(area_slugs)
+        if _after < _before:
+            print(f"  [scan] {_before} internal area(s) collapsed into "
+                  f"{_after} unique Immobiliare slug(s)")
+            for _im, _ins in _grouped.items():
+                if len(_ins) > 1:
+                    print(f"  [scan]   {_im}  ←  {', '.join(_ins)}")
 
     print(f"\n{'─'*52}")
     print(f"  Immobiliare Scorer — fetch run")

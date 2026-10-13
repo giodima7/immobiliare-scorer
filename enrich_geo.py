@@ -117,7 +117,13 @@ def download_city_pois(city: str = "milano") -> dict:
         f'  way["amenity"="university"]({bbox});\n'
         f'  node["amenity"="college"]({bbox});\n'
         f'  way["amenity"="college"]({bbox});\n'
-        f");\nout center bb;"
+        # `out center;` — NOT `out center bb;`: Overpass takes one geometry
+        # modifier, and with `bb` ways came back without a center, so every
+        # park (always a way) and every supermarket/university mapped as an
+        # area was silently dropped — 0 parks in all four city files. Same
+        # output mode as the per-listing _combined_query, which the park
+        # scoring bands were tuned on (no bounds → no size filter there).
+        f");\nout center;"
     )
     print(f"  [geo] downloading {city} POI dataset (one-time)…", file=sys.stderr)
     elements = _overpass(query, timeout_http=90, retries=5)
@@ -155,7 +161,7 @@ def download_city_pois(city: str = "milano") -> dict:
     from datetime import datetime
     pois["downloaded_at"] = datetime.now().isoformat(timespec="seconds")
     pois["city"]          = city
-    out_path = _POIS_DIR / f"{city}_pois.json"
+    out_path = _pois_path(city)   # same file load_local_pois reads (legacy milan_pois.json)
     out_path.write_text(json.dumps(pois, ensure_ascii=False, indent=2))
     _local_pois[city] = pois
 
@@ -168,6 +174,13 @@ def download_city_pois(city: str = "milano") -> dict:
 # out to this helper) doesn't break.
 def download_milan_pois() -> dict:
     return download_city_pois("milano")
+
+
+def current_pois_version(city: str) -> "str | None":
+    """`downloaded_at` of the city's POI file — matches the geo_pois_version
+    enrich() stamps on listings computed from it. None when no file."""
+    pois = load_local_pois(city)
+    return pois.get("downloaded_at") if pois else None
 
 
 def _nearest_dist(elements: list, lat: float, lon: float) -> "int | None":
@@ -847,6 +860,37 @@ def enrich(listing: dict, _skip_osrm: bool = False) -> dict:
                         if _parts:
                             listing["neighbourhood"] = _parts[-1]
 
+        # When the address is a vague stub ("Gottardo, Milano") but the
+        # neighbourhood carries a real street-type prefix ("Corso San
+        # Gottardo"), prefer the neighbourhood. Idealista's title-extracted
+        # addresses strip "Via/Corso/Piazza" and keep only the toponym,
+        # which Nominatim then matches to a wrong landmark — six "Gottardo,
+        # Milano" listings ended up pinned at Duomo coords because of this.
+        # Street-type prefixes (Via, Corso, Piazza, ...) make the query
+        # specific enough for Nominatim to find the right street.
+        _STREET_PREFIXES = ('via ', 'corso ', 'piazza ', 'piazzale ',
+                            'viale ', 'largo ', 'galleria ', 'vicolo ',
+                            'ripa ', 'alzaia ', 'foro ')
+        _nbhd_raw  = (listing.get("neighbourhood") or "").strip()
+        _nbhd_low  = _nbhd_raw.lower()
+        _addr_low  = address.lower()
+        _addr_is_stub = (
+            address
+            and ',' in address                        # has city tail
+            and len(address.split(',')[0].split()) <= 2  # toponym is 1–2 words
+            and not any(_addr_low.startswith(p) for p in _STREET_PREFIXES)
+        )
+        _nbhd_specific = (
+            _nbhd_raw
+            and any(_nbhd_low.startswith(p) for p in _STREET_PREFIXES)
+            and _nbhd_low not in _addr_low           # nbhd adds info
+        )
+        if _addr_is_stub and _nbhd_specific:
+            address = f"{_nbhd_raw}, Milano"
+            listing["address"] = address
+            print(f"  [geo] address upgraded for {lid}: stub → "
+                  f"neighbourhood-prefixed '{address}'", file=sys.stderr)
+
         if address and not _re_geo.search(r'posizione approssimativa', address, _re_geo.I):
             result = _geocode(address)
             if result:
@@ -921,6 +965,9 @@ def enrich(listing: dict, _skip_osrm: bool = False) -> dict:
     # for a Rome flat (San Donato is a Milan M1 stop ~600 km away).
     _city_for_pois = (listing.get("city") or "milano").lower()
     pois = load_local_pois(_city_for_pois)
+    # Which POI file these distances came from — lets the enrichment
+    # workers recompute listings when the file is re-downloaded.
+    pois_version = pois.get("downloaded_at") if pois else None
     if pois:
         # Fast path: in-memory haversine for all POIs, then one OSRM call for metro
         metro_m, metro_name, metro_line, metro_lat, metro_lon = _nearest_metro_local(pois["metro"], lat, lng)
@@ -1006,6 +1053,7 @@ def enrich(listing: dict, _skip_osrm: bool = False) -> dict:
         "university_nearest_dist_m":  uni_m,
         "geo_score":                  _geo_score(metro_m, tram_m, super_m, park_m, uni_m),
         "metro_walk_routed":          _metro_routed,
+        "geo_pois_version":           pois_version,
     }
 
 
