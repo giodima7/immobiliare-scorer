@@ -31,7 +31,21 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import urlencode
 
+import random
+
 import nodriver as uc
+
+from browser_session import BrowserSession, PageTimeout, timed
+
+# Slug mapper translates internal area names (e.g. "cadore") into the real
+# Immobiliare.it macro-area slug ("porta-romana-cadore-montenero") so the
+# search URL actually matches the site's URL scheme. Without it scans land
+# on 0-result pages or fetch the same macro-area three times in a row.
+from area_slug_mapper import (
+    group_by_immobiliare_slug,
+    resolve_immobiliare_slug,
+    verify_slug_mapping,
+)
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
 # Multi-city expansion (migration 007): paths that vary per scanned
@@ -135,10 +149,18 @@ def parse_floor(raw_floor) -> tuple:
 
 def _load_active_areas() -> list:
     """
-    Return display names of active areas for the current CITY_KEY from
-    area_settings_{city}.json if present, else the legacy shared
-    area_settings.json (Milan-only). Falls back to an empty list so the
-    scanner fetches the whole city when nothing is configured.
+    Return active areas for the current CITY_KEY from
+    area_settings_{city}.json (or legacy area_settings.json for Milan).
+
+    Supports both shapes:
+      • New:    {"active_areas": ["macro-slug-1", "macro-slug-2", ...]}
+                — Settings UI redesign writes this directly.
+      • Legacy: {"areas": [{"id", "name", "active"}, ...]}
+                — pre-redesign format with display names + active flag.
+
+    The downstream group_by_immobiliare_slug() step makes both shapes
+    converge on the same macro-slug list, so this loader just hands
+    back the raw strings.
 
     Crucially: when scanning a non-Milan city and no per-city area file
     exists, we DON'T read the Milan area_settings — those names won't
@@ -155,7 +177,13 @@ def _load_active_areas() -> list:
     for p in paths:
         try:
             data = json.loads(p.read_text())
-            if isinstance(data, dict) and "areas" in data:
+            if not isinstance(data, dict):
+                continue
+            # New shape wins when both keys are present.
+            if isinstance(data.get("active_areas"), list):
+                return [s for s in data["active_areas"]
+                        if isinstance(s, str) and s.strip()]
+            if "areas" in data:
                 return [a["name"] for a in data["areas"]
                         if isinstance(a, dict) and a.get("active") and a.get("name")]
         except Exception:
@@ -198,7 +226,35 @@ def _apply_city(city: str) -> None:
     SEEN_IDS_PATH = BASE_DIR      / f"seen_ids_{city}.json"
     OUTPUT_PATH   = DASHBOARD_DIR / f"{city}_rentals_latest.json"
 
-DAEMON_INTERVAL_SEC = 60 * 60   # 60 minutes
+DAEMON_INTERVAL_SEC = 24 * 60 * 60   # one scan per day
+DAEMON_RETRY_SEC    = 60 * 60        # after a failed scan
+
+
+def _last_scan_path(source: str) -> Path:
+    return BASE_DIR / f".last_scan_{source}_{CITY_KEY}"
+
+
+def last_scan_at(source: str) -> float:
+    """Wall-clock time of the last successful daemon scan (0 = never).
+    Persisted so restarting api.py — which restarts the daemons — doesn't
+    trigger an extra scan."""
+    try:
+        return float(_last_scan_path(source).read_text().strip())
+    except (OSError, ValueError):
+        return 0.0
+
+
+def mark_scan_done(source: str) -> None:
+    _last_scan_path(source).write_text(str(time.time()))
+
+
+def sleep_until(deadline: float) -> None:
+    """Sleep until wall-clock `deadline`. time.sleep() alone runs on a clock
+    that stops while the laptop sleeps — the old 60-min sleep stretched so
+    much that ~26 scans ran in 100 days. Re-checking the wall clock every
+    minute makes an overdue scan start soon after wake."""
+    while (left := deadline - time.time()) > 0:
+        time.sleep(min(60.0, left))
 DIGEST_HOUR         = 8          # send daily digest at 08:xx local time
 
 # ── OMI rent data (Milano, 2° sem 2025) ────────────────────────────────────────
@@ -319,6 +375,32 @@ def to_url_slug(name: str) -> str:
     s = s.encode("ascii", "ignore").decode("ascii")
     s = _re.sub(r"[^a-z0-9]+", "-", s).strip("-")
     return s
+
+
+def _parse_count_plus(raw) -> Optional[int]:
+    """Parse Immobiliare's count fields tolerantly.
+
+    Immobiliare's search payload returns string values like '3', '5+',
+    '3+' for the rooms / bathrooms / bedRoomsNumber fields. Plain
+    int() chokes on the trailing '+' and used to silently null large
+    apartments (158 listings). Strip non-digits before converting so
+    '5+' → 5 (treated as the lower bound, matching what the source
+    page displays in its spec sheet).
+    """
+    if raw is None:
+        return None
+    if isinstance(raw, (int, float)):
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            return None
+    s = _re.sub(r"[^\d]", "", str(raw))
+    if not s:
+        return None
+    try:
+        return int(s)
+    except (TypeError, ValueError):
+        return None
 
 
 def build_rental_url(page: int, area_slug: str = None,
@@ -617,14 +699,27 @@ def parse_rental(item: dict) -> Optional[dict]:
                 pass
 
     if spese is None:
+        # Detail pages carry it under costs: "€ 200/mese" (or per year).
+        raw = (prop.get("costs") or {}).get("condominiumExpenses")
+        digits = _re.sub(r"[^\d]", "", str(raw or "").split(",")[0])
+        if digits:
+            spese = int(digits)
+            if "anno" in str(raw).lower():
+                spese = round(spese / 12)
+
+    if spese is None:
         spese = _parse_condo_from_description(prop.get("description") or "")
 
-    # Rooms — try numeric field first, then parse from Italian title
-    rooms_raw = prop.get("rooms") or prop.get("roomsNumber") or prop.get("numRooms")
-    try:
-        rooms = int(rooms_raw) if rooms_raw is not None else None
-    except (TypeError, ValueError):
-        rooms = None
+    # Rooms — try numeric field first, then parse from Italian title.
+    # Immobiliare returns string values like '5+' / '3+' for large
+    # apartments (it caps the display at 5+). Plain int() chokes on the
+    # '+' and used to silently null the field — 158 immobiliare listings
+    # were losing rooms data this way, including ~all Appartamenti/Attici.
+    # _parse_count_plus strips the trailing '+' so '5+' → 5 (lower bound,
+    # which matches what the source page itself shows in the spec sheet).
+    rooms = _parse_count_plus(
+        prop.get("rooms") or prop.get("roomsNumber") or prop.get("numRooms")
+    )
     if rooms is None:
         _ROOM_NAMES = {
             "monolocale": 1, "bilocale": 2, "trilocale": 3,
@@ -692,6 +787,13 @@ def parse_rental(item: dict) -> Optional[dict]:
     if elevator_raw is not None:
         elevator_bool = bool(elevator_raw) if not isinstance(elevator_raw, str) else elevator_raw.lower() not in ("false", "no", "0", "")
 
+    # Search results carry features as Italian strings in `ga4features`
+    # ("balcone", "arredato", "esposizione esterna", …) plus `ga4Heating` /
+    # `ga4Garage`. The other keys read below ("features", "heatingType",
+    # "furnished", "isExternal") are absent there — these fields were 100 %
+    # null on every scan (verified on a live search payload, 2026-10-14).
+    ga4_feats = {str(f).strip().lower() for f in (prop.get("ga4features") or [])}
+
     # is_external
     ext_raw = prop.get("isExternal") or prop.get("external") or prop.get("ga4Exposure")
     is_external = None
@@ -700,11 +802,18 @@ def parse_rental(item: dict) -> Optional[dict]:
             is_external = ext_raw
         elif isinstance(ext_raw, str):
             is_external = ext_raw.lower() in ("true", "yes", "esterno", "1")
+    if is_external is None:
+        if {"esposizione esterna", "esposizione doppia"} & ga4_feats:
+            is_external = True
+        elif "esposizione interna" in ga4_feats:
+            is_external = False
 
     # energy_class
     energy_class = (
         prop.get("energyClass") or prop.get("energy_class")
-        or re_data.get("energyClass") or ""
+        or re_data.get("energyClass")
+        or ((prop.get("energy") or {}).get("class") or {}).get("name")   # detail page
+        or ""
     )
     energy_class = str(energy_class).strip().upper() if energy_class else None
 
@@ -716,39 +825,43 @@ def parse_rental(item: dict) -> Optional[dict]:
         except (TypeError, ValueError):
             year_built = None
 
-    # bathrooms (= "bagni")
-    baths_raw = prop.get("bathrooms") or prop.get("bathRooms")
-    bathrooms = None
-    if baths_raw is not None:
-        try:
-            bathrooms = int(baths_raw)
-        except (TypeError, ValueError):
-            pass
+    # bathrooms (= "bagni") — same '3+' caveat as rooms above.
+    bathrooms = _parse_count_plus(prop.get("bathrooms") or prop.get("bathRooms"))
 
     # bedrooms (= "camere da letto" — bedrooms only, NOT total locali)
     # Italian distinction: rooms = locali (total habitable rooms incl. living)
     #                     bedRoomsNumber = camere = bedrooms only
     beds_raw = prop.get("bedRoomsNumber") or prop.get("bedrooms")
-    bedrooms = None
-    if beds_raw not in (None, '', '0', 0):
-        try:
-            bedrooms = int(beds_raw)
-        except (TypeError, ValueError):
-            pass
+    # 0/'0' indicates "no separate bedrooms" (Monolocale / Open space) — we
+    # treat that as null on purpose so the dashboard omits the bed icon
+    # rather than printing a confusing "🛏 0".
+    if beds_raw in (None, '', '0', 0):
+        bedrooms = None
+    else:
+        bedrooms = _parse_count_plus(beds_raw)
     # Sanity: bedroom count cannot exceed total rooms
     if bedrooms is not None and rooms is not None and bedrooms > rooms:
         bedrooms = None
 
     # ── features[] array  ─────────────────────────────────────────────────────
-    # Immobiliare.it sometimes returns a features list:
-    #   [{"type": "balcony", "label": "Balcone"}, {"type": "parking", ...}, ...]
-    # Collect feature type strings into a set for quick lookup.
+    # Two shapes coexist depending on the page:
+    #   • search results: [{"type": "balcony", "label": "Balcone"}, ...]
+    #   • detail page:    ["balcony", "elevator", ...]   (bare strings)
+    # Tolerate both — the detail-page backfill (detail_backfill.py)
+    # exercises the bare-string path; the regular search-page scan
+    # exercises the dict path. Mixing them would silently lose features.
     _feature_types: set = set()
     for feat in (prop.get("features") or re_data.get("features") or []):
-        ft = feat.get("type") or feat.get("name") or ""
-        _feature_types.add(str(ft).lower())
-        # Also check label for Italian keywords
-        lbl = str(feat.get("label") or "").lower()
+        if isinstance(feat, dict):
+            ft = feat.get("type") or feat.get("name") or ""
+            _feature_types.add(str(ft).lower())
+            lbl = str(feat.get("label") or "").lower()
+        elif isinstance(feat, str):
+            _feature_types.add(feat.lower())
+            lbl = feat.lower()
+        else:
+            continue
+        # Also check label/string for Italian keywords (works for both shapes).
         for kw in ("balcon", "terrazza", "giardino", "box", "garage", "parcheggio",
                    "arredato", "autonomo", "centralizzato"):
             if kw in lbl:
@@ -764,6 +877,11 @@ def parse_rental(item: dict) -> Optional[dict]:
                 break
     if has_balcony is None and _feature_types:
         has_balcony = bool({"balcony", "terrace", "garden", "terr", "balcon", "terrazza", "giardino"} & _feature_types)
+    # ga4features is the complete list — detail pages' `features` is a
+    # partial one (4 of 7 entries on a 2026-10-14 sample, no "balcone"),
+    # so let it overrule a features-derived False.
+    if ga4_feats and not has_balcony:
+        has_balcony = any(f.startswith(("balcon", "terrazz")) for f in ga4_feats)
 
     # has_parking
     has_parking = None
@@ -775,9 +893,14 @@ def parse_rental(item: dict) -> Optional[dict]:
                 break
     if has_parking is None and _feature_types:
         has_parking = bool({"parking", "garage", "box", "parcheggio"} & _feature_types)
+    if (ga4_feats or prop.get("ga4Garage")) and not has_parking:
+        # e.g. "1 posto auto", "1 in box privato/box in garage"
+        has_parking = bool(prop.get("ga4Garage"))
 
     # heating_type
-    heat_raw = prop.get("heatingType") or prop.get("heating") or ""
+    # ga4Heating ("Autonomo" / "Centralizzato") is the dedicated field — never
+    # infer heating from ga4features: it lists "impianto tv centralizzato".
+    heat_raw = prop.get("heatingType") or prop.get("heating") or prop.get("ga4Heating") or ""
     heat_str = str(heat_raw).lower()
     if "autonom" in heat_str or "individual" in heat_str or "indipendent" in heat_str:
         heating_type = "autonomous"
@@ -807,6 +930,13 @@ def parse_rental(item: dict) -> Optional[dict]:
     if furnished is None and _feature_types:
         if "arredato" in _feature_types:
             furnished = True
+    if furnished is None and ga4_feats:
+        # Exact phrases: "non arredato" / "solo cucina arredata" contain the
+        # word but mean unfurnished; no furnishing phrase at all = unknown.
+        if {"arredato", "parzialmente arredato"} & ga4_feats:
+            furnished = True
+        elif {"non arredato", "solo cucina arredata"} & ga4_feats:
+            furnished = False
 
     # photo_count — count photos in the raw multimedia list (not the URL cap)
     photo_count = len(photos) if isinstance(photos, list) else 0
@@ -814,11 +944,16 @@ def parse_rental(item: dict) -> Optional[dict]:
     # published_date + days_on_market
     published_date = None
     days_on_market = None
+    created = re_data.get("createdAt")          # detail page: epoch seconds
+    if isinstance(created, (int, float)) and created > 0:
+        pub = datetime.fromtimestamp(created).date()
+        published_date = pub.isoformat()
+        days_on_market = (date.today() - pub).days
     for date_field in ("dataModifica", "pubblicazione", "dataInserimento",
                        "publicationDate", "insertionDate", "created_at",
                        "createdAt", "insertDate", "datePublished", "firstSeenDate"):
         raw_date = re_data.get(date_field) or prop.get(date_field)
-        if raw_date:
+        if raw_date and published_date is None:
             try:
                 pub_str = str(raw_date)[:10]
                 pub = datetime.fromisoformat(pub_str).date()
@@ -881,7 +1016,8 @@ def parse_rental(item: dict) -> Optional[dict]:
 
 async def _fetch_async(pages: int, area_slugs: list, max_rent: int,
                        min_sqm: int, max_sqm: int, min_rooms: int,
-                       delay: float, browser) -> tuple:
+                       delay: float, browser,
+                       area_delay: float = 6.0) -> tuple:
     """
     Navigate Immobiliare.it rental pages and return (listings, skipped_areas).
 
@@ -895,41 +1031,47 @@ async def _fetch_async(pages: int, area_slugs: list, max_rent: int,
     If area_slugs is non-empty, one URL series is fetched per area slug
     (e.g. /affitto-case/milano/navigli/?prezzoMassimo=2000).
     Results are deduplicated by listing ID.
+
+    Three rate-limit countermeasures shipped together 2026-05-22:
+      • Option 1 — per-area pacing: sleep `area_delay` (default 6 s + jitter)
+        BETWEEN macros so Cloudflare's anti-bot window resets between bursts.
+      • Option 2 — randomized macro order: shuffle `targets` so failures
+        don't always land on the same alphabetical-tail areas.
+      • Option 3 — end-of-scan retry pass on JUST the skipped areas, with
+        3× page delay + 2× area delay, so transient Cloudflare blocks get
+        a second chance without a full city-wide re-scan.
     """
     all_items     = []
     seen_ids      = set()   # global dedup across all areas
     skipped_areas = []      # {"name", "reason"} for areas that failed or returned nothing
 
-    # None sentinel = no area path → fetch whole city
-    targets = area_slugs if area_slugs else [None]
-
-    for area_slug in targets:
+    async def _scan_one_area(area_slug, page_delay):
+        """Per-macro-area fetch. Closure over all the outer state so we can
+        call it both in the main pass and the end-of-scan retry pass
+        without re-threading the parameter list."""
         label = area_slug or "all Milano"
         print(f"\n    area: {label}", end="", flush=True)
-
         try:
-            area_ids_seen    = set()   # IDs seen so far within THIS area's pages
+            area_ids_seen    = set()
             # canonical_slug: resolved by the site on the first request (may differ
             # from area_slug when the site redirects e.g. porta-romana →
             # porta-romana-medaglie-d-oro, which drops pag= from the URL).
-            # We use this resolved slug for pages 2, 3, … so pagination works.
             canonical_slug   = area_slug
             area_got_results = False
+            area_parse_failed = False
 
             for page in range(1, pages + 1):
                 url = build_rental_url(page, canonical_slug, max_rent, min_sqm, max_sqm, min_rooms)
                 print(f"\n    [debug] GET {url}", flush=True)
                 tab = await browser.get(url)
-                await asyncio.sleep(delay)
+                await asyncio.sleep(page_delay)
 
-                # ── Detect redirect on page 1 ──────────────────────────────────────
-                # Immobiliare.it sometimes rewrites a neighbourhood slug to a more
-                # specific sub-area URL, stripping the pag= param in the process.
-                # After the first page load we read the actual href and update
-                # canonical_slug so that subsequent page requests go to the right URL.
+                # Redirect detection on page 1 — Immobiliare sometimes rewrites
+                # a slug to a more specific sub-area URL, stripping pag=.
                 if page == 1 and area_slug:
                     try:
-                        actual_href = await tab.evaluate("window.location.href")
+                        actual_href = await timed(tab.evaluate("window.location.href"),
+                                                  what="read location")
                         if actual_href:
                             m = _re.search(rf'/{_re.escape(CITY_SLUG)}/([^/?#]+)', actual_href)
                             if m:
@@ -937,15 +1079,51 @@ async def _fetch_async(pages: int, area_slugs: list, max_rent: int,
                                 if resolved != canonical_slug:
                                     print(f" [→{resolved}]", end="", flush=True)
                                     canonical_slug = resolved
+                                    # The redirect drops the query string
+                                    # (navigli → navigli-darsena/, no filters),
+                                    # so page 1 would be unfiltered. Reload it
+                                    # on the resolved slug with the filters.
+                                    if "?" in url and "?" not in actual_href:
+                                        url = build_rental_url(page, canonical_slug, max_rent,
+                                                               min_sqm, max_sqm, min_rooms)
+                                        tab = await browser.get(url)
+                                        await asyncio.sleep(page_delay)
+                    except PageTimeout:
+                        raise
                     except Exception:
                         pass
 
-                try:
-                    raw  = await tab.evaluate("JSON.stringify(window.__NEXT_DATA__)")
-                    nd   = json.loads(raw)
-                    data = nd["props"]["pageProps"]["dehydratedState"]["queries"][0]["state"]["data"]
-                except Exception as e:
-                    print(f"\n    [warn] __NEXT_DATA__ parse failed (area={label}, page={page}): {e}")
+                # __NEXT_DATA__ parse with one retry — a single failure
+                # usually means we caught an anti-bot challenge mid-scan,
+                # not a real empty result. Any page, not just page 1: a
+                # failure on page 7 used to silently cut the area short.
+                data = None
+                for _attempt in (1, 2):
+                    try:
+                        raw  = await timed(tab.evaluate("JSON.stringify(window.__NEXT_DATA__)"),
+                                           what="read __NEXT_DATA__")
+                        nd   = json.loads(raw)
+                        data = nd["props"]["pageProps"]["dehydratedState"]["queries"][0]["state"]["data"]
+                        break
+                    except PageTimeout:
+                        raise
+                    except Exception as e:
+                        if _attempt == 1:
+                            print(f"\n    [retry] {label} p{page}: parse failed ({e}); "
+                                  f"sleeping 4s before re-navigating", flush=True)
+                            await asyncio.sleep(4.0)
+                            try:
+                                tab = await browser.get(url)
+                                await asyncio.sleep(page_delay)
+                            except PageTimeout:
+                                raise
+                            except Exception:
+                                pass
+                            continue
+                        print(f"\n    [warn] __NEXT_DATA__ parse failed (area={label}, page={page}): {e}")
+                        area_parse_failed = True
+                        break
+                if data is None:
                     break
 
                 results = data.get("results", [])
@@ -955,19 +1133,14 @@ async def _fetch_async(pages: int, area_slugs: list, max_rent: int,
 
                 area_got_results = True
 
-                # Extract raw IDs from this page before full parsing
                 page_ids = {
                     str(item.get("realEstate", {}).get("id", ""))
                     for item in results
                     if item.get("realEstate", {}).get("id")
                 }
-
-                # If every ID on this page was already seen in a previous page of this
-                # area, the site is recycling page 1 content (pag= ignored for this slug).
                 if page > 1 and page_ids and page_ids.issubset(area_ids_seen):
                     print(f" (repeat page, done)", end="", flush=True)
                     break
-
                 area_ids_seen.update(page_ids)
 
                 new_this_page = 0
@@ -975,39 +1148,200 @@ async def _fetch_async(pages: int, area_slugs: list, max_rent: int,
                     parsed = parse_rental(item)
                     if not parsed or parsed["id"] in seen_ids:
                         continue
-                    # Tag with the resolved area slug so write_output can remove
-                    # stale listings from this area that don't appear in the new scan.
                     parsed["_fetched_area"] = canonical_slug
                     seen_ids.add(parsed["id"])
                     all_items.append(parsed)
                     new_this_page += 1
 
-                # maxPages: guard against None or 0 coming back from the site
                 site_max = data.get("maxPages") or pages
                 max_pg   = min(pages, site_max)
                 print(f" p{page}/{max_pg}(+{new_this_page})", end="", flush=True)
                 if page >= max_pg:
                     break
 
-            # Flag areas that returned nothing across all pages
             if not area_got_results and area_slug:
-                reason = "no results — slug may be invalid or area not found on Immobiliare.it"
-                skipped_areas.append({"name": area_slug, "reason": reason})
+                if area_parse_failed:
+                    reason = ("page parse failed twice (likely Cloudflare "
+                              "anti-bot rate limit, not a bad slug)")
+                else:
+                    reason = "no results — slug may be invalid or area not found on Immobiliare.it"
+                suggested = resolve_immobiliare_slug(area_slug, CITY_KEY)
+                rec = {"name": area_slug, "reason": reason}
+                if suggested and suggested != area_slug:
+                    rec["suggested_slug"] = suggested
+                skipped_areas.append(rec)
                 print(f"\n    [warn] No results for area '{label}' — {reason}", flush=True)
 
         except Exception as exc:
-            # One area failing must never stop the rest of the scan
             reason = f"{type(exc).__name__}: {exc}"
             skipped_areas.append({"name": area_slug or "all Milano", "reason": reason})
             print(f"\n    [error] Area '{label}' failed: {reason} — skipping", flush=True)
-            continue
+            # A hung or dead browser would fail every remaining area too
+            # (2026-08-24: Edge died and the scan kept looping on it).
+            if isinstance(exc, PageTimeout) or not await browser.alive():
+                await browser.restart()
+
+    # ── Pass 1 — full sweep ───────────────────────────────────────────────
+    # None sentinel = no area path → fetch whole city
+    targets = list(area_slugs) if area_slugs else [None]
+    if area_slugs:
+        # Option 2: shuffle so failures don't always land on the same
+        # alphabetical-tail areas across consecutive scans.
+        random.shuffle(targets)
+    for i, area_slug in enumerate(targets):
+        await _scan_one_area(area_slug, delay)
+        # Option 1: idle between macros so Cloudflare's anti-bot
+        # window resets between bursts. Skip after the last area
+        # AND skip after the city-wide pass (only one entry there).
+        if area_slug and i < len(targets) - 1:
+            jitter = random.uniform(0.0, area_delay * 0.4)
+            await asyncio.sleep(area_delay + jitter)
+
+    # ── Pass 2 — retry skipped areas ──────────────────────────────────────
+    # Option 3: give Cloudflare-blocked areas a second chance with
+    # 3× page delay + 2× area delay. Drains skipped_areas first so
+    # the retry pass repopulates from scratch — any area still
+    # failing after the retry stays in skipped_areas as the final
+    # truth, which is what the dashboard surfaces.
+    if area_slugs and skipped_areas:
+        retry_targets = [s["name"] for s in skipped_areas if s.get("name")]
+        skipped_areas.clear()
+        print(f"\n    [retry-pass] revisiting {len(retry_targets)} skipped "
+              f"area(s) at 3× delay…", flush=True)
+        random.shuffle(retry_targets)
+        for i, area_slug in enumerate(retry_targets):
+            await _scan_one_area(area_slug, delay * 3.0)
+            if i < len(retry_targets) - 1:
+                jitter = random.uniform(0.0, area_delay * 0.6)
+                await asyncio.sleep(area_delay * 2.0 + jitter)
+
+    # ── No city-wide fallback ──────────────────────────────────────────────
+    # An earlier version of this scanner did ONE city-wide pass whenever
+    # any area returned 0 results, to recover the would-be listings.
+    # Removed 2026-05-22 — with the verified slug mapping in place,
+    # 0-result areas now genuinely mean "no active listings here" or
+    # "Cloudflare blip", not "wrong URL". The fallback was duplicating
+    # already-fetched listings, attributing them to a synthetic
+    # _city_wide_fallback area, and inflating scan time. Truthful empty
+    # is better than synthetic recovery.
 
     return all_items, skipped_areas
 
 
-def fetch_rentals(pages: int = 3, area_names: list = None, max_rent: int = 0,
+# ── Daily incremental scan ────────────────────────────────────────────────────
+# A full sweep is ~220 page loads; from ~200 loads in one session every
+# remaining area's page came back blocked (8 of 10 full scans lost 6–8 of
+# 17 areas), and >99 % of the loads re-read listings we already had. The
+# daily scan stays well under that:
+#   1. discover — city-wide search, default order = most recently modified
+#      first (verified live 2026-10-14: identical to criterio=dataModifica),
+#      until DAILY_STOP_AFTER pages in a row bring nothing new;
+#   2. sweep    — 1/DAILY_SWEEP_DAYS of the active areas in full, so every
+#      listing's last_seen_date refreshes within STALE_DAYS_THRESHOLD;
+#   3. details  — detail pages (energy class, publication date, condo fees:
+#      absent from search results) for new listings first, then a slow
+#      backfill of older ones, DAILY_DETAIL_BUDGET per day.
+DAILY_DISCOVER_MAX_PAGES = 15
+DAILY_STOP_AFTER         = 2
+DAILY_SWEEP_DAYS         = 4
+DAILY_DETAIL_BUDGET      = 50
+DETAIL_FIELDS = ("energy_class", "published_date", "spese_condominiali", "detail_fetched_at")
+DETAIL_URL    = "https://www.immobiliare.it/annunci/{id}/"
+
+
+def sweep_slugs_for_today(area_slugs: list) -> list:
+    """Every DAILY_SWEEP_DAYS-th area, rotating daily — each area in full
+    once every DAILY_SWEEP_DAYS days."""
+    ordered = sorted(area_slugs)
+    return ordered[date.today().toordinal() % DAILY_SWEEP_DAYS::DAILY_SWEEP_DAYS]
+
+
+def _macro_slug(item: dict) -> str:
+    props = (item.get("realEstate") or {}).get("properties") or [{}]
+    return to_url_slug(((props[0] or {}).get("location") or {}).get("macrozone") or "")
+
+
+async def _daily_async(pages: int, area_slugs: list, max_rent: int, min_sqm: int,
+                       max_sqm: int, min_rooms: int, delay: float, browser,
+                       known_ids: set, detailed_ids: set) -> tuple:
+    """Discover → sweep → details (see DAILY_* above). Returns (listings, skipped)."""
+    active = set(area_slugs)
+    found: dict = {}
+
+    # 1. discover
+    quiet_pages = 0
+    print("\n    discover: city-wide, most recently modified first", end="", flush=True)
+    for page in range(1, DAILY_DISCOVER_MAX_PAGES + 1):
+        url = build_rental_url(page, None, max_rent, min_sqm, max_sqm, min_rooms)
+        try:
+            tab = await browser.get(url)
+            await asyncio.sleep(delay)
+            raw = await timed(tab.evaluate("JSON.stringify(window.__NEXT_DATA__)"),
+                              what="read __NEXT_DATA__")
+            data = json.loads(raw)["props"]["pageProps"]["dehydratedState"]["queries"][0]["state"]["data"]
+        except PageTimeout:
+            await browser.restart()
+            break
+        except Exception as exc:
+            print(f"\n    [warn] discover page {page} unreadable ({type(exc).__name__}) — stopping discovery")
+            break
+        results = data.get("results") or []
+        new_here = 0
+        for item in results:
+            macro = _macro_slug(item)
+            if macro not in active:
+                continue
+            parsed = parse_rental(item)
+            if not parsed:
+                continue
+            parsed["_fetched_area"] = macro
+            if parsed["id"] not in known_ids and parsed["id"] not in found:
+                new_here += 1
+            found[parsed["id"]] = parsed
+        print(f" p{page}(+{new_here} new)", end="", flush=True)
+        quiet_pages = 0 if new_here else quiet_pages + 1
+        if not results or quiet_pages >= DAILY_STOP_AFTER or page >= (data.get("maxPages") or page):
+            break
+
+    # 2. sweep
+    sweep = sweep_slugs_for_today(area_slugs)
+    print(f"\n    sweep: {', '.join(sweep)}", end="", flush=True)
+    swept, skipped = await _fetch_async(pages, sweep, max_rent, min_sqm,
+                                        max_sqm, min_rooms, delay, browser)
+    for l in swept:
+        found.setdefault(l["id"], l)
+
+    # 3. details — new listings first, then older ones never detailed
+    todo = ([i for i in found if i not in known_ids]
+            + [i for i in found if i in known_ids and i not in detailed_ids])
+    todo = [i for i in todo if i not in detailed_ids][:DAILY_DETAIL_BUDGET]
+    print(f"\n    details: {len(todo)} listing page(s)", end="", flush=True)
+    n_ok = 0
+    for lid in todo:
+        try:
+            tab = await browser.get(DETAIL_URL.format(id=lid))
+            await asyncio.sleep(delay)
+            raw = await timed(tab.evaluate("JSON.stringify(window.__NEXT_DATA__)"),
+                              what="read detail __NEXT_DATA__")
+            re_data = json.loads(raw)["props"]["pageProps"]["detailData"]["realEstate"]
+            det = parse_rental({"realEstate": re_data})
+        except PageTimeout:
+            await browser.restart()
+            continue
+        except Exception:
+            continue   # removed listing / challenge page — retried another day
+        if det:
+            listing = found[lid]
+            listing.update({k: v for k, v in det.items() if v is not None and k != "_fetched_area"})
+            listing["detail_fetched_at"] = str(date.today())
+            n_ok += 1
+    print(f" ({n_ok} ok)", end="", flush=True)
+    return list(found.values()), skipped
+
+
+def fetch_rentals(pages: int = 8, area_names: list = None, max_rent: int = 0,
                   min_sqm: int = 0, max_sqm: int = 0, min_rooms: int = 0,
-                  delay: float = 2.5) -> tuple:
+                  delay: float = 2.5, mode: str = "full") -> tuple:
     """
     One-shot fetch of Milano rental listings using Microsoft Edge via nodriver.
     area_names: list of display names, e.g. ["Navigli", "Brera"].
@@ -1032,27 +1366,51 @@ def fetch_rentals(pages: int = 3, area_names: list = None, max_rent: int = 0,
     if area_names and valid_slugs:
         n_valid   = len(valid_slugs)
         n_skipped = len(pre_skipped)
-        desc = ", ".join(valid_slugs)
+        # Fix 3: many internal areas (Cadore, Porta Romana, Montenero) share
+        # one Immobiliare macro-area (porta-romana-cadore-montenero).
+        # Scanning each separately would 3x the requests AND fetch the same
+        # page three times. Group them and scan each macro-area once.
+        verify_slug_mapping(CITY_KEY, valid_slugs)
+        grouped = group_by_immobiliare_slug(valid_slugs, CITY_KEY)
+        area_slugs = list(grouped.keys())
+        desc = ", ".join(area_slugs)
         print(f"  [scan] {len(area_names)} area(s) requested · "
-              f"{n_valid} valid · {n_skipped} skipped (bad slug)")
+              f"{n_valid} valid · {len(area_slugs)} unique Immobiliare slugs · "
+              f"{n_skipped} skipped (bad slug)")
+        # Surface the dedup so the user can see what's happening — e.g.
+        # which three internal areas collapsed into one Immobiliare slug.
+        collapsed = {im: ins for im, ins in grouped.items() if len(ins) > 1}
+        if collapsed:
+            for im_slug, ins in collapsed.items():
+                print(f"  [scan]   {im_slug}  ←  {', '.join(ins)}")
         if pre_skipped:
             print(f"  [scan] Skipped: {', '.join(s['name'] for s in pre_skipped)}")
     else:
         desc = "all Milano"
+        area_slugs = valid_slugs
 
-    area_slugs = valid_slugs
     print(f"  Fetching rentals ({desc})...", end="", flush=True)
 
     async def _run():
-        browser = await uc.start(
-            browser_executable_path=EDGE_PATH,
-            headless=False,
-            lang="it-IT",
-        )
+        browser = BrowserSession("immobiliare")
+        await browser.start()
         try:
-            items, skipped = await _fetch_async(
-                pages, area_slugs, max_rent, min_sqm, max_sqm, min_rooms, delay, browser
-            )
+            if mode == "daily" and area_slugs:
+                known_ids = set(load_seen_ids())
+                detailed_ids = set()
+                if OUTPUT_PATH.exists():
+                    try:
+                        detailed_ids = {l["id"] for l in json.loads(OUTPUT_PATH.read_text())
+                                        if l.get("detail_fetched_at")}
+                    except Exception:
+                        pass
+                items, skipped = await _daily_async(
+                    pages, area_slugs, max_rent, min_sqm, max_sqm, min_rooms, delay,
+                    browser, known_ids, detailed_ids)
+            else:
+                items, skipped = await _fetch_async(
+                    pages, area_slugs, max_rent, min_sqm, max_sqm, min_rooms, delay, browser
+                )
         finally:
             browser.stop()
         return items, skipped
@@ -1221,6 +1579,55 @@ def save_seen_ids(ids: dict):
     SEEN_IDS_PATH.write_text(json.dumps(ids, ensure_ascii=False))
 
 
+# ── Sweep coverage ────────────────────────────────────────────────────────────
+# "Absent N days" only means "gone" if the listing's area was actually swept
+# in that time. Daily scans sweep 1/DAILY_SWEEP_DAYS of the areas, and the
+# scanners can be down for weeks (Aug 29 → Oct 13): on 2026-10-14 the first
+# daily scan trimmed ~12k listings — live ones included — from the 13 areas
+# it hadn't reached yet. So stale-marking / trimming only judges listings
+# last seen before every active area of their source completed a sweep.
+
+def _coverage_path() -> Path:
+    return BASE_DIR / f".sweep_coverage_{CITY_KEY}.json"
+
+
+def record_sweeps(source: str, active_slugs: list, completed_slugs: list) -> None:
+    """Remember today's fully swept areas and the source's current area list."""
+    path = _coverage_path()
+    try:
+        cov = json.loads(path.read_text())
+    except (OSError, ValueError):
+        cov = {}
+    entry = cov.setdefault(source, {"areas": [], "swept": {}})
+    entry["areas"] = sorted(set(active_slugs))
+    today = str(date.today())
+    for slug in completed_slugs:
+        entry["swept"][slug] = today
+    path.write_text(json.dumps(cov, indent=1))
+
+
+def coverage_since() -> dict:
+    """{source: oldest last-complete-sweep date across its active areas},
+    or None for a source with any area not yet swept."""
+    try:
+        cov = json.loads(_coverage_path().read_text())
+    except (OSError, ValueError):
+        return {}
+    out = {}
+    for source, entry in cov.items():
+        dates = [entry["swept"].get(a) for a in entry.get("areas", [])]
+        out[source] = (date.fromisoformat(min(dates))
+                       if dates and all(dates) else None)
+    return out
+
+
+def _judgeable(l: dict, last_seen: date, covered: dict) -> bool:
+    """True when every active area of the listing's source has completed a
+    sweep since it was last seen — i.e. its absence is real."""
+    since = covered.get(l.get("source") or "immobiliare")
+    return since is not None and last_seen < since
+
+
 def mark_stale_listings(all_listings: list, today: date = None) -> int:
     """
     For every listing, compare last_seen_date to today and set
@@ -1233,6 +1640,7 @@ def mark_stale_listings(all_listings: list, today: date = None) -> int:
     """
     if today is None:
         today = date.today()
+    covered = coverage_since()
     stale_count = 0
     for l in all_listings:
         last_seen = l.get("last_seen_date")
@@ -1241,12 +1649,16 @@ def mark_stale_listings(all_listings: list, today: date = None) -> int:
             l["is_stale"] = False
             continue
         try:
-            ds = (today - datetime.fromisoformat(last_seen).date()).days
+            seen_on = datetime.fromisoformat(last_seen).date()
         except ValueError:
             l["days_since_seen"] = None
             l["is_stale"] = False
             continue
+        ds = (today - seen_on).days
         l["days_since_seen"] = ds
+        if not _judgeable(l, seen_on, covered):
+            l["is_stale"] = False   # its area hasn't been re-swept yet
+            continue
         is_stale = ds >= STALE_DAYS_THRESHOLD
         l["is_stale"] = is_stale
         if is_stale:
@@ -1265,6 +1677,7 @@ def trim_stale_listings(all_listings: list, seen: dict,
     """
     if today is None:
         today = date.today()
+    covered = coverage_since()
     keep, dropped = [], 0
     for l in all_listings:
         last_seen = l.get("last_seen_date")
@@ -1272,11 +1685,11 @@ def trim_stale_listings(all_listings: list, seen: dict,
             keep.append(l)
             continue
         try:
-            ds = (today - datetime.fromisoformat(last_seen).date()).days
+            seen_on = datetime.fromisoformat(last_seen).date()
         except ValueError:
             keep.append(l)
             continue
-        if ds < REMOVE_AFTER_DAYS:
+        if (today - seen_on).days < REMOVE_AFTER_DAYS or not _judgeable(l, seen_on, covered):
             keep.append(l)
         else:
             dropped += 1
@@ -1330,63 +1743,92 @@ def write_output(listings: list, source: str = "immobiliare",
     scanned_area_slugs: when provided (area-specific scan), any existing listing
     whose _fetched_area is in this set but whose id is not in the new results is
     considered de-listed and removed from the DB.
+
+    The entire read-modify-write block is serialized via fcntl.flock on
+    a sidecar lock file. Without this, two scanners running concurrently
+    (fetch_rentals + fetch_idealista, both writing the same merged file)
+    raced and the later writer's "old other-source" snapshot stomped the
+    earlier writer's freshly-added rows. This was eating ~all new
+    Immobiliare listings on 2026-05-25 — they survived write_output but
+    Idealista's next scan loaded a pre-write snapshot, then wrote it
+    back as "the truth", silently deleting them.
+
+    The api.py geo-enrich worker also writes this file; for that case
+    we use _merge_by_id_with_disk inside api.py (the worker holds the
+    file in memory too long for flock to be effective).
     """
     DASHBOARD_DIR.mkdir(exist_ok=True)
-    existing: list = []
-    if OUTPUT_PATH.exists():
+
+    # Cross-process write lock — coexists with the api.py geo-enrich
+    # worker's merge-by-id approach. fcntl.LOCK_EX blocks other
+    # write_output callers until we're done with the read-modify-write.
+    import fcntl
+    lock_path = OUTPUT_PATH.with_suffix(OUTPUT_PATH.suffix + ".lock")
+    lock_fh = open(lock_path, "w")
+    try:
+        fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX)
+
+        existing: list = []
+        if OUTPUT_PATH.exists():
+            try:
+                existing = json.loads(OUTPUT_PATH.read_text())
+            except Exception:
+                pass
+
+        new_ids = {l["id"] for l in listings}
+        stale_removed = 0
+        kept = []
+        for l in existing:
+            if l.get("source") in (source, None):
+                if l["id"] in new_ids:
+                    continue   # superseded by fresh version
+                if scanned_area_slugs and l.get("_fetched_area") in scanned_area_slugs:
+                    stale_removed += 1
+                    continue   # de-listed: was in scanned area but not returned this run
+            kept.append(l)
+
+        if stale_removed:
+            print(f"  [stale]  Removed {stale_removed} de-listed listing(s) from scanned areas")
+
+        merged = kept + listings
+
+        # Dedup by ID — new listings (appended last) win
+        seen_dedup: set = set()
+        deduped = []
+        for l in reversed(merged):
+            if l["id"] not in seen_dedup:
+                seen_dedup.add(l["id"])
+                deduped.append(l)
+        merged = list(reversed(deduped))
+
+        # Dedup real-world duplicates: same property listed by multiple agencies
+        # Keep earliest first_seen_date within each (lat,lon@3dp, rooms, sqm, rent_mo) group
+        from collections import defaultdict as _dd
+        geo_groups: dict = _dd(list)
+        for i, l in enumerate(merged):
+            lat, lon = l.get("latitude"), l.get("longitude")
+            if lat is not None and lon is not None and l.get("rooms") and l.get("sqm") and l.get("rent_mo"):
+                geo_groups[(round(lat, 3), round(lon, 3), l["rooms"], l["sqm"], l["rent_mo"])].append(i)
+        remove_geo: set = set()
+        for idxs in geo_groups.values():
+            if len(idxs) > 1:
+                idxs.sort(key=lambda i: (merged[i].get("first_seen_date") or "9999", str(merged[i].get("id", ""))))
+                remove_geo.update(idxs[1:])
+        if remove_geo:
+            print(f"  [dedup]  Removed {len(remove_geo)} real-world duplicate listing(s)")
+            merged = [l for i, l in enumerate(merged) if i not in remove_geo]
+
+        merged.sort(key=lambda x: x.get("score_total", 0), reverse=True)
+        clean = [{k: v for k, v in l.items() if k != "omi"} for l in merged]
+        # Compact + null-strip so the snapshot stays under the 25 MiB Cloudflare cap.
+        from dashboard_io import write_snapshot
+        write_snapshot(OUTPUT_PATH, clean)
+    finally:
         try:
-            existing = json.loads(OUTPUT_PATH.read_text())
+            fcntl.flock(lock_fh.fileno(), fcntl.LOCK_UN)
         except Exception:
             pass
-
-    new_ids = {l["id"] for l in listings}
-    stale_removed = 0
-    kept = []
-    for l in existing:
-        if l.get("source") in (source, None):
-            if l["id"] in new_ids:
-                continue   # superseded by fresh version
-            if scanned_area_slugs and l.get("_fetched_area") in scanned_area_slugs:
-                stale_removed += 1
-                continue   # de-listed: was in scanned area but not returned this run
-        kept.append(l)
-
-    if stale_removed:
-        print(f"  [stale]  Removed {stale_removed} de-listed listing(s) from scanned areas")
-
-    merged = kept + listings
-
-    # Dedup by ID — new listings (appended last) win
-    seen_dedup: set = set()
-    deduped = []
-    for l in reversed(merged):
-        if l["id"] not in seen_dedup:
-            seen_dedup.add(l["id"])
-            deduped.append(l)
-    merged = list(reversed(deduped))
-
-    # Dedup real-world duplicates: same property listed by multiple agencies
-    # Keep earliest first_seen_date within each (lat,lon@3dp, rooms, sqm, rent_mo) group
-    from collections import defaultdict as _dd
-    geo_groups: dict = _dd(list)
-    for i, l in enumerate(merged):
-        lat, lon = l.get("latitude"), l.get("longitude")
-        if lat is not None and lon is not None and l.get("rooms") and l.get("sqm") and l.get("rent_mo"):
-            geo_groups[(round(lat, 3), round(lon, 3), l["rooms"], l["sqm"], l["rent_mo"])].append(i)
-    remove_geo: set = set()
-    for idxs in geo_groups.values():
-        if len(idxs) > 1:
-            idxs.sort(key=lambda i: (merged[i].get("first_seen_date") or "9999", str(merged[i].get("id", ""))))
-            remove_geo.update(idxs[1:])
-    if remove_geo:
-        print(f"  [dedup]  Removed {len(remove_geo)} real-world duplicate listing(s)")
-        merged = [l for i, l in enumerate(merged) if i not in remove_geo]
-
-    merged.sort(key=lambda x: x.get("score_total", 0), reverse=True)
-    clean = [{k: v for k, v in l.items() if k != "omi"} for l in merged]
-    # Compact + null-strip so the snapshot stays under the 25 MiB Cloudflare cap.
-    from dashboard_io import write_snapshot
-    write_snapshot(OUTPUT_PATH, clean)
+        lock_fh.close()
 
 
 def write_status(new_count: int, total_seen: int, skipped_areas: list = None):
@@ -1403,6 +1845,30 @@ def write_status(new_count: int, total_seen: int, skipped_areas: list = None):
 
 # ── Run cycle ──────────────────────────────────────────────────────────────────
 
+def _carry_over_detail_fields(raw: list) -> None:
+    """Search results lack the detail-page fields (DETAIL_FIELDS); keep the
+    ones already on disk so a re-scan doesn't wipe them, and age
+    days_on_market from the stored publication date."""
+    if not OUTPUT_PATH.exists():
+        return
+    try:
+        on_disk = {l["id"]: l for l in json.loads(OUTPUT_PATH.read_text())}
+    except Exception:
+        return
+    for l in raw:
+        old = on_disk.get(l["id"])
+        if not old:
+            continue
+        for k in DETAIL_FIELDS:
+            if l.get(k) is None and old.get(k) is not None:
+                l[k] = old[k]
+        if l.get("days_on_market") is None and l.get("published_date"):
+            try:
+                l["days_on_market"] = (date.today() - date.fromisoformat(l["published_date"])).days
+            except ValueError:
+                pass
+
+
 def run_once(args) -> list:
     """Execute one fetch-score-write cycle. Returns newly seen listings."""
     if args.areas:
@@ -1418,6 +1884,7 @@ def run_once(args) -> list:
         max_sqm=args.max_sqm     or 0,
         min_rooms=args.min_rooms or 0,
         delay=args.delay,
+        mode=args.scan,
     )
     if not raw:
         print("  ✗ No rentals fetched.")
@@ -1425,6 +1892,7 @@ def run_once(args) -> list:
                      skipped_areas=skipped_areas)
         return []
 
+    _carry_over_detail_fields(raw)
     scored = score_all(raw)
 
     # Never overwrite the existing JSON with fewer listings than what's already there.
@@ -1473,6 +1941,11 @@ def run_once(args) -> list:
     # Listings that didn't appear in *this* scan keep their old last_seen_date
     # from `seen`. We need to backfill last_seen_date onto every entry of
     # rentals_latest.json (not just `scored`) and then run mark+trim sweeps.
+    macro_slugs = list(group_by_immobiliare_slug(
+        [s for s in (to_url_slug(n) for n in area_names) if s], CITY_KEY).keys())
+    attempted = sweep_slugs_for_today(macro_slugs) if args.scan == "daily" else macro_slugs
+    failed = {s.get("name") for s in skipped_areas}
+    record_sweeps("immobiliare", macro_slugs, [a for a in attempted if a not in failed])
     _post_scan_stale_pass(seen, today_str)
 
     write_status(len(new_listings), len(seen), skipped_areas=skipped_areas)
@@ -1640,11 +2113,21 @@ def daemon_loop(args):
         print(line, flush=True)
         print(line, file=log_fh, flush=True)
 
-    log(f"Daemon started — interval {DAEMON_INTERVAL_SEC // 60} min, output {OUTPUT_PATH}")
+    log(f"Daemon started — one scan every {DAEMON_INTERVAL_SEC // 3600} h, output {OUTPUT_PATH}")
 
+    next_run = last_scan_at("immobiliare") + DAEMON_INTERVAL_SEC
     while True:
+        if time.time() < next_run:
+            log(f"Next scan at {datetime.fromtimestamp(next_run):%Y-%m-%d %H:%M}")
+            try:
+                sleep_until(next_run)
+            except KeyboardInterrupt:
+                log("Interrupted during sleep — stopping daemon.")
+                log_fh.close()
+                raise
         log("Running scan…")
         new_listings = []
+        scan_ok = False
         try:
             new_listings = run_once(args)
 
@@ -1667,6 +2150,7 @@ def daemon_loop(args):
             # Netlify deploy is handled inside run_once() automatically
 
             log(f"Scan done — {len(new_listings)} new listing(s)")
+            scan_ok = True
 
         except BaseException as e:
             # Catch everything (including SystemExit/KeyboardInterrupt) so the
@@ -1681,13 +2165,11 @@ def daemon_loop(args):
             except Exception:
                 pass
 
-        log(f"Sleeping {DAEMON_INTERVAL_SEC // 60} min…")
-        try:
-            time.sleep(DAEMON_INTERVAL_SEC)
-        except KeyboardInterrupt:
-            log("Interrupted during sleep — stopping daemon.")
-            log_fh.close()
-            raise
+        if scan_ok:
+            mark_scan_done("immobiliare")
+            next_run = time.time() + DAEMON_INTERVAL_SEC
+        else:
+            next_run = time.time() + DAEMON_RETRY_SEC
 
 
 # ── CLI ────────────────────────────────────────────────────────────────────────
@@ -1699,8 +2181,15 @@ def parse_args():
     p.add_argument("--city",     type=str,   default="milano",
                    choices=list(CITY_REGISTRY.keys()),
                    help="City to scan (default: milano)")
-    p.add_argument("--pages",    type=int,   default=3,
-                   help="Pages to fetch (25 listings/page, default 3)")
+    # 3-page default used to leave ~200 listings/macro unscraped on
+    # dense Milan slugs (Vincenzo Monti, San Babila…), and those
+    # listings then went stale in Supabase forever. 8 pages × ~25
+    # listings = up to 200 per macro, which covers every active
+    # listing on the densest slug we've measured. The empty-page
+    # heuristic still short-circuits sparser slugs so we don't pay
+    # 8 × delay for areas with only 2 pages of real results.
+    p.add_argument("--pages",    type=int,   default=8,
+                   help="Pages to fetch per macro-area (25 listings/page, default 8)")
     p.add_argument("--areas",    type=str,   default="",
                    help="Comma-separated area keywords, e.g. navigli,brera,isola")
     p.add_argument("--max-rent", type=int,   default=0,    help="Max monthly rent €")
@@ -1708,6 +2197,9 @@ def parse_args():
     p.add_argument("--max-sqm",  type=int,   default=0,    help="Max surface m²")
     p.add_argument("--min-rooms",type=int,   default=0,    help="Min number of rooms")
     p.add_argument("--delay",    type=float, default=2.5,  help="Seconds between page loads (default 2.5)")
+    p.add_argument("--scan",     choices=("full", "daily"), default=None,
+                   help="full = every page of every active area; daily = discover new "
+                        "+ rotating sweep + detail pages (default with --daemon)")
     p.add_argument("--daemon",   action="store_true",
                    help="Loop forever, fetching every 60 minutes")
     p.add_argument("--email",    action="store_true",
@@ -1715,7 +2207,10 @@ def parse_args():
     p.add_argument("--netlify", action="store_true",
                    help="After each scan, deploy dashboard/ straight to Netlify via the "
                         "Deploy API (requires netlify_config.json with site_id + token)")
-    return p.parse_args()
+    args = p.parse_args()
+    if args.scan is None:
+        args.scan = "daily" if args.daemon else "full"
+    return args
 
 
 def main():
@@ -1727,8 +2222,12 @@ def main():
     # Apply dashboard prefs as defaults when CLI args are at their zero/default values.
     # Explicit CLI overrides (e.g. --pages 10 --max-rent 2500) always win.
     _prefs = _load_scan_prefs()
-    if args.pages == 3:       # 3 is parse_args default → not explicitly overridden
-        args.pages = int(_prefs.get("pages", 3))
+    # If the user didn't pass --pages explicitly, respect any value
+    # saved in scan_prefs.json; otherwise stick with the parser default
+    # (8). The "is default" check has to compare against the same
+    # number set in add_argument above — keep them in lock-step.
+    if args.pages == 8:
+        args.pages = int(_prefs.get("pages", 8))
     if not args.max_rent:
         args.max_rent = int(_prefs.get("max_rent", 0))
     if not args.min_rooms:
@@ -1747,7 +2246,7 @@ def main():
         print(f"  Max rent : €{args.max_rent}/mo")
     if args.min_rooms:
         print(f"  Min rooms: {args.min_rooms}+")
-    print(f"  Mode    : {'daemon (every %d min)' % (DAEMON_INTERVAL_SEC // 60) if args.daemon else 'one-shot'}")
+    print(f"  Mode    : {'daemon (every %d h)' % (DAEMON_INTERVAL_SEC // 3600) if args.daemon else 'one-shot'}")
     if args.netlify:
         print(f"  Netlify : enabled (→ direct deploy after each scan)")
     print(f"{'─'*52}\n")

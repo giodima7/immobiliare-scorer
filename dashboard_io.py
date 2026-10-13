@@ -11,6 +11,10 @@ helper enforces:
   • compact JSON (no indentation, tight separators)
   • drops null / empty values to remove dead bytes
   • drops underscore-prefixed internal/debug fields the dashboard never reads
+  • renames a few underscore-prefixed fields the dashboard DOES read into
+    their column-style names (e.g. _excluded → excluded). Keeps the
+    naming convention scoring.py uses internally while letting the
+    dashboard speak the same names Supabase uses.
 
 Call `write_snapshot(path, listings)` from any code that produces a snapshot
 the dashboard reads.
@@ -33,6 +37,23 @@ _INTERNAL_FIELDS: frozenset[str] = frozenset({
     "_room_efficiency_flag",
 })
 
+# Underscore-prefixed fields the dashboard DOES read — these get renamed
+# to their column-style name (matching the Supabase schema + FIELD_RENAME
+# in supabase_sync.py) so the dashboard's filter code can read one name
+# regardless of which path the data took (local scoring vs Supabase
+# hydrate). Without this, the slim_listing default of "strip every
+# underscore-prefixed key" silently wiped the entire exclusion pipeline
+# from the local JSON snapshot — flags set in scoring.py but never
+# visible to the dashboard's "hide excluded" filter.
+_RENAME_FIELDS: dict[str, str] = {
+    "_excluded":                    "excluded",
+    "_excluded_reason":             "excluded_reason",
+    "_extreme_underpricing":        "extreme_underpricing",
+    "_extreme_underpricing_delta":  "extreme_underpricing_delta",
+    "_price_floor_gate_applied":    "price_floor_gate_applied",
+    "_price_floor_reason":          "price_floor_reason",
+}
+
 # Legacy fields superseded by newer ones. Dropped from snapshots to stay
 # under the 25 MiB Cloudflare cap.
 #   score_explanation -> replaced by score_reasons (component-tagged dicts)
@@ -44,14 +65,25 @@ _EMPTY = (None, "", [], {})
 
 
 def slim_listing(listing: dict) -> dict:
-    """Drop null/empty values, internal debug fields, and legacy fields."""
-    return {
-        k: v
-        for k, v in listing.items()
-        if v not in _EMPTY
-        and not k.startswith("_")
-        and k not in _LEGACY_FIELDS
-    }
+    """Drop null/empty values, internal debug fields, and legacy fields.
+
+    Renames the underscore-prefixed exclusion/gate fields to their
+    column-style names so the dashboard sees them under the same
+    name Supabase exposes (e.g. `excluded` not `_excluded`).
+    """
+    out: dict = {}
+    for k, v in listing.items():
+        if v in _EMPTY:
+            continue
+        if k in _LEGACY_FIELDS:
+            continue
+        if k in _RENAME_FIELDS:
+            out[_RENAME_FIELDS[k]] = v
+            continue
+        if k.startswith("_"):
+            continue
+        out[k] = v
+    return out
 
 
 def write_snapshot(path: str | Path, listings: list[dict]) -> int:

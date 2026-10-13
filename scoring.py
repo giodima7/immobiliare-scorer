@@ -44,7 +44,7 @@ import sys
 from pathlib import Path
 from re import compile as re_compile
 
-from comps_engine import get_comps_benchmark
+from comps_engine import get_comps_benchmark, build_comps_index
 import omi_lookup
 
 
@@ -207,21 +207,21 @@ FINANCING_PROFILES: dict[str, dict] = {
     },
     "mortgage_invest": {
         "ltv":            0.65,
-        "rate":           0.042,
+        "rate":           0.043,
         "term_years":     20,
         "label_en":       "Investment mortgage",
         "label_it":       "Mutuo investimento",
-        "description_en": "65% LTV, 4.2% rate, 20yr. Standard buy-to-let financing.",
-        "description_it": "LTV 65%, tasso 4,2%, 20 anni. Finanziamento standard per investimento.",
+        "description_en": "65% LTV, 4.3% rate, 20yr. Standard buy-to-let financing.",
+        "description_it": "LTV 65%, tasso 4,3%, 20 anni. Finanziamento standard per investimento.",
     },
     "mortgage_primary": {
         "ltv":            0.80,
-        "rate":           0.038,
+        "rate":           0.040,
         "term_years":     25,
         "label_en":       "Primary residence",
         "label_it":       "Prima casa",
-        "description_en": "80% LTV, 3.8% rate, 25yr. Requires you live there 18mo+, lower tax, lower yield since you live in it.",
-        "description_it": "LTV 80%, tasso 3,8%, 25 anni. Richiede residenza 18+ mesi, tasse ridotte, rendimento ridotto in quanto la abiti.",
+        "description_en": "80% LTV, 4.0% rate, 25yr. Requires you live there 18mo+, lower tax, lower yield since you live in it.",
+        "description_it": "LTV 80%, tasso 4,0%, 25 anni. Richiede residenza 18+ mesi, tasse ridotte, rendimento ridotto in quanto la abiti.",
     },
 }
 
@@ -254,7 +254,7 @@ CONTRACT_PROFILES: dict[str, dict] = {
         "description_it": "Contratto 4+4 anni, canone di mercato, cedolare secca 21%.",
     },
     "concordato": {
-        "rent_factor":          0.72,
+        "rent_factor":          0.80,
         "cedolare_rate":        0.10,
         "imu_discount":         0.25,
         "vacancy_months":       0.5,
@@ -265,8 +265,8 @@ CONTRACT_PROFILES: dict[str, dict] = {
         "marketing_annual":     0,
         "label_en":       "Canone concordato (3+2)",
         "label_it":       "Canone concordato (3+2)",
-        "description_en": "3+2 year lease, ~28% lower rent, 10% cedolare + 25% IMU discount.",
-        "description_it": "Contratto 3+2 anni, canone ~28% inferiore, cedolare 10% + IMU -25%.",
+        "description_en": "3+2 year lease, ~20% lower rent, 10% cedolare + 25% IMU discount.",
+        "description_it": "Contratto 3+2 anni, canone ~20% inferiore, cedolare 10% + IMU -25%.",
     },
     "transitorio": {
         "rent_factor":          1.12,
@@ -1009,6 +1009,57 @@ EXTREME_UNDERPRICING_THRESHOLD_PCT: float = -40.0
 EXTREME_UNDERPRICING_CAP:           int   = 55
 
 
+def _apply_exclusion_gates(listing: dict) -> bool:
+    """
+    Consolidated suspect-listing gate. Returns True if the listing should
+    be hidden from the dashboard entirely. Sets _excluded=True + a human-
+    readable _excluded_reason and clears any badge that might otherwise
+    survive (hidden_gem / good_value / score_total).
+
+    Call at the very top of score_rental() / score_sale_listing() —
+    before any comp lookup, before scoring sub-components — so the rest
+    of the pipeline doesn't waste cycles on a row the user will never
+    see anyway.
+
+    Why a helper: the four suspect flags (is_fake, is_misrepresented_
+    address, is_outside_city, is_auction, is_nuda_proprieta) used to
+    each have their own ad-hoc early-return inside score_sale_listing/
+    score_rental, but is_misrepresented_address + is_outside_city were
+    never wired in — so 81 flagged listings sat with the flags set but
+    _excluded=False, slipping through every "hide bad listings" filter
+    in the dashboard. Single helper = single point of truth.
+    """
+    exclude_reasons: list[str] = []
+    if listing.get("is_fake"):
+        exclude_reasons.append("Fake / foreign-property bait listing")
+    if listing.get("is_misrepresented_address"):
+        exclude_reasons.append(listing.get("misrep_reason")
+                               or "Misrepresented address")
+    if listing.get("is_outside_city"):
+        exclude_reasons.append("Coordinates outside city boundary")
+    if listing.get("is_auction"):
+        exclude_reasons.append("Auction listing (asta giudiziaria)")
+    if listing.get("is_nuda_proprieta"):
+        exclude_reasons.append("Nuda proprietà — usufruct retained by seller")
+
+    if not exclude_reasons:
+        return False
+
+    listing["_excluded"]        = True
+    listing["_excluded_reason"] = "; ".join(exclude_reasons)
+    listing["score_total"]      = 0
+    listing["hidden_gem"]       = False
+    listing["good_value"]       = False
+    # Sub-scores zeroed too — keeps the data-quality panel honest
+    # (a listing showing score_property=80 next to score_total=0 reads
+    # like a bug).
+    for sub in ("score_price", "score_property",
+                "score_location", "score_penalty"):
+        if sub in listing:
+            listing[sub] = 0
+    return True
+
+
 def apply_extreme_underpricing_flag(listing: dict, comps_delta_pct: float | None) -> None:
     """
     Mutate `listing` if comps_delta_pct is below the extreme threshold.
@@ -1274,25 +1325,23 @@ def get_condo_fee_flag(listing: dict) -> str | None:
 
 # ── Composite score ───────────────────────────────────────────────────────────
 
-def score_rental(listing: dict, all_listings: list, settings: dict | None = None) -> dict:
+def score_rental(listing: dict, all_listings: list, settings: dict | None = None,
+                 comps_index: dict | None = None) -> dict:
     """
     Score a single rental listing.
 
     Comps benchmark is built from all_listings using comps_engine.
+    comps_index: build_comps_index(all_listings), shared across a run.
     Returns a dict of score fields to be merged into the listing.
     """
     if settings is None:
         settings = _load_settings()
 
-    # Fake/foreign-property bait — same short-circuit as score_sale_listing.
-    # Mutate in place + return an empty dict; score_all merges {**l, **s}
-    # so the mutation survives.
-    if listing.get("is_fake"):
-        listing["score_total"]      = 0
-        listing["hidden_gem"]       = False
-        listing["good_value"]       = False
-        listing["_excluded"]        = True
-        listing["_excluded_reason"] = "Fake / foreign-property bait listing"
+    # Consolidated suspect-listing gate. Catches is_fake +
+    # is_misrepresented_address + is_outside_city + is_auction +
+    # is_nuda_proprieta. Mutates in place + returns an empty dict;
+    # score_all merges {**l, **s} so the mutation survives.
+    if _apply_exclusion_gates(listing):
         return {}
 
     w_price = settings.get("w_price", 0.40)
@@ -1320,6 +1369,8 @@ def score_rental(listing: dict, all_listings: list, settings: dict | None = None
         listing, all_listings,
         radii=tuple(settings.get("radii", [500, 800, 1200])),
         min_comps=int(settings.get("min_comps", 5)),
+        index=comps_index,
+        want_comp_ids=False,   # rentals don't store comp_ids
     )
 
     delta_pct      = comps.get("delta_pct")
@@ -1600,7 +1651,8 @@ def is_sale_good_value(listing: dict, settings: dict | None = None) -> bool:
 
 # ── Composite sale score ──────────────────────────────────────────────────────
 
-def score_sale_listing(listing: dict, all_listings: list, settings: dict | None = None) -> dict:
+def score_sale_listing(listing: dict, all_listings: list, settings: dict | None = None,
+                       comps_index: dict | None = None) -> dict:
     """
     Score a single sale listing.
 
@@ -1614,13 +1666,19 @@ def score_sale_listing(listing: dict, all_listings: list, settings: dict | None 
     if settings is None:
         settings = _load_settings()
 
-    # Short-circuit gates — three flavours of listings that should never
-    # carry a score: judicial auctions, nuda-proprietà sales (buyer can't
-    # actually use the property), and sub-floor prices (mislabelled
-    # rentals / data errors). All three set `_excluded=True` so the
-    # dashboard's applySaleFilters hides them via one consolidated check.
-    # The row still gets emitted (rather than returning None) so the
-    # Data-Quality panel can surface what got rejected.
+    # Consolidated suspect-listing gate. Catches is_fake +
+    # is_misrepresented_address + is_outside_city + is_auction +
+    # is_nuda_proprieta — single point of truth shared with score_rental.
+    # The row still gets emitted (with score_total=0 + _excluded=True)
+    # rather than returning None so the Data-Quality panel can surface
+    # what got rejected.
+    if _apply_exclusion_gates(listing):
+        return listing
+
+    # Sale-only gate: sub-floor price (mislabelled rentals / data errors).
+    # apply_price_floor_gate already sets _excluded + _price_floor_reason;
+    # we still zero the sub-scores below for visual consistency with the
+    # other gates above.
     def _excluded_zero(reason: str) -> dict:
         listing["score_total"]    = 0
         listing["score_price"]    = 0
@@ -1633,14 +1691,7 @@ def score_sale_listing(listing: dict, all_listings: list, settings: dict | None 
         listing["_excluded_reason"] = reason
         return listing
 
-    if listing.get("is_fake"):
-        return _excluded_zero("Fake / foreign-property bait listing")
-    if listing.get("is_nuda_proprieta"):
-        return _excluded_zero("Nuda proprietà — usufruct retained by seller")
-    if listing.get("is_auction"):
-        return _excluded_zero("Auction listing (asta giudiziaria)")
     if apply_price_floor_gate(listing):
-        # apply_price_floor_gate already sets _excluded + _price_floor_reason
         return _excluded_zero(listing.get("_price_floor_reason")
                               or "Below per-city €/m² floor")
 
@@ -1669,6 +1720,7 @@ def score_sale_listing(listing: dict, all_listings: list, settings: dict | None 
         radii=tuple(settings.get("radii", [500, 800, 1200])),
         min_comps=int(settings.get("min_comps", 5)),
         mode='sale',
+        index=comps_index,
     )
 
     delta_pct      = comps.get("delta_pct")
@@ -1846,9 +1898,10 @@ def score_all_sales(listings: list, settings: dict | None = None) -> list:
     if settings is None:
         settings = _load_settings()
 
+    comps_index = build_comps_index(listings)
     scored = []
     for l in listings:
-        s = score_sale_listing(l, listings, settings)
+        s = score_sale_listing(l, listings, settings, comps_index)
         merged = {**l, **s}
         # Apply the extreme-underpricing flag AFTER the merge so we see
         # the final score_total + comps_sale_delta_pct in one place.
@@ -1909,9 +1962,10 @@ def score_all(listings: list, settings: dict | None = None,
         l["ask_psqm_effective"] = compute_effective_psqm(l)
         l["condo_fee_flag"]     = get_condo_fee_flag(l)
 
+    comps_index = build_comps_index(pool)
     scored = []
     for l in listings:
-        s = score_rental(l, pool, settings)
+        s = score_rental(l, pool, settings, comps_index)
         merged = {**l, **s}
         # Same extreme-underpricing flag as sales (rentals at -60 % vs
         # comps are equally suspicious — fake listings exist on both

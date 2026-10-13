@@ -1,0 +1,6267 @@
+{
+  "metro": [
+    {
+      "lat": 41.8835897,
+      "lon": 12.487533,
+      "name": "Circo Massimo",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8949189,
+      "lon": 12.493695,
+      "name": "Cavour (direzione Laurentina)",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8666996,
+      "lon": 12.4836491,
+      "name": "Garbatella",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8748621,
+      "lon": 12.4824769,
+      "name": "Piramide",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8272637,
+      "lon": 12.4808876,
+      "name": "Laurentina",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8270962,
+      "lon": 12.4807693,
+      "name": "Laurentina",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.894923,
+      "lon": 12.4931044,
+      "name": "Cavour (direzione Rebibbia/Jonio)",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9021568,
+      "lon": 12.4958528,
+      "name": "Repubblica",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9025559,
+      "lon": 12.4954251,
+      "name": "Repubblica",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9008033,
+      "lon": 12.4994495,
+      "name": "Termini",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9005362,
+      "lon": 12.499903,
+      "name": "Termini Exit T3",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8561396,
+      "lon": 12.4785229,
+      "name": "Basilica San Paolo",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.856474,
+      "lon": 12.4784291,
+      "name": "Basilica San Paolo",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8952481,
+      "lon": 12.5047989,
+      "name": "Vittorio Emanuele",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8565014,
+      "lon": 12.4781,
+      "name": "Basilica San Paolo",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8902333,
+      "lon": 12.5066334,
+      "name": "Manzoni",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8905116,
+      "lon": 12.5072651,
+      "name": "Manzoni",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8833618,
+      "lon": 12.4882692,
+      "name": "Circo Massimo",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8664965,
+      "lon": 12.4836804,
+      "name": "Garbatella",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9015651,
+      "lon": 12.4262311,
+      "name": "Cornelia",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9156298,
+      "lon": 12.5478642,
+      "name": "Monti Tiburtini",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9108634,
+      "lon": 12.5287323,
+      "name": "Tiburtina FS",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9084321,
+      "lon": 12.5124092,
+      "name": "Policlinico",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9062361,
+      "lon": 12.5052453,
+      "name": "Castro Pretorio",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9149119,
+      "lon": 12.5549336,
+      "name": "Pietralata",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.915505,
+      "lon": 12.5386693,
+      "name": "Quintiliani",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9136627,
+      "lon": 12.5208145,
+      "name": "Bologna",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9142023,
+      "lon": 12.5206599,
+      "name": "Bologna",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.7896008,
+      "lon": 12.3778287,
+      "name": "Casal Bernocchi - Centro Giano",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.7835343,
+      "lon": 12.3608521,
+      "name": "Acilia",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8425139,
+      "lon": 12.5863174,
+      "name": "Anagnina",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8746754,
+      "lon": 12.5225834,
+      "name": "Furio Camillo",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8664198,
+      "lon": 12.5357546,
+      "name": "Arco di Travertino",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8996206,
+      "lon": 12.4267888,
+      "name": "Cornelia",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9115301,
+      "lon": 12.475705,
+      "name": "Flaminio - Piazza del Popolo",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.7563045,
+      "lon": 12.3021683,
+      "name": "Ostia Antica",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9397676,
+      "lon": 12.528141,
+      "name": "Conca d'Oro",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8692554,
+      "lon": 12.529273,
+      "name": "Colli Albani - Parco Appia Antica",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9017705,
+      "lon": 12.4255049,
+      "name": "Cornelia",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9059298,
+      "lon": 12.5054405,
+      "name": "Castro Pretorio",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8301439,
+      "lon": 12.4670835,
+      "name": "EUR Palasport",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8300612,
+      "lon": 12.4673622,
+      "name": "EUR Palasport",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.86361,
+      "lon": 12.5479224,
+      "name": "Porta Furba - Quadraro",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8635842,
+      "lon": 12.5480321,
+      "name": "Porta Furba - Quadraro",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8640191,
+      "lon": 12.5481531,
+      "name": "Porta Furba - Quadraro",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9062377,
+      "lon": 12.5056728,
+      "name": "Castro Pretorio",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8917087,
+      "lon": 12.4902877,
+      "name": "Colosseo – Fori Imperiali",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.897865,
+      "lon": 12.4689559,
+      "name": "Chiesa Nuova",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.902918,
+      "lon": 12.4650941,
+      "name": "San Pietro (Castel S. Angelo)",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9317786,
+      "lon": 12.5192683,
+      "name": "Libia",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9080709,
+      "lon": 12.4471216,
+      "name": "Cipro",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9073139,
+      "lon": 12.4473565,
+      "name": "Cipro",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9077482,
+      "lon": 12.4475076,
+      "name": "Cipro",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9064475,
+      "lon": 12.4829182,
+      "name": "Spagna",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9093062,
+      "lon": 12.458238,
+      "name": "Ottaviano",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9094398,
+      "lon": 12.4577508,
+      "name": "Ottaviano",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9092022,
+      "lon": 12.4578544,
+      "name": "Ottaviano",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9091944,
+      "lon": 12.4577394,
+      "name": "Ottaviano",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9095168,
+      "lon": 12.4578182,
+      "name": "Ottaviano",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9096678,
+      "lon": 12.458202,
+      "name": "Ottaviano",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9112025,
+      "lon": 12.466047,
+      "name": "Lepanto",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9113099,
+      "lon": 12.4664721,
+      "name": "Lepanto",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.91151,
+      "lon": 12.4658444,
+      "name": "Lepanto",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9096128,
+      "lon": 12.4583021,
+      "name": "Ottaviano",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9093396,
+      "lon": 12.4583778,
+      "name": "Ottaviano",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9120954,
+      "lon": 12.4759202,
+      "name": "Flaminio - Piazza del Popolo",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9119692,
+      "lon": 12.4753744,
+      "name": "Flaminio - Piazza del Popolo",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9120312,
+      "lon": 12.4756393,
+      "name": "Flaminio - Piazza del Popolo",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.912698,
+      "lon": 12.4765187,
+      "name": "Flaminio",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.920482,
+      "lon": 12.5650543,
+      "name": "Ponte Mammolo",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8493218,
+      "lon": 12.4751444,
+      "name": "Marconi",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8670059,
+      "lon": 12.4825689,
+      "name": "Garbatella",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8955804,
+      "lon": 12.502708,
+      "name": "Vittorio Emanuele",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8954573,
+      "lon": 12.5025861,
+      "name": "Vittorio Emanuele",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.874469,
+      "lon": 12.4834111,
+      "name": "Piramide",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8821318,
+      "lon": 12.5150873,
+      "name": "Re di Roma",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9083113,
+      "lon": 12.5122171,
+      "name": "Policlinico",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9091407,
+      "lon": 12.5115436,
+      "name": "Policlinico",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9090651,
+      "lon": 12.5112725,
+      "name": "Policlinico",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9041706,
+      "lon": 12.4885034,
+      "name": "Barberini",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9042152,
+      "lon": 12.4889042,
+      "name": "Barberini",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.904451,
+      "lon": 12.4886334,
+      "name": "Barberini",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.903636,
+      "lon": 12.4890063,
+      "name": "Barberini",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9036575,
+      "lon": 12.4890709,
+      "name": "Barberini",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9021327,
+      "lon": 12.4960318,
+      "name": "Repubblica",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.902708,
+      "lon": 12.4954428,
+      "name": "Repubblica",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.885303,
+      "lon": 12.5101889,
+      "name": "San Giovanni",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8851039,
+      "lon": 12.509438,
+      "name": "San Giovanni",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9018754,
+      "lon": 12.4262791,
+      "name": "Cornelia",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9059808,
+      "lon": 12.4150571,
+      "name": "",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9061036,
+      "lon": 12.4149509,
+      "name": "Battistini",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9042768,
+      "lon": 12.4884095,
+      "name": "Barberini",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8750338,
+      "lon": 12.5231251,
+      "name": "Furio Camillo",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8747893,
+      "lon": 12.5233531,
+      "name": "Furio Camillo",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8778085,
+      "lon": 12.519301,
+      "name": "Ponte Lungo",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8779148,
+      "lon": 12.5184171,
+      "name": "Ponte Lungo",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8778751,
+      "lon": 12.5183572,
+      "name": "Ponte Lungo",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8775469,
+      "lon": 12.5188355,
+      "name": "Ponte Lungo",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8415147,
+      "lon": 12.5855192,
+      "name": "Anagnina",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8414183,
+      "lon": 12.5856401,
+      "name": "Anagnina",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8627739,
+      "lon": 12.6461186,
+      "name": "Grotte Celoni",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8986873,
+      "lon": 12.4318875,
+      "name": "Baldo degli Ubaldi",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8984939,
+      "lon": 12.4319563,
+      "name": "Baldo degli Ubaldi",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9115687,
+      "lon": 12.4659077,
+      "name": "Lepanto",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9116138,
+      "lon": 12.4664661,
+      "name": "Lepanto",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9111647,
+      "lon": 12.465901,
+      "name": "Lepanto",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9113595,
+      "lon": 12.4666884,
+      "name": "Lepanto",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9115801,
+      "lon": 12.4663255,
+      "name": "Lepanto",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8748955,
+      "lon": 12.5232326,
+      "name": "Furio Camillo",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9806563,
+      "lon": 12.4936718,
+      "name": "Centro RAI",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.79533,
+      "lon": 12.4038771,
+      "name": "Vitinia",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8195321,
+      "lon": 12.4367553,
+      "name": "Tor di Valle",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9258415,
+      "lon": 12.5730132,
+      "name": "Rebibbia",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8993063,
+      "lon": 12.4351209,
+      "name": "Baldo degli Ubaldi",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.899704,
+      "lon": 12.427148,
+      "name": "Cornelia",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9238641,
+      "lon": 12.5159334,
+      "name": "Sant'Agnese/Annibaliano",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9030071,
+      "lon": 12.441419,
+      "name": "",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8850248,
+      "lon": 12.5096997,
+      "name": "San Giovanni",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8850847,
+      "lon": 12.509902,
+      "name": "San Giovanni",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8851458,
+      "lon": 12.5094567,
+      "name": "San Giovanni",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.913149,
+      "lon": 12.5204704,
+      "name": "Bologna",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9132303,
+      "lon": 12.5202076,
+      "name": "Bologna",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9132696,
+      "lon": 12.5211141,
+      "name": "Bologna",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9137007,
+      "lon": 12.5202683,
+      "name": "Bologna",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9137745,
+      "lon": 12.5203125,
+      "name": "Bologna",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8661138,
+      "lon": 12.5350297,
+      "name": "Arco di Travertino",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8618939,
+      "lon": 12.5524137,
+      "name": "Numidio Quadrato Dir.Battistini",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8619684,
+      "lon": 12.5524801,
+      "name": "Numidio Quadrato",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8624033,
+      "lon": 12.5528705,
+      "name": "Numidio Quadrato",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8624752,
+      "lon": 12.5529433,
+      "name": "Numidio Quadrato",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8617525,
+      "lon": 12.5527609,
+      "name": "Numidio Quadrato",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.862237,
+      "lon": 12.5532154,
+      "name": "Numidio Quadrato",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8596384,
+      "lon": 12.5568863,
+      "name": "Lucio Sestio",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8563313,
+      "lon": 12.5625721,
+      "name": "Giulio Agricola",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8565224,
+      "lon": 12.5622503,
+      "name": "Giulio Agricola",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8567196,
+      "lon": 12.562981,
+      "name": "Giulio Agricola",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8569137,
+      "lon": 12.562674,
+      "name": "Giulio Agricola",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.853697,
+      "lon": 12.5674463,
+      "name": "Subaugusta",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8540355,
+      "lon": 12.5678883,
+      "name": "Subaugusta",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.849454,
+      "lon": 12.5738837,
+      "name": "Cinecittà",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8496692,
+      "lon": 12.5741626,
+      "name": "Cinecittà",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9064945,
+      "lon": 12.4830592,
+      "name": "Spagna",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8938968,
+      "lon": 12.5038802,
+      "name": "Vittorio Emanuele",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8940698,
+      "lon": 12.5035585,
+      "name": "Vittorio Emanuele",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8916255,
+      "lon": 12.4914461,
+      "name": "Colosseo",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8651593,
+      "lon": 12.6809329,
+      "name": "Bolognetta",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8646918,
+      "lon": 12.6672618,
+      "name": "Borghesiana",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8649024,
+      "lon": 12.6581296,
+      "name": "Due Leoni - Fontana Candida",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8655206,
+      "lon": 12.6876098,
+      "name": "Finocchio",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.865673,
+      "lon": 12.6980872,
+      "name": "Graniti",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8643334,
+      "lon": 12.6255783,
+      "name": "Torre Angela",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8641551,
+      "lon": 12.6355752,
+      "name": "Torre Gaia",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8633135,
+      "lon": 12.6168368,
+      "name": "Torrenova",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9086841,
+      "lon": 12.4862054,
+      "name": "Spagna",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8641331,
+      "lon": 12.6105711,
+      "name": "Giardinetti",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8666209,
+      "lon": 12.5971565,
+      "name": "Torre Maura",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8689954,
+      "lon": 12.5865637,
+      "name": "Torre Spaccata",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8862072,
+      "lon": 12.5619649,
+      "name": "Gardenie",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8868269,
+      "lon": 12.5182706,
+      "name": "Lodi",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8873905,
+      "lon": 12.5402599,
+      "name": "Malatesta",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8810807,
+      "lon": 12.566593,
+      "name": "Mirti",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8885415,
+      "lon": 12.5282078,
+      "name": "Pigneto",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8712904,
+      "lon": 12.5788298,
+      "name": "Alessandrino",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8819028,
+      "lon": 12.5136022,
+      "name": "Re di Roma",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9468701,
+      "lon": 12.5275914,
+      "name": "Jonio",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9108748,
+      "lon": 12.5294231,
+      "name": "Tiburtina FS",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9155579,
+      "lon": 12.538645,
+      "name": "Quintiliani",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9246715,
+      "lon": 12.5161092,
+      "name": "Sant'Agnese/Annibaliano",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9318611,
+      "lon": 12.518924,
+      "name": "Libia",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9392317,
+      "lon": 12.5274161,
+      "name": "Conca d'Oro",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8779235,
+      "lon": 12.5194696,
+      "name": "",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.87806,
+      "lon": 12.5193111,
+      "name": "",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8299531,
+      "lon": 12.4666144,
+      "name": "EUR Palasport",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9089378,
+      "lon": 12.4851006,
+      "name": "Spagna",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9147006,
+      "lon": 12.5548145,
+      "name": "Pietralata",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9157945,
+      "lon": 12.5480509,
+      "name": "Monti Tiburtini",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8992416,
+      "lon": 12.4348446,
+      "name": "Baldo degli Ubaldi",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8993817,
+      "lon": 12.434652,
+      "name": "Baldo degli Ubaldi",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.899489,
+      "lon": 12.4350948,
+      "name": "Baldo degli Ubaldi",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9445359,
+      "lon": 12.5350832,
+      "name": "Adriatico",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8366772,
+      "lon": 12.4714528,
+      "name": "Agricoltura",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9181729,
+      "lon": 12.5002944,
+      "name": "Buenos Aires",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8391157,
+      "lon": 12.4638693,
+      "name": "EUR Magliana",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8641989,
+      "lon": 12.4694041,
+      "name": "Fermi",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9103928,
+      "lon": 12.4980565,
+      "name": "Fiume",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9459553,
+      "lon": 12.5274062,
+      "name": "Jonio",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8465612,
+      "lon": 12.4597517,
+      "name": "Magliana Nuova",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8814067,
+      "lon": 12.4658123,
+      "name": "Nievo",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9508863,
+      "lon": 12.5584536,
+      "name": "Ojetti",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9460347,
+      "lon": 12.5530511,
+      "name": "Pugliese",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8550492,
+      "lon": 12.4650832,
+      "name": "Roma Tre",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9035005,
+      "lon": 12.488248,
+      "name": "Barberini",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9438944,
+      "lon": 12.547364,
+      "name": "Talenti",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8729956,
+      "lon": 12.4660631,
+      "name": "Trastevere FS",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8959959,
+      "lon": 12.4824921,
+      "name": "Venezia",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9256628,
+      "lon": 12.5093292,
+      "name": "Nemorense",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9337062,
+      "lon": 12.5142456,
+      "name": "Villa Chigi",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8827742,
+      "lon": 12.502675,
+      "name": "Porta Metronia",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9092467,
+      "lon": 12.4882277,
+      "name": "Saba Parcheggio Villa Borghese",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.938853,
+      "lon": 12.5277283,
+      "name": "Conca d'Oro",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9404404,
+      "lon": 12.5284164,
+      "name": "Conca d'Oro",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8828771,
+      "lon": 12.5026595,
+      "name": "Porta Metronia",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8915659,
+      "lon": 12.4902082,
+      "name": "Colosseo – Fori Imperiali",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9156504,
+      "lon": 12.5471631,
+      "name": "Monti Tiburtini",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.915425,
+      "lon": 12.5478332,
+      "name": "Monti Tiburtini",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8395627,
+      "lon": 12.463917,
+      "name": "",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.7834154,
+      "lon": 12.3608838,
+      "name": "",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.7835956,
+      "lon": 12.3607412,
+      "name": "",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8902797,
+      "lon": 12.5065471,
+      "name": "Manzoni",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8667048,
+      "lon": 12.5350696,
+      "name": "Arco di Travertino",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8690342,
+      "lon": 12.5301033,
+      "name": "Colli Albani - Parco Appia Antica",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8691301,
+      "lon": 12.5293602,
+      "name": "Colli Albani - Parco Appia Antica",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8695325,
+      "lon": 12.5301493,
+      "name": "Colli Albani - Parco Appia Antica",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8696627,
+      "lon": 12.52996,
+      "name": "Colli Albani - Parco Appia Antica",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8287018,
+      "lon": 12.4708244,
+      "name": "EUR Fermi",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8290603,
+      "lon": 12.4707886,
+      "name": "EUR Fermi",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8291626,
+      "lon": 12.4704489,
+      "name": "EUR Fermi",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9154942,
+      "lon": 12.5605537,
+      "name": "Santa Maria del Soccorso",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.902011,
+      "lon": 12.5001385,
+      "name": "Termini Exit T6",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9461715,
+      "lon": 12.527943,
+      "name": "Jonio",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8853194,
+      "lon": 12.5099333,
+      "name": "San Giovanni",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8867661,
+      "lon": 12.5175788,
+      "name": "Lodi",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8876224,
+      "lon": 12.5400899,
+      "name": "Malatesta",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8862573,
+      "lon": 12.5627756,
+      "name": "Gardenie",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8862365,
+      "lon": 12.5627733,
+      "name": "Gardenie",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.881323,
+      "lon": 12.5668537,
+      "name": "",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8813471,
+      "lon": 12.5664055,
+      "name": "",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8875868,
+      "lon": 12.5409252,
+      "name": "Malatesta",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9238256,
+      "lon": 12.5155842,
+      "name": "Sant'Agnese/Annibaliano",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9141515,
+      "lon": 12.5207212,
+      "name": "Bologna",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8866059,
+      "lon": 12.5176188,
+      "name": "Lodi",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8862871,
+      "lon": 12.5615971,
+      "name": "Gardenie",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8867495,
+      "lon": 12.5185697,
+      "name": "Lodi",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8867809,
+      "lon": 12.5187649,
+      "name": "Lodi",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8869108,
+      "lon": 12.5184659,
+      "name": "Lodi",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8869445,
+      "lon": 12.5186828,
+      "name": "Lodi",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.88729,
+      "lon": 12.5403911,
+      "name": "Malatesta",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8885043,
+      "lon": 12.5286559,
+      "name": "Pigneto",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8886829,
+      "lon": 12.5278452,
+      "name": "Pigneto",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8897407,
+      "lon": 12.5510981,
+      "name": "",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9246468,
+      "lon": 12.5161559,
+      "name": "Sant'Agnese/Annibaliano",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8438464,
+      "lon": 12.5842142,
+      "name": "Anagnina",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9011643,
+      "lon": 12.4996168,
+      "name": "Termini Exit T5",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9236213,
+      "lon": 12.5160515,
+      "name": "Sant'Agnese/Annibaliano",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8422039,
+      "lon": 12.5877406,
+      "name": "Anagnina",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8855462,
+      "lon": 12.5110807,
+      "name": "San Giovanni",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9002777,
+      "lon": 12.5011566,
+      "name": "Termini",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.900554,
+      "lon": 12.5006398,
+      "name": "Termini Exit T2",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9016577,
+      "lon": 12.5007858,
+      "name": "Termini",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8757154,
+      "lon": 12.4822962,
+      "name": "",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8818672,
+      "lon": 12.5151169,
+      "name": "Re di Roma",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8821137,
+      "lon": 12.5150452,
+      "name": "Re di Roma",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8815767,
+      "lon": 12.5131761,
+      "name": "Re di Roma",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8817925,
+      "lon": 12.513126,
+      "name": "Re di Roma",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8818627,
+      "lon": 12.5151688,
+      "name": "Re di Roma",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8815706,
+      "lon": 12.5131316,
+      "name": "Re di Roma",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.881785,
+      "lon": 12.5130745,
+      "name": "Re di Roma",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8855165,
+      "lon": 12.510835,
+      "name": "San Giovanni",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8646792,
+      "lon": 12.6675506,
+      "name": "Borghesiana",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8822126,
+      "lon": 12.5140551,
+      "name": "Re di Roma",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9394309,
+      "lon": 12.5280015,
+      "name": "Conca d'Oro",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8684276,
+      "lon": 12.586824,
+      "name": "Torre Spaccata",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8685539,
+      "lon": 12.5864706,
+      "name": "Torre Spaccata",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8688746,
+      "lon": 12.5870142,
+      "name": "Torre Spaccata",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8690015,
+      "lon": 12.5864323,
+      "name": "Torre Spaccata",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8661926,
+      "lon": 12.5972154,
+      "name": "Torre Maura",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8665278,
+      "lon": 12.5972221,
+      "name": "Torre Maura",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8599182,
+      "lon": 12.5570689,
+      "name": "Lucio Sestio",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8597897,
+      "lon": 12.5573432,
+      "name": "Lucio Sestio",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.859594,
+      "lon": 12.5571308,
+      "name": "Lucio Sestio",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8668684,
+      "lon": 12.5972808,
+      "name": "Torre Maura",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8861306,
+      "lon": 12.560934,
+      "name": "Gardenie",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8892184,
+      "lon": 12.5510936,
+      "name": "",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8632064,
+      "lon": 12.6171256,
+      "name": "",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8653344,
+      "lon": 12.6813971,
+      "name": "Bolognetta",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.885695,
+      "lon": 12.5099358,
+      "name": "San Giovanni",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8903768,
+      "lon": 12.5071891,
+      "name": "Manzoni",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8898787,
+      "lon": 12.5510965,
+      "name": "",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.889764,
+      "lon": 12.5514519,
+      "name": "",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8898813,
+      "lon": 12.551431,
+      "name": "",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8712138,
+      "lon": 12.5781453,
+      "name": "Alessandrino",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8716606,
+      "lon": 12.5788282,
+      "name": "Alessandrino",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8872993,
+      "lon": 12.5414279,
+      "name": "Malatesta",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8496299,
+      "lon": 12.574217,
+      "name": "Cinecittà",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8494051,
+      "lon": 12.5739555,
+      "name": "Cinecittà",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8745036,
+      "lon": 12.5681846,
+      "name": "",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8746438,
+      "lon": 12.5679358,
+      "name": "Parco di Centocelle",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8395496,
+      "lon": 12.4632892,
+      "name": "EUR Magliana",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.856361,
+      "lon": 12.4784382,
+      "name": "Basilica San Paolo",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8950928,
+      "lon": 12.5050831,
+      "name": "Vittorio Emanuele",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8536505,
+      "lon": 12.5674032,
+      "name": "Subaugusta",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8541124,
+      "lon": 12.5679864,
+      "name": "Subaugusta",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9008668,
+      "lon": 12.4993397,
+      "name": "Termini",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8652506,
+      "lon": 12.6809038,
+      "name": "Bolognetta",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8861327,
+      "lon": 12.5609099,
+      "name": "Gardenie",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.88088,
+      "lon": 12.5670698,
+      "name": "",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8808052,
+      "lon": 12.5662969,
+      "name": "",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9099703,
+      "lon": 12.4579591,
+      "name": "Ottaviano",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9360601,
+      "lon": 12.4622484,
+      "name": "Farnesina",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9297666,
+      "lon": 12.4698851,
+      "name": "Auditorium",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9156906,
+      "lon": 12.4594999,
+      "name": "Mazzini",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9108474,
+      "lon": 12.5291224,
+      "name": "Tiburtina FS",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9317214,
+      "lon": 12.5194942,
+      "name": "Libia",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9320403,
+      "lon": 12.519114,
+      "name": "Libia",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9319706,
+      "lon": 12.5192245,
+      "name": "Libia",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9321113,
+      "lon": 12.519003,
+      "name": "Libia",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8398882,
+      "lon": 12.4633955,
+      "name": "",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8268112,
+      "lon": 12.4817278,
+      "name": "Laurentina",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8394545,
+      "lon": 12.4638121,
+      "name": "",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8288306,
+      "lon": 12.4708565,
+      "name": "EUR Fermi",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8270353,
+      "lon": 12.4812994,
+      "name": "Laurentina",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8300135,
+      "lon": 12.4667117,
+      "name": "EUR Palasport",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8912684,
+      "lon": 12.4913087,
+      "name": "Colosseo",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9063932,
+      "lon": 12.5057913,
+      "name": "Castro Pretorio",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9084567,
+      "lon": 12.5121341,
+      "name": "Policlinico",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8947564,
+      "lon": 12.4933395,
+      "name": "Cavour",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8835164,
+      "lon": 12.488033,
+      "name": "Circo Massimo",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9208043,
+      "lon": 12.5651321,
+      "name": "Ponte Mammolo",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9157576,
+      "lon": 12.5480043,
+      "name": "Monti Tiburtini",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9257192,
+      "lon": 12.5728916,
+      "name": "Rebibbia",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9149475,
+      "lon": 12.5550901,
+      "name": "Pietralata",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9107613,
+      "lon": 12.53006,
+      "name": "Tiburtina FS",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9155472,
+      "lon": 12.5605694,
+      "name": "Santa Maria del Soccorso",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8740625,
+      "lon": 12.4830412,
+      "name": "Piramide",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8623216,
+      "lon": 12.5532736,
+      "name": "Numidio Quadrato",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8617201,
+      "lon": 12.5527279,
+      "name": "Numidio Quadrato",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.7760617,
+      "lon": 12.3420465,
+      "name": "Acilia Sud - Dragona",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8894037,
+      "lon": 12.5515059,
+      "name": "",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8655456,
+      "lon": 12.459081,
+      "name": "Portuense",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8619681,
+      "lon": 12.4527758,
+      "name": "Ramazzini",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8557406,
+      "lon": 12.4463446,
+      "name": "La Loggia",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.957517,
+      "lon": 12.5731361,
+      "name": "Nomentana GRA",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9561916,
+      "lon": 12.5236693,
+      "name": "Monte Cervialto",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9614099,
+      "lon": 12.5174851,
+      "name": "Serpentara Pontificia Università",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9698509,
+      "lon": 12.5184626,
+      "name": "Labia",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9785172,
+      "lon": 12.5249203,
+      "name": "Colle Salario",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9850648,
+      "lon": 12.5262853,
+      "name": "Scambiatore A1 Nord",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8663385,
+      "lon": 12.4830624,
+      "name": "Garbatella",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9412755,
+      "lon": 12.5183474,
+      "name": "Val d’Ala",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8873056,
+      "lon": 12.4733699,
+      "name": "Mastai",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9155496,
+      "lon": 12.5385485,
+      "name": "Quintiliani",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8668352,
+      "lon": 12.5975937,
+      "name": "Torre Maura",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8985393,
+      "lon": 12.4321499,
+      "name": "Baldo degli Ubaldi",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9094639,
+      "lon": 12.4584619,
+      "name": "Ottaviano",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8979513,
+      "lon": 12.4690081,
+      "name": "Chiesa Nuova",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8648437,
+      "lon": 12.4822487,
+      "name": "Garbatella",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9360181,
+      "lon": 12.4621795,
+      "name": "Farnesina",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9297863,
+      "lon": 12.4697086,
+      "name": "Auditorium",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9156758,
+      "lon": 12.4595815,
+      "name": "Mazzini",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9029529,
+      "lon": 12.4652575,
+      "name": "San Pietro (Castel S. Angelo)",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9099681,
+      "lon": 12.4580896,
+      "name": "Ottaviano",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8112843,
+      "lon": 12.4256026,
+      "name": "Torrino",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9005397,
+      "lon": 12.4264281,
+      "name": "Cornelia",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9067924,
+      "lon": 12.4845554,
+      "name": "Spagna",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8901796,
+      "lon": 12.5068166,
+      "name": "Manzoni",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8818844,
+      "lon": 12.5140745,
+      "name": "Re di Roma",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8778585,
+      "lon": 12.518939,
+      "name": "Ponte Lungo",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8946332,
+      "lon": 12.5045392,
+      "name": "Vittorio Emanuele",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9038098,
+      "lon": 12.4886166,
+      "name": "Barberini",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9113748,
+      "lon": 12.4661642,
+      "name": "Lepanto",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9128476,
+      "lon": 12.4771598,
+      "name": "Flaminio",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9028279,
+      "lon": 12.4960541,
+      "name": "Repubblica",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8747498,
+      "lon": 12.5230387,
+      "name": "Furio Camillo",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8694882,
+      "lon": 12.5298717,
+      "name": "Colli Albani",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9029039,
+      "lon": 12.4413709,
+      "name": "Valle Aurelia",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9073889,
+      "lon": 12.4476868,
+      "name": "Cipro",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8660784,
+      "lon": 12.5358014,
+      "name": "Arco di Travertino",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8990319,
+      "lon": 12.4335844,
+      "name": "Baldo degli Ubaldi",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.862134,
+      "lon": 12.5526443,
+      "name": "Numidio Quadrato",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8637967,
+      "lon": 12.548224,
+      "name": "Porta Furba/Quadraro",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8566227,
+      "lon": 12.5626402,
+      "name": "Giulio Agricola",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8597711,
+      "lon": 12.5571283,
+      "name": "Lucio Sestio",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8538535,
+      "lon": 12.5676778,
+      "name": "Subaugusta",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.849274,
+      "lon": 12.5744078,
+      "name": "Cinecittà",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8427897,
+      "lon": 12.5860901,
+      "name": "Anagnina",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.90612,
+      "lon": 12.4151835,
+      "name": "Battistini",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8913606,
+      "lon": 12.4915439,
+      "name": "Colosseo",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8828655,
+      "lon": 12.5031173,
+      "name": "Porta Metronia",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8916173,
+      "lon": 12.489605,
+      "name": "",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8918898,
+      "lon": 12.489948,
+      "name": "",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8829185,
+      "lon": 12.5026858,
+      "name": "",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8830658,
+      "lon": 12.5034203,
+      "name": "Porta Metronia",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8779424,
+      "lon": 12.5191411,
+      "name": "Ponte Lungo",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.926565,
+      "lon": 12.481442,
+      "name": "",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.926576,
+      "lon": 12.481461,
+      "name": "",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.8831907,
+      "lon": 12.5033764,
+      "name": "Porta Metronia",
+      "lines": "",
+      "is_station": false
+    },
+    {
+      "lat": 41.9494215,
+      "lon": 12.5143724,
+      "name": "Vaglia",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9117408,
+      "lon": 12.4918905,
+      "name": "Galleria Borghese",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9097079,
+      "lon": 12.487146,
+      "name": "Galoppatoio (Spagna)",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9025773,
+      "lon": 12.4812246,
+      "name": "San Silvestro",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.9105362,
+      "lon": 12.4756211,
+      "name": "Popolo (Flaminio)",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8393578,
+      "lon": 12.4645059,
+      "name": "EUR Magliana",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8500712,
+      "lon": 12.4533555,
+      "name": "Montalcini",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8711604,
+      "lon": 12.4595213,
+      "name": "S. Camillo / Dunant",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8666617,
+      "lon": 12.4497244,
+      "name": "Forlanini",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8604498,
+      "lon": 12.4433493,
+      "name": "Morelli / Colli Portuensi",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8643245,
+      "lon": 12.4705054,
+      "name": "Fermi",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8626303,
+      "lon": 12.4612549,
+      "name": "Greppi",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8334826,
+      "lon": 12.4926597,
+      "name": "Tintoretto",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8319533,
+      "lon": 12.5042478,
+      "name": "Roma 70",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8451705,
+      "lon": 12.4381366,
+      "name": "Trullo",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.845139,
+      "lon": 12.4247666,
+      "name": "Casetta Mattei",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8541324,
+      "lon": 12.4161913,
+      "name": "Corviale",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8243223,
+      "lon": 12.4984505,
+      "name": "Fonte Meravigliosa",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8154842,
+      "lon": 12.5046142,
+      "name": "Cecchignola Sud",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8034256,
+      "lon": 12.50566,
+      "name": "Tor Pagnotta",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.7957294,
+      "lon": 12.5132068,
+      "name": "Ardeatina GRA",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8300696,
+      "lon": 12.4653846,
+      "name": "EUR Palasport",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8200449,
+      "lon": 12.4535186,
+      "name": "Torrino Nord",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8155907,
+      "lon": 12.4460489,
+      "name": "Torrino Sud",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.8080532,
+      "lon": 12.4320437,
+      "name": "Cina",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.7983695,
+      "lon": 12.4291726,
+      "name": "Cavaceppi",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.7843772,
+      "lon": 12.4363443,
+      "name": "Eroi di Cefalonia",
+      "lines": "",
+      "is_station": true
+    },
+    {
+      "lat": 41.7766264,
+      "lon": 12.4434577,
+      "name": "Eroi di Rodi / Pontina",
+      "lines": "",
+      "is_station": true
+    }
+  ],
+  "tram": [
+    {
+      "lat": 41.891475,
+      "lon": 12.5155794
+    },
+    {
+      "lat": 41.8950329,
+      "lon": 12.5670859
+    },
+    {
+      "lat": 41.8914693,
+      "lon": 12.5144292
+    },
+    {
+      "lat": 41.891565,
+      "lon": 12.514704
+    },
+    {
+      "lat": 41.8763568,
+      "lon": 12.4824107
+    },
+    {
+      "lat": 41.9184582,
+      "lon": 12.4730493
+    },
+    {
+      "lat": 41.892411,
+      "lon": 12.5365588
+    },
+    {
+      "lat": 41.8923362,
+      "lon": 12.5345668
+    },
+    {
+      "lat": 41.8913951,
+      "lon": 12.5200444
+    },
+    {
+      "lat": 41.9155345,
+      "lon": 12.4742696
+    },
+    {
+      "lat": 41.9139577,
+      "lon": 12.4690447
+    },
+    {
+      "lat": 41.9022597,
+      "lon": 12.5190615
+    },
+    {
+      "lat": 41.8747926,
+      "lon": 12.4465118
+    },
+    {
+      "lat": 41.884627,
+      "lon": 12.5668504
+    },
+    {
+      "lat": 41.8927532,
+      "lon": 12.5424751
+    },
+    {
+      "lat": 41.8955725,
+      "lon": 12.5181961
+    },
+    {
+      "lat": 41.8806031,
+      "lon": 12.4670867
+    },
+    {
+      "lat": 41.8705138,
+      "lon": 12.4549537
+    },
+    {
+      "lat": 41.8716054,
+      "lon": 12.4499242
+    },
+    {
+      "lat": 41.8772481,
+      "lon": 12.4421179
+    },
+    {
+      "lat": 41.8901425,
+      "lon": 12.4743162
+    },
+    {
+      "lat": 41.8773904,
+      "lon": 12.440296
+    },
+    {
+      "lat": 41.9004874,
+      "lon": 12.5001851
+    },
+    {
+      "lat": 41.8949439,
+      "lon": 12.5635623
+    },
+    {
+      "lat": 41.8949802,
+      "lon": 12.5740337
+    },
+    {
+      "lat": 41.8933481,
+      "lon": 12.5473695
+    },
+    {
+      "lat": 41.8943262,
+      "lon": 12.5554983
+    },
+    {
+      "lat": 41.892028,
+      "lon": 12.531624
+    },
+    {
+      "lat": 41.8910734,
+      "lon": 12.5251959
+    },
+    {
+      "lat": 41.9190044,
+      "lon": 12.474148
+    },
+    {
+      "lat": 41.8931033,
+      "lon": 12.5159497
+    },
+    {
+      "lat": 41.8849336,
+      "lon": 12.5682461
+    },
+    {
+      "lat": 41.9243263,
+      "lon": 12.4715238
+    },
+    {
+      "lat": 41.9284278,
+      "lon": 12.4698378
+    },
+    {
+      "lat": 41.932236,
+      "lon": 12.4683147
+    },
+    {
+      "lat": 41.9326781,
+      "lon": 12.4667519
+    },
+    {
+      "lat": 41.9299345,
+      "lon": 12.4679602
+    },
+    {
+      "lat": 41.9288596,
+      "lon": 12.4689315
+    },
+    {
+      "lat": 41.924007,
+      "lon": 12.4709131
+    },
+    {
+      "lat": 41.9206339,
+      "lon": 12.4722934
+    },
+    {
+      "lat": 41.8917024,
+      "lon": 12.5144592
+    },
+    {
+      "lat": 41.9123265,
+      "lon": 12.475639
+    },
+    {
+      "lat": 41.8924939,
+      "lon": 12.4748588
+    },
+    {
+      "lat": 41.9156828,
+      "lon": 12.4742453
+    },
+    {
+      "lat": 41.9207639,
+      "lon": 12.4722771
+    },
+    {
+      "lat": 41.8775461,
+      "lon": 12.4402839
+    },
+    {
+      "lat": 41.909647,
+      "lon": 12.4580078
+    },
+    {
+      "lat": 41.9100409,
+      "lon": 12.4580307
+    },
+    {
+      "lat": 41.8937374,
+      "lon": 12.4757176
+    },
+    {
+      "lat": 41.9113311,
+      "lon": 12.4585989
+    },
+    {
+      "lat": 41.8948797,
+      "lon": 12.5596123
+    },
+    {
+      "lat": 41.9120052,
+      "lon": 12.4613647
+    },
+    {
+      "lat": 41.9117796,
+      "lon": 12.4604399
+    },
+    {
+      "lat": 41.9128556,
+      "lon": 12.464808
+    },
+    {
+      "lat": 41.9130735,
+      "lon": 12.4657008
+    },
+    {
+      "lat": 41.9137133,
+      "lon": 12.4680732
+    },
+    {
+      "lat": 41.8804093,
+      "lon": 12.4840783
+    },
+    {
+      "lat": 41.9187894,
+      "lon": 12.4855182
+    },
+    {
+      "lat": 41.8809432,
+      "lon": 12.4847056
+    },
+    {
+      "lat": 41.8832883,
+      "lon": 12.4876985
+    },
+    {
+      "lat": 41.8877706,
+      "lon": 12.5131736
+    },
+    {
+      "lat": 41.8899029,
+      "lon": 12.4941169
+    },
+    {
+      "lat": 41.8898072,
+      "lon": 12.4940402
+    },
+    {
+      "lat": 41.9166819,
+      "lon": 12.4815443
+    },
+    {
+      "lat": 41.8895959,
+      "lon": 12.5040554
+    },
+    {
+      "lat": 41.8891364,
+      "lon": 12.5151179
+    },
+    {
+      "lat": 41.8875175,
+      "lon": 12.4911752
+    },
+    {
+      "lat": 41.8880886,
+      "lon": 12.4914336
+    },
+    {
+      "lat": 41.8990568,
+      "lon": 12.5180528
+    },
+    {
+      "lat": 41.8939009,
+      "lon": 12.5166531
+    },
+    {
+      "lat": 41.8831383,
+      "lon": 12.4690446
+    },
+    {
+      "lat": 41.8771209,
+      "lon": 12.4656743
+    },
+    {
+      "lat": 41.9041446,
+      "lon": 12.517638
+    },
+    {
+      "lat": 41.9148724,
+      "lon": 12.5042217
+    },
+    {
+      "lat": 41.887507,
+      "lon": 12.4728541
+    },
+    {
+      "lat": 41.8924173,
+      "lon": 12.5400727
+    },
+    {
+      "lat": 41.891341,
+      "lon": 12.5277371
+    },
+    {
+      "lat": 41.8924045,
+      "lon": 12.5398124
+    },
+    {
+      "lat": 41.8938471,
+      "lon": 12.5514745
+    },
+    {
+      "lat": 41.9306747,
+      "lon": 12.4648993
+    },
+    {
+      "lat": 41.9187795,
+      "lon": 12.4767217
+    },
+    {
+      "lat": 41.8761503,
+      "lon": 12.4822318
+    },
+    {
+      "lat": 41.8827453,
+      "lon": 12.4760185
+    },
+    {
+      "lat": 41.8951704,
+      "lon": 12.4810158
+    },
+    {
+      "lat": 41.8858322,
+      "lon": 12.5668842
+    },
+    {
+      "lat": 41.8857226,
+      "lon": 12.5668743
+    },
+    {
+      "lat": 41.8928552,
+      "lon": 12.5614064
+    },
+    {
+      "lat": 41.8909316,
+      "lon": 12.5645149
+    },
+    {
+      "lat": 41.8883595,
+      "lon": 12.5654299
+    },
+    {
+      "lat": 41.9004496,
+      "lon": 12.5001465
+    },
+    {
+      "lat": 41.8947256,
+      "lon": 12.5581554
+    },
+    {
+      "lat": 41.8913152,
+      "lon": 12.521266
+    },
+    {
+      "lat": 41.8805981,
+      "lon": 12.4671132
+    },
+    {
+      "lat": 41.8733542,
+      "lon": 12.4653208
+    },
+    {
+      "lat": 41.8746169,
+      "lon": 12.4466941
+    },
+    {
+      "lat": 41.8862829,
+      "lon": 12.5661335
+    },
+    {
+      "lat": 41.8857771,
+      "lon": 12.5668802
+    },
+    {
+      "lat": 41.9307011,
+      "lon": 12.4648502
+    },
+    {
+      "lat": 41.9060456,
+      "lon": 12.4583222
+    },
+    {
+      "lat": 41.9060828,
+      "lon": 12.4583274
+    },
+    {
+      "lat": 41.9170379,
+      "lon": 12.4802932
+    },
+    {
+      "lat": 41.9210323,
+      "lon": 12.4921386
+    },
+    {
+      "lat": 41.9206885,
+      "lon": 12.4969754
+    },
+    {
+      "lat": 41.8731447,
+      "lon": 12.4663043
+    },
+    {
+      "lat": 41.8892691,
+      "lon": 12.5029182
+    },
+    {
+      "lat": 41.8971614,
+      "lon": 12.5195137
+    },
+    {
+      "lat": 41.8887537,
+      "lon": 12.5652525
+    },
+    {
+      "lat": 41.8912336,
+      "lon": 12.5635393
+    },
+    {
+      "lat": 41.8933431,
+      "lon": 12.5611952
+    },
+    {
+      "lat": 41.8910926,
+      "lon": 12.5251895
+    },
+    {
+      "lat": 41.8850708,
+      "lon": 12.4715709
+    },
+    {
+      "lat": 41.8771923,
+      "lon": 12.4422672
+    },
+    {
+      "lat": 41.8733689,
+      "lon": 12.4654043
+    },
+    {
+      "lat": 41.872079,
+      "lon": 12.4600243
+    },
+    {
+      "lat": 41.8719021,
+      "lon": 12.4597912
+    },
+    {
+      "lat": 41.8705116,
+      "lon": 12.455092
+    },
+    {
+      "lat": 41.8714944,
+      "lon": 12.4499301
+    },
+    {
+      "lat": 41.8866937,
+      "lon": 12.5091668
+    },
+    {
+      "lat": 41.8866817,
+      "lon": 12.5092427
+    },
+    {
+      "lat": 41.8943449,
+      "lon": 12.5554935
+    },
+    {
+      "lat": 41.8950625,
+      "lon": 12.5670859
+    },
+    {
+      "lat": 41.8950123,
+      "lon": 12.5740487
+    },
+    {
+      "lat": 41.8938632,
+      "lon": 12.5514677
+    },
+    {
+      "lat": 41.8949727,
+      "lon": 12.5635551
+    },
+    {
+      "lat": 41.8927804,
+      "lon": 12.542465
+    },
+    {
+      "lat": 41.8924371,
+      "lon": 12.5365538
+    },
+    {
+      "lat": 41.8982581,
+      "lon": 12.499529
+    },
+    {
+      "lat": 41.8978884,
+      "lon": 12.5002502
+    },
+    {
+      "lat": 41.895281,
+      "lon": 12.5045169
+    },
+    {
+      "lat": 41.8949914,
+      "lon": 12.5050978
+    },
+    {
+      "lat": 41.8934783,
+      "lon": 12.5089404
+    },
+    {
+      "lat": 41.8933139,
+      "lon": 12.5093533
+    },
+    {
+      "lat": 41.8789574,
+      "lon": 12.4789201
+    },
+    {
+      "lat": 41.8848193,
+      "lon": 12.4705297
+    },
+    {
+      "lat": 41.8848293,
+      "lon": 12.4704966
+    },
+    {
+      "lat": 41.876504,
+      "lon": 12.4657619
+    },
+    {
+      "lat": 41.883187,
+      "lon": 12.4691277
+    },
+    {
+      "lat": 41.8869146,
+      "lon": 12.4722983
+    },
+    {
+      "lat": 41.8900202,
+      "lon": 12.4742181
+    },
+    {
+      "lat": 41.8935736,
+      "lon": 12.475537
+    },
+    {
+      "lat": 41.9073871,
+      "lon": 12.5135932
+    },
+    {
+      "lat": 41.8952129,
+      "lon": 12.4809948
+    },
+    {
+      "lat": 41.9041025,
+      "lon": 12.5176632
+    },
+    {
+      "lat": 41.8913496,
+      "lon": 12.5277356
+    },
+    {
+      "lat": 41.8913309,
+      "lon": 12.52774
+    },
+    {
+      "lat": 41.8920151,
+      "lon": 12.5316473
+    },
+    {
+      "lat": 41.892042,
+      "lon": 12.5316423
+    },
+    {
+      "lat": 41.8923218,
+      "lon": 12.5345702
+    },
+    {
+      "lat": 41.8923518,
+      "lon": 12.5345642
+    },
+    {
+      "lat": 41.8933698,
+      "lon": 12.5473651
+    },
+    {
+      "lat": 41.9179742,
+      "lon": 12.5004028
+    },
+    {
+      "lat": 41.9179584,
+      "lon": 12.5003744
+    },
+    {
+      "lat": 41.9167747,
+      "lon": 12.481138
+    },
+    {
+      "lat": 41.9181806,
+      "lon": 12.4844947
+    },
+    {
+      "lat": 41.9193084,
+      "lon": 12.490702
+    },
+    {
+      "lat": 41.9192713,
+      "lon": 12.4905815
+    },
+    {
+      "lat": 41.9204481,
+      "lon": 12.4915973
+    },
+    {
+      "lat": 41.9218875,
+      "lon": 12.4939598
+    },
+    {
+      "lat": 41.9217313,
+      "lon": 12.4945068
+    },
+    {
+      "lat": 41.9204405,
+      "lon": 12.4973345
+    },
+    {
+      "lat": 41.9144915,
+      "lon": 12.5047473
+    },
+    {
+      "lat": 41.9126611,
+      "lon": 12.5069727
+    },
+    {
+      "lat": 41.9126802,
+      "lon": 12.507004
+    },
+    {
+      "lat": 41.91105,
+      "lon": 12.5089923
+    },
+    {
+      "lat": 41.9110635,
+      "lon": 12.5090147
+    },
+    {
+      "lat": 41.9100913,
+      "lon": 12.5101747
+    },
+    {
+      "lat": 41.9095696,
+      "lon": 12.5108756
+    },
+    {
+      "lat": 41.9076124,
+      "lon": 12.5132589
+    },
+    {
+      "lat": 41.9058774,
+      "lon": 12.515416
+    },
+    {
+      "lat": 41.9054372,
+      "lon": 12.5160227
+    },
+    {
+      "lat": 41.9043886,
+      "lon": 12.5173497
+    },
+    {
+      "lat": 41.9022676,
+      "lon": 12.5190443
+    },
+    {
+      "lat": 41.9022536,
+      "lon": 12.5190788
+    },
+    {
+      "lat": 41.9016081,
+      "lon": 12.5185391
+    },
+    {
+      "lat": 41.9015956,
+      "lon": 12.5185708
+    },
+    {
+      "lat": 41.8989502,
+      "lon": 12.5181068
+    },
+    {
+      "lat": 41.8969933,
+      "lon": 12.5193228
+    },
+    {
+      "lat": 41.8954487,
+      "lon": 12.5180466
+    },
+    {
+      "lat": 41.893929,
+      "lon": 12.516738
+    },
+    {
+      "lat": 41.8931027,
+      "lon": 12.5160114
+    },
+    {
+      "lat": 41.8902685,
+      "lon": 12.5061011
+    },
+    {
+      "lat": 41.8902435,
+      "lon": 12.5061177
+    },
+    {
+      "lat": 41.8897396,
+      "lon": 12.4987556
+    },
+    {
+      "lat": 41.8898458,
+      "lon": 12.4980351
+    },
+    {
+      "lat": 41.8832742,
+      "lon": 12.4877332
+    },
+    {
+      "lat": 41.8772082,
+      "lon": 12.481433
+    },
+    {
+      "lat": 41.8809244,
+      "lon": 12.4775409
+    },
+    {
+      "lat": 41.8840455,
+      "lon": 12.4741863
+    },
+    {
+      "lat": 41.8839861,
+      "lon": 12.4744351
+    },
+    {
+      "lat": 41.8809344,
+      "lon": 12.4775801
+    },
+    {
+      "lat": 41.8789684,
+      "lon": 12.4789576
+    },
+    {
+      "lat": 41.8772296,
+      "lon": 12.4814056
+    }
+  ],
+  "supermarket": [
+    {
+      "lat": 41.893177,
+      "lon": 12.509422
+    },
+    {
+      "lat": 41.7771694,
+      "lon": 12.3413176
+    },
+    {
+      "lat": 41.8446306,
+      "lon": 12.4909213
+    },
+    {
+      "lat": 41.87642,
+      "lon": 12.5176062
+    },
+    {
+      "lat": 41.9510622,
+      "lon": 12.4128737
+    },
+    {
+      "lat": 41.9376724,
+      "lon": 12.5794402
+    },
+    {
+      "lat": 41.9437907,
+      "lon": 12.5641697
+    },
+    {
+      "lat": 41.8720922,
+      "lon": 12.5151327
+    },
+    {
+      "lat": 41.7775543,
+      "lon": 12.442404
+    },
+    {
+      "lat": 41.8544841,
+      "lon": 12.4869757
+    },
+    {
+      "lat": 41.9139091,
+      "lon": 12.4506883
+    },
+    {
+      "lat": 41.829802,
+      "lon": 12.6148825
+    },
+    {
+      "lat": 41.883302,
+      "lon": 12.5033292
+    },
+    {
+      "lat": 41.9113849,
+      "lon": 12.5020762
+    },
+    {
+      "lat": 41.9305866,
+      "lon": 12.5213886
+    },
+    {
+      "lat": 41.9419568,
+      "lon": 12.4713016
+    },
+    {
+      "lat": 41.9445438,
+      "lon": 12.4737019
+    },
+    {
+      "lat": 41.944069,
+      "lon": 12.4742207
+    },
+    {
+      "lat": 41.8103768,
+      "lon": 12.4847621
+    },
+    {
+      "lat": 41.8507416,
+      "lon": 12.4948756
+    },
+    {
+      "lat": 41.932038,
+      "lon": 12.4218555
+    },
+    {
+      "lat": 41.9271499,
+      "lon": 12.4161852
+    },
+    {
+      "lat": 41.9257493,
+      "lon": 12.4201873
+    },
+    {
+      "lat": 41.939002,
+      "lon": 12.4236527
+    },
+    {
+      "lat": 41.9239729,
+      "lon": 12.4924652
+    },
+    {
+      "lat": 41.7515958,
+      "lon": 12.3550873
+    },
+    {
+      "lat": 41.9354989,
+      "lon": 12.422212
+    },
+    {
+      "lat": 41.8900246,
+      "lon": 12.5319613
+    },
+    {
+      "lat": 41.9441782,
+      "lon": 12.5482214
+    },
+    {
+      "lat": 41.9094427,
+      "lon": 12.539079
+    },
+    {
+      "lat": 41.8506443,
+      "lon": 12.4914481
+    },
+    {
+      "lat": 41.8548446,
+      "lon": 12.4970184
+    },
+    {
+      "lat": 41.8978038,
+      "lon": 12.4265631
+    },
+    {
+      "lat": 41.9397358,
+      "lon": 12.4248573
+    },
+    {
+      "lat": 41.9371851,
+      "lon": 12.4281298
+    },
+    {
+      "lat": 41.922674,
+      "lon": 12.4234199
+    },
+    {
+      "lat": 41.8775058,
+      "lon": 12.4460294
+    },
+    {
+      "lat": 41.8396899,
+      "lon": 12.5453103
+    },
+    {
+      "lat": 41.8438469,
+      "lon": 12.552652
+    },
+    {
+      "lat": 41.9148131,
+      "lon": 12.4504157
+    },
+    {
+      "lat": 41.8174724,
+      "lon": 12.4894892
+    },
+    {
+      "lat": 41.8132953,
+      "lon": 12.4863815
+    },
+    {
+      "lat": 41.8094803,
+      "lon": 12.6071923
+    },
+    {
+      "lat": 41.9536198,
+      "lon": 12.4572278
+    },
+    {
+      "lat": 41.7507418,
+      "lon": 12.3760184
+    },
+    {
+      "lat": 41.879281,
+      "lon": 12.5121551
+    },
+    {
+      "lat": 41.9345318,
+      "lon": 12.4421303
+    },
+    {
+      "lat": 41.772902,
+      "lon": 12.6009139
+    },
+    {
+      "lat": 41.8616058,
+      "lon": 12.5746158
+    },
+    {
+      "lat": 41.786276,
+      "lon": 12.6731336
+    },
+    {
+      "lat": 41.8649707,
+      "lon": 12.4947772
+    },
+    {
+      "lat": 41.9691833,
+      "lon": 12.4366738
+    },
+    {
+      "lat": 41.9642446,
+      "lon": 12.4446453
+    },
+    {
+      "lat": 41.9661841,
+      "lon": 12.4422872
+    },
+    {
+      "lat": 41.9656675,
+      "lon": 12.4527831
+    },
+    {
+      "lat": 41.9824834,
+      "lon": 12.4133941
+    },
+    {
+      "lat": 41.9732944,
+      "lon": 12.4420678
+    },
+    {
+      "lat": 41.9132166,
+      "lon": 12.6604904
+    },
+    {
+      "lat": 41.8178555,
+      "lon": 12.6881707
+    },
+    {
+      "lat": 41.9342503,
+      "lon": 12.5290221
+    },
+    {
+      "lat": 41.8368021,
+      "lon": 12.5048325
+    },
+    {
+      "lat": 41.8974342,
+      "lon": 12.4995409
+    },
+    {
+      "lat": 41.8957969,
+      "lon": 12.4776043
+    },
+    {
+      "lat": 41.7859541,
+      "lon": 12.3905813
+    },
+    {
+      "lat": 41.8932667,
+      "lon": 12.5020251
+    },
+    {
+      "lat": 41.7880851,
+      "lon": 12.3944886
+    },
+    {
+      "lat": 41.7921902,
+      "lon": 12.6092732
+    },
+    {
+      "lat": 41.800021,
+      "lon": 12.6042675
+    },
+    {
+      "lat": 41.8811773,
+      "lon": 12.5382651
+    },
+    {
+      "lat": 41.8778246,
+      "lon": 12.5297627
+    },
+    {
+      "lat": 41.9200273,
+      "lon": 12.5031387
+    },
+    {
+      "lat": 41.8768891,
+      "lon": 12.5224491
+    },
+    {
+      "lat": 41.8772509,
+      "lon": 12.5231764
+    },
+    {
+      "lat": 41.9046709,
+      "lon": 12.4565937
+    },
+    {
+      "lat": 41.904995,
+      "lon": 12.4476279
+    },
+    {
+      "lat": 41.9191576,
+      "lon": 12.5090945
+    },
+    {
+      "lat": 41.9196167,
+      "lon": 12.522375
+    },
+    {
+      "lat": 41.9191844,
+      "lon": 12.5201267
+    },
+    {
+      "lat": 41.8757462,
+      "lon": 12.5240894
+    },
+    {
+      "lat": 41.8742729,
+      "lon": 12.5188883
+    },
+    {
+      "lat": 41.9003142,
+      "lon": 12.4923668
+    },
+    {
+      "lat": 41.7746534,
+      "lon": 12.6041451
+    },
+    {
+      "lat": 41.9017918,
+      "lon": 12.5024945
+    },
+    {
+      "lat": 41.8360884,
+      "lon": 12.5873569
+    },
+    {
+      "lat": 41.8868545,
+      "lon": 12.5196076
+    },
+    {
+      "lat": 41.9127756,
+      "lon": 12.4423835
+    },
+    {
+      "lat": 41.920234,
+      "lon": 12.4424035
+    },
+    {
+      "lat": 41.920533,
+      "lon": 12.441287
+    },
+    {
+      "lat": 41.8683995,
+      "lon": 12.4860205
+    },
+    {
+      "lat": 41.9189392,
+      "lon": 12.4409666
+    },
+    {
+      "lat": 41.9973036,
+      "lon": 12.3904351
+    },
+    {
+      "lat": 41.908972,
+      "lon": 12.5262512
+    },
+    {
+      "lat": 41.8583398,
+      "lon": 12.4556975
+    },
+    {
+      "lat": 41.9439882,
+      "lon": 12.5652965
+    },
+    {
+      "lat": 41.9045202,
+      "lon": 12.5019385
+    },
+    {
+      "lat": 41.9952108,
+      "lon": 12.6656027
+    },
+    {
+      "lat": 41.8756274,
+      "lon": 12.4519072
+    },
+    {
+      "lat": 41.9282859,
+      "lon": 12.5234056
+    },
+    {
+      "lat": 41.9268568,
+      "lon": 12.5155939
+    },
+    {
+      "lat": 41.9235741,
+      "lon": 12.5105898
+    },
+    {
+      "lat": 41.9232122,
+      "lon": 12.5147402
+    },
+    {
+      "lat": 41.9085954,
+      "lon": 12.4518705
+    },
+    {
+      "lat": 41.9000545,
+      "lon": 12.4376852
+    },
+    {
+      "lat": 41.7872603,
+      "lon": 12.5183542
+    },
+    {
+      "lat": 41.8220274,
+      "lon": 12.5186894
+    },
+    {
+      "lat": 41.9188949,
+      "lon": 12.5216395
+    },
+    {
+      "lat": 41.8660132,
+      "lon": 12.5926133
+    },
+    {
+      "lat": 41.9587264,
+      "lon": 12.5384337
+    },
+    {
+      "lat": 41.9514997,
+      "lon": 12.5475372
+    },
+    {
+      "lat": 41.9630003,
+      "lon": 12.5343383
+    },
+    {
+      "lat": 41.9598393,
+      "lon": 12.5352521
+    },
+    {
+      "lat": 41.9654175,
+      "lon": 12.5291772
+    },
+    {
+      "lat": 41.8722001,
+      "lon": 12.5305577
+    },
+    {
+      "lat": 41.9392711,
+      "lon": 12.4263047
+    },
+    {
+      "lat": 41.8701896,
+      "lon": 12.517236
+    },
+    {
+      "lat": 41.9307982,
+      "lon": 12.4188493
+    },
+    {
+      "lat": 41.9125295,
+      "lon": 12.5751301
+    },
+    {
+      "lat": 41.9607684,
+      "lon": 12.536673
+    },
+    {
+      "lat": 41.9521755,
+      "lon": 12.6517909
+    },
+    {
+      "lat": 41.9583949,
+      "lon": 12.6517319
+    },
+    {
+      "lat": 41.9425999,
+      "lon": 12.649334
+    },
+    {
+      "lat": 41.9742635,
+      "lon": 12.644831
+    },
+    {
+      "lat": 41.8533014,
+      "lon": 12.571598
+    },
+    {
+      "lat": 41.9323778,
+      "lon": 12.3766012
+    },
+    {
+      "lat": 41.9082723,
+      "lon": 12.4467553
+    },
+    {
+      "lat": 41.8757004,
+      "lon": 12.5247358
+    },
+    {
+      "lat": 41.7792302,
+      "lon": 12.3410067
+    },
+    {
+      "lat": 41.7874898,
+      "lon": 12.4259028
+    },
+    {
+      "lat": 41.7759767,
+      "lon": 12.4396504
+    },
+    {
+      "lat": 41.8949857,
+      "lon": 12.4570631
+    },
+    {
+      "lat": 41.8094205,
+      "lon": 12.6776837
+    },
+    {
+      "lat": 41.9564628,
+      "lon": 12.6971302
+    },
+    {
+      "lat": 41.9441948,
+      "lon": 12.5657053
+    },
+    {
+      "lat": 41.9382838,
+      "lon": 12.5301641
+    },
+    {
+      "lat": 41.9457468,
+      "lon": 12.5539373
+    },
+    {
+      "lat": 41.9511321,
+      "lon": 12.5609562
+    },
+    {
+      "lat": 41.8988982,
+      "lon": 12.5376428
+    },
+    {
+      "lat": 41.9145168,
+      "lon": 12.4640174
+    },
+    {
+      "lat": 41.9012083,
+      "lon": 12.5038424
+    },
+    {
+      "lat": 41.909675,
+      "lon": 12.451169
+    },
+    {
+      "lat": 41.8015808,
+      "lon": 12.5980919
+    },
+    {
+      "lat": 41.8517412,
+      "lon": 12.4859635
+    },
+    {
+      "lat": 41.8744553,
+      "lon": 12.4782378
+    },
+    {
+      "lat": 41.8548253,
+      "lon": 12.478547
+    },
+    {
+      "lat": 41.9990971,
+      "lon": 12.6291507
+    },
+    {
+      "lat": 41.9129365,
+      "lon": 12.4967015
+    },
+    {
+      "lat": 41.8697212,
+      "lon": 12.463718
+    },
+    {
+      "lat": 41.9076011,
+      "lon": 12.4537086
+    },
+    {
+      "lat": 41.8353819,
+      "lon": 12.5151297
+    },
+    {
+      "lat": 41.908036,
+      "lon": 12.4632398
+    },
+    {
+      "lat": 41.9639355,
+      "lon": 12.5259455
+    },
+    {
+      "lat": 41.8557665,
+      "lon": 12.4809599
+    },
+    {
+      "lat": 41.9046844,
+      "lon": 12.4773805
+    },
+    {
+      "lat": 41.8875649,
+      "lon": 12.4031596
+    },
+    {
+      "lat": 41.9115487,
+      "lon": 12.4436418
+    },
+    {
+      "lat": 41.9213976,
+      "lon": 12.4458796
+    },
+    {
+      "lat": 41.8835905,
+      "lon": 12.5106793
+    },
+    {
+      "lat": 41.8928841,
+      "lon": 12.5749253
+    },
+    {
+      "lat": 41.9637293,
+      "lon": 12.6205713
+    },
+    {
+      "lat": 41.9140932,
+      "lon": 12.6104843
+    },
+    {
+      "lat": 41.8308352,
+      "lon": 12.4950518
+    },
+    {
+      "lat": 41.8627033,
+      "lon": 12.5579393
+    },
+    {
+      "lat": 41.8633902,
+      "lon": 12.557952
+    },
+    {
+      "lat": 41.9217103,
+      "lon": 12.5261748
+    },
+    {
+      "lat": 41.8539248,
+      "lon": 12.4794471
+    },
+    {
+      "lat": 41.8915204,
+      "lon": 12.5016088
+    },
+    {
+      "lat": 41.8280453,
+      "lon": 12.6254387
+    },
+    {
+      "lat": 41.9021811,
+      "lon": 12.5361065
+    },
+    {
+      "lat": 41.9002212,
+      "lon": 12.4367798
+    },
+    {
+      "lat": 41.9044706,
+      "lon": 12.4258746
+    },
+    {
+      "lat": 41.8548514,
+      "lon": 12.5896204
+    },
+    {
+      "lat": 41.8623694,
+      "lon": 12.6857996
+    },
+    {
+      "lat": 41.9138632,
+      "lon": 12.4640293
+    },
+    {
+      "lat": 41.8815643,
+      "lon": 12.5150057
+    },
+    {
+      "lat": 41.8742951,
+      "lon": 12.5210739
+    },
+    {
+      "lat": 41.8576059,
+      "lon": 12.4414183
+    },
+    {
+      "lat": 41.8581077,
+      "lon": 12.3995778
+    },
+    {
+      "lat": 41.8561598,
+      "lon": 12.5630141
+    },
+    {
+      "lat": 41.8576318,
+      "lon": 12.561718
+    },
+    {
+      "lat": 41.8972309,
+      "lon": 12.4430264
+    },
+    {
+      "lat": 41.8971275,
+      "lon": 12.4433921
+    },
+    {
+      "lat": 41.8667225,
+      "lon": 12.5879187
+    },
+    {
+      "lat": 41.902689,
+      "lon": 12.4825483
+    },
+    {
+      "lat": 41.8719482,
+      "lon": 12.519861
+    },
+    {
+      "lat": 41.8615606,
+      "lon": 12.5554751
+    },
+    {
+      "lat": 41.8735499,
+      "lon": 12.6195769
+    },
+    {
+      "lat": 41.8830332,
+      "lon": 12.4721057
+    },
+    {
+      "lat": 41.8532943,
+      "lon": 12.4975563
+    },
+    {
+      "lat": 41.866354,
+      "lon": 12.4864774
+    },
+    {
+      "lat": 41.9313801,
+      "lon": 12.5605856
+    },
+    {
+      "lat": 41.8795714,
+      "lon": 12.4764467
+    },
+    {
+      "lat": 41.8639537,
+      "lon": 12.5483655
+    },
+    {
+      "lat": 41.8630634,
+      "lon": 12.5533207
+    },
+    {
+      "lat": 41.8415058,
+      "lon": 12.4837583
+    },
+    {
+      "lat": 41.8828679,
+      "lon": 12.4580439
+    },
+    {
+      "lat": 41.8949179,
+      "lon": 12.4502513
+    },
+    {
+      "lat": 41.893983,
+      "lon": 12.450763
+    },
+    {
+      "lat": 41.8661317,
+      "lon": 12.485765
+    },
+    {
+      "lat": 41.8875241,
+      "lon": 12.5414884
+    },
+    {
+      "lat": 41.8795905,
+      "lon": 12.4746135
+    },
+    {
+      "lat": 41.8795942,
+      "lon": 12.4754075
+    },
+    {
+      "lat": 41.8948295,
+      "lon": 12.4800999
+    },
+    {
+      "lat": 41.8528174,
+      "lon": 12.5589745
+    },
+    {
+      "lat": 41.8886235,
+      "lon": 12.5285541
+    },
+    {
+      "lat": 41.8693543,
+      "lon": 12.4871363
+    },
+    {
+      "lat": 41.8659879,
+      "lon": 12.5758023
+    },
+    {
+      "lat": 41.8977207,
+      "lon": 12.5152285
+    },
+    {
+      "lat": 41.895725,
+      "lon": 12.51751
+    },
+    {
+      "lat": 41.9636041,
+      "lon": 12.5144023
+    },
+    {
+      "lat": 41.9635741,
+      "lon": 12.5132395
+    },
+    {
+      "lat": 41.8691024,
+      "lon": 12.6324185
+    },
+    {
+      "lat": 41.8620653,
+      "lon": 12.6216696
+    },
+    {
+      "lat": 41.8825891,
+      "lon": 12.588388
+    },
+    {
+      "lat": 41.8977357,
+      "lon": 12.4695012
+    },
+    {
+      "lat": 41.9482292,
+      "lon": 12.5445608
+    },
+    {
+      "lat": 41.9055481,
+      "lon": 12.5041443
+    },
+    {
+      "lat": 41.9052942,
+      "lon": 12.4953863
+    },
+    {
+      "lat": 41.8587973,
+      "lon": 12.6232337
+    },
+    {
+      "lat": 41.8628944,
+      "lon": 12.6834191
+    },
+    {
+      "lat": 41.774099,
+      "lon": 12.6716347
+    },
+    {
+      "lat": 41.7878168,
+      "lon": 12.6686354
+    },
+    {
+      "lat": 41.7881575,
+      "lon": 12.6973357
+    },
+    {
+      "lat": 41.9060818,
+      "lon": 12.4634054
+    },
+    {
+      "lat": 41.9082427,
+      "lon": 12.4673742
+    },
+    {
+      "lat": 41.8606402,
+      "lon": 12.5540578
+    },
+    {
+      "lat": 41.8871435,
+      "lon": 12.4701991
+    },
+    {
+      "lat": 41.8871995,
+      "lon": 12.4706076
+    },
+    {
+      "lat": 41.8872868,
+      "lon": 12.4700974
+    },
+    {
+      "lat": 41.8334753,
+      "lon": 12.5559742
+    },
+    {
+      "lat": 41.9144018,
+      "lon": 12.521327
+    },
+    {
+      "lat": 41.9051456,
+      "lon": 12.4615778
+    },
+    {
+      "lat": 41.8825106,
+      "lon": 12.4862664
+    },
+    {
+      "lat": 41.9259352,
+      "lon": 12.4703228
+    },
+    {
+      "lat": 41.9118904,
+      "lon": 12.4572872
+    },
+    {
+      "lat": 41.9072904,
+      "lon": 12.4465457
+    },
+    {
+      "lat": 41.8969795,
+      "lon": 12.4981233
+    },
+    {
+      "lat": 41.875068,
+      "lon": 12.4248166
+    },
+    {
+      "lat": 41.7761753,
+      "lon": 12.3701199
+    },
+    {
+      "lat": 41.8448738,
+      "lon": 12.4863248
+    },
+    {
+      "lat": 41.9005174,
+      "lon": 12.469841
+    },
+    {
+      "lat": 41.8200139,
+      "lon": 12.4527222
+    },
+    {
+      "lat": 41.9132948,
+      "lon": 12.4157223
+    },
+    {
+      "lat": 41.8986146,
+      "lon": 12.5363345
+    },
+    {
+      "lat": 41.8953238,
+      "lon": 12.4749883
+    },
+    {
+      "lat": 41.8090031,
+      "lon": 12.4290405
+    },
+    {
+      "lat": 41.807794,
+      "lon": 12.4343987
+    },
+    {
+      "lat": 41.8161174,
+      "lon": 12.4341385
+    },
+    {
+      "lat": 41.8221902,
+      "lon": 12.4449585
+    },
+    {
+      "lat": 41.8154765,
+      "lon": 12.4363502
+    },
+    {
+      "lat": 41.8995375,
+      "lon": 12.4760891
+    },
+    {
+      "lat": 41.8540252,
+      "lon": 12.5895749
+    },
+    {
+      "lat": 41.9021792,
+      "lon": 12.486135
+    },
+    {
+      "lat": 41.890259,
+      "lon": 12.5246293
+    },
+    {
+      "lat": 41.8893767,
+      "lon": 12.5140711
+    },
+    {
+      "lat": 41.8962656,
+      "lon": 12.5015968
+    },
+    {
+      "lat": 41.9398759,
+      "lon": 12.5362533
+    },
+    {
+      "lat": 41.9081141,
+      "lon": 12.4523473
+    },
+    {
+      "lat": 41.8817574,
+      "lon": 12.485298
+    },
+    {
+      "lat": 41.997362,
+      "lon": 12.4852812
+    },
+    {
+      "lat": 41.9012991,
+      "lon": 12.5014047
+    },
+    {
+      "lat": 41.887613,
+      "lon": 12.4733263
+    },
+    {
+      "lat": 41.9223708,
+      "lon": 12.3744291
+    },
+    {
+      "lat": 41.9100201,
+      "lon": 12.3497605
+    },
+    {
+      "lat": 41.9083357,
+      "lon": 12.491969
+    },
+    {
+      "lat": 41.8816403,
+      "lon": 12.356628
+    },
+    {
+      "lat": 41.8836511,
+      "lon": 12.3332657
+    },
+    {
+      "lat": 41.9616337,
+      "lon": 12.4096632
+    },
+    {
+      "lat": 41.9069162,
+      "lon": 12.4180472
+    },
+    {
+      "lat": 41.9225941,
+      "lon": 12.4108913
+    },
+    {
+      "lat": 41.8157705,
+      "lon": 12.4324988
+    },
+    {
+      "lat": 41.9275382,
+      "lon": 12.4252022
+    },
+    {
+      "lat": 41.8935701,
+      "lon": 12.408298
+    },
+    {
+      "lat": 41.8948644,
+      "lon": 12.4140105
+    },
+    {
+      "lat": 41.8941674,
+      "lon": 12.438133
+    },
+    {
+      "lat": 41.8768624,
+      "lon": 12.4144421
+    },
+    {
+      "lat": 41.9492235,
+      "lon": 12.3759051
+    },
+    {
+      "lat": 41.9017565,
+      "lon": 12.4251532
+    },
+    {
+      "lat": 41.7961704,
+      "lon": 12.433767
+    },
+    {
+      "lat": 41.8973727,
+      "lon": 12.4904523
+    },
+    {
+      "lat": 41.8866748,
+      "lon": 12.471762
+    },
+    {
+      "lat": 41.9025599,
+      "lon": 12.4370918
+    },
+    {
+      "lat": 41.7706228,
+      "lon": 12.3561719
+    },
+    {
+      "lat": 41.9085853,
+      "lon": 12.5374411
+    },
+    {
+      "lat": 41.894703,
+      "lon": 12.5909404
+    },
+    {
+      "lat": 41.891636,
+      "lon": 12.6804811
+    },
+    {
+      "lat": 41.8034719,
+      "lon": 12.5990055
+    },
+    {
+      "lat": 41.9203448,
+      "lon": 12.5465114
+    },
+    {
+      "lat": 41.9099756,
+      "lon": 12.4984473
+    },
+    {
+      "lat": 41.9105783,
+      "lon": 12.503597
+    },
+    {
+      "lat": 41.8958605,
+      "lon": 12.4494051
+    },
+    {
+      "lat": 41.8877187,
+      "lon": 12.5308578
+    },
+    {
+      "lat": 41.945524,
+      "lon": 12.5223869
+    },
+    {
+      "lat": 41.9296957,
+      "lon": 12.5700631
+    },
+    {
+      "lat": 41.9343675,
+      "lon": 12.5684982
+    },
+    {
+      "lat": 41.9790621,
+      "lon": 12.5159337
+    },
+    {
+      "lat": 41.9037493,
+      "lon": 12.4796709
+    },
+    {
+      "lat": 41.8558709,
+      "lon": 12.4741354
+    },
+    {
+      "lat": 41.9459949,
+      "lon": 12.5165659
+    },
+    {
+      "lat": 41.9036161,
+      "lon": 12.4205875
+    },
+    {
+      "lat": 41.9006066,
+      "lon": 12.5008525
+    },
+    {
+      "lat": 41.9074062,
+      "lon": 12.4984086
+    },
+    {
+      "lat": 41.8999595,
+      "lon": 12.5655349
+    },
+    {
+      "lat": 41.8938559,
+      "lon": 12.5028797
+    },
+    {
+      "lat": 41.8773782,
+      "lon": 12.4682308
+    },
+    {
+      "lat": 41.9233869,
+      "lon": 12.4688915
+    },
+    {
+      "lat": 41.8663374,
+      "lon": 12.527579
+    },
+    {
+      "lat": 41.8803661,
+      "lon": 12.5161985
+    },
+    {
+      "lat": 41.8354682,
+      "lon": 12.5003351
+    },
+    {
+      "lat": 41.9097357,
+      "lon": 12.5110621
+    },
+    {
+      "lat": 41.8770784,
+      "lon": 12.4831785
+    },
+    {
+      "lat": 41.8336214,
+      "lon": 12.5102046
+    },
+    {
+      "lat": 41.913128,
+      "lon": 12.5274956
+    },
+    {
+      "lat": 41.9085362,
+      "lon": 12.5193528
+    },
+    {
+      "lat": 41.9068492,
+      "lon": 12.5631009
+    },
+    {
+      "lat": 41.9690744,
+      "lon": 12.5159542
+    },
+    {
+      "lat": 41.9504979,
+      "lon": 12.5262362
+    },
+    {
+      "lat": 41.8818784,
+      "lon": 12.5220549
+    },
+    {
+      "lat": 41.9543891,
+      "lon": 12.522887
+    },
+    {
+      "lat": 41.9136939,
+      "lon": 12.5625778
+    },
+    {
+      "lat": 41.9145405,
+      "lon": 12.4223401
+    },
+    {
+      "lat": 41.8829611,
+      "lon": 12.4544129
+    },
+    {
+      "lat": 41.7702065,
+      "lon": 12.6561002
+    },
+    {
+      "lat": 41.9277922,
+      "lon": 12.5243126
+    },
+    {
+      "lat": 41.81289,
+      "lon": 12.6109085
+    },
+    {
+      "lat": 41.9382657,
+      "lon": 12.4692918
+    },
+    {
+      "lat": 41.9404845,
+      "lon": 12.529373
+    },
+    {
+      "lat": 41.7968529,
+      "lon": 12.6084114
+    },
+    {
+      "lat": 41.8605909,
+      "lon": 12.5559766
+    },
+    {
+      "lat": 41.8647851,
+      "lon": 12.4652103
+    },
+    {
+      "lat": 41.8686122,
+      "lon": 12.468745
+    },
+    {
+      "lat": 41.7593785,
+      "lon": 12.6238556
+    },
+    {
+      "lat": 41.8706626,
+      "lon": 12.5266694
+    },
+    {
+      "lat": 41.8421058,
+      "lon": 12.5510609
+    },
+    {
+      "lat": 41.8813435,
+      "lon": 12.5134513
+    },
+    {
+      "lat": 41.9366567,
+      "lon": 12.5340006
+    },
+    {
+      "lat": 41.9083166,
+      "lon": 12.5233721
+    },
+    {
+      "lat": 41.8848658,
+      "lon": 12.5125068
+    },
+    {
+      "lat": 41.7905138,
+      "lon": 12.357118
+    },
+    {
+      "lat": 41.8851202,
+      "lon": 12.5170661
+    },
+    {
+      "lat": 41.8768133,
+      "lon": 12.5650332
+    },
+    {
+      "lat": 41.8954194,
+      "lon": 12.4710112
+    },
+    {
+      "lat": 41.9023378,
+      "lon": 12.4770653
+    },
+    {
+      "lat": 41.9103387,
+      "lon": 12.497506
+    },
+    {
+      "lat": 41.8832665,
+      "lon": 12.5182718
+    },
+    {
+      "lat": 41.894487,
+      "lon": 12.5007024
+    },
+    {
+      "lat": 41.8765535,
+      "lon": 12.5264562
+    },
+    {
+      "lat": 41.9075369,
+      "lon": 12.5560825
+    },
+    {
+      "lat": 41.8979506,
+      "lon": 12.5169184
+    },
+    {
+      "lat": 41.9846925,
+      "lon": 12.5139305
+    },
+    {
+      "lat": 41.8952503,
+      "lon": 12.5057114
+    },
+    {
+      "lat": 41.8377328,
+      "lon": 12.4257802
+    },
+    {
+      "lat": 41.8386379,
+      "lon": 12.4228294
+    },
+    {
+      "lat": 41.9762587,
+      "lon": 12.5157964
+    },
+    {
+      "lat": 41.9032794,
+      "lon": 12.488603
+    },
+    {
+      "lat": 41.853879,
+      "lon": 12.4754168
+    },
+    {
+      "lat": 41.8669323,
+      "lon": 12.6275812
+    },
+    {
+      "lat": 41.8119589,
+      "lon": 12.4472917
+    },
+    {
+      "lat": 41.8758021,
+      "lon": 12.4472783
+    },
+    {
+      "lat": 41.913256,
+      "lon": 12.5191476
+    },
+    {
+      "lat": 41.9039285,
+      "lon": 12.4770773
+    },
+    {
+      "lat": 41.902091,
+      "lon": 12.4841923
+    },
+    {
+      "lat": 41.7503445,
+      "lon": 12.3537754
+    },
+    {
+      "lat": 41.8528948,
+      "lon": 12.4164417
+    },
+    {
+      "lat": 41.8719926,
+      "lon": 12.4814601
+    },
+    {
+      "lat": 41.9493772,
+      "lon": 12.6019707
+    },
+    {
+      "lat": 41.9435784,
+      "lon": 12.5981153
+    },
+    {
+      "lat": 41.8819471,
+      "lon": 12.4204129
+    },
+    {
+      "lat": 41.9387141,
+      "lon": 12.4639273
+    },
+    {
+      "lat": 41.9203052,
+      "lon": 12.4977364
+    },
+    {
+      "lat": 41.7777242,
+      "lon": 12.3970108
+    },
+    {
+      "lat": 41.7762425,
+      "lon": 12.352685
+    },
+    {
+      "lat": 41.8729063,
+      "lon": 12.4575438
+    },
+    {
+      "lat": 41.8945704,
+      "lon": 12.493355
+    },
+    {
+      "lat": 41.8299752,
+      "lon": 12.4883772
+    },
+    {
+      "lat": 41.9052769,
+      "lon": 12.4376345
+    },
+    {
+      "lat": 41.8699861,
+      "lon": 12.575913
+    },
+    {
+      "lat": 41.8969799,
+      "lon": 12.4678746
+    },
+    {
+      "lat": 41.8937037,
+      "lon": 12.5465119
+    },
+    {
+      "lat": 41.8938462,
+      "lon": 12.5464795
+    },
+    {
+      "lat": 41.8649166,
+      "lon": 12.4984418
+    },
+    {
+      "lat": 41.9094562,
+      "lon": 12.5438699
+    },
+    {
+      "lat": 41.9089957,
+      "lon": 12.5452426
+    },
+    {
+      "lat": 41.9084614,
+      "lon": 12.5211023
+    },
+    {
+      "lat": 41.880812,
+      "lon": 12.5021693
+    },
+    {
+      "lat": 41.8984002,
+      "lon": 12.5593579
+    },
+    {
+      "lat": 41.97158,
+      "lon": 12.5163541
+    },
+    {
+      "lat": 41.9467507,
+      "lon": 12.5268239
+    },
+    {
+      "lat": 41.9449247,
+      "lon": 12.5273392
+    },
+    {
+      "lat": 41.9073053,
+      "lon": 12.5385014
+    },
+    {
+      "lat": 41.9072286,
+      "lon": 12.5391657
+    },
+    {
+      "lat": 41.9153006,
+      "lon": 12.5070447
+    },
+    {
+      "lat": 41.8757931,
+      "lon": 12.5154376
+    },
+    {
+      "lat": 41.8726828,
+      "lon": 12.5171638
+    },
+    {
+      "lat": 41.8431591,
+      "lon": 12.4099888
+    },
+    {
+      "lat": 41.958812,
+      "lon": 12.5250068
+    },
+    {
+      "lat": 41.8715248,
+      "lon": 12.4589725
+    },
+    {
+      "lat": 41.8813326,
+      "lon": 12.5083533
+    },
+    {
+      "lat": 41.8442886,
+      "lon": 12.4361305
+    },
+    {
+      "lat": 41.9583784,
+      "lon": 12.5488968
+    },
+    {
+      "lat": 41.77727,
+      "lon": 12.436621
+    },
+    {
+      "lat": 41.8005319,
+      "lon": 12.4293969
+    },
+    {
+      "lat": 41.9412227,
+      "lon": 12.5252003
+    },
+    {
+      "lat": 41.8437066,
+      "lon": 12.4363719
+    },
+    {
+      "lat": 41.8917964,
+      "lon": 12.5314271
+    },
+    {
+      "lat": 41.8912195,
+      "lon": 12.5527754
+    },
+    {
+      "lat": 41.884404,
+      "lon": 12.5618235
+    },
+    {
+      "lat": 41.8495431,
+      "lon": 12.5793219
+    },
+    {
+      "lat": 41.9296442,
+      "lon": 12.5187476
+    },
+    {
+      "lat": 41.8329337,
+      "lon": 12.5995413
+    },
+    {
+      "lat": 41.8602513,
+      "lon": 12.5573891
+    },
+    {
+      "lat": 41.869983,
+      "lon": 12.5295007
+    },
+    {
+      "lat": 41.8772438,
+      "lon": 12.4284109
+    },
+    {
+      "lat": 41.8423389,
+      "lon": 12.4824532
+    },
+    {
+      "lat": 41.8503331,
+      "lon": 12.4218805
+    },
+    {
+      "lat": 41.8264427,
+      "lon": 12.5075908
+    },
+    {
+      "lat": 41.8556137,
+      "lon": 12.5683306
+    },
+    {
+      "lat": 41.8983036,
+      "lon": 12.5138789
+    },
+    {
+      "lat": 41.8559349,
+      "lon": 12.5674934
+    },
+    {
+      "lat": 41.8627331,
+      "lon": 12.5722436
+    },
+    {
+      "lat": 41.8615276,
+      "lon": 12.5725331
+    },
+    {
+      "lat": 41.8827818,
+      "lon": 12.5665758
+    },
+    {
+      "lat": 41.9430438,
+      "lon": 12.4239297
+    },
+    {
+      "lat": 41.9402998,
+      "lon": 12.4231487
+    },
+    {
+      "lat": 41.9441689,
+      "lon": 12.4209395
+    },
+    {
+      "lat": 41.7521958,
+      "lon": 12.3485269
+    },
+    {
+      "lat": 41.9315492,
+      "lon": 12.4675863
+    },
+    {
+      "lat": 41.9243446,
+      "lon": 12.4914115
+    },
+    {
+      "lat": 41.8132525,
+      "lon": 12.6551166
+    },
+    {
+      "lat": 41.9108868,
+      "lon": 12.4577286
+    },
+    {
+      "lat": 41.9050195,
+      "lon": 12.4441405
+    },
+    {
+      "lat": 41.9078618,
+      "lon": 12.4641045
+    },
+    {
+      "lat": 41.9186091,
+      "lon": 12.4982277
+    },
+    {
+      "lat": 41.7823758,
+      "lon": 12.3661346
+    },
+    {
+      "lat": 41.8340328,
+      "lon": 12.5971906
+    },
+    {
+      "lat": 41.942012,
+      "lon": 12.436198
+    },
+    {
+      "lat": 41.8516891,
+      "lon": 12.4479087
+    },
+    {
+      "lat": 41.7698934,
+      "lon": 12.3727459
+    },
+    {
+      "lat": 41.8744067,
+      "lon": 12.5466201
+    },
+    {
+      "lat": 41.8806752,
+      "lon": 12.4550359
+    },
+    {
+      "lat": 41.8825619,
+      "lon": 12.4547143
+    },
+    {
+      "lat": 41.851823,
+      "lon": 12.4215852
+    },
+    {
+      "lat": 41.9123991,
+      "lon": 12.4557918
+    },
+    {
+      "lat": 41.8748319,
+      "lon": 12.5273746
+    },
+    {
+      "lat": 41.8146828,
+      "lon": 12.440628
+    },
+    {
+      "lat": 41.9410858,
+      "lon": 12.5753345
+    },
+    {
+      "lat": 41.8865671,
+      "lon": 12.5661723
+    },
+    {
+      "lat": 41.8802913,
+      "lon": 12.4771129
+    },
+    {
+      "lat": 41.8851609,
+      "lon": 12.5114853
+    },
+    {
+      "lat": 41.8729866,
+      "lon": 12.470005
+    },
+    {
+      "lat": 41.8953795,
+      "lon": 12.5591939
+    },
+    {
+      "lat": 41.8912992,
+      "lon": 12.5345443
+    },
+    {
+      "lat": 41.881608,
+      "lon": 12.5430889
+    },
+    {
+      "lat": 41.822338,
+      "lon": 12.6382779
+    },
+    {
+      "lat": 41.8898864,
+      "lon": 12.5388972
+    },
+    {
+      "lat": 41.9155147,
+      "lon": 12.5553201
+    },
+    {
+      "lat": 41.8247879,
+      "lon": 12.4755016
+    },
+    {
+      "lat": 41.9147768,
+      "lon": 12.5249979
+    },
+    {
+      "lat": 41.903921,
+      "lon": 12.4852157
+    },
+    {
+      "lat": 41.8818969,
+      "lon": 12.5401787
+    },
+    {
+      "lat": 41.8514886,
+      "lon": 12.4960573
+    },
+    {
+      "lat": 41.8657088,
+      "lon": 12.4607373
+    },
+    {
+      "lat": 41.9056205,
+      "lon": 12.6920439
+    },
+    {
+      "lat": 41.9804498,
+      "lon": 12.4791798
+    },
+    {
+      "lat": 41.8757131,
+      "lon": 12.4428251
+    },
+    {
+      "lat": 41.8375695,
+      "lon": 12.5936427
+    },
+    {
+      "lat": 41.9059157,
+      "lon": 12.5494827
+    },
+    {
+      "lat": 41.867238,
+      "lon": 12.6316794
+    },
+    {
+      "lat": 41.8625929,
+      "lon": 12.4669018
+    },
+    {
+      "lat": 41.9449746,
+      "lon": 12.5546244
+    },
+    {
+      "lat": 41.8933188,
+      "lon": 12.578568
+    },
+    {
+      "lat": 41.7772187,
+      "lon": 12.4367886
+    },
+    {
+      "lat": 41.816079,
+      "lon": 12.4464553
+    },
+    {
+      "lat": 41.8582618,
+      "lon": 12.6134167
+    },
+    {
+      "lat": 41.8724118,
+      "lon": 12.6210152
+    },
+    {
+      "lat": 41.877309,
+      "lon": 12.5418377
+    },
+    {
+      "lat": 41.8002695,
+      "lon": 12.431004
+    },
+    {
+      "lat": 41.8987397,
+      "lon": 12.5310361
+    },
+    {
+      "lat": 41.9486149,
+      "lon": 12.5845694
+    },
+    {
+      "lat": 41.882074,
+      "lon": 12.4588378
+    },
+    {
+      "lat": 41.9712725,
+      "lon": 12.5383621
+    },
+    {
+      "lat": 41.9170713,
+      "lon": 12.4982654
+    },
+    {
+      "lat": 41.91684,
+      "lon": 12.4985518
+    },
+    {
+      "lat": 41.918,
+      "lon": 12.4970718
+    },
+    {
+      "lat": 41.9108447,
+      "lon": 12.4392569
+    },
+    {
+      "lat": 41.8673929,
+      "lon": 12.6744312
+    },
+    {
+      "lat": 41.9099876,
+      "lon": 12.5467917
+    },
+    {
+      "lat": 41.7883483,
+      "lon": 12.3608774
+    },
+    {
+      "lat": 41.9631555,
+      "lon": 12.4543193
+    },
+    {
+      "lat": 41.8977078,
+      "lon": 12.469531
+    },
+    {
+      "lat": 41.8804812,
+      "lon": 12.5409487
+    },
+    {
+      "lat": 41.9068582,
+      "lon": 12.4461834
+    },
+    {
+      "lat": 41.8971562,
+      "lon": 12.5062184
+    },
+    {
+      "lat": 41.9560911,
+      "lon": 12.4842886
+    },
+    {
+      "lat": 41.9236127,
+      "lon": 12.3748464
+    },
+    {
+      "lat": 41.875977,
+      "lon": 12.4671754
+    },
+    {
+      "lat": 41.8798562,
+      "lon": 12.5681581
+    },
+    {
+      "lat": 41.9116411,
+      "lon": 12.4400739
+    },
+    {
+      "lat": 41.8805556,
+      "lon": 12.5407197
+    },
+    {
+      "lat": 41.9071569,
+      "lon": 12.4700801
+    },
+    {
+      "lat": 41.8989091,
+      "lon": 12.5008296
+    },
+    {
+      "lat": 41.8359706,
+      "lon": 12.6037034
+    },
+    {
+      "lat": 41.9090511,
+      "lon": 12.5682338
+    },
+    {
+      "lat": 41.8927802,
+      "lon": 12.6313008
+    },
+    {
+      "lat": 41.9301707,
+      "lon": 12.5235259
+    },
+    {
+      "lat": 41.8443457,
+      "lon": 12.4564976
+    },
+    {
+      "lat": 41.8912544,
+      "lon": 12.3806232
+    },
+    {
+      "lat": 41.8965095,
+      "lon": 12.3962935
+    },
+    {
+      "lat": 41.8481945,
+      "lon": 12.6073675
+    },
+    {
+      "lat": 41.8405092,
+      "lon": 12.6216086
+    },
+    {
+      "lat": 41.9074771,
+      "lon": 12.4698919
+    },
+    {
+      "lat": 41.8326472,
+      "lon": 12.4637268
+    },
+    {
+      "lat": 41.8510732,
+      "lon": 12.5999139
+    },
+    {
+      "lat": 41.8653551,
+      "lon": 12.550595
+    },
+    {
+      "lat": 41.895121,
+      "lon": 12.4724399
+    },
+    {
+      "lat": 41.8956482,
+      "lon": 12.4714648
+    },
+    {
+      "lat": 41.895,
+      "lon": 12.4775489
+    },
+    {
+      "lat": 41.775452,
+      "lon": 12.3334641
+    },
+    {
+      "lat": 41.8648544,
+      "lon": 12.5521335
+    },
+    {
+      "lat": 41.8916038,
+      "lon": 12.5093367
+    },
+    {
+      "lat": 41.8956728,
+      "lon": 12.5026505
+    },
+    {
+      "lat": 41.7723864,
+      "lon": 12.3771343
+    },
+    {
+      "lat": 41.815143,
+      "lon": 12.6197038
+    },
+    {
+      "lat": 41.8744795,
+      "lon": 12.5282729
+    },
+    {
+      "lat": 41.8900924,
+      "lon": 12.5237776
+    },
+    {
+      "lat": 41.8690542,
+      "lon": 12.4447719
+    },
+    {
+      "lat": 41.8943632,
+      "lon": 12.4395313
+    },
+    {
+      "lat": 41.8817242,
+      "lon": 12.560123
+    },
+    {
+      "lat": 41.9957303,
+      "lon": 12.4806356
+    },
+    {
+      "lat": 41.8556868,
+      "lon": 12.4583877
+    },
+    {
+      "lat": 41.7605784,
+      "lon": 12.3012675
+    },
+    {
+      "lat": 41.8744024,
+      "lon": 12.4807817
+    },
+    {
+      "lat": 41.8539679,
+      "lon": 12.6739675
+    },
+    {
+      "lat": 41.7658545,
+      "lon": 12.4791499
+    },
+    {
+      "lat": 41.8656502,
+      "lon": 12.468608
+    },
+    {
+      "lat": 41.9038008,
+      "lon": 12.4876433
+    },
+    {
+      "lat": 41.9131774,
+      "lon": 12.504822
+    },
+    {
+      "lat": 41.9032563,
+      "lon": 12.4801556
+    },
+    {
+      "lat": 41.9040201,
+      "lon": 12.4818809
+    },
+    {
+      "lat": 41.8236321,
+      "lon": 12.5058395
+    },
+    {
+      "lat": 41.908356,
+      "lon": 12.5239672
+    },
+    {
+      "lat": 41.8808305,
+      "lon": 12.5134826
+    },
+    {
+      "lat": 41.8879815,
+      "lon": 12.535414
+    },
+    {
+      "lat": 41.8965951,
+      "lon": 12.4413538
+    },
+    {
+      "lat": 41.8906378,
+      "lon": 12.5559932
+    },
+    {
+      "lat": 41.8973609,
+      "lon": 12.4434
+    },
+    {
+      "lat": 41.8230008,
+      "lon": 12.5032637
+    },
+    {
+      "lat": 41.8610773,
+      "lon": 12.6877671
+    },
+    {
+      "lat": 41.8831886,
+      "lon": 12.5246347
+    },
+    {
+      "lat": 41.8415366,
+      "lon": 12.551992
+    },
+    {
+      "lat": 41.9282867,
+      "lon": 12.6351883
+    },
+    {
+      "lat": 41.7876009,
+      "lon": 12.4446614
+    },
+    {
+      "lat": 41.9065311,
+      "lon": 12.55645
+    },
+    {
+      "lat": 41.9240514,
+      "lon": 12.4470572
+    },
+    {
+      "lat": 41.8637853,
+      "lon": 12.6341473
+    },
+    {
+      "lat": 41.9074236,
+      "lon": 12.4538677
+    },
+    {
+      "lat": 41.916607,
+      "lon": 12.4581525
+    },
+    {
+      "lat": 41.9211372,
+      "lon": 12.458413
+    },
+    {
+      "lat": 41.8981873,
+      "lon": 12.4536351
+    },
+    {
+      "lat": 41.9069019,
+      "lon": 12.4576671
+    },
+    {
+      "lat": 41.8941014,
+      "lon": 12.474553
+    },
+    {
+      "lat": 41.9319407,
+      "lon": 12.5212856
+    },
+    {
+      "lat": 41.8975618,
+      "lon": 12.4329332
+    },
+    {
+      "lat": 41.9151555,
+      "lon": 12.4149712
+    },
+    {
+      "lat": 41.8708376,
+      "lon": 12.5830428
+    },
+    {
+      "lat": 41.8657567,
+      "lon": 12.6046382
+    },
+    {
+      "lat": 41.8706886,
+      "lon": 12.4545541
+    },
+    {
+      "lat": 41.7660553,
+      "lon": 12.6682543
+    },
+    {
+      "lat": 41.8719257,
+      "lon": 12.4588359
+    },
+    {
+      "lat": 41.9159945,
+      "lon": 12.381891
+    },
+    {
+      "lat": 41.9103419,
+      "lon": 12.5281593
+    },
+    {
+      "lat": 41.8973414,
+      "lon": 12.4286947
+    },
+    {
+      "lat": 41.8653121,
+      "lon": 12.4856777
+    },
+    {
+      "lat": 41.880353,
+      "lon": 12.5032442
+    },
+    {
+      "lat": 41.8744427,
+      "lon": 12.5112704
+    },
+    {
+      "lat": 41.8742728,
+      "lon": 12.5109403
+    },
+    {
+      "lat": 41.9233541,
+      "lon": 12.4789751
+    },
+    {
+      "lat": 41.8880763,
+      "lon": 12.5364749
+    },
+    {
+      "lat": 41.9017685,
+      "lon": 12.4736535
+    },
+    {
+      "lat": 41.9017685,
+      "lon": 12.4736535
+    },
+    {
+      "lat": 41.9200925,
+      "lon": 12.4998572
+    },
+    {
+      "lat": 41.9564639,
+      "lon": 12.6976913
+    },
+    {
+      "lat": 41.8782705,
+      "lon": 12.4657779
+    },
+    {
+      "lat": 41.8764318,
+      "lon": 12.4668063
+    },
+    {
+      "lat": 41.8806675,
+      "lon": 12.513796
+    },
+    {
+      "lat": 41.8640739,
+      "lon": 12.6864694
+    },
+    {
+      "lat": 41.8828904,
+      "lon": 12.5386854
+    },
+    {
+      "lat": 41.8792104,
+      "lon": 12.4784821
+    },
+    {
+      "lat": 41.8618808,
+      "lon": 12.4680867
+    }
+  ],
+  "park": [],
+  "university": [
+    {
+      "lat": 41.9142199,
+      "lon": 12.4971176
+    },
+    {
+      "lat": 41.9040214,
+      "lon": 12.4757375
+    },
+    {
+      "lat": 41.8884302,
+      "lon": 12.5041821
+    },
+    {
+      "lat": 41.9026641,
+      "lon": 12.5165639
+    },
+    {
+      "lat": 41.902777,
+      "lon": 12.5175393
+    },
+    {
+      "lat": 41.8979818,
+      "lon": 12.4772115
+    },
+    {
+      "lat": 41.8991606,
+      "lon": 12.5176584
+    },
+    {
+      "lat": 41.9006888,
+      "lon": 12.4734914
+    },
+    {
+      "lat": 41.8988027,
+      "lon": 12.4836394
+    },
+    {
+      "lat": 41.8556133,
+      "lon": 12.467077
+    },
+    {
+      "lat": 41.9040268,
+      "lon": 12.5153946
+    },
+    {
+      "lat": 41.903677,
+      "lon": 12.5145177
+    },
+    {
+      "lat": 41.8890177,
+      "lon": 12.5038424
+    },
+    {
+      "lat": 41.9001808,
+      "lon": 12.4766899
+    },
+    {
+      "lat": 41.8750254,
+      "lon": 12.4731208
+    },
+    {
+      "lat": 41.932819,
+      "lon": 12.4590498
+    },
+    {
+      "lat": 41.7671409,
+      "lon": 12.4704438
+    },
+    {
+      "lat": 41.8821466,
+      "lon": 12.4783062
+    },
+    {
+      "lat": 41.8935665,
+      "lon": 12.4938755
+    },
+    {
+      "lat": 41.9259158,
+      "lon": 12.4883413
+    },
+    {
+      "lat": 41.8795613,
+      "lon": 12.3946376
+    },
+    {
+      "lat": 41.8791802,
+      "lon": 12.3946472
+    },
+    {
+      "lat": 41.9361099,
+      "lon": 12.4646166
+    },
+    {
+      "lat": 41.8864837,
+      "lon": 12.523872
+    },
+    {
+      "lat": 41.8975454,
+      "lon": 12.4995551
+    },
+    {
+      "lat": 41.9035823,
+      "lon": 12.5146133
+    },
+    {
+      "lat": 41.9041864,
+      "lon": 12.5151082
+    },
+    {
+      "lat": 41.9044036,
+      "lon": 12.5146022
+    },
+    {
+      "lat": 41.8562297,
+      "lon": 12.605617
+    },
+    {
+      "lat": 41.9103481,
+      "lon": 12.4669032
+    },
+    {
+      "lat": 41.8635452,
+      "lon": 12.4793108
+    },
+    {
+      "lat": 41.8544217,
+      "lon": 12.4643326
+    },
+    {
+      "lat": 41.8603485,
+      "lon": 12.4938775
+    },
+    {
+      "lat": 41.8547455,
+      "lon": 12.4714648
+    },
+    {
+      "lat": 41.8679102,
+      "lon": 12.479147
+    },
+    {
+      "lat": 41.9034723,
+      "lon": 12.4835872
+    },
+    {
+      "lat": 41.8922989,
+      "lon": 12.4868828
+    },
+    {
+      "lat": 41.905725,
+      "lon": 12.4856974
+    },
+    {
+      "lat": 41.8891358,
+      "lon": 12.5210958
+    },
+    {
+      "lat": 41.8968836,
+      "lon": 12.4800453
+    },
+    {
+      "lat": 41.9315599,
+      "lon": 12.4583798
+    },
+    {
+      "lat": 41.9045073,
+      "lon": 12.5136573
+    },
+    {
+      "lat": 41.8936366,
+      "lon": 12.4294921
+    },
+    {
+      "lat": 41.8841668,
+      "lon": 12.4832406
+    },
+    {
+      "lat": 41.8953285,
+      "lon": 12.5016311
+    },
+    {
+      "lat": 41.8860111,
+      "lon": 12.5288765
+    },
+    {
+      "lat": 41.8998025,
+      "lon": 12.5163572
+    },
+    {
+      "lat": 41.9137366,
+      "lon": 12.4744235
+    },
+    {
+      "lat": 41.9144803,
+      "lon": 12.4721166
+    },
+    {
+      "lat": 41.8956929,
+      "lon": 12.4701191
+    },
+    {
+      "lat": 41.9200518,
+      "lon": 12.4937857
+    },
+    {
+      "lat": 41.9032595,
+      "lon": 12.4964869
+    },
+    {
+      "lat": 41.895935,
+      "lon": 12.50539
+    },
+    {
+      "lat": 41.881237,
+      "lon": 12.5441209
+    },
+    {
+      "lat": 41.9372804,
+      "lon": 12.494162
+    },
+    {
+      "lat": 41.9073592,
+      "lon": 12.4753361
+    },
+    {
+      "lat": 41.8859355,
+      "lon": 12.4622253
+    },
+    {
+      "lat": 41.8976431,
+      "lon": 12.469079
+    },
+    {
+      "lat": 41.9067808,
+      "lon": 12.4826013
+    }
+  ],
+  "downloaded_at": "2026-05-16T19:32:49",
+  "city": "roma"
+}

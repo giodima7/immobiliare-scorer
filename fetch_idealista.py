@@ -37,6 +37,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import random
 import re as _re
 import sys
 import time
@@ -48,6 +49,8 @@ from urllib.parse import urlencode
 
 import nodriver as uc
 
+from browser_session import BrowserSession, PageTimeout, timed
+
 # ── Shared infrastructure imported from fetch_rentals ────────────────────────
 # All OMI data, scoring, enrichment, and persistence live in fetch_rentals so
 # this file only adds Idealista-specific URL building and HTML/DOM parsing.
@@ -56,7 +59,9 @@ from fetch_rentals import (
     BASE_DIR, DASHBOARD_DIR, SEEN_IDS_PATH, OUTPUT_PATH,
     NETLIFY_CONFIG_PATH, STATUS_PATH, DIGEST_SENT_PATH,
     # Constants
-    CITY_KEY, CITY_LABEL, EDGE_PATH, DAEMON_INTERVAL_SEC,
+    CITY_KEY, CITY_LABEL, EDGE_PATH, DAEMON_INTERVAL_SEC, DAEMON_RETRY_SEC,
+    last_scan_at, mark_scan_done, sleep_until, sweep_slugs_for_today, record_sweeps,
+    _parse_condo_from_description,
     # OMI + scoring
     match_omi, score_all,
     # Parsing helpers
@@ -162,18 +167,31 @@ def _load_synonyms() -> dict:
 _NEIGHBOURHOOD_SYNONYMS: dict = _load_synonyms()
 
 
+# Immobiliare macro areas whose names share no word with any Idealista
+# zone/subzone. Arco della Pace / Arena / Pagano sit between Sempione and
+# Ariosto - Magenta, both in Idealista's "Fiera - De Angeli".
+_AREA_ZONE_OVERRIDES: dict = {
+    "arco-della-pace-arena-pagano": ["Fiera - De Angeli"],
+}
+
+
 def _match_zones_for_immo_areas(immo_areas: list) -> list:
     """
     Given a list of active Immobiliare area names, return the Idealista zone
     names whose subzones overlap with those areas.
 
-    Matching uses three passes (any one hit is enough to include the zone):
-      1. Exact match:   canonical name == Immobiliare area name
-      2. Immo contains zone:  "Porta Romana - Medaglie d'Oro" ⊇ "Porta Romana"
-      3. Zone contains Immo:  "San Vittore - Washington"    ⊇ "San Vittore"
+    Active areas are Immobiliare macro slugs ("cenisio-sarpi-isola"), while
+    zones carry display names ("Isola", "Rogoredo - Santa Giulia"). Both
+    sides are slugified; each name is split on " - " into phrases, and a
+    zone matches when one of its phrases is a whole run of words inside an
+    area slug (or the area slug a run inside a phrase: "centro" ⊂
+    "centro-storico"). Word-run matching, not prefix matching: the old
+    raw-string startswith() compared slugs to display names, matched only
+    6 of 18 zones for 17 areas, and let "naviglio grande" hit "navigli".
 
-    "Canonical names" for a zone = zone name itself + all subzone names +
-    all synonym-mapped subzone names (i.e. the Immobiliare-facing names).
+    Phrases come from the zone name, its subzone names and their
+    synonym-mapped (Immobiliare-facing) names. A leading "corso"/"via"/
+    "viale"/"piazza"/"zona" is dropped ("Corso Genova" → "genova").
     """
     if not _ZONE_MAP_PATH.exists():
         return []
@@ -182,31 +200,35 @@ def _match_zones_for_immo_areas(immo_areas: list) -> list:
     except Exception:
         return []
 
-    synonyms  = _load_synonyms()
-    targets   = [a.lower() for a in immo_areas]   # active Immobiliare area names, lower-cased
-    matched   = []
+    synonyms = _load_synonyms()
+    targets  = [f"-{to_url_slug(a)}-" for a in immo_areas if a]
+    _street_words = ("corso-", "via-", "viale-", "piazza-", "zona-")
 
+    def _phrases(name: str) -> set:
+        out = set()
+        for part in name.split(" - "):
+            ph = to_url_slug(part)
+            for w in _street_words:
+                if ph.startswith(w) and len(ph) > len(w):
+                    ph = ph[len(w):]
+            if ph:
+                out.add(f"-{ph}-")
+        return out
+
+    matched = []
     for zone in nmap.get("zones", []):
         zone_name = zone.get("name", "")
-        subzones  = zone.get("subzones", [])
-
-        # Collect all names this zone is known by (canonical + raw + mapped)
-        candidates = {zone_name.lower()}
-        for sub in subzones:
+        phrases = _phrases(zone_name)
+        for sub in zone.get("subzones", []):
             raw = sub.get("name", "")
-            candidates.add(raw.lower())
-            candidates.add(synonyms.get(raw, raw).lower())
+            phrases |= _phrases(raw) | _phrases(synonyms.get(raw, raw))
+        if any(ph in t or t in ph for ph in phrases for t in targets):
+            matched.append(zone_name)
 
-        # Check for any overlap with the active Immobiliare areas
-        for cand in candidates:
-            for target in targets:
-                if cand == target or target.startswith(cand) or cand.startswith(target):
-                    matched.append(zone_name)
-                    break
-            else:
-                continue
-            break   # zone already matched — move on
-
+    for a in immo_areas:
+        for zone_name in _AREA_ZONE_OVERRIDES.get(to_url_slug(a or ""), []):
+            if zone_name not in matched:
+                matched.append(zone_name)
     return matched
 
 
@@ -338,7 +360,10 @@ async def _check_and_handle_captcha(tab, timeout: int = 120) -> bool:
     await _wait_for_render(tab)
 
     try:
-        page_text = await tab.evaluate("document.body?.innerText || ''")
+        page_text = await timed(tab.evaluate("document.body?.innerText || ''"),
+                                what="read page text")
+    except PageTimeout:
+        raise
     except Exception:
         return True   # can't introspect page — assume OK
 
@@ -358,11 +383,14 @@ async def _check_and_handle_captcha(tab, timeout: int = 120) -> bool:
     while time.time() < deadline:
         await asyncio.sleep(3)
         try:
-            pt = await tab.evaluate("document.body?.innerText || ''")
+            pt = await timed(tab.evaluate("document.body?.innerText || ''"),
+                             what="read page text")
             lpt2 = (pt or "").lower()
             if not any(["captcha" in lpt2, "datadome" in lpt2]):
                 print("  [idealista] ✓ CAPTCHA solved — continuing scan")
                 return True
+        except PageTimeout:
+            raise
         except Exception:
             pass
 
@@ -595,11 +623,13 @@ async def _wait_for_render(tab) -> bool:
     deadline = time.time() + _RENDER_TIMEOUT
     while time.time() < deadline:
         try:
-            count = await tab.evaluate(
+            count = await timed(tab.evaluate(
                 "document.querySelectorAll('article.item').length"
-            )
+            ), what="count listing cards")
             if count and int(count) > 0:
                 return True
+        except PageTimeout:
+            raise
         except Exception:
             pass
         await asyncio.sleep(_RENDER_POLL_INTERVAL)
@@ -621,7 +651,7 @@ async def _extract_listings_from_page(tab) -> list:
 
     # Try embedded JSON first — more reliable when available
     try:
-        json_str = await tab.evaluate(_JSON_CHECK_JS)
+        json_str = await timed(tab.evaluate(_JSON_CHECK_JS), what="read embedded JSON")
         if json_str and isinstance(json_str, str) and json_str.strip() not in ("null", ""):
             json_data = json.loads(json_str)
             if json_data and isinstance(json_data, dict) and json_data.get("@type") == "ItemList":
@@ -629,12 +659,14 @@ async def _extract_listings_from_page(tab) -> list:
                 if parsed:
                     print(" [json]", end="", flush=True)
                     return parsed
+    except PageTimeout:
+        raise
     except Exception:
         pass
 
     # Fall back to live DOM extraction (always returns JSON string now)
     try:
-        result_str = await tab.evaluate(_EXTRACT_JS)
+        result_str = await timed(tab.evaluate(_EXTRACT_JS), what="extract listing cards")
         if result_str and isinstance(result_str, str):
             result = json.loads(result_str)
             if isinstance(result, list):
@@ -642,6 +674,8 @@ async def _extract_listings_from_page(tab) -> list:
         # Older nodriver might auto-parse the JSON — handle both cases
         elif isinstance(result_str, list):
             return result_str
+    except PageTimeout:
+        raise
     except Exception as e:
         print(f" [dom-err:{type(e).__name__}]", end="", flush=True)
 
@@ -1043,7 +1077,9 @@ def parse_idealista_listing(raw: dict) -> Optional[dict]:
         "rent_mo":            price,        # monthly rent € — same field name as fetch_rentals
         "sqm":                sqm,
         "ask_psqm":           ask_psqm,    # €/m²/month
-        "spese_condominiali": None,         # not available on search results page
+        # Not a structured field on search cards; the card's description
+        # preview sometimes states it ("spese condominiali € 150").
+        "spese_condominiali": _parse_condo_from_description(raw.get("description") or ""),
         # ── Physical ──────────────────────────────────────────────────────────
         "rooms":              rooms,
         "bedrooms":           bedrooms,        # camere da letto
@@ -1296,7 +1332,8 @@ async def _fetch_sale_async(pages: int, area_slugs: list, max_price: int,
 
                 if page == 1 and area_slug:
                     try:
-                        actual_href = await tab.evaluate("window.location.href")
+                        actual_href = await timed(tab.evaluate("window.location.href"),
+                                                  what="read location")
                         if actual_href:
                             m = (_re.search(r"/milano(?:-milano)?/([^/?#]+)/con-", actual_href)
                                  or _re.search(r"/milano(?:-milano)?/([^/?#]+?)/?$", actual_href))
@@ -1305,6 +1342,8 @@ async def _fetch_sale_async(pages: int, area_slugs: list, max_price: int,
                                 if resolved != canonical_slug:
                                     print(f" [→{resolved}]", end="", flush=True)
                                     canonical_slug = resolved
+                    except PageTimeout:
+                        raise
                     except Exception:
                         pass
 
@@ -1335,12 +1374,14 @@ async def _fetch_sale_async(pages: int, area_slugs: list, max_price: int,
                     new_this_page += 1
 
                 try:
-                    has_next = await tab.evaluate(
+                    has_next = await timed(tab.evaluate(
                         "!!(document.querySelector('a.icon-arrow-right-after')"
                         "|| document.querySelector('li.next a')"
                         "|| document.querySelector('a[rel=\"next\"]')"
                         "|| document.querySelector('.pagination-next a'))"
-                    )
+                    ), what="find next link")
+                except PageTimeout:
+                    raise
                 except Exception:
                     has_next = False
 
@@ -1357,6 +1398,10 @@ async def _fetch_sale_async(pages: int, area_slugs: list, max_price: int,
             reason = f"{type(exc).__name__}: {exc}"
             skipped_areas.append({"name": label, "reason": reason})
             print(f"\n    [error] Sale area '{label}' failed: {reason} — skipping", flush=True)
+            # A hung or dead browser would fail every remaining area too.
+            if isinstance(exc, PageTimeout) or not await browser.alive():
+                await browser.restart()
+                continue
             try:
                 tab = await browser.get("about:blank")
                 await asyncio.sleep(1.5)
@@ -1397,11 +1442,8 @@ def fetch_idealista_sales(pages: int = 3, area_names: list = None, max_price: in
     print(f"  Fetching Idealista sale listings ({desc})…", end="", flush=True)
 
     async def _run():
-        browser = await uc.start(
-            browser_executable_path=EDGE_PATH,
-            headless=False,
-            lang="it-IT",
-        )
+        browser = BrowserSession("idealista-sales")
+        await browser.start()
         try:
             items, skipped = await _fetch_sale_async(
                 pages, area_slugs, max_price, min_sqm, min_rooms, delay, browser
@@ -1458,38 +1500,38 @@ def fetch_idealista_sales(pages: int = 3, area_names: list = None, max_price: in
 
         try:
             import omi_lookup as _omi_lookup
-            if _omi_lookup.ZONES:
-                _need_omi = [
-                    l for l in items
-                    if l.get("omi_loc_mid") is None
-                    and l.get("latitude") and l.get("longitude")
-                ]
-                _omi_updates = []
-                for _l in _need_omi:
-                    _zone, _src = _omi_lookup.lookup(float(_l["latitude"]),
-                                                      float(_l["longitude"]))
-                    if _zone:
-                        _omi_f = {
-                            "omi_zona":      _zone["zona"],
-                            "omi_fascia":    _zone["fascia"],
-                            "omi_descr":     _zone["descr"],
-                            "omi_loc_min":   _zone["loc_min"],
-                            "omi_loc_max":   _zone["loc_max"],
-                            "omi_loc_mid":   _zone["loc_mid"],
-                            "omi_compr_min": _zone["compr_min"],
-                            "omi_compr_max": _zone["compr_max"],
-                            "omi_compr_mid": _zone["compr_mid"],
-                            "omi_source":    _src,
-                        }
-                        _l.update(_omi_f)
-                        _omi_updates.append(
-                            (SOURCE_SALE, _l["id"],
-                             {**(_ecache.get(SOURCE_SALE, _l["id"]) or {}), **_omi_f})
-                        )
-                if _omi_updates:
-                    _ecache.bulk_save(_omi_updates)
-                    print(f"  [omi]    polygon fields applied to "
-                          f"{len(_omi_updates)} sale listings")
+            _need_omi = [
+                l for l in items
+                if l.get("omi_loc_mid") is None
+                and l.get("latitude") and l.get("longitude")
+            ]
+            _omi_updates = []
+            for _l in _need_omi:
+                _zone, _src = _omi_lookup.lookup_for_city(float(_l["latitude"]),
+                                                           float(_l["longitude"]),
+                                                           city=CITY_KEY)
+                if _zone:
+                    _omi_f = {
+                        "omi_zona":      _zone["zona"],
+                        "omi_fascia":    _zone["fascia"],
+                        "omi_descr":     _zone["descr"],
+                        "omi_loc_min":   _zone["loc_min"],
+                        "omi_loc_max":   _zone["loc_max"],
+                        "omi_loc_mid":   _zone["loc_mid"],
+                        "omi_compr_min": _zone["compr_min"],
+                        "omi_compr_max": _zone["compr_max"],
+                        "omi_compr_mid": _zone["compr_mid"],
+                        "omi_source":    _src,
+                    }
+                    _l.update(_omi_f)
+                    _omi_updates.append(
+                        (SOURCE_SALE, _l["id"],
+                         {**(_ecache.get(SOURCE_SALE, _l["id"]) or {}), **_omi_f})
+                    )
+            if _omi_updates:
+                _ecache.bulk_save(_omi_updates)
+                print(f"  [omi]    polygon fields applied to "
+                      f"{len(_omi_updates)} sale listings")
         except Exception as _omi_exc:
             print(f"  [omi]    polygon step skipped: {_omi_exc}", file=sys.stderr)
 
@@ -1721,7 +1763,8 @@ async def _fetch_async(pages: int, area_slugs: list, max_rent: int,
                 # /milano-milano/ and /con- so we must capture only that segment.
                 if page == 1 and area_slug:
                     try:
-                        actual_href = await tab.evaluate("window.location.href")
+                        actual_href = await timed(tab.evaluate("window.location.href"),
+                                                  what="read location")
                         if actual_href:
                             # Match slug segment that precedes /con- or end of path.
                             # Handles both zone URLs (/milano/{slug}/con-) and
@@ -1733,6 +1776,8 @@ async def _fetch_async(pages: int, area_slugs: list, max_rent: int,
                                 if resolved != canonical_slug:
                                     print(f" [→{resolved}]", end="", flush=True)
                                     canonical_slug = resolved
+                    except PageTimeout:
+                        raise
                     except Exception:
                         pass
 
@@ -1766,12 +1811,14 @@ async def _fetch_async(pages: int, area_slugs: list, max_rent: int,
 
                 # Detect "next page" link — Idealista uses several different selectors
                 try:
-                    has_next = await tab.evaluate(
+                    has_next = await timed(tab.evaluate(
                         "!!(document.querySelector('a.icon-arrow-right-after')"
                         "|| document.querySelector('li.next a')"
                         "|| document.querySelector('a[rel=\"next\"]')"
                         "|| document.querySelector('.pagination-next a'))"
-                    )
+                    ), what="find next link")
+                except PageTimeout:
+                    raise
                 except Exception:
                     has_next = False
 
@@ -1791,7 +1838,12 @@ async def _fetch_async(pages: int, area_slugs: list, max_rent: int,
             skipped_areas.append({"name": label, "reason": reason})
             print(f"\n    [error] Area '{label}' failed: {reason} — skipping",
                   flush=True)
-            # Recover browser session: navigate to blank page to reset CDP state
+            # A hung or dead browser would fail every remaining area too
+            # (2026-08-24: Edge died and the scan kept looping on it).
+            if isinstance(exc, PageTimeout) or not await browser.alive():
+                await browser.restart()
+                continue
+            # Otherwise navigate to a blank page to reset CDP state
             try:
                 tab = await browser.get("about:blank")
                 await asyncio.sleep(1.5)
@@ -1802,9 +1854,59 @@ async def _fetch_async(pages: int, area_slugs: list, max_rent: int,
     return all_items, skipped_areas
 
 
+# Daily scan (see fetch_rentals DAILY_*): per zone, newest first until a page
+# brings nothing new, plus the rotating full sweep. No detail pages: they
+# don't expose coordinates either (latitude: '' on every sample, 2026-10-14).
+IDEALISTA_NEWEST     = "ordine=pubblicazione-desc"   # the site's own "Recenti" link
+DAILY_ZONE_MAX_PAGES = 5
+
+
+async def _daily_async(pages: int, area_slugs: list, max_rent: int, min_sqm: int,
+                       min_rooms: int, delay: float, browser, known_ids: set) -> tuple:
+    found: dict = {}
+    print("\n    discover: newest first per zone", end="", flush=True)
+    for i, slug in enumerate(area_slugs):
+        for page in range(1, DAILY_ZONE_MAX_PAGES + 1):
+            url = build_idealista_url(page, slug, max_rent, min_sqm, min_rooms)
+            url += ("&" if "?" in url else "?") + IDEALISTA_NEWEST
+            try:
+                tab = await browser.get(url)
+                await asyncio.sleep(2.0)
+                if not await _check_and_handle_captcha(tab, timeout=60):
+                    break
+                raws = await _extract_listings_from_page(tab)
+            except PageTimeout:
+                await browser.restart()
+                break
+            except Exception as exc:
+                print(f"\n    [warn] {slug} p{page} unreadable ({type(exc).__name__})", flush=True)
+                break
+            new_here = 0
+            for raw in raws:
+                parsed = parse_idealista_listing(raw)
+                if not parsed:
+                    continue
+                parsed["_fetched_area"] = slug
+                if parsed["id"] not in known_ids and parsed["id"] not in found:
+                    new_here += 1
+                found[parsed["id"]] = parsed
+            print(f" {slug}:p{page}(+{new_here})", end="", flush=True)
+            if not raws or not new_here:
+                break
+        if i < len(area_slugs) - 1:
+            await asyncio.sleep(random.uniform(3.0, 6.0))
+
+    sweep = sweep_slugs_for_today(area_slugs)
+    print(f"\n    sweep: {', '.join(sweep)}", end="", flush=True)
+    swept, skipped = await _fetch_async(pages, sweep, max_rent, min_sqm, min_rooms, delay, browser)
+    for l in swept:
+        found.setdefault(l["id"], l)
+    return list(found.values()), skipped
+
+
 def fetch_idealista(pages: int = 3, area_names: list = None, max_rent: int = 0,
                     min_sqm: int = 0, min_rooms: int = 0,
-                    delay: float = 3.0) -> tuple:
+                    delay: float = 3.0, mode: str = "full") -> tuple:
     """
     One-shot fetch of Milano rental listings from Idealista.it via nodriver.
     delay defaults to 3.0s — Idealista applies stricter bot detection.
@@ -1838,12 +1940,14 @@ def fetch_idealista(pages: int = 3, area_names: list = None, max_rent: int = 0,
     print(f"  Fetching Idealista rentals ({desc})…", end="", flush=True)
 
     async def _run():
-        browser = await uc.start(
-            browser_executable_path=EDGE_PATH,
-            headless=False,
-            lang="it-IT",
-        )
+        browser = BrowserSession("idealista")
+        await browser.start()
         try:
+            if mode == "daily" and area_slugs:
+                items, skipped = await _daily_async(
+                    pages, area_slugs, max_rent, min_sqm, min_rooms, delay, browser,
+                    known_ids=set(load_seen_ids()))
+                return items, skipped
             items, skipped = await _fetch_async(
                 pages, area_slugs, max_rent, min_sqm, min_rooms, delay, browser
             )
@@ -1903,38 +2007,38 @@ def fetch_idealista(pages: int = 3, area_names: list = None, max_rent: int = 0,
         # OMI polygon fields for listings still missing them (fast, in-memory)
         try:
             import omi_lookup as _omi_lookup
-            if _omi_lookup.ZONES:
-                _need_omi = [
-                    l for l in items
-                    if l.get("omi_loc_mid") is None
-                    and l.get("latitude") and l.get("longitude")
-                ]
-                _omi_updates = []
-                for _l in _need_omi:
-                    _zone, _src = _omi_lookup.lookup(float(_l["latitude"]),
-                                                      float(_l["longitude"]))
-                    if _zone:
-                        _omi_f = {
-                            "omi_zona":      _zone["zona"],
-                            "omi_fascia":    _zone["fascia"],
-                            "omi_descr":     _zone["descr"],
-                            "omi_loc_min":   _zone["loc_min"],
-                            "omi_loc_max":   _zone["loc_max"],
-                            "omi_loc_mid":   _zone["loc_mid"],
-                            "omi_compr_min": _zone["compr_min"],
-                            "omi_compr_max": _zone["compr_max"],
-                            "omi_compr_mid": _zone["compr_mid"],
-                            "omi_source":    _src,
-                        }
-                        _l.update(_omi_f)
-                        _omi_updates.append(
-                            (SOURCE, _l["id"],
-                             {**(_ecache.get(SOURCE, _l["id"]) or {}), **_omi_f})
-                        )
-                if _omi_updates:
-                    _ecache.bulk_save(_omi_updates)
-                    print(f"  [omi]    polygon fields applied to "
-                          f"{len(_omi_updates)} listings")
+            _need_omi = [
+                l for l in items
+                if l.get("omi_loc_mid") is None
+                and l.get("latitude") and l.get("longitude")
+            ]
+            _omi_updates = []
+            for _l in _need_omi:
+                _zone, _src = _omi_lookup.lookup_for_city(float(_l["latitude"]),
+                                                           float(_l["longitude"]),
+                                                           city=CITY_KEY)
+                if _zone:
+                    _omi_f = {
+                        "omi_zona":      _zone["zona"],
+                        "omi_fascia":    _zone["fascia"],
+                        "omi_descr":     _zone["descr"],
+                        "omi_loc_min":   _zone["loc_min"],
+                        "omi_loc_max":   _zone["loc_max"],
+                        "omi_loc_mid":   _zone["loc_mid"],
+                        "omi_compr_min": _zone["compr_min"],
+                        "omi_compr_max": _zone["compr_max"],
+                        "omi_compr_mid": _zone["compr_mid"],
+                        "omi_source":    _src,
+                    }
+                    _l.update(_omi_f)
+                    _omi_updates.append(
+                        (SOURCE, _l["id"],
+                         {**(_ecache.get(SOURCE, _l["id"]) or {}), **_omi_f})
+                    )
+            if _omi_updates:
+                _ecache.bulk_save(_omi_updates)
+                print(f"  [omi]    polygon fields applied to "
+                      f"{len(_omi_updates)} listings")
         except Exception as _omi_exc:
             print(f"  [omi]    polygon step skipped: {_omi_exc}", file=sys.stderr)
 
@@ -1973,6 +2077,7 @@ def run_once(args) -> list:
         min_sqm=args.min_sqm    or 0,
         min_rooms=args.min_rooms or 0,
         delay=args.delay,
+        mode=args.scan,
     )
 
     if not raw:
@@ -2007,6 +2112,10 @@ def run_once(args) -> list:
     for l in scored:
         lid = l["id"]
         l["first_seen_date"] = seen[lid]["first_seen_date"] if lid in seen else today_str
+        # Seen in this scan. Staleness marking and archive_old_listings key
+        # off last_seen_date; Idealista rentals never carried it, so all
+        # 13k looked "never seen" (Immobiliare + Idealista sales stamp it).
+        l["last_seen_date"]  = today_str
 
     # Derive canonical area slugs that were actually scanned
     fetched_slugs = {l.get("_fetched_area") for l in scored if l.get("_fetched_area")}
@@ -2017,8 +2126,15 @@ def run_once(args) -> list:
     # Update shared seen_ids.json
     new_listings = [l for l in scored if l["id"] not in seen]
     for l in scored:
-        seen[l["id"]] = {"first_seen_date": l["first_seen_date"]}
+        seen[l["id"]] = {"first_seen_date": l["first_seen_date"],
+                         "last_seen_date":  today_str}
     save_seen_ids(seen)
+
+    # Coverage for fetch_rentals' stale/trim pass (it judges Idealista rows too).
+    zone_slugs = [s for s in (to_url_slug(n) for n in area_names) if s]
+    attempted  = sweep_slugs_for_today(zone_slugs) if args.scan == "daily" else zone_slugs
+    failed     = {s.get("name") for s in skipped_areas}
+    record_sweeps("idealista", zone_slugs, [z for z in attempted if z not in failed])
 
     write_idealista_status(new_count=len(new_listings), skipped_areas=skipped_areas)
     print(f"  ✓ {len(scored)} Idealista listings written · {len(new_listings)} new")
@@ -2048,12 +2164,22 @@ def daemon_loop(args):
         print(line, flush=True)
         print(line, file=log_fh, flush=True)
 
-    log(f"Idealista daemon started — interval {DAEMON_INTERVAL_SEC // 60} min, "
+    log(f"Idealista daemon started — one scan every {DAEMON_INTERVAL_SEC // 3600} h, "
         f"output {OUTPUT_PATH}")
 
+    next_run = last_scan_at("idealista") + DAEMON_INTERVAL_SEC
     while True:
+        if time.time() < next_run:
+            log(f"Next scan at {datetime.fromtimestamp(next_run):%Y-%m-%d %H:%M}")
+            try:
+                sleep_until(next_run)
+            except KeyboardInterrupt:
+                log("Interrupted during sleep — stopping Idealista daemon.")
+                log_fh.close()
+                raise
         log("Running Idealista scan…")
         new_listings = []
+        scan_ok = False
         try:
             new_listings = run_once(args)
 
@@ -2072,6 +2198,7 @@ def daemon_loop(args):
                     mark_digest_sent()
 
             log(f"Scan done — {len(new_listings)} new Idealista listing(s)")
+            scan_ok = True
 
         except BaseException as e:
             if isinstance(e, KeyboardInterrupt):
@@ -2084,13 +2211,11 @@ def daemon_loop(args):
             except Exception:
                 pass
 
-        log(f"Sleeping {DAEMON_INTERVAL_SEC // 60} min…")
-        try:
-            time.sleep(DAEMON_INTERVAL_SEC)
-        except KeyboardInterrupt:
-            log("Interrupted during sleep — stopping Idealista daemon.")
-            log_fh.close()
-            raise
+        if scan_ok:
+            mark_scan_done("idealista")
+            next_run = time.time() + DAEMON_INTERVAL_SEC
+        else:
+            next_run = time.time() + DAEMON_RETRY_SEC
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
@@ -2115,6 +2240,9 @@ def parse_args():
                    help="Min number of rooms (0 = no filter, overrides scan_prefs)")
     p.add_argument("--delay",     type=float, default=3.0,
                    help="Seconds between page loads (default 3.0 — stricter than Immobiliare)")
+    p.add_argument("--scan",      choices=("full", "daily"), default=None,
+                   help="full = every page of every zone; daily = newest per zone "
+                        "+ rotating sweep (default with --daemon)")
     p.add_argument("--daemon",    action="store_true",
                    help="Loop forever, fetching every 60 minutes")
     p.add_argument("--email",     action="store_true",
@@ -2124,7 +2252,10 @@ def parse_args():
                         "(requires netlify_config.json with site_id + token)")
     p.add_argument("--mode",     choices=["rental", "sale"], default="rental",
                    help="rental (default) or sale (vendita-case)")
-    return p.parse_args()
+    args = p.parse_args()
+    if args.scan is None:
+        args.scan = "daily" if args.daemon else "full"
+    return args
 
 
 def main():
@@ -2161,7 +2292,7 @@ def main():
         print(f"  Min rooms: {args.min_rooms}+")
     else:
         print(f"  Min rooms: (no filter)")
-    print(f"  Mode     : {'daemon (every %d min)' % (DAEMON_INTERVAL_SEC // 60) if args.daemon else 'one-shot'}")
+    print(f"  Mode     : {'daemon (every %d h)' % (DAEMON_INTERVAL_SEC // 3600) if args.daemon else 'one-shot'}")
     if args.netlify:
         print(f"  Netlify  : enabled (→ direct deploy after each scan)")
     print(f"{'─'*52}")

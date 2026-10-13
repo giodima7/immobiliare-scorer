@@ -32,9 +32,11 @@ Three values you'll need:
 ## 3. Create the schema (SQL editor)
 
 Run this **once** in the Supabase SQL editor for a fresh project. For
-existing projects that were provisioned before migration 002, run
-`supabase_migration_002.sql` instead — it `ADD COLUMN IF NOT EXISTS`-es
-every field that was missing from the original schema.
+existing projects, run the migration scripts in order instead:
+- `supabase_migration_002.sql` — adds the 30+ columns the dashboard
+  reads but the original schema didn't have.
+- `supabase_migration_003.sql` — promotes `score_reasons` from `TEXT[]`
+  to `JSONB` so the dashboard can read the per-reason `sentiment` field.
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
@@ -118,7 +120,7 @@ CREATE TABLE IF NOT EXISTS listings (
   score_location   INTEGER,
   score_penalty    INTEGER,
   score_geo        INTEGER,
-  score_reasons    TEXT[],
+  score_reasons    JSONB,            -- array of {component, sentiment, text} dicts
   score_was_capped BOOLEAN,
   ldi_score        NUMERIC(6,2),
   ldi_bonus        NUMERIC(6,2),
