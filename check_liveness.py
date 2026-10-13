@@ -37,6 +37,8 @@ from pathlib import Path
 
 import nodriver as uc
 
+from browser_session import BrowserSession
+
 BASE_DIR   = Path(__file__).resolve().parent
 DASHBOARD  = BASE_DIR / "dashboard"
 EDGE_PATH  = "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"
@@ -205,12 +207,11 @@ async def run(candidates: list[dict], delay: float, dry_run: bool,
             print(f"  … and {len(to_check)-20} more")
         return {"checked": 0, "delisted": 0, "live": 0, "error": 0}
 
-    print(f"Opening Edge for {len(to_check)} liveness check(s) @ {delay}s delay…")
-    browser = await uc.start(
-        browser_executable_path=EDGE_PATH,
-        headless=False,
-        lang="it-IT",
-    )
+    print(f"Opening browser for {len(to_check)} liveness check(s) @ {delay}s delay…")
+    # Chrome via the shared session (Edge 122 is blocked by Immobiliare);
+    # one profile for the manual tools — they don't run concurrently.
+    browser = BrowserSession("immobiliare-tools")
+    await browser.start()
 
     checked = delisted = live = errors = 0
     try:
@@ -254,7 +255,7 @@ async def run(candidates: list[dict], delay: float, dry_run: bool,
     finally:
         _save_progress(done)
         try:
-            await browser.stop()
+            browser.stop()
         except Exception:
             pass
 

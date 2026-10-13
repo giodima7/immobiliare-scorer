@@ -55,6 +55,8 @@ from typing import Iterable
 
 import nodriver as uc
 
+from browser_session import BrowserSession
+
 BASE_DIR  = Path(__file__).resolve().parent
 EDGE_PATH = "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"
 
@@ -306,13 +308,12 @@ async def backfill(listing_type: str, limit: int, dry_run: bool,
         return 0
 
     print()
-    print(f"Opening Edge for {len(candidates)} detail-page fetch(es) "
+    print(f"Opening browser for {len(candidates)} detail-page fetch(es) "
           f"@ {delay}s delay each…")
-    browser = await uc.start(
-        browser_executable_path=EDGE_PATH,
-        headless=False,
-        lang="it-IT",
-    )
+    # Chrome via the shared session (Edge 122 is blocked by Immobiliare);
+    # one profile for the manual tools — they don't run concurrently.
+    browser = BrowserSession("immobiliare-tools")
+    await browser.start()
 
     fixed   = 0
     skipped = 0
