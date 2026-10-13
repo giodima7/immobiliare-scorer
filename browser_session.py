@@ -206,6 +206,20 @@ class BrowserSession:
                 and self._port is not None
                 and await asyncio.to_thread(_port_answers, self._port))
 
+    async def minimize(self) -> None:
+        """Minimize the window (it stays a real, headed browser — headless
+        fails the sites' bot checks). Best effort."""
+        try:
+            from nodriver import cdp
+            tab = self.browser.main_tab
+            wid, _ = await timed(tab.send(cdp.browser.get_window_for_target()),
+                                 what="get window")
+            await timed(tab.send(cdp.browser.set_window_bounds(
+                wid, cdp.browser.Bounds(window_state=cdp.browser.WindowState.MINIMIZED))),
+                what="minimize window")
+        except Exception as exc:
+            print(f"  [browser] could not minimize {self.name}: {exc}", flush=True)
+
     async def get(self, url: str, timeout: float = NAV_TIMEOUT):
         return await timed(self.browser.get(url), timeout, f"GET {url}")
 

@@ -2882,7 +2882,7 @@ _PROBE_NAVIGATE_TIMEOUT = 12.0
 
 
 def _ensure_probe_thread():
-    """Lazily spin up the probe worker thread + Edge browser. Idempotent;
+    """Lazily spin up the probe worker thread + browser. Idempotent;
     safe to call from any Flask handler thread."""
     global _probe_thread, _probe_loop
     with _probe_init_lock:
@@ -2899,7 +2899,7 @@ def _ensure_probe_thread():
 
 
 def _probe_thread_main():
-    """Owns the asyncio loop + the persistent Edge browser."""
+    """Owns the asyncio loop + the persistent probe browser."""
     global _probe_loop
     _probe_loop = _probe_asyncio.new_event_loop()
     _probe_asyncio.set_event_loop(_probe_loop)
@@ -2912,27 +2912,28 @@ def _probe_thread_main():
 
 
 async def _probe_browser_main():
-    """Open the persistent Edge browser, prime the Cloudflare cookie by
+    """Open the persistent probe browser, prime the anti-bot cookie by
     visiting the Immobiliare homepage, then idle. Probes are scheduled
     on this same loop via asyncio.run_coroutine_threadsafe — they share
-    `_probe_browser` via the module-level binding below."""
-    import nodriver as uc
-    from fetch_rentals import EDGE_PATH
+    `_probe_browser` via the module-level binding below.
+
+    Same BrowserSession as the scanners (Chrome — the installed Edge 122
+    gets Immobiliare's "Access is temporarily restricted" page), own
+    profile so it can run while a scan holds the scanner's, minimized so
+    a View click doesn't pop a browser window in front of the user."""
+    from browser_session import BrowserSession
 
     global _probe_browser
-    print("  [probe] starting persistent Edge (headed, one-time)…")
-    _probe_browser = await uc.start(
-        browser_executable_path=EDGE_PATH,
-        headless=False, lang="it-IT",
-    )
+    print("  [probe] starting persistent probe browser (one-time)…")
+    _probe_browser = BrowserSession("immobiliare-probe")
+    await _probe_browser.start()
+    await _probe_browser.minimize()
     try:
-        # Warm-up: hit the homepage so Cloudflare's challenge resolves
+        # Warm-up: hit the homepage so the anti-bot challenge resolves
         # once. Future probes inherit the cookie and skip the challenge.
-        tab = await _probe_browser.get("https://www.immobiliare.it/")
+        await _probe_browser.get("https://www.immobiliare.it/")
         await _probe_asyncio.sleep(4.0)
-        try: await tab.activate()
-        except Exception: pass
-        print("  [probe] Edge ready — Cloudflare cookie primed.")
+        print("  [probe] browser ready — anti-bot cookie primed.")
         _probe_browser_ready.set()
 
         # Idle forever — probes execute on this loop via
@@ -3120,15 +3121,14 @@ def _scrape_listing_sync(url: str) -> dict | None:
 
 async def _scrape_listing_async(url: str) -> dict | None:
     """
-    Scrape one listing. Opens Edge VISIBLY so the user can solve the
+    Scrape one listing. Opens a browser VISIBLY so the user can solve the
     Immobiliare/Idealista bot-check captcha if it appears. Polls the page
     for up to SCRAPE_TIMEOUT seconds waiting for the real listing data to
     appear. This mirrors the manual-captcha pattern the daemon scanner
     uses in fetch_rentals.py.
     """
     import asyncio as _asyncio
-    import nodriver as uc
-    from fetch_rentals import EDGE_PATH
+    from browser_session import BrowserSession
 
     is_immobiliare = "immobiliare.it" in url
     is_idealista   = "idealista.it" in url
@@ -3193,10 +3193,9 @@ async def _scrape_listing_async(url: str) -> dict | None:
                 stack.extend(v)
         return None
 
-    browser = await uc.start(
-        browser_executable_path=EDGE_PATH,
-        headless=False, lang="it-IT",
-    )
+    # Chrome via the shared session (Edge 122 is blocked by Immobiliare).
+    browser = BrowserSession("immobiliare-tools")
+    await browser.start()
     try:
         tab = await browser.get(url)
         # Bring the window forward so the user notices the captcha
@@ -3246,8 +3245,9 @@ async def _scrape_listing_async(url: str) -> dict | None:
                 await _asyncio.sleep(POLL_INTERVAL)
             return None
     finally:
-        try: await browser.close()
-        except Exception: pass
+        # Was `await browser.close()` — no such method; the swallowed error
+        # left every scrape's browser running.
+        browser.stop()
     return None
 
 
