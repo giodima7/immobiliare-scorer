@@ -1,0 +1,443 @@
+"""Listing-page details — the fields search results don't carry.
+
+Search pages give price, size, rooms and (Immobiliare) the feature list.
+Condition, heating, energy class, year built, bathrooms and condo fees for
+Idealista, and energy class / year / condo fees / contract type for
+Immobiliare, only exist on each listing's own page. Fetching ~10k pages
+at once would get the scanners blocked, so the scanner daemons drip them
+in while they wait for the next daily scan: a few pages every ~20 min
+during the day, the listings that could earn a label first.
+
+Results live in their own file (DETAIL_CACHE_PATH, keyed by listing id)
+instead of being written into the shared listings file: three processes
+already rewrite that file, and a re-scan replaces whole rows. score_all()
+applies the cache on every scoring run (apply_details), so whichever path
+rescored last, the details are there.
+"""
+from __future__ import annotations
+
+import asyncio
+import fcntl
+import json
+import os
+import random
+import re
+import time
+from datetime import date, datetime
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
+DETAIL_CACHE_PATH = BASE_DIR / "detail_cache_milano.json"
+RENTALS_PATH = BASE_DIR / "dashboard" / "milano_rentals_latest.json"
+
+# Fields a listing page can supply. apply_details() only fills gaps, with
+# two exceptions below — fresh search data wins otherwise.
+DETAIL_KEYS = ("condition", "heating_type", "energy_class", "year_built",
+               "bathrooms", "has_balcony", "has_parking", "furnished",
+               "is_external", "spese_condominiali", "photo_count",
+               "contract_type", "availability", "published_date",
+               "air_conditioning")
+
+# Idealista search cards only ever set these to True (keyword found in the
+# snippet) — never False. A listing page's yes/no answer replaces them.
+CARD_YES_ONLY = ("has_balcony", "has_parking", "furnished")
+
+# ── Drip pacing (per source) ──────────────────────────────────────────────────
+DRIP_PER_DAY      = 150          # listing pages per source per day
+DRIP_HOURS        = (8, 23)      # local hours the drip runs in
+DRIP_BATCH        = 3            # pages per browser session
+DRIP_GAP_MIN      = (12, 24)     # minutes between sessions (random)
+DRIP_PAGE_GAP_SEC = (20, 45)     # seconds between pages in a session
+PRIORITY_Z        = -0.8         # price_z at or below this → fetched first
+NEW_DAYS          = 3            # first seen within this many days → next
+
+
+# ── Cache I/O ─────────────────────────────────────────────────────────────────
+
+def load_cache() -> dict:
+    try:
+        return json.loads(DETAIL_CACHE_PATH.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def save_entries(entries: dict) -> None:
+    """Merge {id: entry} into the cache under a lock, atomically."""
+    if not entries:
+        return
+    lock_path = DETAIL_CACHE_PATH.with_suffix(".json.lock")
+    with open(lock_path, "w") as lock_fh:
+        fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX)
+        cache = load_cache()
+        cache.update(entries)
+        tmp = DETAIL_CACHE_PATH.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(cache, ensure_ascii=False, separators=(",", ":")))
+        os.replace(tmp, DETAIL_CACHE_PATH)
+
+
+# ── Applying details to listings (called from scoring.score_all) ─────────────
+
+def _condition_unknown(value) -> bool:
+    from comps_engine import condition_group
+    return condition_group({"condition": value}) == "unknown"
+
+
+def apply_details(listings: list, cache: dict | None = None) -> int:
+    """Fill listing fields from the detail cache. Returns rows touched."""
+    cache = load_cache() if cache is None else cache
+    if not cache:
+        return 0
+    n = 0
+    for l in listings:
+        e = cache.get(str(l.get("id")))
+        if not e:
+            continue
+        if e.get("gone"):
+            # The site's own "no longer available" page — unless a scan saw
+            # the listing again afterwards (relisted / search lag).
+            if (e.get("fetched_at") or "") >= (l.get("last_seen_date") or ""):
+                l["is_stale"] = True
+                l["gone_checked"] = e.get("fetched_at")
+            continue
+        for k, v in (e.get("fields") or {}).items():
+            if v is None:
+                continue
+            cur = l.get(k)
+            if (cur is None
+                    or (k in CARD_YES_ONLY and l.get("source") == "idealista")
+                    or (k == "condition" and _condition_unknown(cur))):
+                l[k] = v
+        l["detail_fetched_at"] = e.get("fetched_at")
+        if l.get("days_on_market") is None and l.get("published_date"):
+            try:
+                l["days_on_market"] = (date.today() - date.fromisoformat(l["published_date"])).days
+            except ValueError:
+                pass
+        n += 1
+    return n
+
+
+# Same flat on both sites (comps_engine duplicate groups): copy what one copy
+# knows into the other. Idealista card flags are not real answers.
+TWIN_KEYS = ("condition", "heating_type", "energy_class", "year_built",
+             "bathrooms", "has_balcony", "has_parking", "furnished",
+             "is_external", "spese_condominiali")
+
+
+def _has_real_value(l: dict, k: str) -> bool:
+    v = l.get(k)
+    if v is None:
+        return False
+    if k == "condition" and _condition_unknown(v):
+        return False
+    if k in CARD_YES_ONLY and l.get("source") == "idealista" and not l.get("detail_fetched_at"):
+        return False
+    return True
+
+
+def fill_from_twins(pool: list, comps_index: dict) -> int:
+    """Fill gaps from the listing's duplicates. Returns rows touched."""
+    groups, group_of = comps_index.get("groups") or [], comps_index.get("group_of") or {}
+    by_obj = {id(l): l for l in pool}
+    n = 0
+    for l in pool:
+        g = group_of.get(id(l))
+        if g is None:
+            continue
+        twins = [by_obj[i] for i in groups[g] if i != id(l) and i in by_obj]
+        if not twins:
+            continue
+        filled = []
+        for k in TWIN_KEYS:
+            if _has_real_value(l, k):
+                continue
+            for t in twins:
+                if _has_real_value(t, k):
+                    l[k] = t[k]
+                    filled.append(k)
+                    break
+        if filled:
+            l["twin_filled"] = filled
+            n += 1
+    return n
+
+
+# ── Parsing listing pages ─────────────────────────────────────────────────────
+
+def _contract_type(value) -> str | None:
+    s = str(value or "").lower()
+    if not s:
+        return None
+    for pat, label in ((r"4\s*\+\s*4", "4+4"), (r"3\s*\+\s*2", "3+2"),
+                       (r"transitori", "transitorio"), (r"student", "studenti")):
+        if re.search(pat, s):
+            return label
+    return None
+
+
+def parse_immobiliare_detail(next_data: dict) -> dict | None:
+    """Fields from an Immobiliare listing page's __NEXT_DATA__."""
+    from fetch_rentals import parse_rental
+    try:
+        re_data = next_data["props"]["pageProps"]["detailData"]["realEstate"]
+    except (KeyError, TypeError):
+        return None
+    parsed = parse_rental({"realEstate": re_data}) or {}
+    props = re_data.get("properties") or [{}]
+    prop = (props[0] if isinstance(props, list) else props) or {}
+    fields = {k: parsed.get(k) for k in DETAIL_KEYS if parsed.get(k) is not None}
+    fields["contract_type"] = _contract_type(re_data.get("contractValue"))
+    fields["availability"] = (str(prop.get("availability")).strip().lower()
+                              if prop.get("availability") else None)
+    return {k: v for k, v in fields.items() if v is not None}
+
+
+# Idealista energy icons: icon-energy-c-1 … c-7 = A … G (c-7 seen with
+# 272 kWh/m²·year, which is class G territory). Letter suffixes are kept as is.
+_IDEALISTA_ENERGY = {str(i): c for i, c in enumerate("ABCDEFG", start=1)}
+
+_IDEALISTA_EXTRACT_JS = r"""JSON.stringify({
+  title: document.title || '',
+  head: (document.body ? document.body.innerText : '').slice(0, 4000),
+  features: Array.from(document.querySelectorAll('.details-property_features li')).map(e => e.innerText.trim()),
+  energy: (document.querySelector('.details-property_features [class*="icon-energy-"]') || {}).className || '',
+  comment: ((document.querySelector('.comment') || {}).innerText || '').slice(0, 4000),
+  photos: new Set(Array.from(document.querySelectorAll('.detail-image img, .main-image img, picture img'))
+                   .map(i => i.getAttribute('data-ondemand-img') || i.getAttribute('data-src') || i.src)
+                   .filter(Boolean)).size
+})"""
+
+_RENOVATED_ADVERB = re.compile(
+    r"\b(complet|total|interament|integralment|recentement|appena|finement|nuovament)\w*\s+"
+    r"(?:e\s+\w+\s+)?ristrutturat[oa]\b", re.I)
+_RENOVATED_FLAT = re.compile(
+    r"\b(appartamento|immobile|bilocale|trilocale|quadrilocale|monolocale|attico|loft)\b"
+    r"[^.]{0,40}\bristrutturat[oa]\b", re.I)
+
+
+def _says_renovated(text: str) -> bool:
+    """The whole flat renovated — not "bagno ristrutturato" or "da ristrutturare"."""
+    for m in list(_RENOVATED_ADVERB.finditer(text)) + list(_RENOVATED_FLAT.finditer(text)):
+        before = text[max(0, m.start() - 25):m.start()].lower()
+        if re.search(r"\b(bagn[oi]|cucina)\b", before + m.group(0).lower().split("ristruttur")[0]):
+            continue
+        return True
+    return False
+
+
+def parse_idealista_detail(page: dict) -> dict:
+    """Fields from the listing page's feature list + description."""
+    from fetch_rentals import _parse_condo_from_description
+    feats = [f.lower() for f in page.get("features") or []]
+    text = " | ".join(feats)
+    comment = page.get("comment") or ""
+    out: dict = {}
+
+    m = re.search(r"(\d+)\s+bagn", text)
+    if m:
+        out["bathrooms"] = int(m.group(1))
+    out["has_balcony"] = any(re.search(r"\b(balcon|terrazz)", f) for f in feats)
+    out["has_parking"] = any(re.search(r"\b(box|garage|posto auto|parcheggio)", f) for f in feats)
+    if any(re.search(r"\bnon (ammobiliato|arredato)", f) for f in feats):
+        out["furnished"] = False
+    elif any(re.search(r"\b(ammobiliato|arredato)", f) for f in feats):
+        out["furnished"] = True
+    if any(f.strip() in ("esterno", "esposizione esterna") for f in feats):
+        out["is_external"] = True
+    elif any(f.strip() in ("interno", "esposizione interna") for f in feats):
+        out["is_external"] = False
+    m = re.search(r"costruito nel (\d{4})", text)
+    if m:
+        out["year_built"] = int(m.group(1))
+    if re.search(r"riscaldamento autonomo", text):
+        out["heating_type"] = "autonomous"
+    elif re.search(r"riscaldamento centralizzato", text):
+        out["heating_type"] = "centralised"
+    elif re.search(r"senza riscaldamento|non dispone di riscaldamento", text):
+        out["heating_type"] = "none"
+    if any("aria condizionata" in f for f in feats):
+        out["air_conditioning"] = True
+
+    # Idealista has three states only; "buono stato" also covers renovated
+    # flats, so it maps to renovated only when the description says so and
+    # otherwise stays undetermined for the benchmark (comps_engine
+    # condition_group → 'unknown').
+    if "nuova costruzione" in text:
+        out["condition"] = "Nuovo / In costruzione"
+    elif "da ristrutturare" in text:
+        out["condition"] = "Da ristrutturare"
+    elif "buono stato" in text:
+        out["condition"] = ("Ottimo / Ristrutturato" if _says_renovated(comment)
+                            else "Buono stato (Idealista)")
+
+    m = re.search(r"icon-energy-c-(\w+)", page.get("energy") or "")
+    if m:
+        out["energy_class"] = _IDEALISTA_ENERGY.get(m.group(1), m.group(1).upper())
+
+    fee = _parse_condo_from_description(comment)
+    if fee:
+        out["spese_condominiali"] = fee
+    if page.get("photos"):
+        out["photo_count"] = int(page["photos"])
+    return out
+
+
+# ── Priority queue ────────────────────────────────────────────────────────────
+
+def build_queue(source: str, cache: dict | None = None,
+                rentals_path: Path = RENTALS_PATH) -> list:
+    """[(id, url)] still to fetch for `source`, most useful first:
+    possible deals (price_z ≤ PRIORITY_Z, lowest first), then listings first
+    seen in the last NEW_DAYS days, then everything else visible."""
+    cache = load_cache() if cache is None else cache
+    try:
+        rows = json.loads(rentals_path.read_text())
+    except (OSError, ValueError):
+        return []
+    today = date.today()
+    deals, new, rest = [], [], []
+    for l in rows:
+        if (l.get("source") or "immobiliare") != source:
+            continue
+        if l.get("is_stale") or l.get("excluded") or not l.get("url"):
+            continue
+        if str(l.get("id")) in cache or (source == "immobiliare" and l.get("detail_fetched_at")):
+            continue
+        z = l.get("price_z")
+        try:
+            age = (today - date.fromisoformat(l.get("first_seen_date") or "")).days
+        except ValueError:
+            age = 999
+        item = (str(l["id"]), l["url"])
+        if z is not None and z <= PRIORITY_Z:
+            deals.append((z, item))
+        elif age <= NEW_DAYS:
+            new.append((age, item))
+        else:
+            rest.append((z if z is not None else 9, item))
+    return ([i for _, i in sorted(deals)] + [i for _, i in sorted(new)]
+            + [i for _, i in sorted(rest)])
+
+
+# ── Fetching ──────────────────────────────────────────────────────────────────
+
+_GONE_RX = re.compile(r"non è più (disponibile|pubblicato)|non è presente sul nostro sito", re.I)
+_BLOCK_RX = re.compile(r"captcha|datadome|accesso .{0,20}limitat|temporaneamente (bloccat|limitat|restrict)"
+                       r"|access is temporarily restricted|verifica di essere", re.I)
+
+_PAGE_STATE_JS = r"""JSON.stringify({
+  title: document.title || '',
+  text: (document.body ? document.body.innerText : '').slice(0, 4000),
+  next: window.__NEXT_DATA__ || null
+})"""
+
+
+async def _fetch_one(browser, source: str, lid: str, url: str) -> tuple[str, dict | None]:
+    """→ ("ok", fields) | ("gone", None) | ("blocked", None) | ("error", None).
+    "gone" only on the sites' own removed-listing notice; anything
+    unrecognised is an error and the listing is retried another day."""
+    from browser_session import timed
+    tab = await browser.get(url)
+    await asyncio.sleep(random.uniform(2.5, 4.5))
+    if source == "immobiliare":
+        raw = await timed(tab.evaluate(_PAGE_STATE_JS), what="read detail page")
+        st = json.loads(raw) if raw else {}
+        if st.get("next"):
+            fields = parse_immobiliare_detail(st["next"])
+            if fields is not None:
+                return "ok", fields
+        text = st.get("title", "") + " " + st.get("text", "")
+        if _GONE_RX.search(text):
+            return "gone", None
+        return ("blocked", None) if _BLOCK_RX.search(text) else ("error", None)
+    raw = await timed(tab.evaluate(_IDEALISTA_EXTRACT_JS), what="read idealista detail")
+    page = json.loads(raw) if raw else {}
+    if page.get("features"):
+        return "ok", parse_idealista_detail(page)
+    text = page.get("title", "") + " " + page.get("head", "")
+    if _GONE_RX.search(text):
+        return "gone", None
+    return ("blocked", None) if _BLOCK_RX.search(text) else ("error", None)
+
+
+async def fetch_batch(source: str, items: list, log=print) -> dict:
+    """Fetch listing pages with one browser session. Returns stats."""
+    from browser_session import BrowserSession, PageTimeout
+    stats = {"ok": 0, "gone": 0, "error": 0, "blocked": False}
+    if not items:
+        return stats
+    browser = BrowserSession(source)
+    await browser.start()
+    entries: dict = {}
+    try:
+        for i, (lid, url) in enumerate(items):
+            if i:
+                await asyncio.sleep(random.uniform(*DRIP_PAGE_GAP_SEC))
+            try:
+                status, fields = await _fetch_one(browser, source, lid, url)
+            except PageTimeout:
+                await browser.restart()
+                stats["error"] += 1
+                continue
+            except Exception:
+                stats["error"] += 1
+                continue
+            if status == "blocked":
+                stats["blocked"] = True
+                break
+            if status == "error":
+                stats["error"] += 1
+                continue
+            today = str(date.today())
+            if status == "gone":
+                entries[lid] = {"gone": True, "fetched_at": today, "source": source}
+                stats["gone"] += 1
+            elif status == "ok":
+                entries[lid] = {"fields": fields, "fetched_at": today, "source": source}
+                stats["ok"] += 1
+    finally:
+        browser.stop()
+        save_entries(entries)
+    return stats
+
+
+def drip_until(source: str, deadline: float, log=print) -> None:
+    """Drip listing pages for `source` until wall-clock `deadline`, then
+    return (the caller's next scan is due). Sleeps like sleep_until in
+    between, so a laptop that slept through the night catches up on wake."""
+    queue: list = []
+    built_on = None
+    done_today, day = 0, date.today()
+    blocked_until = 0.0
+    next_batch = time.time() + random.uniform(60, 300)
+    while deadline - time.time() > 0:
+        now = datetime.now()
+        if date.today() != day:
+            day, done_today = date.today(), 0
+        eligible = (DRIP_HOURS[0] <= now.hour < DRIP_HOURS[1]
+                    and done_today < DRIP_PER_DAY and time.time() >= blocked_until)
+        if eligible and time.time() >= next_batch:
+            if built_on != day or not queue:
+                queue = build_queue(source)
+                built_on = day
+            take = queue[:min(DRIP_BATCH, DRIP_PER_DAY - done_today)]
+            queue = queue[len(take):]
+            if take:
+                try:
+                    stats = asyncio.run(fetch_batch(source, take, log))
+                except Exception as exc:
+                    stats = {"ok": 0, "gone": 0, "error": len(take), "blocked": False}
+                    log(f"[details] {source}: batch failed ({type(exc).__name__}: {exc})")
+                done_today += len(take)
+                if stats["blocked"]:
+                    blocked_until = time.time() + 6 * 3600
+                    log(f"[details] {source}: blocked — pausing 6 h")
+                else:
+                    log(f"[details] {source}: {stats['ok']} ok, {stats['gone']} gone, "
+                        f"{stats['error']} failed · {done_today}/{DRIP_PER_DAY} today · "
+                        f"{len(queue)} queued")
+            next_batch = time.time() + random.uniform(*DRIP_GAP_MIN) * 60
+        wait = 60.0
+        if eligible:
+            wait = min(wait, max(1.0, next_batch - time.time()))
+        time.sleep(max(1.0, min(wait, deadline - time.time())))
