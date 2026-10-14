@@ -15,8 +15,19 @@ from __future__ import annotations
 
 # ── Verdict lead bullet ─────────────────────────────────────────────────────
 
-def _verdict_lead(score: int) -> str:
-    if score >= 85: return "Lume thinks this is a hidden gem — well worth a look."
+def _verdict_lead(listing: dict) -> str:
+    # The lead used to say "hidden gem" for any score ≥ 85 — 1,143 Milan
+    # listings vs 12 actually labelled. Use the real labels, and don't call
+    # a listing "overpriced" when its score was capped for another reason.
+    score = listing.get("score_total") or 0
+    if listing.get("hidden_gem"):
+        return "Lume thinks this is a hidden gem — well worth a look."
+    if listing.get("good_value"):
+        return "Lume rates this good value for the area."
+    if listing.get("_extreme_underpricing") or listing.get("extreme_underpricing"):
+        return "Priced far below similar flats — verify it's real before getting excited."
+    if listing.get("is_below_ground"):
+        return "Below-ground unit — Lume caps its score whatever the price."
     if score >= 72: return "Lume rates this solid for the area."
     if score >= 60: return "Lume's read: reasonable, with caveats below."
     if score >= 45: return "Lume thinks this is overpriced for what you get."
@@ -113,7 +124,7 @@ def explain(listing: dict) -> list[str]:
     n_c   = listing.get("comps_n") or 0
 
     # 1. Verdict lead — Lume's overall read
-    bullets.append(_verdict_lead(score))
+    bullets.append(_verdict_lead(listing))
 
     # 2. Price-vs-neighbours line
     pline = _price_line(delta, n_c, "flats")
@@ -563,7 +574,7 @@ def explain_sale(listing: dict) -> list[str]:
     n_c   = listing.get("comps_sale_n") or 0
 
     # 1. Verdict
-    bullets.append(_verdict_lead(score))
+    bullets.append(_verdict_lead(listing))
 
     # 2. Price-vs-neighbours
     pline = _price_line(delta, n_c, "sales")

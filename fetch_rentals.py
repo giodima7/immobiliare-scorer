@@ -756,11 +756,10 @@ def parse_rental(item: dict) -> Optional[dict]:
     else:
         floor = str(floor_raw).strip() if floor_raw is not None else None
 
-    condition_raw = (
-        prop.get("ga4Condition")
-        or prop.get("condition")
-        or re_data.get("typology", {}).get("name", "")
-    )
+    # No typology fallback: it filled `condition` with "Appartamento" /
+    # "Bilocale" (703 Milan rows) — scored as unknown anyway, shown as if
+    # it were the flat's condition.
+    condition_raw = prop.get("ga4Condition") or prop.get("condition") or None
 
     listing_id = str(re_data.get("id", ""))
     url = f"https://www.immobiliare.it/annunci/{listing_id}/" if listing_id else ""

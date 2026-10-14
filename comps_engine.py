@@ -23,8 +23,12 @@ Output dict keys
 
 from __future__ import annotations
 import math
+import re
 import statistics
+from datetime import date
 from typing import Optional
+
+import numpy as np
 
 
 # ── Haversine ────────────────────────────────────────────────────────────────
@@ -246,6 +250,25 @@ SUSPECT_FLAGS = ("is_fake", "is_misrepresented_address", "is_outside_city",
 # its price, pulling the benchmark toward its ask and hiding mispricing.
 DUP_MAX_M = 300   # Idealista coords are geocoded, often a few hundred m off
 
+# Mid-term / short-let platforms: furnished, bills-included stays priced at
+# ×1.4–1.6 the zone median (Milan, 2026-10-14: ~5k rows, 18 % of the pool).
+# They're still scored, but never used as comps for long-term rentals.
+SHORTLET_PLATFORMS = re.compile(r"spacest|roomless|housinganywhere|uniplaces|spotahome", re.I)
+
+# Rental benchmark (validated by backtest on Milan, 8,128 long-term listings:
+# median |ask − benchmark| 12.8 % → 11.9 %, bias +0.8 % → 0.0 %, Idealista vs
+# Immobiliare gap +1.4 pp → 0.0, size bias −0.113 → −0.060). Each switch can
+# be overridden from scoring_settings.json.
+RENT_BENCHMARK_DEFAULTS = {
+    "comps_method":           "knn",   # "knn" (nearest flats) | "zone" (OMI-zone cascade)
+    "knn_k":                  30,
+    "knn_max_m":              1500,
+    "size_elasticity":        -0.30,   # €/m² ∝ m²^β — bigger flats rent for less per m²
+    "recency_half_life_days": 90,      # archived comps count half after 90 days unseen
+    "omi_blend":              False,   # asks run ~41 % above OMI — blending biased it low
+    "trim":                   "sym",   # "sym" = IQR only; "asym" = old 5 %/12 % trim
+}
+
 
 def _ll(l: dict) -> tuple:
     return (l.get("latitude") or l.get("lat"),
@@ -285,7 +308,7 @@ def build_comps_index(all_listings: list[dict]) -> dict:
       omi_fascia equality, so scanning one bucket gives the same candidates
       (same order) as scanning the whole pool — without it every listing
       re-scans the pool: O(n²), ~9 min for Milan rentals.
-    • Drop suspect listings (SUSPECT_FLAGS).
+    • Drop suspect listings (SUSPECT_FLAGS) and short-let platforms.
     • Collapse duplicate groups to one copy (see DUP_MAX_M); remember the
       groups so a listing never gets its own twins as comps.
 
@@ -295,7 +318,7 @@ def build_comps_index(all_listings: list[dict]) -> dict:
     skip: set[int] = set()                    # suspect + non-kept duplicates
     by_key: dict[tuple, list[dict]] = {}
     for l in all_listings:
-        if any(l.get(f) for f in SUSPECT_FLAGS):
+        if any(l.get(f) for f in SUSPECT_FLAGS) or SHORTLET_PLATFORMS.search(l.get("agency_name") or ""):
             skip.add(id(l))
             continue
         k = _dup_key(l)
@@ -340,8 +363,12 @@ def build_comps_index(all_listings: list[dict]) -> dict:
         f = l.get("omi_fascia")
         if f:
             by_fascia.setdefault(f, []).append(l)
+    geo = [l for l in all_listings if id(l) not in skip and all(_ll(l))]
     return {"by_zone": by_zone, "by_fascia": by_fascia, "skip": skip,
-            "by_key": by_key, "groups": groups, "group_of": group_of}
+            "by_key": by_key, "groups": groups, "group_of": group_of,
+            "geo": geo,
+            "geo_lat": np.array([float(_ll(l)[0]) for l in geo]),
+            "geo_lon": np.array([float(_ll(l)[1]) for l in geo])}
 
 
 def _twin_ids(listing: dict, index: dict) -> set[int]:
@@ -362,6 +389,61 @@ def _twin_ids(listing: dict, index: dict) -> set[int]:
                 twins.update(index["groups"][mg])
     twins.discard(id(listing))
     return twins
+
+
+def _knn_pool(listing: dict, index: dict, is_candidate, cgroup: str,
+              k: int, max_m: float, min_comps: int) -> tuple:
+    """Nearest comps within max_m in the listing's OMI fascia. Same-condition
+    flats first when at least 15 exist (no condition adjustment needed, like
+    the zone cascade's pass 1). Returns (pool, pass_used, radius_m)."""
+    lat, lon = _ll(listing)
+    if not (lat and lon) or not len(index["geo"]):
+        return [], "", None
+    lat, lon = float(lat), float(lon)
+    dy = (index["geo_lat"] - lat) * 111_195.0
+    dx = (index["geo_lon"] - lon) * 111_195.0 * math.cos(math.radians(lat))
+    d = np.hypot(dx, dy)
+    near = np.nonzero(d <= max_m)[0]
+    fascia = listing.get("omi_fascia")
+    mixed, same = [], []
+    # stable: Idealista rows often share a geocoded point — keep ties in pool order
+    for i in near[np.argsort(d[near], kind="stable")]:
+        if len(mixed) >= k and (cgroup == "unknown" or len(same) >= k):
+            break
+        l = index["geo"][i]
+        if fascia and l.get("omi_fascia") != fascia:
+            continue
+        if not is_candidate(l):
+            continue
+        if len(mixed) < k:
+            mixed.append((l, float(d[i])))
+        if cgroup != "unknown" and len(same) < k and condition_group(l) == cgroup:
+            same.append((l, float(d[i])))
+    for pool, name, need in ((same, "knn_stratified", 15), (mixed, "knn", min_comps)):
+        if len(pool) >= need:
+            return [l for l, _ in pool], name, int(pool[-1][1])
+    return [], "", None
+
+
+def _age_days(l: dict) -> Optional[int]:
+    try:
+        return max(0, (date.today() - date.fromisoformat(l["last_seen_date"])).days)
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _weighted_median(pairs: list) -> float:
+    """Median of (value, weight) pairs sorted by value; plain median when
+    all weights are equal (identical to statistics.median)."""
+    if len({w for _, w in pairs}) <= 1:
+        return statistics.median(v for v, _ in pairs)
+    half = sum(w for _, w in pairs) / 2
+    acc = 0.0
+    for v, w in pairs:
+        acc += w
+        if acc >= half:
+            return v
+    return pairs[-1][0]
 
 
 def get_comps_benchmark(
@@ -391,6 +473,9 @@ def get_comps_benchmark(
     if settings:
         radii = tuple(settings.get("radii", list(radii)))
         min_comps = int(settings.get("min_comps", min_comps))
+    rent = ({**RENT_BENCHMARK_DEFAULTS,
+             **{k: v for k, v in (settings or {}).items() if k in RENT_BENCHMARK_DEFAULTS}}
+            if mode == 'rent' else None)
 
     # Use the condo-fee-inclusive €/m² when available (rent mode pre-pass
     # populates `ask_psqm_effective`). Sale listings don't carry it, so they
@@ -442,12 +527,18 @@ def get_comps_benchmark(
     zone_pool   = index["by_zone"].get(omi_zone, [])     if omi_zone   else []
     fascia_pool = index["by_fascia"].get(omi_fascia, []) if omi_fascia else []
 
-    # ── Pass 1: same OMI zone + same condition group (ideal pool) ─────────────
     pool: list[dict] = []
     pass_used: str = ""
     radius_used = None
 
-    if omi_zone and listing_cgroup != 'unknown':
+    # ── Rentals: nearest comparable flats (falls back to the cascade) ────────
+    if rent and rent["comps_method"] == "knn":
+        pool, pass_used, radius_used = _knn_pool(
+            listing, index, _is_candidate, listing_cgroup,
+            int(rent["knn_k"]), float(rent["knn_max_m"]), min_comps)
+
+    # ── Pass 1: same OMI zone + same condition group (ideal pool) ─────────────
+    if not pass_used and omi_zone and listing_cgroup != 'unknown':
         candidates = [l for l in zone_pool
                       if _is_candidate(l)
                       and l.get("omi_zona") == omi_zone
@@ -515,48 +606,62 @@ def get_comps_benchmark(
     if not pool:
         return _no_comps_result(ask_psqm, omi_mid, listing_cgroup)
 
-    # ── Apply condition adjustment ───────────────────────────────────────────
-    # Pass 1 (zone_stratified) is by definition same-group: no adjustment.
-    # All other passes mix conditions: multiply each comp by its factor.
-    # Listings with 'unknown' condition: keep raw price (factor 1.0) to
-    # avoid biasing on missing data.
-    adjusted = pass_used != 'zone_stratified' and listing_cgroup != 'unknown'
-    if adjusted:
-        adj_prices = [_adjust_price(_psqm(l),
-                                    condition_group(l),
-                                    listing_cgroup)
-                      for l in pool]
-    else:
-        adj_prices = [_psqm(l) for l in pool]
-    adj_prices = [p for p in adj_prices if p > 0]
-    if not adj_prices:
+    # ── Price each comp like the listing ─────────────────────────────────────
+    # Condition: stratified pools are same-group by definition; other pools
+    # mix conditions, so each comp is multiplied by its factor. Listings with
+    # 'unknown' condition keep raw prices (factor 1.0) to avoid biasing on
+    # missing data.
+    # Rentals also: size (€/m² falls with m²) and recency (weight halves
+    # every recency_half_life_days a comp has gone unseen).
+    stratified = pass_used in ('zone_stratified', 'knn_stratified')
+    adjusted = not stratified and listing_cgroup != 'unknown'
+    beta = float(rent["size_elasticity"] or 0) if rent else 0.0
+    half_life = rent["recency_half_life_days"] if rent else None
+    pairs = []
+    for l in pool:
+        p = _psqm(l)
+        if adjusted:
+            p = _adjust_price(p, condition_group(l), listing_cgroup)
+        comp_sqm = l.get("sqm") or 0
+        if beta and sqm_t > 0 and comp_sqm > 0:
+            p *= (sqm_t / comp_sqm) ** beta
+        if p <= 0:
+            continue
+        w = 1.0
+        if half_life:
+            age = _age_days(l)
+            w = 0.5 ** ((age if age is not None else 120) / half_life)
+        pairs.append((p, w))
+    if not pairs:
         return _no_comps_result(ask_psqm, omi_mid, listing_cgroup)
 
-    # ── IQR outlier removal + asymmetric trim (gentler when pool is small) ───
-    s = sorted(adj_prices)
-    n = len(s)
+    # ── IQR outlier removal (+ legacy asymmetric trim) ────────────────────────
+    pairs.sort()
+    n = len(pairs)
     if n >= 4:
-        q1 = s[n // 4]
-        q3 = s[(3 * n) // 4]
+        q1 = pairs[n // 4][0]
+        q3 = pairs[(3 * n) // 4][0]
         iqr = q3 - q1
-        s = [v for v in s if q1 - 1.5 * iqr <= v <= q3 + 1.5 * iqr]
-        if not s:
-            s = sorted(adj_prices)
+        pairs = [pv for pv in pairs if q1 - 1.5 * iqr <= pv[0] <= q3 + 1.5 * iqr] or pairs
 
-    n2 = len(s)
-    if n2 >= 30:
-        top_cut = max(1, int(n2 * 0.12))
-        bot_cut = max(1, int(n2 * 0.05))
-        s = s[bot_cut: n2 - top_cut]
-    elif n2 >= 15:
-        top_cut = max(1, int(n2 * 0.08))
-        s = s[: n2 - top_cut]
-    # < 15: no trim — every data point is precious
+    if not rent or rent["trim"] == "asym":
+        # Cut 12 % from the top but 5 % from the bottom: put the "median" near
+        # the 46th percentile — rentals use the symmetric IQR-only trim.
+        n2 = len(pairs)
+        if n2 >= 30:
+            top_cut = max(1, int(n2 * 0.12))
+            bot_cut = max(1, int(n2 * 0.05))
+            pairs = pairs[bot_cut: n2 - top_cut]
+        elif n2 >= 15:
+            top_cut = max(1, int(n2 * 0.08))
+            pairs = pairs[: n2 - top_cut]
+        # < 15: no trim — every data point is precious
 
-    if not s:
+    if not pairs:
         return _no_comps_result(ask_psqm, omi_mid, listing_cgroup)
 
-    median = statistics.median(s)
+    s = [v for v, _ in pairs]
+    median = _weighted_median(pairs)
     p40    = _percentile(s, 40)
     p60    = _percentile(s, 60)
     n_final = len(s)
@@ -565,23 +670,30 @@ def get_comps_benchmark(
 
     # ── Confidence (per stratification spec) ──────────────────────────────────
     confidence = 0
-    if n_final >= 40:
+    # A nearest-flats pool is capped at knn_k (30) by design, so "large" is
+    # relative to that cap — otherwise every kNN benchmark lost 20 points
+    # against zone pools and fell under the label gates (Good Value 327 →
+    # 173, Idealista 134 → 1 on Milan) for no change in accuracy.
+    big = max(20, int(0.8 * int(rent["knn_k"]))) if pass_used.startswith("knn") else 40
+    if n_final >= big:
         confidence += 40
     elif n_final >= 20:
         confidence += 20
-    if pass_used == 'zone_stratified':
+    if stratified:
         confidence += 20
-    elif 'zone' in pass_used:
+    elif 'zone' in pass_used or pass_used == 'knn':
         confidence += 10
     confidence += 20 if stdev_v < (3.0 if mode == 'rent' else 1500) else 0
-    if pass_used == 'zone_stratified' and listing_cgroup != 'unknown':
+    if stratified and listing_cgroup != 'unknown':
         confidence += 20
     confidence = max(0, min(100, confidence))
 
-    blended = (
-        _blend_sale(median, omi_mid, n_final, confidence) if mode == 'sale'
-        else _blend(median, omi_mid, confidence)
-    )
+    if mode == 'sale':
+        blended = _blend_sale(median, omi_mid, n_final, confidence)
+    elif rent and not rent["omi_blend"]:
+        blended = median   # asks run ~41 % above OMI: blending pulled the benchmark low
+    else:
+        blended = _blend(median, omi_mid, confidence)
     delta_pct = (ask_psqm - blended) / blended if blended > 0 else 0
 
     # Capture the IDs of the listings that fed into the median, so the

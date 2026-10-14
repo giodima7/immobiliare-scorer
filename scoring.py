@@ -1369,6 +1369,7 @@ def score_rental(listing: dict, all_listings: list, settings: dict | None = None
         listing, all_listings,
         radii=tuple(settings.get("radii", [500, 800, 1200])),
         min_comps=int(settings.get("min_comps", 5)),
+        settings=settings,     # rental benchmark switches (comps_engine.RENT_BENCHMARK_DEFAULTS)
         index=comps_index,
         want_comp_ids=False,   # rentals don't store comp_ids
     )
