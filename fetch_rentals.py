@@ -255,6 +255,30 @@ def sleep_until(deadline: float) -> None:
     minute makes an overdue scan start soon after wake."""
     while (left := deadline - time.time()) > 0:
         time.sleep(min(60.0, left))
+
+
+def run_marked(source: str, fn, *args):
+    """Run a scan with a `.scan_running_<source>` marker present, so the
+    dashboard can tell "scanning now" from "daemon alive" (api.py)."""
+    marker = BASE_DIR / f".scan_running_{source}"
+    marker.write_text(str(os.getpid()))
+    try:
+        return fn(*args)
+    finally:
+        marker.unlink(missing_ok=True)
+
+
+def wait_and_drip(source: str, deadline: float, log=print) -> None:
+    """Wait for the next scan, fetching listing pages meanwhile
+    (listing_details.drip_until). Falls back to a plain wait on any error."""
+    try:
+        from listing_details import drip_until
+        drip_until(source, deadline, log)
+    except KeyboardInterrupt:
+        raise
+    except Exception as exc:
+        log(f"[details] drip stopped ({type(exc).__name__}: {exc}) — plain wait")
+    sleep_until(deadline)
 DIGEST_HOUR         = 8          # send daily digest at 08:xx local time
 
 # ── OMI rent data (Milano, 2° sem 2025) ────────────────────────────────────────
@@ -623,7 +647,23 @@ def _parse_condo_from_description(desc):
             val = val / 12
         if 20 <= val <= 1000:
             return int(round(val))
+    # Number before the keyword: "€ 950 + 200 per oneri condominiali",
+    # "+ € 150 di spese condominiali".
+    for m in _CONDO_AMOUNT_FIRST_RX.finditer(text):
+        val = float(m.group(1).replace(".", "").replace(",", "."))
+        ctx = text[m.start(): min(len(text), m.end() + 30)]
+        if _PERIOD_ANNUAL_RX.search(ctx) and not _PERIOD_MONTHLY_RX.search(ctx):
+            val = val / 12
+        if 20 <= val <= 1000:
+            return int(round(val))
     return None
+
+
+_CONDO_AMOUNT_FIRST_RX = _re.compile(
+    r"\+\s*(?:€\s*)?(\d[\d.,]*)\s*(?:€|eur\w*)?\s*(?:per\s+|di\s+)?"
+    r"(?:oneri|spese)(?:\s+condomin\w*)",
+    _re.IGNORECASE,
+)
 
 
 # ── Parser ─────────────────────────────────────────────────────────────────────
@@ -817,7 +857,8 @@ def parse_rental(item: dict) -> Optional[dict]:
     energy_class = str(energy_class).strip().upper() if energy_class else None
 
     # year_built
-    year_built = prop.get("yearBuilt") or prop.get("year_built") or re_data.get("yearBuilt")
+    year_built = (prop.get("buildingYear") or prop.get("yearBuilt")      # detail page: buildingYear
+                  or prop.get("year_built") or re_data.get("yearBuilt"))
     if year_built is not None:
         try:
             year_built = int(year_built)
@@ -1238,12 +1279,13 @@ async def _fetch_async(pages: int, area_slugs: list, max_rent: int,
 #   2. sweep    — 1/DAILY_SWEEP_DAYS of the active areas in full, so every
 #      listing's last_seen_date refreshes within STALE_DAYS_THRESHOLD;
 #   3. details  — detail pages (energy class, publication date, condo fees:
-#      absent from search results) for new listings first, then a slow
-#      backfill of older ones, DAILY_DETAIL_BUDGET per day.
+#      absent from search results), DAILY_DETAIL_BUDGET per scan. 0 since
+#      2026-10-14: the daemon fetches them between scans instead, best
+#      candidates first (listing_details.py, wait_and_drip).
 DAILY_DISCOVER_MAX_PAGES = 15
 DAILY_STOP_AFTER         = 2
 DAILY_SWEEP_DAYS         = 4
-DAILY_DETAIL_BUDGET      = 50
+DAILY_DETAIL_BUDGET      = 0
 DETAIL_FIELDS = ("energy_class", "published_date", "spese_condominiali", "detail_fetched_at")
 DETAIL_URL    = "https://www.immobiliare.it/annunci/{id}/"
 
@@ -1955,9 +1997,9 @@ def run_once(args) -> list:
     write_status(len(new_listings), len(seen), skipped_areas=skipped_areas)
     print(f"  ✓ {len(scored)} rentals written · {len(new_listings)} new")
 
-    # Deploy to Netlify — only when we have actual listings to show
-    if NETLIFY_CONFIG_PATH.exists() and scored:
-        _netlify_deploy()
+    # (The Netlify deploy that used to follow is gone: the dashboard moved to
+    # Cloudflare, every deploy failed with 401/403, and the online data comes
+    # from Supabase anyway.)
 
     return new_listings
 
@@ -2124,7 +2166,7 @@ def daemon_loop(args):
         if time.time() < next_run:
             log(f"Next scan at {datetime.fromtimestamp(next_run):%Y-%m-%d %H:%M}")
             try:
-                sleep_until(next_run)
+                wait_and_drip("immobiliare", next_run, log)
             except KeyboardInterrupt:
                 log("Interrupted during sleep — stopping daemon.")
                 log_fh.close()
@@ -2133,7 +2175,7 @@ def daemon_loop(args):
         new_listings = []
         scan_ok = False
         try:
-            new_listings = run_once(args)
+            new_listings = run_marked("immobiliare", run_once, args)
 
             # Re-read email config on every iteration so dashboard changes take effect
             email_cfg  = load_email_config()

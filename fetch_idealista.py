@@ -60,7 +60,7 @@ from fetch_rentals import (
     NETLIFY_CONFIG_PATH, STATUS_PATH, DIGEST_SENT_PATH,
     # Constants
     CITY_KEY, CITY_LABEL, EDGE_PATH, DAEMON_INTERVAL_SEC, DAEMON_RETRY_SEC,
-    last_scan_at, mark_scan_done, sleep_until, sweep_slugs_for_today, record_sweeps,
+    last_scan_at, mark_scan_done, sleep_until, wait_and_drip, run_marked, sweep_slugs_for_today, record_sweeps,
     _parse_condo_from_description,
     # OMI + scoring
     match_omi, score_all,
@@ -71,7 +71,7 @@ from fetch_rentals import (
     # Active areas
     _load_active_areas,
     # Netlify deploy + prefs
-    _netlify_deploy, _load_scan_prefs,
+    _load_scan_prefs,
     # Daily digest helpers
     mark_digest_sent,
 )
@@ -546,6 +546,12 @@ JSON.stringify((() => {
                 });
                 return out.slice(0, 8);
             })(),
+            // Gallery size from the card's "1/5" counter (last span).
+            photo_count: (() => {
+                const spans = a.querySelectorAll('.item-multimedia-pictures__counter span');
+                const n = spans.length ? parseInt((spans[spans.length - 1].textContent || '').replace(/\D/g, ''), 10) : NaN;
+                return Number.isFinite(n) ? n : null;
+            })(),
             latitude:    a.getAttribute('data-latitude')  || '',
             longitude:   a.getAttribute('data-longitude') || '',
             agency:      (() => {
@@ -930,6 +936,13 @@ def _safe_float(val) -> Optional[float]:
 
 # ── Listing parser ────────────────────────────────────────────────────────────
 
+def _int_or_none(val) -> Optional[int]:
+    try:
+        return int(val) if val not in (None, "") else None
+    except (TypeError, ValueError):
+        return None
+
+
 def parse_idealista_listing(raw: dict) -> Optional[dict]:
     """
     Convert raw DOM-extracted fields into the standard listing dict.
@@ -1097,7 +1110,7 @@ def parse_idealista_listing(raw: dict) -> Optional[dict]:
         "has_parking":        has_parking,
         "heating_type":       None,
         "furnished":          furnished,
-        "photo_count":        None,
+        "photo_count":        _int_or_none(raw.get("photo_count")),
         "days_on_market":     None,
         "published_date":     None,
         "condition":          None,
@@ -2140,9 +2153,9 @@ def run_once(args) -> list:
     write_idealista_status(new_count=len(new_listings), skipped_areas=skipped_areas)
     print(f"  ✓ {len(scored)} Idealista listings written · {len(new_listings)} new")
 
-    # Netlify deploy — only when config is present and we have data
-    if NETLIFY_CONFIG_PATH.exists() and scored:
-        _netlify_deploy()
+    # (The Netlify deploy that used to follow is gone: the dashboard moved to
+    # Cloudflare, every deploy failed with 401/403, and the online data comes
+    # from Supabase anyway.)
 
     return new_listings
 
@@ -2173,7 +2186,7 @@ def daemon_loop(args):
         if time.time() < next_run:
             log(f"Next scan at {datetime.fromtimestamp(next_run):%Y-%m-%d %H:%M}")
             try:
-                sleep_until(next_run)
+                wait_and_drip("idealista", next_run, log)
             except KeyboardInterrupt:
                 log("Interrupted during sleep — stopping Idealista daemon.")
                 log_fh.close()
@@ -2182,7 +2195,7 @@ def daemon_loop(args):
         new_listings = []
         scan_ok = False
         try:
-            new_listings = run_once(args)
+            new_listings = run_marked("idealista", run_once, args)
 
             if _email_available:
                 email_cfg = load_email_config()
