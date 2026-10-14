@@ -40,12 +40,13 @@ Formula
 from __future__ import annotations
 import json
 import math
+from datetime import date
 import re as _re
 import sys
 from pathlib import Path
 from re import compile as re_compile
 
-from comps_engine import get_comps_benchmark, build_comps_index
+from comps_engine import get_comps_benchmark, build_comps_index, SHORTLET_PLATFORMS
 import omi_lookup
 
 
@@ -336,69 +337,8 @@ PURCHASE_COSTS: dict[str, float] = {
 LDI: dict[str, int] = _build_ldi("milano")
 
 
-def is_hidden_gem(listing: dict, settings: dict | None = None) -> bool:
-    """
-    A Hidden Gem must be excellent on ALL dimensions simultaneously.
-    No single strong signal compensates for weakness elsewhere.
-    Thresholds are read from settings (or _DEFAULT_SETTINGS if not provided).
-
-    Beyond the standard score gates this also enforces two physical
-    sanity-checks that the abstract scores can miss:
-      • metro within `gem_metro_max_m` (real walkability, not just a
-        "well-connected fascia" inference from the location score)
-      • at least `gem_min_sqm_per_room` of floor area per room (avoids
-        crammed 45 m² 2-locale flats slipping in as "gems")
-    """
-    if settings is None:
-        settings = _load_settings()
-    delta = listing.get("comps_delta_pct")
-
-    # Metro proximity gate. None = unknown; treat as failing the gate
-    # because we can't prove the listing is actually walk-to-metro.
-    metro_max = settings.get("gem_metro_max_m", 800)
-    metro_dist = listing.get("metro_nearest_dist_m")
-    if metro_max and (metro_dist is None or metro_dist > metro_max):
-        return False
-
-    # Cramped-flat gate. A 45 m² flat marketed as a 2-locale (≈22.5 m²
-    # per room) is borderline; anything below the threshold is too tight
-    # to be a "gem" no matter how cheap it is per m².
-    min_spr = settings.get("gem_min_sqm_per_room", 0)
-    sqm     = listing.get("sqm")
-    rooms   = listing.get("rooms")
-    if min_spr and sqm and rooms and rooms > 0 and (sqm / rooms) < min_spr:
-        return False
-
-    return (
-        (listing.get("score_total") or 0)                                      >= settings.get("gem_total_min",      72)   and
-        (listing.get("ldi_score") or 0)                                        >= settings.get("gem_ldi_min",         65)   and
-        delta is not None and delta                                            <= settings.get("gem_delta_max",       -8.0) and
-        (listing.get("score_property") or listing.get("score_physical") or 0) >= settings.get("gem_property_min",    50)   and
-        (listing.get("score_location") or 0)                                   >= settings.get("gem_location_min",    45)   and
-        (listing.get("comps_confidence") or 0)                                 >= settings.get("gem_confidence_min",  40)   and
-        (listing.get("score_penalty") or 0)                                    >= settings.get("gem_penalty_min",     70)
-    )
-
-
-def is_good_value(listing: dict, settings: dict | None = None) -> bool:
-    """
-    Great Value = solid listing, below market, decent area.
-    Weaker than Hidden Gem on every dimension but still genuinely good.
-    Thresholds are read from settings (or _DEFAULT_SETTINGS if not provided).
-    """
-    if settings is None:
-        settings = _load_settings()
-    delta = listing.get("comps_delta_pct")
-    return (
-        not is_hidden_gem(listing, settings)                                       and
-        (listing.get("score_total") or 0)                                      >= settings.get("gv_total_min",      65)   and
-        (listing.get("ldi_score") or 0)                                        >= settings.get("gv_ldi_min",         45)   and
-        delta is not None and delta                                            <= settings.get("gv_delta_max",       -5.0) and
-        (listing.get("score_property") or listing.get("score_physical") or 0) >= settings.get("gv_property_min",    40)   and
-        (listing.get("score_location") or 0)                                   >= settings.get("gv_location_min",    35)   and
-        (listing.get("comps_confidence") or 0)                                 >= settings.get("gv_confidence_min",  30)   and
-        (listing.get("score_penalty") or 0)                                    >= settings.get("gv_penalty_min",     55)
-    )
+# Rental labels: rental_labels() (rent_* settings). The old is_hidden_gem /
+# is_good_value helpers were never called — removed with the redesign.
 
 
 # ── Load scoring settings ────────────────────────────────────────────────────
@@ -450,6 +390,25 @@ _DEFAULT_SETTINGS: dict = {
     "gem_penalty_min":    75,
     "gem_metro_max_m":    800,     # ≈ 10-min walk; None disables the gate
     "gem_min_sqm_per_room": 22,    # crammed-flat filter
+    # Rental labels (redesigned 2026-10-14; sales keep the gem_*/gv_* keys).
+    # The discount is judged in units of its own uncertainty (price_z =
+    # delta / σ, σ as in price_score_smooth). No area-desirability (LDI) gate
+    # — it confined labels to central fascia B (337 of 339) — and no
+    # total-score / confidence gates (confidence didn't track accuracy).
+    "rent_gv_z_max":             -1.1,   # ≈ −20 % at typical σ
+    "rent_gem_z_max":            -1.3,   # ≈ −23 % — and a genuinely good flat:
+    "rent_label_delta_floor":    -30.0,  # deeper discounts: verify first, no label
+    "rent_label_max_age_days":   60,     # on the market longer → not a bargain
+    "rent_gv_min_comps":         15,
+    "rent_gem_min_comps":        20,
+    "rent_gv_property_min":      45,
+    "rent_gv_location_min":      50,
+    "rent_gv_penalty_min":       60,
+    "rent_gem_property_min":     65,
+    "rent_gem_location_min":     80,
+    "rent_gem_penalty_min":      75,
+    "rent_gem_metro_max_m":      700,
+    "rent_gem_min_sqm_per_room": 22,
     # Great Value badge thresholds
     "gv_total_min":       70,
     "gv_ldi_min":         50,
@@ -837,19 +796,70 @@ def property_score(listing: dict, settings: dict | None = None) -> int:
 
 # ── Price-vs-comps score (0–100) ─────────────────────────────────────────────
 
-def price_score_smooth(delta_pct: float, spread: float, settings: dict) -> float:
+def price_sigma(comps: dict, settings: dict) -> float:
+    """Uncertainty of a rental's discount: wider when its comps disagree."""
+    med = comps.get("median") or 0
+    spread = ((comps.get("p60") or 0) - (comps.get("p40") or 0)) / med if med > 0 else 0.0
+    return settings["price_sigma_base"] + settings["price_sigma_spread"] * max(0.0, spread)
+
+
+# Benchmarks good enough to hang a label on: nearest flats or the listing's
+# own OMI zone — not citywide fascia / OMI-only fallbacks.
+_LABEL_BENCHMARKS = {"knn", "knn_stratified", "zone_stratified", "zone_any_condition"}
+
+
+def rental_labels(listing: dict, price_z: float | None, delta_label_pct: float | None,
+                  comps: dict, prop_s: float, loc_s: float, pen_s: float,
+                  settings: dict) -> tuple[bool, bool]:
+    """
+    (good_value, hidden_gem) for a rental — see the rent_* settings.
+    Both need a real discount (price_z), a solid benchmark, a listing that
+    hasn't sat on the market for months and isn't a short-let platform, and
+    a discount no deeper than rent_label_delta_floor (beyond that it's more
+    often bait or bad data than a bargain). Hidden Gem additionally needs a
+    deeper discount, more comps, better property/location/penalty scores,
+    metro within walking distance and an uncramped layout.
+    """
+    st = settings
+    if (price_z is None or delta_label_pct is None
+            or listing.get("_absolute_value_gate_applied") or listing.get("_is_corporate_rental")
+            or SHORTLET_PLATFORMS.search(listing.get("agency_name") or "")
+            or comps.get("benchmark_source") not in _LABEL_BENCHMARKS
+            or delta_label_pct < st["rent_label_delta_floor"]):
+        return False, False
+    first_seen = listing.get("first_seen_date")
+    if first_seen:
+        try:
+            if (date.today() - date.fromisoformat(first_seen)).days > st["rent_label_max_age_days"]:
+                return False, False
+        except ValueError:
+            pass
+    n = comps.get("n_comps") or 0
+    good = (price_z <= st["rent_gv_z_max"] and n >= st["rent_gv_min_comps"]
+            and prop_s >= st["rent_gv_property_min"] and loc_s >= st["rent_gv_location_min"]
+            and pen_s >= st["rent_gv_penalty_min"])
+    metro = listing.get("metro_nearest_dist_m")
+    sqm, rooms = listing.get("sqm"), listing.get("rooms")
+    gem = (good and price_z <= st["rent_gem_z_max"] and n >= st["rent_gem_min_comps"]
+           and prop_s >= st["rent_gem_property_min"] and loc_s >= st["rent_gem_location_min"]
+           and pen_s >= st["rent_gem_penalty_min"]
+           and metro is not None and metro <= st["rent_gem_metro_max_m"]
+           and not (sqm and rooms and sqm / rooms < st["rent_gem_min_sqm_per_room"]))
+    return good and not gem, gem
+
+
+def price_score_smooth(delta_pct: float, sigma: float, settings: dict) -> float:
     """
     Rentals: discount in units of its own uncertainty → 0–100, no flat
     regions. The piecewise curve gave 100 to everything ≥15 % below comps
     (−15 % and −37 % tied; 88 of the top 100 at 100) and 0 to everything
     ≥20 % above.
 
-    σ = base + slope × comps spread ((p60 − p40) / median): on Milan
-    long-term rentals the median |ask − benchmark| runs 10.7 % for the
-    tightest fifth of comp pools to 14.3 % for the widest. k sets the
-    steepness so −7 % / −15 % land near their old scores at typical σ.
+    σ from price_sigma() = base + slope × comps spread ((p60 − p40) /
+    median): on Milan long-term rentals the median |ask − benchmark| runs
+    10.7 % for the tightest fifth of comp pools to 14.3 % for the widest.
+    k sets the steepness so −7 % / −15 % land near their old scores.
     """
-    sigma = settings["price_sigma_base"] + settings["price_sigma_spread"] * max(0.0, spread)
     z = delta_pct / sigma
     return 50.0 * math.erfc(settings["price_curve_k"] * z / math.sqrt(2))   # 100·Φ(−k·z)
 
@@ -1430,11 +1440,12 @@ def score_rental(listing: dict, all_listings: list, settings: dict | None = None
     blended_median = comps.get("blended_median")
     confidence     = comps.get("confidence", 0)
 
+    price_z = None   # discount in units of its uncertainty — drives the labels
     if delta_pct is not None and blended_median is not None and blended_median > 0:
+        sigma = price_sigma(comps, settings)
+        price_z = delta_pct / sigma
         if settings.get("price_curve") == "smooth":
-            med = comps.get("median") or 0
-            spread = ((comps.get("p60") or 0) - (comps.get("p40") or 0)) / med if med > 0 else 0.0
-            pvc_s = price_score_smooth(delta_pct, spread, settings)
+            pvc_s = price_score_smooth(delta_pct, sigma, settings)
         else:
             pvc_s = price_vs_comps_score(delta_pct, rent_mo, blended_median, sqm, settings)
         delta_label_pct = round(delta_pct * 100, 1)
@@ -1563,34 +1574,9 @@ def score_rental(listing: dict, all_listings: list, settings: dict | None = None
         suggested_rent_mo   = int(round(adjusted_psqm * sqm / 25) * 25)
         suggested_rent_psqm = round(adjusted_psqm, 1)
 
-    # ── Hidden Gem / Great Value flags ────────────────────────────────────────
-    _gate_fired = listing.get("_absolute_value_gate_applied", False)
-    _is_corp_l  = listing.get("_is_corporate_rental", False)
-    _loc_s_r = round(loc_s)
-    _hidden_gem = (
-        not _gate_fired                                                        # gate = not a gem
-        and not _is_corp_l                                                     # corporate = not a gem
-        and total          >= settings.get("gem_total_min",      72)
-        and ldi_score  >= settings.get("gem_ldi_min",         65)
-        and delta_label_pct is not None
-        and delta_label_pct            <= settings.get("gem_delta_max",       -8.0)
-        and prop_s     >= settings.get("gem_property_min",    50)
-        and _loc_s_r   >= settings.get("gem_location_min",    45)
-        and confidence >= settings.get("gem_confidence_min",  40)
-        and pen_s      >= settings.get("gem_penalty_min",     70)
-    )
-    _good_value = not _hidden_gem and (
-        not _gate_fired                                                        # gate = not good value
-        and not _is_corp_l                                                     # corporate = not good value
-        and total          >  settings.get("gv_total_min",        65)         # strictly > ceiling
-        and ldi_score  >= settings.get("gv_ldi_min",          45)
-        and delta_label_pct is not None
-        and delta_label_pct            <= settings.get("gv_delta_max",        -5.0)
-        and prop_s     >= settings.get("gv_property_min",     40)
-        and _loc_s_r   >= settings.get("gv_location_min",     35)
-        and confidence >= settings.get("gv_confidence_min",   30)
-        and pen_s      >= settings.get("gv_penalty_min",      55)
-    )
+    # ── Good Value / Hidden Gem (see rental_labels and the rent_* settings) ──
+    _good_value, _hidden_gem = rental_labels(
+        listing, price_z, delta_label_pct, comps, prop_s, round(loc_s), pen_s, settings)
 
     return {
         # Comps fields
@@ -1621,6 +1607,7 @@ def score_rental(listing: dict, all_listings: list, settings: dict | None = None
         # Gem flags
         "hidden_gem":          _hidden_gem,
         "good_value":          _good_value,
+        "price_z":             round(price_z, 2) if price_z is not None else None,
         # Back-compat fields (kept for dashboard display / OMI context)
         "vs_omi_pct":          vs_omi_pct,
         "vs_omi_rent_pct":     vs_omi_pct,

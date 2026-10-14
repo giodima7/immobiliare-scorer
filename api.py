@@ -2396,23 +2396,26 @@ def save_scoring_settings():
 
 @app.route("/api/rescore", methods=["POST"])
 def api_rescore():
-    """Re-run scoring + explain on the current rentals_latest.json in-process."""
-    rent_path = DASHBOARD_DIR / "rentals_latest.json"
+    """Re-run scoring + explain on a city's rentals (default Milan), then
+    push to Supabase. Called by the settings panel after saving thresholds.
+
+    Was hard-wired to the legacy rentals_latest.json, so saved thresholds
+    never reached the per-city file the dashboard actually reads. Uses the
+    enrichment worker's locked read-merge-rescore-write (_flush_geo)."""
+    city = (request.args.get("city")
+            or (request.get_json(silent=True) or {}).get("city")
+            or "milano").lower()
+    rent_path = _resolve_city_path(city, "rental")
     if not rent_path.exists():
         _load_env()
         from supabase_sync import hydrate_local_json
         if not hydrate_local_json(rent_path, "rental"):
-            return jsonify({"error": "rentals_latest.json not found and Supabase hydrate failed"}), 404
+            return jsonify({"error": f"{rent_path.name} not found and Supabase hydrate failed"}), 404
     try:
-        from scoring import score_all, _load_settings
-        from explain import explain_all
-        with open(rent_path) as f:
-            listings = _json.load(f)
-        settings = _load_settings()
-        scored   = score_all(listings, settings)
-        explain_all(scored)
-        with open(rent_path, "w") as f:
-            _json.dump(scored, f, indent=2)
+        import scoring as _scoring
+        data = _json.loads(rent_path.read_text())
+        _flush_geo(data, rent_path, _scoring)
+        _invalidate_pending_cache(city, "rental")
         # Push fresh scores back to Supabase so the deployed dashboard
         # reflects them on next reload. Quiet failure if creds missing.
         try:
@@ -2420,7 +2423,7 @@ def api_rescore():
             push_local_json(rent_path, "rental")
         except Exception as exc:
             print(f"[rescore] supabase push failed: {exc}")
-        return jsonify({"ok": True, "count": len(scored)})
+        return jsonify({"ok": True, "count": len(data), "city": city})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
