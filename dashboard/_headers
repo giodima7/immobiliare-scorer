@@ -7,8 +7,8 @@
 # hours-old index.html after a deploy. `no-store` is the only header that
 # guarantees every page load fetches the latest dashboard.
 #
-# We don't bundle assets — every script/style is inline in index.html —
-# so making HTML uncacheable has zero compound cost.
+# No bundler: the page's CSS/JS are plain files in assets/ (revalidated on
+# every load, see /assets/* below), so HTML + scripts always match.
 /
   Cache-Control: no-store, no-cache, must-revalidate
   Pragma: no-cache
@@ -24,6 +24,13 @@
 /zone-mappings
   Cache-Control: no-store, no-cache, must-revalidate
 /zone-mappings.html
+  Cache-Control: no-store, no-cache, must-revalidate
+
+# The page's CSS/JS (split out of index.html on 2026-10-14): always
+# revalidate, so a deploy never pairs a new index.html with old scripts.
+/assets/*
+  Cache-Control: no-cache
+/full.html
   Cache-Control: no-store, no-cache, must-revalidate
 
 # JSON snapshots: 1-hour browser cache. Fresh data lands via GitHub Actions
