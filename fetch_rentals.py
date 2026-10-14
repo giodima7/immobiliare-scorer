@@ -1631,10 +1631,9 @@ def _judgeable(l: dict, last_seen: date, covered: dict) -> bool:
 def mark_stale_listings(all_listings: list, today: date = None) -> int:
     """
     For every listing, compare last_seen_date to today and set
-    `days_since_seen` + `is_stale` accordingly. Listings WITHOUT a
-    last_seen_date (legacy data from before this feature) are NOT marked
-    stale on the first cycle — they get a grace pass until the next scan
-    stamps them.
+    `days_since_seen` + `is_stale` accordingly. Listings without a usable
+    last_seen_date, or whose areas haven't all been swept since they were
+    last seen (see _judgeable), keep their current is_stale.
 
     Returns the number of listings flagged as stale.
     """
@@ -1644,20 +1643,26 @@ def mark_stale_listings(all_listings: list, today: date = None) -> int:
     stale_count = 0
     for l in all_listings:
         last_seen = l.get("last_seen_date")
-        if not last_seen:
-            l["days_since_seen"] = None
-            l["is_stale"] = False
-            continue
         try:
-            seen_on = datetime.fromisoformat(last_seen).date()
+            seen_on = datetime.fromisoformat(last_seen).date() if last_seen else None
         except ValueError:
+            seen_on = None
+        if seen_on is None:
+            # No usable date (e.g. Idealista rows before 2026-10-14): keep the
+            # flag as is — forcing False revived ~9k archived Idealista rows.
             l["days_since_seen"] = None
-            l["is_stale"] = False
+            l["is_stale"] = bool(l.get("is_stale"))
+            stale_count += l["is_stale"]
             continue
         ds = (today - seen_on).days
         l["days_since_seen"] = ds
-        if not _judgeable(l, seen_on, covered):
-            l["is_stale"] = False   # its area hasn't been re-swept yet
+        if ds >= STALE_DAYS_THRESHOLD and not _judgeable(l, seen_on, covered):
+            # Its area hasn't been re-swept yet: can't call it gone, but
+            # don't revive it either. The rentals dashboard hides listings
+            # only via is_stale — forcing False here re-showed every
+            # archived / user-archived listing.
+            l["is_stale"] = bool(l.get("is_stale"))
+            stale_count += l["is_stale"]
             continue
         is_stale = ds >= STALE_DAYS_THRESHOLD
         l["is_stale"] = is_stale
