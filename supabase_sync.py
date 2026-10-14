@@ -156,12 +156,44 @@ def _normalise(v):
     return v
 
 
+_live_columns: tuple[float, frozenset[str]] | None = None
+
+
+def schema_columns() -> frozenset[str]:
+    """Columns the live `listings` table actually has, from PostgREST's
+    OpenAPI description (refreshed every 10 min). A field added locally
+    before its migration ran is then skipped instead of failing every batch
+    with "column not found", and starts syncing once the migration is in.
+    Falls back to SCHEMA_COLUMNS when the description can't be read."""
+    global _live_columns
+    if _live_columns and time.time() - _live_columns[0] < 600:
+        return _live_columns[1]
+    base = (os.environ.get("SUPABASE_URL") or SUPABASE_URL).rstrip("/")
+    key = os.environ.get("SUPABASE_SERVICE_KEY") or SUPABASE_KEY
+    cols = SCHEMA_COLUMNS
+    if base and key:
+        try:
+            req = urllib.request.Request(f"{base}/rest/v1/", headers={
+                "apikey": key, "Authorization": f"Bearer {key}",
+                "Accept": "application/openapi+json"})
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                spec = json.loads(resp.read())
+            live = (spec.get("definitions") or {}).get("listings", {}).get("properties") or {}
+            if live:
+                cols = frozenset(live)
+        except Exception:
+            pass
+    _live_columns = (time.time(), cols)
+    return cols
+
+
 def listing_to_row(listing: dict, listing_type: str) -> dict:
     """Map a listing dict to a Supabase row, dropping unknown columns."""
     row: dict = {"listing_type": listing_type}
+    columns = schema_columns()
     for k, v in listing.items():
         col = FIELD_RENAME.get(k, k)
-        if col not in SCHEMA_COLUMNS:
+        if col not in columns:
             continue
         row[col] = _normalise(v)
 
@@ -423,16 +455,29 @@ def hydrate_local_json(path: Path, listing_type: str, page_size: int = 1000) -> 
     return True
 
 
+# Legacy single-city snapshots (May 2026) — never pushed: their rows overwrite
+# current Milan rows and come back online as live (incidents on 2026-10-14).
+LEGACY_FILES = {"rentals_latest.json", "sales_latest.json"}
+
+# path → mtime of the version last pushed (in this process), so api.py's
+# autosync watcher doesn't push again what a rescore/enrichment just pushed.
+PUSHED_MTIME: dict[str, float] = {}
+
+
 def push_local_json(path: Path, listing_type: str) -> bool:
     """Upsert the local JSON's contents back to Supabase. Wraps sync_file
     so callers can refresh the DB after a local mutation (e.g. enrichment
     appended geo fields, rescore recomputed scores)."""
     if not path.exists():
         return False
+    if path.name in LEGACY_FILES:
+        print(f"[push] {path.name} is a legacy snapshot — not pushed")
+        return False
     if not SUPABASE_URL or not SUPABASE_KEY:
         print("[push] SUPABASE_URL / SUPABASE_SERVICE_KEY not set — skipping push")
         return False
     try:
+        PUSHED_MTIME[str(path)] = path.stat().st_mtime
         return sync_file(path, listing_type)
     except Exception as exc:
         print(f"[push] sync_file failed: {exc}")
