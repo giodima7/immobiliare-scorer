@@ -47,6 +47,7 @@ from pathlib import Path
 from re import compile as re_compile
 
 from comps_engine import get_comps_benchmark, build_comps_index, SHORTLET_PLATFORMS
+from listing_details import apply_details, fill_from_twins
 import omi_lookup
 
 
@@ -365,6 +366,20 @@ _DEFAULT_SETTINGS: dict = {
     # per scoring run) instead of "no", and leaves condition to the benchmark.
     "property_impute_unknown": True,
     "property_condition":      False,
+    # Idealista search cards only ever say "yes" to balcony / parking /
+    # furnished (keyword in the snippet), never "no" — they counted as
+    # bonuses with no matching penalties. Treated as unknown until a listing
+    # page (listing_details.py) or the same flat on Immobiliare answers.
+    "property_ignore_card_flags": True,
+    # Rentals: what the price comparison is made on. "asking" = rent alone
+    # on both sides (condo fees are judged in the property score); "known"
+    # = rent + fees wherever stated — only ~2 % state them, so exactly those
+    # looked 10–20 % dearer than neighbours whose fees were unknown.
+    "rent_condo_basis":  "asking",
+    # Discounts beyond rent_label_delta_floor are more often bad data, fake
+    # or already-let listings than deals (the labels already skip them):
+    # neutral price score and a "verify" flag instead of a top ranking.
+    "rent_price_suspect_neutral": True,
     # €-impact adjustment
     "euro_impact_small":  75,   # |monthly diff| < €75 → reduce penalty 30%
     "euro_impact_large": 200,   # |monthly diff| > €200 → full penalty
@@ -404,7 +419,9 @@ _DEFAULT_SETTINGS: dict = {
     "rent_gv_property_min":      45,
     "rent_gv_location_min":      50,
     "rent_gv_penalty_min":       60,
-    "rent_gem_property_min":     65,
+    # 62 = the share of flats 65 used to pass (40 %) before Idealista's
+    # yes-only card flags stopped inflating property scores (2026-10-14).
+    "rent_gem_property_min":     62,
     "rent_gem_location_min":     80,
     "rent_gem_penalty_min":      75,
     "rent_gem_metro_max_m":      700,
@@ -759,6 +776,14 @@ def property_parts(listing: dict, settings: dict | None = None) -> dict:
     # coefficient here counted it twice.
     if not settings.get("property_condition", True):
         parts.pop("condition", None)
+    if (settings.get("property_ignore_card_flags")
+            and listing.get("source") == "idealista"
+            and not listing.get("detail_fetched_at")):
+        twin = set(listing.get("twin_filled") or ())
+        for feat, key in (("balcony", "has_balcony"), ("parking", "has_parking"),
+                          ("furnished", "furnished")):
+            if key not in twin:
+                parts.pop(feat, None)
     return parts
 
 
@@ -1433,7 +1458,7 @@ def score_rental(listing: dict, all_listings: list, settings: dict | None = None
         min_comps=int(settings.get("min_comps", 5)),
         settings=settings,     # rental benchmark switches (comps_engine.RENT_BENCHMARK_DEFAULTS)
         index=comps_index,
-        want_comp_ids=False,   # rentals don't store comp_ids
+        want_comp_ids=not listing.get("is_stale"),   # dashboard's comparable-flats list
     )
 
     delta_pct      = comps.get("delta_pct")
@@ -1441,6 +1466,7 @@ def score_rental(listing: dict, all_listings: list, settings: dict | None = None
     confidence     = comps.get("confidence", 0)
 
     price_z = None   # discount in units of its uncertainty — drives the labels
+    price_suspect = False
     if delta_pct is not None and blended_median is not None and blended_median > 0:
         sigma = price_sigma(comps, settings)
         price_z = delta_pct / sigma
@@ -1449,6 +1475,10 @@ def score_rental(listing: dict, all_listings: list, settings: dict | None = None
         else:
             pvc_s = price_vs_comps_score(delta_pct, rent_mo, blended_median, sqm, settings)
         delta_label_pct = round(delta_pct * 100, 1)
+        if (settings.get("rent_price_suspect_neutral")
+                and delta_label_pct < settings.get("rent_label_delta_floor", -30.0)):
+            pvc_s = 50.0
+            price_suspect = True
         # Log extremes for debugging
         if pvc_s in (0.0, 100.0):
             print(
@@ -1466,17 +1496,9 @@ def score_rental(listing: dict, all_listings: list, settings: dict | None = None
         pvc_s = 50.0          # neutral when no benchmark
         delta_label_pct = None
 
-    # ── LDI boost (only for bargains in non-premium zones) ─────────────────────
-    # A bargain in a prime area deserves a reward; an overpriced one does not.
-    # The "premium" cutoff is the 80th-percentile compr_mid IN THE LISTING'S
-    # CITY — was hardcoded 5500 for Milan, now city-relative so Naples /
-    # La Maddalena get a sensible threshold too.
-    _omi_compr_r = listing.get("omi_compr_mid") or 0
-    _boost_max_r = _get_ldi_boost_threshold(listing.get("city", "milano"))
-    if delta_pct is not None and delta_pct <= 0 and _omi_compr_r <= _boost_max_r:
-        boosted_price_score = round(min(100.0, pvc_s * (1 + ldi_bonus)))
-    else:
-        boosted_price_score = round(pvc_s)   # above comps, no comps, or premium zone: no boost
+    # The old LDI boost on top of the price score changed no rental's score
+    # (2026-10-14: 0 of 9,958) — removed; field kept for the dashboard.
+    boosted_price_score = round(pvc_s)
 
     # ── Composite ──────────────────────────────────────────────────────────────
     total_raw = round(
@@ -1487,26 +1509,33 @@ def score_rental(listing: dict, all_listings: list, settings: dict | None = None
     )
     total_raw = max(0, min(100, total_raw))
 
+    cap_reasons = []
     # Property quality gate: sparse/poor property data caps the total at 75
-    if prop_s < 40:
-        total_raw = min(total_raw, 75)
+    if prop_s < 40 and total_raw > 75:
+        total_raw = 75
+        cap_reasons.append("property below 40 → max 75")
 
     # Price ceiling: overpriced listings cannot score above a ceiling regardless
     # of how good the property or location is.
     if delta_label_pct is not None:
         total = apply_price_ceiling(total_raw, delta_label_pct)
+        if total < total_raw:
+            cap_reasons.append(f"priced above nearby flats → max {total}")
     else:
         total = total_raw
 
     # Below-ground hard cap: seminterrato/interrato cannot score above 55
     # regardless of price or location — the habitat is fundamentally compromised.
     _fn = listing.get("floor_n")
-    if _fn is not None and _fn < 0:
-        total = min(total, 55)
+    if _fn is not None and _fn < 0 and total > 55:
+        total = 55
+        cap_reasons.append("below ground → max 55")
 
     # Absolute value gate: overpriced small flats in premium zones
     total, _gate_applied = apply_absolute_value_gate(total, ask_psqm, sqm)
     listing["_absolute_value_gate_applied"] = bool(_gate_applied)
+    if _gate_applied:
+        cap_reasons.append(f"small flat at a premium €/m² → max {total}")
 
     # Corporate / short-term rental detection — cap at 75 and disqualify badges.
     _is_corp = is_corporate_rental(listing) or has_corporate_rental_signals(listing)
@@ -1515,6 +1544,7 @@ def score_rental(listing: dict, all_listings: list, settings: dict | None = None
     if _is_corp and total > CORPORATE_CEILING:
         listing["_corporate_ceiling_applied"] = True
         total = CORPORATE_CEILING
+        cap_reasons.append(f"short-let / corporate rental → max {CORPORATE_CEILING}")
 
     # Effective rent (base + condo + bundled utilities) — what the renter
     # actually pays each month, useful when condo fees are non-trivial.
@@ -1603,7 +1633,10 @@ def score_rental(listing: dict, all_listings: list, settings: dict | None = None
         "ldi_score":           ldi_score,
         "ldi_bonus":           round(ldi_bonus, 3),   # fraction 0–0.10
         "boosted_price_score": boosted_price_score,
-        "score_was_capped":    score_was_capped,
+        "score_was_capped":    score_was_capped or bool(cap_reasons),
+        "score_cap_reason":    "; ".join(cap_reasons) or None,
+        "price_suspect":       price_suspect,
+        "comps_ids":           comps.get("comp_ids") or None,
         # Gem flags
         "hidden_gem":          _hidden_gem,
         "good_value":          _good_value,
@@ -2014,15 +2047,26 @@ def score_all(listings: list, settings: dict | None = None,
 
     pool = comps_pool if comps_pool is not None else listings
 
+    # Listing-page details (condition, heating, energy, condo fees …) from
+    # listing_details' cache — applied on every scoring path, see that module.
+    if settings.get("use_listing_details", True):
+        _seen = {id(l) for l in pool}
+        apply_details(pool + [l for l in listings if id(l) not in _seen])
+
     # Pre-pass: stamp ask_psqm_effective + condo_fee_flag on every listing in
-    # the comps pool BEFORE scoring runs, so the comps engine reads a
-    # consistent "effective" €/m² across the whole pool (including condo
-    # fees where present). Cheap — pure arithmetic, no I/O.
+    # the comps pool BEFORE scoring runs, so the comps engine reads one
+    # consistent €/m² across the whole pool (rent_condo_basis).
     for l in pool:
-        l["ask_psqm_effective"] = compute_effective_psqm(l)
+        if settings.get("rent_condo_basis", "known") == "asking":
+            l["ask_psqm_effective"] = l.get("ask_psqm") or compute_effective_psqm(l)
+        else:
+            l["ask_psqm_effective"] = compute_effective_psqm(l)
         l["condo_fee_flag"]     = get_condo_fee_flag(l)
 
     comps_index = build_comps_index(pool)
+    # Same flat on both sites: each copy gets what the other knows.
+    if settings.get("fill_from_twins", True):
+        fill_from_twins(pool, comps_index)
     if settings.get("property_impute_unknown"):
         settings = {**settings, "_feature_means": _property_feature_means(pool, settings, comps_index)}
     scored = []
