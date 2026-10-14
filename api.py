@@ -1019,6 +1019,55 @@ def favourites():
     return send_file(DASHBOARD_DIR / "favourites.html")
 
 
+@app.route("/full.html")
+def full_dashboard():
+    """The pre-2026-10-14 dashboard with sales / investor / valuation (parked)."""
+    return send_file(DASHBOARD_DIR / "full.html")
+
+
+@app.route("/manifest.json")
+@app.route("/icon-192.png")
+@app.route("/icon-512.png")
+def dashboard_root_files():
+    """PWA manifest + icons the page links from the site root (Cloudflare
+    serves them from dashboard/; locally they were 404s)."""
+    return send_file(DASHBOARD_DIR / request.path.lstrip("/"))
+
+
+@app.route("/assets/<path:fname>")
+def dashboard_assets(fname):
+    """The dashboard's CSS/JS files (dashboard/assets/)."""
+    path = (DASHBOARD_DIR / "assets" / fname).resolve()
+    if not str(path).startswith(str((DASHBOARD_DIR / "assets").resolve())) or not path.is_file():
+        return jsonify({"error": "not found"}), 404
+    resp = send_file(path)
+    resp.headers["Cache-Control"] = "no-cache"
+    return resp
+
+
+_rentals_payload_cache: dict = {}   # (path, mtime, visible) → (etag, gzip bytes, raw bytes)
+
+
+def _rentals_payload(path: Path, visible: bool) -> tuple[str, bytes, bytes]:
+    """The rentals file as served: visible rows only when asked (the file
+    also keeps ~18k archived rows the grid never shows), compact JSON, and
+    a gzip copy — 87 MB → ~4 MB over the wire. Cached per file version."""
+    import gzip
+    mtime = path.stat().st_mtime_ns
+    key = (str(path), mtime, visible)
+    hit = _rentals_payload_cache.get(key)
+    if hit:
+        return hit
+    rows = _json.loads(path.read_text())
+    if visible:
+        rows = [l for l in rows if not l.get("is_stale")]
+    raw = _json.dumps(rows, ensure_ascii=False, separators=(",", ":")).encode()
+    hit = (f'"{mtime}-{int(visible)}"', gzip.compress(raw, compresslevel=5), raw)
+    _rentals_payload_cache.clear()          # one version at a time — they're big
+    _rentals_payload_cache[key] = hit
+    return hit
+
+
 @app.route("/rentals")
 def rentals():
     """
@@ -1027,12 +1076,97 @@ def rentals():
     `rentals_latest.json` when the new `milano_rentals_latest.json` hasn't
     been written yet. Empty array on miss — the JS layer falls through to
     Supabase, which always knows the city.
+
+    ?visible=1 drops archived (is_stale) rows. Gzipped when the browser
+    accepts it; ETag lets an unchanged file come back as a 304.
     """
     city = (request.args.get("city") or "milano").lower()
     path = _resolve_city_path(city, "rental")
     if not path.exists():
         return jsonify([])
-    return send_file(path, mimetype="application/json")
+    etag, gz, raw = _rentals_payload(path, request.args.get("visible") == "1")
+    if request.headers.get("If-None-Match") == etag:
+        return Response(status=304, headers={"ETag": etag})
+    use_gz = "gzip" in (request.headers.get("Accept-Encoding") or "")
+    resp = Response(gz if use_gz else raw, mimetype="application/json")
+    if use_gz:
+        resp.headers["Content-Encoding"] = "gzip"
+    resp.headers["ETag"] = etag
+    resp.headers["Cache-Control"] = "no-cache"
+    resp.headers["Vary"] = "Accept-Encoding"
+    return resp
+
+
+@app.route("/rentals/by-ids")
+def rentals_by_ids():
+    """Rows for the given ids (?ids=a,b,c), archived ones included — the
+    favourites page needs a handful, not the whole file."""
+    city = (request.args.get("city") or "milano").lower()
+    ids = {i for i in (request.args.get("ids") or "").split(",") if i}
+    path = _resolve_city_path(city, "rental")
+    if not ids or not path.exists():
+        return jsonify([])
+    return jsonify([l for l in _json.loads(path.read_text()) if str(l.get("id")) in ids])
+
+
+# ── Saved items (favourites, collections) — local copy ───────────────────────
+# The dashboard keeps them in localStorage; locally it also mirrors them here
+# so they survive a cleared browser or another browser on this machine.
+USER_DATA_PATH = BASE_DIR / "user_data.json"
+_USER_DATA_KEYS = {"rentFavourites", "favourites", "collections"}
+
+
+@app.route("/api/user-data", methods=["GET"])
+def user_data_get():
+    try:
+        return jsonify(_json.loads(USER_DATA_PATH.read_text()))
+    except (OSError, ValueError):
+        return jsonify({})
+
+
+@app.route("/api/user-data/<name>", methods=["PUT"])
+def user_data_put(name):
+    if name not in _USER_DATA_KEYS:
+        return jsonify({"error": "unknown key"}), 400
+    try:
+        data = _json.loads(USER_DATA_PATH.read_text())
+    except (OSError, ValueError):
+        data = {}
+    data[name] = request.get_json(silent=True)
+    tmp = USER_DATA_PATH.with_suffix(".json.tmp")
+    tmp.write_text(_json.dumps(data, ensure_ascii=False, indent=1))
+    tmp.replace(USER_DATA_PATH)
+    return jsonify({"ok": True})
+
+
+# ── Email alerts (Supabase digest_filters) ───────────────────────────────────
+# Migration 013 closed digest_filters to the public key; the local dashboard
+# manages alerts through here with the service key from .env.
+@app.route("/api/digest-filters", methods=["GET", "POST", "PATCH", "DELETE"])
+def digest_filters_proxy():
+    import os as _os
+    import urllib.error
+    import urllib.request
+    _load_env()
+    base = (_os.environ.get("SUPABASE_URL") or "").rstrip("/")
+    key = _os.environ.get("SUPABASE_SERVICE_KEY") or ""
+    if not base or not key:
+        return jsonify({"error": "SUPABASE_URL / SUPABASE_SERVICE_KEY not set"}), 503
+    url = f"{base}/rest/v1/digest_filters"
+    if request.query_string:
+        url += "?" + request.query_string.decode()
+    headers = {"apikey": key, "Authorization": f"Bearer {key}",
+               "Content-Type": "application/json"}
+    if request.headers.get("Prefer"):
+        headers["Prefer"] = request.headers["Prefer"]
+    body = request.get_data() if request.method in ("POST", "PATCH") else None
+    req = urllib.request.Request(url, data=body, headers=headers, method=request.method)
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return Response(r.read(), status=r.status,
+                            mimetype=r.headers.get("Content-Type") or "application/json")
+    except urllib.error.HTTPError as e:
+        return Response(e.read(), status=e.code, mimetype="application/json")
 
 
 @app.route("/sales")
@@ -1225,11 +1359,16 @@ def scanner_status():
 
     immo_st["running"]  = running_immo
     ideal_st["running"] = running_idealista
+    # `running` = the daemon process is alive (always, in daily mode);
+    # `scanning` = a scan is in progress right now (marker the daemon writes).
+    immo_st["scanning"]  = running_immo and (BASE_DIR / ".scan_running_immobiliare").exists()
+    ideal_st["scanning"] = running_idealista and (BASE_DIR / ".scan_running_idealista").exists()
 
     # Top-level fields from immobiliare (for backward compat with existing JS)
     result = {
         "running":     running_immo or running_idealista,
-        "last_run":    immo_st.get("last_run"),
+        "scanning":    immo_st["scanning"] or ideal_st["scanning"],
+        "last_run":    max(filter(None, [immo_st.get("last_run"), ideal_st.get("last_run")]), default=None),
         "new_count":   immo_st.get("new_count", 0),
         "total_seen":  immo_st.get("total_seen", 0),
         "immobiliare": immo_st,
@@ -1606,6 +1745,10 @@ def _geo_orchestrator_worker(jobs: list[tuple[str, str]]):
             _geo_queue.clear()
 
 
+ACTIVE_ENRICH_CITIES = {"milano"}
+ACTIVE_ENRICH_KINDS  = {"rental"}
+
+
 @app.route("/geo-enrich-queue", methods=["POST"])
 def start_geo_enrich_queue():
     """
@@ -1627,7 +1770,15 @@ def start_geo_enrich_queue():
     body  = request.get_json(silent=True) or {}
     cities = body.get("cities") or ["milano", "roma", "napoli", "la_maddalena"]
     kinds  = body.get("kinds")  or ["rental", "sale"]
+    # Scope is Milan rentals (2026-10-14). Pages open in a browser queue
+    # this automatically; other cities/sales were re-geocoded on every page
+    # load (with Milan-only geocoding checks). {"all": true} overrides.
+    if not body.get("all"):
+        cities = [c for c in cities if c in ACTIVE_ENRICH_CITIES]
+        kinds  = [k for k in kinds if k in ACTIVE_ENRICH_KINDS]
     jobs   = [(c, k) for c in cities for k in kinds]
+    if not jobs:
+        return jsonify({"ok": True, "queued": []})
 
     _geo_orchestrator_thread = threading.Thread(
         target=_geo_orchestrator_worker, args=(jobs,), daemon=True)
@@ -3397,9 +3548,12 @@ def _supabase_autosync_watcher() -> None:
         print("  Autosync  → disabled (Supabase env not set)", flush=True)
         return
 
+    # The active city's file (scope: Milan rentals). Was the legacy
+    # rentals_latest.json / sales_latest.json, which nothing current writes
+    # except a start-up rescore — so restarts pushed May data online, and
+    # the nightly scans never reached Supabase on their own.
     paths = [
-        (DASHBOARD_DIR / "rentals_latest.json", "rental"),
-        (DASHBOARD_DIR / "sales_latest.json",   "sale"),
+        (DASHBOARD_DIR / "milano_rentals_latest.json", "rental"),
     ]
     # Prime baselines from current mtime so we don't re-push on startup.
     last_mtime: dict[str, float] = {
@@ -3425,6 +3579,11 @@ def _supabase_autosync_watcher() -> None:
             prev  = last_mtime.get(str(path), 0.0)
             if mtime <= prev:
                 continue
+            # Already pushed by whoever wrote it (rescore, enrichment).
+            from supabase_sync import PUSHED_MTIME
+            if PUSHED_MTIME.get(str(path)) == mtime:
+                last_mtime[str(path)] = mtime
+                continue
             # Wait until the file has been quiet for QUIET_SEC — avoids
             # racing the scanner's atomic .tmp → final replace.
             if _t.time() - mtime < QUIET_SEC:
@@ -3447,9 +3606,10 @@ if __name__ == "__main__":
         except Exception:
             pass
 
-    # Rescore existing JSON with current formula before starting
-    _rescore_existing_json()
-    _rescore_existing_sales_json()
+    # (The start-up rescore of the legacy rentals_latest.json /
+    # sales_latest.json is gone: the autosync watcher then pushed that May
+    # data over the live Milan rows — 2026-10-14. Milan is rescored by the
+    # scanners, the enrichment worker and /api/rescore.)
 
     # Sweep for orphan scanner daemons from previous api.py sessions —
     # without this, restarting api.py leaves any --daemon subprocess
