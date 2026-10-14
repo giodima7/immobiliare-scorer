@@ -39,6 +39,7 @@ Formula
 
 from __future__ import annotations
 import json
+import math
 import re as _re
 import sys
 from pathlib import Path
@@ -414,6 +415,16 @@ _DEFAULT_SETTINGS: dict = {
     "price_neutral_lo": -0.03,  # −3% to +5% → score 50 (neutral zone)
     "price_neutral_hi":  0.05,
     "price_bad":         0.20,  # ≥ +20% → score 0
+    # Rentals: smooth price score (see price_score_smooth). "legacy" restores
+    # the piecewise curve above.
+    "price_curve":        "smooth",
+    "price_sigma_base":    0.134,   # uncertainty σ = base + spread × (p60−p40)/median
+    "price_sigma_spread":  0.56,
+    "price_curve_k":       1.4,     # −7 % ≈ 71, −15 % ≈ 88, +20 % ≈ 7 at typical σ
+    # Rentals: property score treats unknown features as average (computed
+    # per scoring run) instead of "no", and leaves condition to the benchmark.
+    "property_impute_unknown": True,
+    "property_condition":      False,
     # €-impact adjustment
     "euro_impact_small":  75,   # |monthly diff| < €75 → reduce penalty 30%
     "euro_impact_large": 200,   # |monthly diff| > €200 → full penalty
@@ -614,7 +625,7 @@ def _energy_numeric(energy_class) -> int | None:
 
 # ── Physical / property score (0–100) ───────────────────────────────────────
 
-def property_score(listing: dict, settings: dict | None = None) -> int:
+def property_parts(listing: dict, settings: dict | None = None) -> dict:
     """
     Score physical quality 0–100 using Italian Coefficienti di Merito.
 
@@ -626,31 +637,24 @@ def property_score(listing: dict, settings: dict | None = None) -> int:
 
     Source: FIMAA / Tecnoborsa / OMI professional appraisal standard.
 
-    Returns 50 (neutral) when no physical fields are present. Clamped 0–100.
+    Returns {feature: adjustment} for the features this listing states;
+    property_score() turns them into the 0–100 score.
     """
     if settings is None:
         settings = {}
 
-    # Scale factor: 1 percentage point of adjustment → SCALE score points.
-    # Max positive sweep (attico+lift +20, ottimo +10, balcony +4, box +4,
-    # external +5, A3 +8, autonomous heat +5, furnished +8, bathrooms +3) ≈ +67%
-    # Max negative sweep (interrato -25, fatiscente -25, G -6, no-heat -3) ≈ -59%
-    # SCALE 1.5 → +67×1.5 = +100.5 (clamped to 100), -59×1.5 = -88.5 (clamped to 0)
-    SCALE = 1.5
-
-    n_known = 0
-    total_adjustment = 0.0
+    parts: dict = {}   # feature → adjustment, known features only
     cond_key: str | None = None   # captured for the age × condition rule below
 
     # ── Floor coefficient ────────────────────────────────────────────────────
     if listing.get('floor_n') is not None:
-        n_known += 1
-        total_adjustment += floor_score(listing)
+        parts['floor'] = 0.0
+        parts['floor'] += floor_score(listing)
 
     # ── Condition ────────────────────────────────────────────────────────────
     cond_raw = (listing.get('condition') or '').lower().strip()
     if cond_raw:
-        n_known += 1
+        parts['condition'] = 0.0
         # Order matters: check 'da_ristrutturare' BEFORE 'ristrutturat' since
         # the substring 'ristruttur' is contained in both.
         if 'fatiscente' in cond_raw:
@@ -670,137 +674,185 @@ def property_score(listing: dict, settings: dict | None = None) -> int:
             cond_key = 'abitabile'
         else:
             cond_key = 'buono'   # unknown phrasing → neutral
-        total_adjustment += CONDITION_COEFFICIENTS.get(cond_key, 0.0)
+        parts['condition'] += CONDITION_COEFFICIENTS.get(cond_key, 0.0)
 
     # ── Building age × condition interaction ─────────────────────────────────
     yr = listing.get('year_built')
     if yr and isinstance(yr, (int, float)) and yr > 1900:
-        n_known += 1
+        parts['age'] = 0.0
         age = 2026 - int(yr)
         is_good_cond = cond_key in ('ottimo', 'nuova_costruzione', 'ristrutturato')
         is_poor_cond = cond_key in ('da_ristrutturare', 'fatiscente')
-        if   age > 40 and is_good_cond:    total_adjustment += 0.05   # well-maintained historical
-        elif 20 < age <= 40 and is_good_cond: total_adjustment += 0.02
-        elif age > 40 and is_poor_cond:    total_adjustment -= 0.05   # old AND needs work
+        if   age > 40 and is_good_cond:    parts['age'] += 0.05   # well-maintained historical
+        elif 20 < age <= 40 and is_good_cond: parts['age'] += 0.02
+        elif age > 40 and is_poor_cond:    parts['age'] -= 0.05   # old AND needs work
         # otherwise no extra age adjustment (condition already captures)
 
     # ── Exposure / luminosity ────────────────────────────────────────────────
     ext = listing.get('is_external')
     if ext is not None:
-        n_known += 1
+        parts['exposure'] = 0.0
         if ext is True:
-            total_adjustment += 0.05   # external facing (proxy for sud/est/ovest)
+            parts['exposure'] += 0.05   # external facing (proxy for sud/est/ovest)
 
     # ── Energy class ─────────────────────────────────────────────────────────
     ec_raw   = (listing.get('energy_class') or '').strip().upper()
     ec_coeff = ENERGY_COEFFICIENTS.get(ec_raw)
     if ec_coeff is not None:
-        n_known += 1
-        total_adjustment += ec_coeff
+        parts['energy'] = 0.0
+        parts['energy'] += ec_coeff
 
     # ── Balcony / terrazza ────────────────────────────────────────────────────
     balc = listing.get('has_balcony')
     if balc is not None:
-        n_known += 1
+        parts['balcony'] = 0.0
         if balc is True:
-            total_adjustment += 0.04
+            parts['balcony'] += 0.04
 
     # ── Box / garage / posto auto (averaged at +4%) ──────────────────────────
     park = listing.get('has_parking')
     if park is not None:
-        n_known += 1
+        parts['parking'] = 0.0
         if park is True:
-            total_adjustment += 0.04
+            parts['parking'] += 0.04
 
     # ── Heating ──────────────────────────────────────────────────────────────
     ht_raw = (listing.get('heating_type') or '').lower().strip()
     if ht_raw:
-        n_known += 1
+        parts['heating'] = 0.0
         if 'autonomous' in ht_raw or 'autonomo' in ht_raw:
-            total_adjustment += HEATING_COEFFICIENTS['autonomous']
+            parts['heating'] += HEATING_COEFFICIENTS['autonomous']
         elif 'centraliz' in ht_raw and ('valvol' in ht_raw or 'termost' in ht_raw):
-            total_adjustment += HEATING_COEFFICIENTS['centralizzato_valvole']
+            parts['heating'] += HEATING_COEFFICIENTS['centralizzato_valvole']
         elif 'none' in ht_raw or ht_raw in ('no', 'assente'):
-            total_adjustment += HEATING_COEFFICIENTS['none']
+            parts['heating'] += HEATING_COEFFICIENTS['none']
         # other centralised → 0 (baseline)
 
     # ── Furnished (rental market signal — not a formal coefficient) ──────────
     furn = listing.get('furnished')
     if furn is not None:
-        n_known += 1
+        parts['furnished'] = 0.0
         if furn is True:
-            total_adjustment += 0.08
+            parts['furnished'] += 0.08
 
     # ── Bathrooms (quality signal — not a formal coefficient) ────────────────
     baths = listing.get('bathrooms')
     if baths is not None:
-        n_known += 1
+        parts['bathrooms'] = 0.0
         if baths >= 2:
-            total_adjustment += 0.03
+            parts['bathrooms'] += 0.03
 
     # ── Photo count (listing-quality proxy — penalty only) ───────────────────
     photos = listing.get('photo_count')
     if photos is not None:
-        n_known += 1
+        parts['photos'] = 0.0
         if photos < 5:
-            total_adjustment -= 0.05
+            parts['photos'] -= 0.05
 
     # ── Days on market (staleness penalty — not a property coefficient) ──────
     dom = listing.get('days_on_market')
     if dom is not None:
-        n_known += 1
-        if   dom > 60:  total_adjustment -= 0.07
-        elif dom > 30:  total_adjustment -= 0.03
+        parts['dom'] = 0.0
+        if   dom > 60:  parts['dom'] -= 0.07
+        elif dom > 30:  parts['dom'] -= 0.03
 
     # ── Condominium fees (cost penalty — not a property coefficient) ─────────
     rent_mo = listing.get('rent_mo') or listing.get('price') or 0
     spese   = listing.get('spese_condominiali') or listing.get('condominium_fees') or 0
     if rent_mo and spese and rent_mo > 0:
-        n_known += 1
-        if   spese > rent_mo * 0.20:  total_adjustment -= 0.10
-        elif spese > rent_mo * 0.12:  total_adjustment -= 0.04
+        parts['condo'] = 0.0
+        if   spese > rent_mo * 0.20:  parts['condo'] -= 0.10
+        elif spese > rent_mo * 0.12:  parts['condo'] -= 0.04
 
     # ── Room efficiency / monolocale size (layout-quality penalty) ───────────
     _sqm   = listing.get('sqm')   or 0
     _rooms = listing.get('rooms') or 0
     if _sqm > 0:
-        n_known += 1
+        parts['layout'] = 0.0
         if _rooms >= 2:
             _eff = _sqm / _rooms
             if   _eff < 10:
-                total_adjustment -= 0.20
+                parts['layout'] -= 0.20
                 listing['_room_efficiency_flag'] = 'severe'
             elif _eff < 14:
-                total_adjustment -= 0.10
+                parts['layout'] -= 0.10
                 listing['_room_efficiency_flag'] = 'tight'
             else:
                 listing['_room_efficiency_flag'] = None
         else:
             # Monolocale / studio — penalise on absolute sqm
             if   _sqm < 30:
-                total_adjustment -= 0.25
+                parts['layout'] -= 0.25
                 listing['_room_efficiency_flag'] = 'micro_studio'
             elif _sqm < 38:
-                total_adjustment -= 0.15
+                parts['layout'] -= 0.15
                 listing['_room_efficiency_flag'] = 'small_studio'
             elif _sqm < 45:
-                total_adjustment -= 0.08
+                parts['layout'] -= 0.08
                 listing['_room_efficiency_flag'] = 'compact_studio'
             else:
                 listing['_room_efficiency_flag'] = None
     else:
         listing['_room_efficiency_flag'] = None
 
-    # ── No data — return neutral ─────────────────────────────────────────────
-    if n_known == 0:
-        return 50
+    # Rentals: comps are same-condition or condition-adjusted whenever the
+    # condition is known, so the benchmark already prices it — adding the
+    # coefficient here counted it twice.
+    if not settings.get("property_condition", True):
+        parts.pop("condition", None)
+    return parts
 
-    # ── Apply to baseline and clamp ──────────────────────────────────────────
-    raw = 50.0 + (total_adjustment * 100 * SCALE)
+
+# Scale factor: 1 percentage point of adjustment → PROPERTY_SCALE score points.
+# Max positive sweep (attico+lift +20, ottimo +10, balcony +4, box +4,
+# external +5, A3 +8, autonomous heat +5, furnished +8, bathrooms +3) ≈ +67%
+# Max negative sweep (interrato -25, fatiscente -25, G -6, no-heat -3) ≈ -59%
+# 1.5 → +67×1.5 = +100.5 (clamped to 100), -59×1.5 = -88.5 (clamped to 0)
+PROPERTY_SCALE = 1.5
+
+
+def property_score(listing: dict, settings: dict | None = None) -> int:
+    """
+    0–100 physical quality from property_parts(): neutral baseline 50 plus
+    the adjustments, clamped. Returns 50 when no physical fields are known.
+
+    With property_impute_unknown, a feature the listing doesn't state counts
+    at its average over the scoring run (settings["_feature_means"], set by
+    score_all) instead of "no". Otherwise the score measured how much a
+    source reports: Idealista rows (condition, photos, heating never
+    stated) scored −11 vs Immobiliare in the same zone and size, and 98 of
+    the top 100 were Immobiliare.
+    """
+    if settings is None:
+        settings = {}
+    parts = property_parts(listing, settings)
+    means = settings.get("_feature_means") if settings.get("property_impute_unknown") else None
+    for feat, mean in (means or {}).items():
+        parts.setdefault(feat, mean)
+    if not parts:
+        return 50
+    raw = 50.0 + (sum(parts.values()) * 100 * PROPERTY_SCALE)
     return max(0, min(100, round(raw)))
 
 
 # ── Price-vs-comps score (0–100) ─────────────────────────────────────────────
+
+def price_score_smooth(delta_pct: float, spread: float, settings: dict) -> float:
+    """
+    Rentals: discount in units of its own uncertainty → 0–100, no flat
+    regions. The piecewise curve gave 100 to everything ≥15 % below comps
+    (−15 % and −37 % tied; 88 of the top 100 at 100) and 0 to everything
+    ≥20 % above.
+
+    σ = base + slope × comps spread ((p60 − p40) / median): on Milan
+    long-term rentals the median |ask − benchmark| runs 10.7 % for the
+    tightest fifth of comp pools to 14.3 % for the widest. k sets the
+    steepness so −7 % / −15 % land near their old scores at typical σ.
+    """
+    sigma = settings["price_sigma_base"] + settings["price_sigma_spread"] * max(0.0, spread)
+    z = delta_pct / sigma
+    return 50.0 * math.erfc(settings["price_curve_k"] * z / math.sqrt(2))   # 100·Φ(−k·z)
+
 
 def price_vs_comps_score(
     delta_pct: float,
@@ -1379,7 +1431,12 @@ def score_rental(listing: dict, all_listings: list, settings: dict | None = None
     confidence     = comps.get("confidence", 0)
 
     if delta_pct is not None and blended_median is not None and blended_median > 0:
-        pvc_s = price_vs_comps_score(delta_pct, rent_mo, blended_median, sqm, settings)
+        if settings.get("price_curve") == "smooth":
+            med = comps.get("median") or 0
+            spread = ((comps.get("p60") or 0) - (comps.get("p40") or 0)) / med if med > 0 else 0.0
+            pvc_s = price_score_smooth(delta_pct, spread, settings)
+        else:
+            pvc_s = price_vs_comps_score(delta_pct, rent_mo, blended_median, sqm, settings)
         delta_label_pct = round(delta_pct * 100, 1)
         # Log extremes for debugging
         if pvc_s in (0.0, 100.0):
@@ -1936,6 +1993,21 @@ def score_all_sales(listings: list, settings: dict | None = None) -> list:
     return scored
 
 
+def _property_feature_means(pool: list, settings: dict, comps_index: dict) -> dict:
+    """Average property_parts() adjustment per feature over the listings
+    that state it — long-term, non-suspect rows (the comps pool), so
+    short-let platforms' furnished-everything stock doesn't set the norm."""
+    sums: dict = {}
+    counts: dict = {}
+    for l in pool:
+        if id(l) in comps_index["skip"]:
+            continue
+        for feat, adj in property_parts(dict(l), settings).items():
+            sums[feat] = sums.get(feat, 0.0) + adj
+            counts[feat] = counts.get(feat, 0) + 1
+    return {f: sums[f] / counts[f] for f in sums}
+
+
 def score_all(listings: list, settings: dict | None = None,
               comps_pool: list | None = None) -> list:
     """Score all listings, log null-field coverage, return sorted list.
@@ -1964,6 +2036,8 @@ def score_all(listings: list, settings: dict | None = None,
         l["condo_fee_flag"]     = get_condo_fee_flag(l)
 
     comps_index = build_comps_index(pool)
+    if settings.get("property_impute_unknown"):
+        settings = {**settings, "_feature_means": _property_feature_means(pool, settings, comps_index)}
     scored = []
     for l in listings:
         s = score_rental(l, pool, settings, comps_index)
