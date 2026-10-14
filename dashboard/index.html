@@ -8876,8 +8876,9 @@ function saveFilters() {
       <div>
         <h2 class="settings-card-title">🏷️ Badge Thresholds</h2>
         <p class="settings-card-subtitle">
-          Minimum sub-scores a listing must hit on <em>every</em> gate simultaneously to earn a badge.
-          Lowering thresholds adds more badges; raising them tightens qualification.
+          Rental badges: a discount that's large relative to its uncertainty, a solid
+          benchmark (nearest comparable flats), and minimum sub-scores — all at once.
+          Short-let platforms and listings on the market for months never get a badge.
           Hit <strong>Save &amp; Rescore</strong> to apply immediately.
         </p>
       </div>
@@ -8888,7 +8889,7 @@ function saveFilters() {
         <div class="score-settings-grid" id="gemSettingsGrid"></div>
       </div>
       <div>
-        <div style="font-size:12px;font-weight:700;color:#0E7490;margin-bottom:8px">💰 Great Value</div>
+        <div style="font-size:12px;font-weight:700;color:#0E7490;margin-bottom:8px">💰 Good Value</div>
         <div class="score-settings-grid" id="gvSettingsGrid"></div>
       </div>
     </div>
@@ -22287,32 +22288,33 @@ const _SCORE_FIELDS = [
 // shown here are what the UI hints, _GEM_DEFAULTS below is what we fall
 // back to when scoring_settings.json hasn't loaded yet.
 const _GEM_FIELDS = [
-  { key: 'gem_total_min',      label: 'Min total score',      desc: 'score_total ≥ this (default 80)',            step: 1,   min: 0,   max: 100  },
-  { key: 'gem_ldi_min',        label: 'Min LDI zone score',   desc: 'ldi_score ≥ this (default 70)',              step: 1,   min: 0,   max: 100  },
-  { key: 'gem_delta_max',      label: 'Max % vs comps',       desc: 'comps_delta_pct ≤ this, e.g. −12 (default −12.0)', step: 0.5, min: -50, max: 0 },
-  { key: 'gem_property_min',   label: 'Min property score',   desc: 'score_property ≥ this (default 62)',         step: 1,   min: 0,   max: 100  },
-  { key: 'gem_location_min',   label: 'Min location score',   desc: 'score_location ≥ this (default 62)',         step: 1,   min: 0,   max: 100  },
-  { key: 'gem_confidence_min', label: 'Min comps confidence', desc: 'comps_confidence ≥ this (default 60)',       step: 1,   min: 0,   max: 100  },
-  { key: 'gem_penalty_min',    label: 'Min penalty score',    desc: 'score_penalty ≥ this (default 75)',          step: 1,   min: 0,   max: 100  },
-  { key: 'gem_metro_max_m',    label: 'Max metro distance (m)', desc: 'metro_nearest_dist_m ≤ this (default 800 m, ≈ 10 min walk)', step: 50, min: 0, max: 5000 },
-  { key: 'gem_min_sqm_per_room', label: 'Min m² per room',    desc: 'sqm / rooms ≥ this — kills crammed flats (default 22)', step: 1, min: 0, max: 60 },
+  { key: 'rent_gem_z_max',            label: 'Max discount (z)',      desc: 'discount ÷ its uncertainty ≤ this, e.g. −1.3 ≈ −23 % (default −1.3)', step: 0.1, min: -5, max: 0 },
+  { key: 'rent_gem_min_comps',        label: 'Min comparables',       desc: 'comparable flats behind the benchmark (default 20)', step: 1, min: 5, max: 60 },
+  { key: 'rent_gem_property_min',     label: 'Min property score',    desc: 'score_property ≥ this (default 65)',     step: 1, min: 0, max: 100 },
+  { key: 'rent_gem_location_min',     label: 'Min location score',    desc: 'score_location ≥ this (default 80)',     step: 1, min: 0, max: 100 },
+  { key: 'rent_gem_penalty_min',      label: 'Min penalty score',     desc: 'score_penalty ≥ this (default 75)',      step: 1, min: 0, max: 100 },
+  { key: 'rent_gem_metro_max_m',      label: 'Max metro distance (m)', desc: 'metro_nearest_dist_m ≤ this (default 700 m)', step: 50, min: 0, max: 5000 },
+  { key: 'rent_gem_min_sqm_per_room', label: 'Min m² per room',       desc: 'sqm / rooms ≥ this — no crammed flats (default 22)', step: 1, min: 0, max: 60 },
 ];
 const _GV_FIELDS = [
-  { key: 'gv_total_min',       label: 'Min total score',      desc: 'score_total ≥ this (default 70)',            step: 1,   min: 0,   max: 100  },
-  { key: 'gv_ldi_min',         label: 'Min LDI zone score',   desc: 'ldi_score ≥ this (default 50)',              step: 1,   min: 0,   max: 100  },
-  { key: 'gv_delta_max',       label: 'Max % vs comps',       desc: 'comps_delta_pct ≤ this, e.g. −7 (default −7.0)', step: 0.5, min: -50, max: 0 },
-  { key: 'gv_property_min',    label: 'Min property score',   desc: 'score_property ≥ this (default 50)',         step: 1,   min: 0,   max: 100  },
-  { key: 'gv_location_min',    label: 'Min location score',   desc: 'score_location ≥ this (default 50)',         step: 1,   min: 0,   max: 100  },
-  { key: 'gv_confidence_min',  label: 'Min comps confidence', desc: 'comps_confidence ≥ this (default 45)',       step: 1,   min: 0,   max: 100  },
-  { key: 'gv_penalty_min',     label: 'Min penalty score',    desc: 'score_penalty ≥ this (default 60)',          step: 1,   min: 0,   max: 100  },
+  { key: 'rent_gv_z_max',             label: 'Max discount (z)',      desc: 'discount ÷ its uncertainty ≤ this, e.g. −1.1 ≈ −20 % (default −1.1)', step: 0.1, min: -5, max: 0 },
+  { key: 'rent_gv_min_comps',         label: 'Min comparables',       desc: 'comparable flats behind the benchmark (default 15)', step: 1, min: 5, max: 60 },
+  { key: 'rent_gv_property_min',      label: 'Min property score',    desc: 'score_property ≥ this (default 45)',     step: 1, min: 0, max: 100 },
+  { key: 'rent_gv_location_min',      label: 'Min location score',    desc: 'score_location ≥ this (default 50)',     step: 1, min: 0, max: 100 },
+  { key: 'rent_gv_penalty_min',       label: 'Min penalty score',     desc: 'score_penalty ≥ this (default 60)',      step: 1, min: 0, max: 100 },
+  { key: 'rent_label_delta_floor',    label: 'Deepest discount (%)',  desc: 'deeper than this → "verify first", no badge (both badges; default −30)', step: 1, min: -60, max: 0 },
+  { key: 'rent_label_max_age_days',   label: 'Max days on market',    desc: 'first seen longer ago → no badge (both badges; default 60)', step: 5, min: 0, max: 365 },
 ];
 
+// Rental badges (scoring.rental_labels). Sales keep their own gem_*/gv_*
+// thresholds in scoring_settings.json.
 const _GEM_DEFAULTS = {
-  gem_total_min:80, gem_ldi_min:70, gem_delta_max:-12.0, gem_property_min:62,
-  gem_location_min:62, gem_confidence_min:60, gem_penalty_min:75,
-  gem_metro_max_m:800, gem_min_sqm_per_room:22,
-  gv_total_min:70, gv_ldi_min:50, gv_delta_max:-7.0, gv_property_min:50,
-  gv_location_min:50, gv_confidence_min:45, gv_penalty_min:60,
+  rent_gem_z_max: -1.3, rent_gem_min_comps: 20, rent_gem_property_min: 65,
+  rent_gem_location_min: 80, rent_gem_penalty_min: 75, rent_gem_metro_max_m: 700,
+  rent_gem_min_sqm_per_room: 22,
+  rent_gv_z_max: -1.1, rent_gv_min_comps: 15, rent_gv_property_min: 45,
+  rent_gv_location_min: 50, rent_gv_penalty_min: 60,
+  rent_label_delta_floor: -30, rent_label_max_age_days: 60,
 };
 
 function _buildGemGrid(fields, gridId, settings) {
