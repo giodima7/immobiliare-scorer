@@ -165,6 +165,12 @@ def listing_to_row(listing: dict, listing_type: str) -> dict:
             continue
         row[col] = _normalise(v)
 
+    # The dashboard shows rows with `is_stale=eq.false` — a NULL is hidden.
+    # Locally a missing is_stale means "visible" (`!l.is_stale`), and
+    # Idealista rentals never carried the field, so ~2.2k of them were
+    # invisible online only. Unknown staleness → visible, same as local.
+    row["is_stale"] = bool(listing.get("is_stale"))
+
     # Multi-city safety net: the listings.city column stores the lowercase
     # code ('milano', 'roma') — match the cities table PK. Old scanner
     # output occasionally writes the display label ("Milano"); fall back

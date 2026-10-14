@@ -2116,6 +2116,7 @@ def run_once(args) -> list:
         # off last_seen_date; Idealista rentals never carried it, so all
         # 13k looked "never seen" (Immobiliare + Idealista sales stamp it).
         l["last_seen_date"]  = today_str
+        l["is_stale"]        = False
 
     # Derive canonical area slugs that were actually scanned
     fetched_slugs = {l.get("_fetched_area") for l in scored if l.get("_fetched_area")}
