@@ -14196,6 +14196,18 @@ function compsContextStr(l, isRental) {
   return parts.join(' · ');
 }
 
+// Short label for the detail panel's "Comps source" row.
+const _COMPS_SOURCE_SHORT = {
+  knn_stratified:          'nearest flats, same condition',
+  knn:                     'nearest flats, condition adjusted',
+  zone_stratified:         'same zone + same condition',
+  zone_any_condition:      'same zone + condition adjusted',
+  radius_800m_same_fascia: '≤800 m + same fascia',
+  fascia_fallback:         'same fascia (citywide)',
+  omi_zone:                'OMI zone fallback',
+  omi_only:                'OMI reference only',
+};
+
 // Methodology tooltip — full description on hover (kept for ⓘ icon)
 function compsMethodTip(l, isRental) {
   const src    = (isRental ? l.comps_source : l.comps_sale_source) || '';
@@ -14203,6 +14215,15 @@ function compsMethodTip(l, isRental) {
   const adj    = isRental ? !!l.comps_adjusted : !!l.comps_sale_adjusted;
   const zona   = l.omi_zona || '?';
   const fascia = l.omi_fascia || '?';
+  const nComps = (isRental ? l.comps_n : l.comps_sale_n) || 0;
+  const radius = isRental ? l.comps_radius_m : l.comps_sale_radius_m;
+  const within = radius ? ` within ${radius} m` : '';
+  if (src === 'knn_stratified')
+    return `The ${nComps} nearest flats${within} in the same condition group (${cgroup}) and OMI fascia ${fascia} — €/m² scaled to this flat's size, recently seen listings weighted more.`;
+  if (src === 'knn')
+    return adj
+      ? `The ${nComps} nearest flats${within} in OMI fascia ${fascia}, prices adjusted to ${cgroup} condition and scaled to this flat's size.`
+      : `The ${nComps} nearest flats${within} in OMI fascia ${fascia}, mixed conditions (this flat's condition is unknown — no adjustment), scaled to its size.`;
   if (src === 'zone_stratified' && cgroup && cgroup !== 'unknown')
     return `Comps from same OMI zone (${zona}) and same condition group (${cgroup}). Most reliable.`;
   if (src === 'zone_any_condition')
@@ -14470,7 +14491,7 @@ function renderRentalCard(l) {
         ${_dRow(`Location ×${wL}`, l.score_location != null ? l.score_location + ' → ' + Math.round(l.score_location * wL) : (l.geo_score != null ? l.geo_score + ' → ' + Math.round(l.geo_score * wL) : '50 (neutral)'), (l.score_location == null && l.geo_score == null) ? 'muted' : '')}
         ${_dRow(`Penalty ×${wPn}`, l.score_penalty != null ? l.score_penalty + ' → ' + Math.round(l.score_penalty * wPn) : '100 (no penalty)', l.score_penalty == null ? 'muted' : '')}
         ${_dRow('Comps median', l.comps_median != null ? '€' + l.comps_median + '/m²/mo (' + (l.comps_n || 0) + ' comps)' : null, l.comps_median == null ? 'muted' : '')}
-        ${_dRow('Comps source', l.comps_source || null, l.comps_source ? '' : 'muted')}
+        ${_dRow('Comps source', l.comps_source ? (_COMPS_SOURCE_SHORT[l.comps_source] || l.comps_source) : null, l.comps_source ? '' : 'muted')}
         ${_dRow('OMI context', l.vs_omi_label || null, l.vs_omi_label ? '' : 'muted')}
         ${(() => {
           // OMI suggested rent — already adjusted by scoring.py for sqm + condition.
@@ -14484,7 +14505,7 @@ function renderRentalCard(l) {
             <span class="dg-val${over ? ' bad' : ''}">${valStr}</span>
           </div>`;
         })()}
-        ${l.ldi_score != null ? _dRow('LDI zone boost', `${l.ldi_score}/100${l.ldi_bonus > 0 ? ' (+' + l.ldi_bonus + ' price bonus)' : ''}`, l.ldi_score >= 65 ? 'good' : '') : ''}
+        ${l.ldi_score != null ? _dRow('LDI zone', `${l.ldi_score}/100`, l.ldi_score >= 65 ? 'good' : '') : ''}
         ${_dRow('Total', l.score_total != null ? l.score_total + ' / 100' : null)}
       </div>
     </div>`;
@@ -14826,6 +14847,9 @@ function applyRentFilters(data, f) {
     if (f.idQuery) {
       if (!String(l.id ?? '').toLowerCase().includes(f.idQuery)) return false;
     }
+    // Fake / bait / misrepresented listings (score 0) — the sales filter
+    // already hides them; rentals showed 231 of them in the grid.
+    if (l.excluded) return false;
     if (f.areas.length) {
       const nb = (l.neighbourhood || '').toLowerCase();
       // Bidirectional substring match so both sources work:
@@ -19136,7 +19160,7 @@ function renderSaleCard(l) {
         ${_dRow('Sale comps median', l.comps_sale_median != null ? '€' + fmt(Math.round(l.comps_sale_median)) + '/m² (' + (l.comps_sale_n || 0) + ' comps)' : null, l.comps_sale_median == null ? 'muted' : '')}
         ${_dRow('Comps source', l.comps_sale_source || null, l.comps_sale_source ? '' : 'muted')}
         ${_dRow('vs OMI compr', l.vs_omi_label || null, l.vs_omi_label ? '' : 'muted')}
-        ${l.ldi_score != null ? _dRow('LDI zone', `${l.ldi_score}/100${l.ldi_bonus > 0 ? ' (+' + l.ldi_bonus + ' price bonus)' : ''}`, l.ldi_score >= 65 ? 'good' : '') : ''}
+        ${l.ldi_score != null ? _dRow('LDI zone', `${l.ldi_score}/100`, l.ldi_score >= 65 ? 'good' : '') : ''}
         ${_dRow('OMI compr mid', l.omi_compr_mid != null ? '€' + fmt(l.omi_compr_mid) + '/m²' : null, l.omi_compr_mid ? '' : 'muted')}
         ${_dRow('Est. yield', l.estimated_yield_pct != null ? l.estimated_yield_pct.toFixed(1) + '% gross' : null, l.estimated_yield_pct != null ? (l.estimated_yield_pct >= 5 ? 'good' : l.estimated_yield_pct < 3.5 ? 'bad' : '') : 'muted')}
         ${_dRow('Total', l.score_total != null ? l.score_total + ' / 100' : null)}
