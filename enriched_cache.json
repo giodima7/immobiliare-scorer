@@ -659421,7 +659421,7 @@
     "metro_walk_routed": false
   },
   "immobiliare:125349107": {
-    "enriched_at": "2026-10-14T07:32:41",
+    "enriched_at": "2026-10-14T08:09:48",
     "omi_zona": "R2",
     "omi_fascia": "R",
     "omi_descr": "",
@@ -659431,7 +659431,7 @@
     "omi_compr_min": null,
     "omi_compr_max": null,
     "omi_compr_mid": null,
-    "omi_source": "nominatim+centroid",
+    "omi_source": "centroid",
     "latitude": 45.4579043,
     "longitude": 9.1967497,
     "metro_nearest_name": "Centro RAI",
@@ -659524,7 +659524,7 @@
     "metro_walk_routed": false
   },
   "immobiliare:128874648": {
-    "enriched_at": "2026-10-14T07:32:41",
+    "enriched_at": "2026-10-14T08:09:48",
     "omi_zona": "R2",
     "omi_fascia": "R",
     "omi_descr": "",
@@ -659534,7 +659534,7 @@
     "omi_compr_min": null,
     "omi_compr_max": null,
     "omi_compr_mid": null,
-    "omi_source": "nominatim+centroid",
+    "omi_source": "centroid",
     "latitude": 45.4647943,
     "longitude": 9.1877803,
     "metro_nearest_name": "Centro RAI",
@@ -659550,7 +659550,7 @@
     "geo_pois_version": "2026-05-16T19:32:49"
   },
   "immobiliare:96985846": {
-    "enriched_at": "2026-10-14T07:32:41",
+    "enriched_at": "2026-10-14T08:09:48",
     "omi_zona": "R2",
     "omi_fascia": "R",
     "omi_descr": "",
@@ -659560,7 +659560,7 @@
     "omi_compr_min": null,
     "omi_compr_max": null,
     "omi_compr_mid": null,
-    "omi_source": "nominatim+centroid",
+    "omi_source": "centroid",
     "latitude": 45.5197664,
     "longitude": 9.2990079,
     "metro_nearest_name": "Centro RAI",
@@ -659576,7 +659576,7 @@
     "geo_pois_version": "2026-05-16T19:32:49"
   },
   "immobiliare:127668820": {
-    "enriched_at": "2026-10-14T07:32:41",
+    "enriched_at": "2026-10-14T08:09:48",
     "omi_zona": "R2",
     "omi_fascia": "R",
     "omi_descr": "",
@@ -659586,7 +659586,7 @@
     "omi_compr_min": null,
     "omi_compr_max": null,
     "omi_compr_mid": null,
-    "omi_source": "nominatim+centroid",
+    "omi_source": "centroid",
     "latitude": 45.4691688,
     "longitude": 9.2352726,
     "metro_nearest_name": "Centro RAI",
@@ -659602,7 +659602,7 @@
     "geo_pois_version": "2026-05-16T19:32:49"
   },
   "immobiliare:105867861": {
-    "enriched_at": "2026-10-14T07:32:41",
+    "enriched_at": "2026-10-14T08:09:48",
     "omi_zona": "R2",
     "omi_fascia": "R",
     "omi_descr": "",
@@ -659612,7 +659612,7 @@
     "omi_compr_min": null,
     "omi_compr_max": null,
     "omi_compr_mid": null,
-    "omi_source": "nominatim+centroid",
+    "omi_source": "centroid",
     "latitude": 45.4196954,
     "longitude": 9.2759021,
     "metro_nearest_name": "Centro RAI",
@@ -659628,7 +659628,7 @@
     "geo_pois_version": "2026-05-16T19:32:49"
   },
   "immobiliare:121146834": {
-    "enriched_at": "2026-10-14T07:32:41",
+    "enriched_at": "2026-10-14T08:09:48",
     "omi_zona": "R2",
     "omi_fascia": "R",
     "omi_descr": "",
@@ -659638,7 +659638,7 @@
     "omi_compr_min": null,
     "omi_compr_max": null,
     "omi_compr_mid": null,
-    "omi_source": "nominatim+centroid",
+    "omi_source": "centroid",
     "latitude": 45.4647943,
     "longitude": 9.1877803,
     "metro_nearest_name": "Centro RAI",
@@ -702885,7 +702885,7 @@
     "geo_pois_version": "2026-05-16T19:32:49"
   },
   "sale:128135982": {
-    "enriched_at": "2026-10-14T07:32:58",
+    "enriched_at": "2026-10-14T08:10:24",
     "omi_zona": "R2",
     "omi_fascia": "R",
     "omi_descr": "",
@@ -709827,7 +709827,7 @@
     "geo_pois_version": "2026-05-16T19:32:49"
   },
   "immobiliare:114961243": {
-    "enriched_at": "2026-10-14T07:33:18",
+    "enriched_at": "2026-10-14T08:10:46",
     "omi_zona": "E28",
     "omi_fascia": "E",
     "omi_descr": "PIANURA PERIFERIA",
@@ -719135,7 +719135,7 @@
     "geo_pois_version": "2026-05-16T19:33:17"
   },
   "immobiliare:127223401": {
-    "enriched_at": "2026-10-14T07:33:18",
+    "enriched_at": "2026-10-14T08:10:46",
     "omi_zona": "E28",
     "omi_fascia": "E",
     "omi_descr": "PIANURA PERIFERIA",
@@ -719187,7 +719187,7 @@
     "geo_pois_version": "2026-05-16T19:33:17"
   },
   "immobiliare:128374692": {
-    "enriched_at": "2026-10-14T07:33:18",
+    "enriched_at": "2026-10-14T08:10:46",
     "omi_zona": "E28",
     "omi_fascia": "E",
     "omi_descr": "PIANURA PERIFERIA",
@@ -719213,7 +719213,7 @@
     "geo_pois_version": "2026-05-16T19:33:17"
   },
   "immobiliare:127627954": {
-    "enriched_at": "2026-10-14T07:33:18",
+    "enriched_at": "2026-10-14T08:10:46",
     "omi_zona": "E28",
     "omi_fascia": "E",
     "omi_descr": "PIANURA PERIFERIA",
@@ -729013,7 +729013,7 @@
     "geo_pois_version": "2026-05-16T19:33:17"
   },
   "sale:110776617": {
-    "enriched_at": "2026-10-14T07:33:31",
+    "enriched_at": "2026-10-14T08:10:58",
     "omi_zona": "E28",
     "omi_fascia": "E",
     "omi_descr": "PIANURA PERIFERIA",
@@ -746368,7 +746368,7 @@
     "geo_pois_version": "2026-05-16T19:33:17"
   },
   "immobiliare:86353010": {
-    "enriched_at": "2026-10-14T07:33:18",
+    "enriched_at": "2026-10-14T08:10:46",
     "omi_zona": "E28",
     "omi_fascia": "E",
     "omi_descr": "PIANURA PERIFERIA",
@@ -755149,7 +755149,7 @@
     "metro_walk_routed": false
   },
   "immobiliare:120205832": {
-    "enriched_at": "2026-10-14T07:33:18",
+    "enriched_at": "2026-10-14T08:10:46",
     "omi_zona": "E28",
     "omi_fascia": "E",
     "omi_descr": "PIANURA PERIFERIA",
