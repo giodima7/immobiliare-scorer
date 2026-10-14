@@ -355,7 +355,11 @@ async function fetchFromSupabase(listingType, ids) {
 async function loadFavListings(listingType, ids) {
   if (!ids.length) return [];
   // Try Flask first (localhost dev), fall back to Supabase REST (prod).
-  const flaskPath = listingType === 'rental' ? '/rentals' : '/sales';
+  // Rentals: only the favourited rows (/rentals/by-ids), not the whole
+  // ~90 MB file. Sales (parked) keep the old full fetch.
+  const flaskPath = listingType === 'rental'
+    ? `/rentals/by-ids?ids=${encodeURIComponent(ids.join(','))}`
+    : '/sales';
   try {
     const r = await fetch(flaskPath);
     if (r.ok) {
@@ -372,6 +376,9 @@ function saveSalesFavs(ids) { localStorage.setItem(FAV_KEY, JSON.stringify(ids))
 function saveRentFavs(ids)  { localStorage.setItem(RENT_FAV_KEY, JSON.stringify(ids)); }
 
 const fmt        = n => n != null ? Number(n).toLocaleString('it-IT') : '–';
+// Scraped text goes into innerHTML — escape it; links must be http(s).
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const safeUrl = u => /^https?:\/\//i.test(String(u || '')) ? esc(u) : '#';
 const scoreClass = s => s >= 70 ? 'high' : s >= 45 ? 'mid' : 'low';
 const vsClass    = p => p != null ? (p <= -5 ? 'vs-below' : p >= 5 ? 'vs-above' : 'vs-at') : '';
 
@@ -397,11 +404,11 @@ function renderRentCard(l) {
         const cls = r.sentiment === 'positive' ? 'expl-good'
                   : r.sentiment === 'negative' ? 'expl-bad'
                   : 'expl-warn';
-        return `<div class="expl-bullet ${cls}">${_icon[r.sentiment] || '•'} ${r.text}</div>`;
+        return `<div class="expl-bullet ${cls}">${_icon[r.sentiment] || '•'} ${esc(r.text)}</div>`;
       }).join('')
     : legacy.map(b => {
         const cls = b.startsWith('✓') ? 'expl-good' : b.startsWith('✗') ? 'expl-bad' : 'expl-warn';
-        return `<div class="expl-bullet ${cls}">${b}</div>`;
+        return `<div class="expl-bullet ${cls}">${esc(b)}</div>`;
       }).join('');
 
   const card = document.createElement('div');
@@ -414,16 +421,16 @@ function renderRentCard(l) {
       <div class="score-badge ${sc}">${l.score_total ?? '–'}</div>
       <div class="fav-card-title">
         <div class="neigh">
-          ${l.neighbourhood || '–'}
-          ${l.omi_fascia ? `<span class="fascia-badge fascia-${l.omi_fascia}">Fascia ${l.omi_fascia}</span>` : ''}
+          ${esc(l.neighbourhood || '–')}
+          ${l.omi_fascia ? `<span class="fascia-badge fascia-${esc(l.omi_fascia)}">Fascia ${esc(l.omi_fascia)}</span>` : ''}
         </div>
-        ${l.address ? `<div class="address">${l.address}</div>` : ''}
-        <span class="city-tag ${ct}">${l.city || l.city_key || 'Milano'}</span>
+        ${l.address ? `<div class="address">${esc(l.address)}</div>` : ''}
+        <span class="city-tag ${ct}">${esc(l.city || l.city_key || 'Milano')}</span>
         <span class="source-pill source-${l.source || 'immobiliare'}">${l.source === 'idealista' ? 'Idealista' : 'Immobiliare.it'}</span>
       </div>
       <div class="fav-card-actions">
-        <button class="btn-remove-fav" data-id="${l.id}" data-type="rental">♥ Remove</button>
-        <a class="btn-view" href="${l.url}" target="_blank" rel="noopener">↗ View</a>
+        <button class="btn-remove-fav" data-id="${esc(l.id)}" data-type="rental">♥ Remove</button>
+        <a class="btn-view" href="${safeUrl(l.url)}" target="_blank" rel="noopener">↗ View</a>
       </div>
     </div>
 
@@ -436,10 +443,10 @@ function renderRentCard(l) {
           <span class="lbl">Rooms</span><span class="val">${l.rooms ?? '–'}</span>
         </div>
         <div class="info-row">
-          <span class="lbl">Floor</span><span class="val">${l.floor ?? '–'}</span>
+          <span class="lbl">Floor</span><span class="val">${esc(l.floor ?? '–')}</span>
         </div>
         <div class="info-row">
-          <span class="lbl">Condition</span><span class="val">${l.condition || '–'}</span>
+          <span class="lbl">Condition</span><span class="val">${esc(l.condition || '–')}</span>
         </div>
         ${l.spese_condominiali ? `<div class="info-row"><span class="lbl">Condo fees</span><span class="val val-warn">+€${fmt(l.spese_condominiali)}/mo</span></div>` : ''}
       </div>
@@ -448,7 +455,7 @@ function renderRentCard(l) {
         <div class="section-title">Score &amp; Comps</div>
         <div class="info-row">
           <span class="lbl">vs comps</span>
-          <span class="vs-badge ${vc}">${vsLabel}</span>
+          <span class="vs-badge ${vc}">${esc(vsLabel)}</span>
         </div>
         <div class="info-row">
           <span class="lbl">Comps median</span>
@@ -460,11 +467,11 @@ function renderRentCard(l) {
         </div>
         <div class="info-row">
           <span class="lbl">Confidence</span>
-          <span class="val">${l.comps_conf_label || '–'}</span>
+          <span class="val">${esc(l.comps_conf_label || '–')}</span>
         </div>
         ${l.suggested_rent_mo ? `<div class="info-row"><span class="lbl">OMI suggested</span><span class="val val-accent">€${fmt(l.suggested_rent_mo)}/mo</span></div>` : ''}
         ${l.geo_score != null ? `<div class="info-row"><span class="lbl">Geo score</span><span class="val">${l.geo_score}/100</span></div>` : ''}
-        ${l.metro_nearest_name ? `<div class="info-row"><span class="lbl">Nearest metro</span><span class="val">${l.metro_nearest_name} ${l.metro_nearest_dist_m ?? ''}m</span></div>` : ''}
+        ${l.metro_nearest_name ? `<div class="info-row"><span class="lbl">Nearest metro</span><span class="val">${esc(l.metro_nearest_name)} ${esc(l.metro_nearest_dist_m ?? '')}m</span></div>` : ''}
       </div>
     </div>
 
@@ -516,15 +523,15 @@ function renderSaleCard(l) {
       <div class="score-badge ${sc}">${l.score_total ?? '–'}</div>
       <div class="fav-card-title">
         <div class="neigh">
-          ${l.neighbourhood || '–'}
-          ${l.omi_fascia ? `<span class="fascia-badge fascia-${l.omi_fascia}">Fascia ${l.omi_fascia}</span>` : ''}
+          ${esc(l.neighbourhood || '–')}
+          ${l.omi_fascia ? `<span class="fascia-badge fascia-${esc(l.omi_fascia)}">Fascia ${esc(l.omi_fascia)}</span>` : ''}
         </div>
-        ${l.address ? `<div class="address">${l.address}</div>` : ''}
-        <span class="city-tag ${ct}">${l.city || l.city_key || '–'}</span>
+        ${l.address ? `<div class="address">${esc(l.address)}</div>` : ''}
+        <span class="city-tag ${ct}">${esc(l.city || l.city_key || '–')}</span>
       </div>
       <div class="fav-card-actions">
-        <button class="btn-remove-fav" data-id="${l.id}" data-type="sale">♥ Remove</button>
-        <a class="btn-view" href="${l.url}" target="_blank" rel="noopener">↗ View</a>
+        <button class="btn-remove-fav" data-id="${esc(l.id)}" data-type="sale">♥ Remove</button>
+        <a class="btn-view" href="${safeUrl(l.url)}" target="_blank" rel="noopener">↗ View</a>
       </div>
     </div>
 
@@ -534,8 +541,8 @@ function renderSaleCard(l) {
         <div class="big-val">€${fmt(l.price)}</div>
         <div class="sub-val" style="margin-bottom:8px">${fmt(l.sqm)} m² · €${fmt(l.ask_psqm)}/m²</div>
         <div class="info-row"><span class="lbl">Rooms</span><span class="val">${l.rooms ?? '–'}</span></div>
-        <div class="info-row"><span class="lbl">Floor</span><span class="val">${l.floor ?? '–'}</span></div>
-        <div class="info-row"><span class="lbl">Condition</span><span class="val">${l.condition || '–'}</span></div>
+        <div class="info-row"><span class="lbl">Floor</span><span class="val">${esc(l.floor ?? '–')}</span></div>
+        <div class="info-row"><span class="lbl">Condition</span><span class="val">${esc(l.condition || '–')}</span></div>
         ${l.elevator != null ? `<div class="info-row"><span class="lbl">Elevator</span><span class="val">${l.elevator ? 'Yes' : 'No'}</span></div>` : ''}
       </div>
 
@@ -543,9 +550,9 @@ function renderSaleCard(l) {
         <div class="section-title">OMI &amp; Score</div>
         <div class="info-row">
           <span class="lbl">vs OMI</span>
-          <span class="vs-badge ${vc}">${l.vs_omi_label || '–'}</span>
+          <span class="vs-badge ${vc}">${esc(l.vs_omi_label || '–')}</span>
         </div>
-        <div class="info-row"><span class="lbl">OMI zone</span><span class="val val-accent">${l.omi_zona || l.omi_zone || '–'}</span></div>
+        <div class="info-row"><span class="lbl">OMI zone</span><span class="val val-accent">${esc(l.omi_zona || l.omi_zone || '–')}</span></div>
         <div class="info-row"><span class="lbl">Fascia</span><span class="val">${l.omi_fascia || '–'}</span></div>
         ${l.est_yield_pct != null ? `<div class="info-row"><span class="lbl">Est. yield</span><span class="val val-good">${Number(l.est_yield_pct).toFixed(2)}%</span></div>` : ''}
         ${l.est_rent_mo != null ? `<div class="info-row"><span class="lbl">Est. rent/mo</span><span class="val">€${fmt(l.est_rent_mo)}</span></div>` : ''}

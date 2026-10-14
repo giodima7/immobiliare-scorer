@@ -40,7 +40,12 @@ fi
 # sed -i is GNU-only; Cloudflare Pages runs Linux so this is fine. The
 # delimiters use | so URLs with / don't need escaping. Anon key is a JWT
 # (no special chars in standard chars set), so | is also safe.
-sed -i "s|%%SUPABASE_URL%%|${SUPABASE_URL}|g"      "$INDEX"
-sed -i "s|%%SUPABASE_ANON_KEY%%|${SUPABASE_ANON_KEY}|g" "$INDEX"
+# The page's JS lives in assets/*.js since 2026-10-14 — substitute there too.
+TARGETS=("$INDEX")
+for f in "${SCRIPT_DIR}"/assets/*.js; do [[ -f "$f" ]] && TARGETS+=("$f"); done
+for f in "${TARGETS[@]}"; do
+  sed -i "s|%%SUPABASE_URL%%|${SUPABASE_URL}|g"      "$f"
+  sed -i "s|%%SUPABASE_ANON_KEY%%|${SUPABASE_ANON_KEY}|g" "$f"
+done
 
-echo "build.sh: Supabase credentials injected into $INDEX"
+echo "build.sh: Supabase credentials injected into ${TARGETS[*]}"
