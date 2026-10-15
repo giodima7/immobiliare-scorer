@@ -33,36 +33,26 @@ async function updateScannerStatus() {
     const meta  = document.getElementById('scannerLastRun');
     const badge = document.getElementById('scannerNewBadge');
 
-    dot.classList.toggle('running', anyRunning);
+    dot.classList.toggle('status-running', anyRunning);
+    dot.classList.toggle('status-idle', !anyRunning);
     let label = t('scan.stopped');
     if (scanning)        label = t('scan.scanning');
     else if (anyRunning) label = t('scan.daily_on');
     lbl.textContent   = label;
-    lbl.style.color   = anyRunning ? 'var(--green-mid)' : 'var(--text-secondary)';
+    lbl.style.color   = anyRunning ? 'var(--green-ink)' : 'var(--text-secondary)';
 
     document.getElementById('btnStartScanner').disabled = anyRunning;
     document.getElementById('btnStopScanner').disabled  = !anyRunning;
 
     if (st.last_run) {
-      meta.textContent = 'Last run: ' + st.last_run.replace('T', ' ');
+      meta.textContent = t('scan.last_run', { when: st.last_run.replace('T', ' ').slice(0, 16) });
       // Auto-reload the grid when a scan finishes. The first poll only
       // records the current run — the page already loaded that data.
       if (!scanning && st.last_run !== _lastScannerRun) {
         const isFirstPoll = _lastScannerRun === null;
         _lastScannerRun = st.last_run;
         if (!isFirstPoll) await loadRentals();
-        if (!isFirstPoll) {
-          // Flash "↻ Updated" on the stats bar to confirm the grid refreshed
-          const bar = document.querySelector('#rentalsView .stats-bar');
-          if (bar) {
-            const flash = document.createElement('span');
-            flash.textContent = '↻ Updated';
-            flash.style.cssText = 'color:var(--green-mid);font-weight:700;transition:opacity 1.5s';
-            bar.appendChild(flash);
-            setTimeout(() => { flash.style.opacity = '0'; }, 1500);
-            setTimeout(() => { flash.remove(); }, 3000);
-          }
-        }
+        if (!isFirstPoll) showToast(t('scan.updated'));
       }
       _lastScannerRun = st.last_run;
     }
@@ -76,18 +66,19 @@ async function updateScannerStatus() {
       const iBadge= document.getElementById('idealistaNewBadge');
       if (iRow) {
         iRow.style.display = 'flex';
-        iDot.classList.toggle('running', !!st.idealista.running);
+        iDot.classList.toggle('status-running', !!st.idealista.running);
+        iDot.classList.toggle('status-idle', !st.idealista.running);
         iLbl.textContent  = st.idealista.scanning ? t('scan.idealista_scanning')
                           : st.idealista.running ? t('scan.idealista_on') : t('scan.idealista_stopped');
-        iLbl.style.color  = st.idealista.running ? 'var(--green-mid)' : 'var(--text-secondary)';
+        iLbl.style.color  = st.idealista.running ? 'var(--green-ink)' : 'var(--text-secondary)';
         if (st.idealista.last_run)
-          iMeta.textContent = 'Last: ' + st.idealista.last_run.replace('T', ' ');
+          iMeta.textContent = t('scan.last_run', { when: st.idealista.last_run.replace('T', ' ').slice(0, 16) });
         if (st.idealista.new_count > 0)
-          iBadge.textContent = st.idealista.new_count + ' new';
+          iBadge.textContent = t('scan.new_n', { n: fmt(st.idealista.new_count) });
       }
     }
     if (st.new_count != null && st.new_count > 0) {
-      badge.textContent = st.new_count + ' new listing' + (st.new_count !== 1 ? 's' : '');
+      badge.textContent = t('scan.new_n', { n: fmt(st.new_count) });
       badge.classList.add('visible');
     } else {
       badge.classList.remove('visible');
@@ -101,7 +92,7 @@ async function updateScannerStatus() {
       if (skipped && skipped.length > 0) {
         skipWarn.style.display = '';
         const lbl = t('scan.areas_skipped') || 'areas skipped';
-        skipWarn.textContent   = `⚠ ${skipped.length} ${lbl}`;
+        skipWarn.textContent   = `${skipped.length} ${lbl}`;
         skipWarn.title         = skipped.map(s => `${s.name}: ${s.reason}`).join('\n');
         skipWarn.onclick       = () => {
           switchTab('settings');
@@ -124,7 +115,7 @@ async function updateScannerStatus() {
         const sum = document.getElementById('scanSkippedSummary');
         if (sum) {
           const lbl = t('scan.areas_skipped') || 'areas skipped';
-          sum.textContent = `⚠ ${skipped.length} ${lbl}`;
+          sum.textContent = `${skipped.length} ${lbl}`;
         }
         const list = document.getElementById('scanSkippedList');
         if (list) {
@@ -384,11 +375,12 @@ async function _maybeAutoEnqueueEnrichment(st) {
 // always sees the full grid of cities × kinds. Once they click "Run all"
 // the orchestrator drains the queue sequentially and each row transitions
 // queued → running → done in turn.
-const _ENRICH_CITY_ORDER = ['milano', 'roma', 'napoli', 'la_maddalena'];
+// Milan rentals only (scope since 2026-10-14).
+const _ENRICH_CITY_ORDER = ['milano'];
 const _ENRICH_CITY_LABELS = {
   milano: 'Milano', roma: 'Roma', napoli: 'Napoli', la_maddalena: 'La Maddalena',
 };
-const _ENRICH_KINDS = ['rental', 'sale'];
+const _ENRICH_KINDS = ['rental'];
 
 function _enrichCityLabel(code) {
   // Prefer the same display name the city pill is using so the i18n
@@ -432,10 +424,8 @@ function _renderEnrichmentPanel(st) {
     // Bake the total pending count into the button label when nothing is
     // running so the user knows exactly how much work clicking will do.
     runBtn.textContent = queueActive
-      ? '▶ Running queue…'
-      : (totalPending > 0
-          ? `▶ Run for all cities (${totalPending} listings)`
-          : '▶ Run for all cities');
+      ? t('tools.enrich_running')
+      : (totalPending > 0 ? t('tools.enrich_run_n', { n: fmt(totalPending) }) : t('tools.enrich_run'));
   }
   if (stopBtn) stopBtn.hidden  = !queueActive;
 
@@ -561,22 +551,17 @@ function _renderEnrichmentPanel(st) {
 // reads this both when rendering the checkboxes AND when POSTing to
 // /start-scanner so the user can scan 1+ cities in one click.
 const SCAN_CITIES_KEY = 'lume_scan_cities';
+// Milan only (the multi-city picker is parked in full.html): whatever an
+// old browser stored, the scanner gets Milan.
 function _readScanCities() {
-  try {
-    const raw = localStorage.getItem(SCAN_CITIES_KEY);
-    if (raw) {
-      const arr = JSON.parse(raw);
-      if (Array.isArray(arr) && arr.length) return arr;
-    }
-  } catch (_) {}
-  return ['milano'];   // default = Milan only (matches pre-multi-city behaviour)
+  return ['milano'];
 }
 
 const _SCAN_CITY_META = {
-  milano:       { flag: '🏙️',  label: 'Milano' },
-  roma:         { flag: '🏛️',  label: 'Roma' },
-  napoli:       { flag: '🌋',  label: 'Napoli' },
-  la_maddalena: { flag: '🏝️',  label: 'La Maddalena' },
+  milano:       { flag: '',  label: 'Milano' },
+  roma:         { flag: '',  label: 'Roma' },
+  napoli:       { flag: '',  label: 'Napoli' },
+  la_maddalena: { flag: '',  label: 'La Maddalena' },
 };
 
 function toggleScanCity(code, enabled) {
@@ -604,7 +589,7 @@ function _renderCityScanGrid() {
     ? availableCities.map(c => c.code)
     : Object.keys(_SCAN_CITY_META);
   grid.innerHTML = order.map(code => {
-    const meta = _SCAN_CITY_META[code] || { flag: '📍', label: code };
+    const meta = _SCAN_CITY_META[code] || { flag: '', label: code };
     const on   = enabled.has(code);
     return `
       <label class="city-scan-card ${on ? 'city-scan-card-on' : ''}"

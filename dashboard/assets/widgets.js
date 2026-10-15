@@ -36,7 +36,8 @@ const MILAN_AREAS = {
       'San Siro','Teodosio - Porpora','Tibaldi - Pezzotti','Tripoli - Soderini',
       'Ungheria','Via Padova','Vigentino'],
 };
-const FASCIA_LABEL = { A: 'Fascia A — prime', B: 'Fascia B — semi-central', C: 'Fascia C — peripheral' };
+// Group headers in the area picker (translated at render time).
+const FASCIA_LABEL = { A: 'areas.group_A', B: 'areas.group_B', C: 'areas.group_C' };
 
 // Populate the mobile drawer area searchable multiselects with the available
 // area list. Uses active scan areas when the local server is available,
@@ -78,7 +79,7 @@ function AreaMSearch(inputId, tagsId, dropdownId, allAreas, onChange) {
       tag.textContent = name;
       const x = document.createElement('button');
       x.type = 'button';
-      x.setAttribute('aria-label', `Remove ${name}`);
+      x.setAttribute('aria-label', t('chip.remove') + ': ' + name);
       x.textContent = '×';
       x.addEventListener('mousedown', e => {
         e.preventDefault(); e.stopPropagation();
@@ -101,7 +102,7 @@ function AreaMSearch(inputId, tagsId, dropdownId, allAreas, onChange) {
     if (!list.length) {
       const empty = document.createElement('div');
       empty.className = 'area-msearch-empty';
-      empty.textContent = options.length ? 'No matches' : 'No areas available';
+      empty.textContent = t(options.length ? 'fb.no_match' : 'fb.no_areas');
       dropdown.appendChild(empty);
       return;
     }
@@ -211,8 +212,7 @@ let dRentAreaMsearch = null;
 
 // ── Multi-select component ────────────────────────────────────────────────────
 function buildMultiSelect({ wrapId, triggerId, panelId, searchId, listId,
-                             clearId, doneId, allLabel = 'All areas', onChange,
-                             items = null, itemUnit = 'area' }) {
+                             clearId, doneId, onChange, items = null }) {
   const trigger = document.getElementById(triggerId);
   const panel   = document.getElementById(panelId);
   const search  = document.getElementById(searchId);
@@ -249,7 +249,7 @@ function buildMultiSelect({ wrapId, triggerId, panelId, searchId, listId,
         if (!matches.length) continue;
         const hdr = document.createElement('div');
         hdr.className = 'msd-group-header';
-        hdr.textContent = FASCIA_LABEL[fascia];
+        hdr.textContent = t(FASCIA_LABEL[fascia]);
         list.appendChild(hdr);
         for (const name of matches) list.appendChild(_makeOption(name, name));
       }
@@ -257,15 +257,17 @@ function buildMultiSelect({ wrapId, triggerId, panelId, searchId, listId,
   }
 
   function updateTrigger() {
-    const n    = selected.size;
-    const unit = n === 1 ? itemUnit : itemUnit + 's';
-    trigger.innerHTML = (n === 0 ? allLabel : `${n} ${unit} selected`)
-      + ' <span class="msd-caret">▾</span>';
+    const n = selected.size;
+    const label = n === 0 ? t('fb.all_areas')
+      : n === 1 ? [...selected][0]
+      : t('fb.n_areas', { n });
+    trigger.innerHTML = `<span class="msd-label">${escapeHtml(label)}</span>${icon('chevron-down')}`;
     trigger.classList.toggle('has-selection', n > 0);
+    trigger.setAttribute('aria-expanded', String(isOpen()));
   }
 
-  function open()  { panel.classList.add('is-open');    }
-  function close() { panel.classList.remove('is-open'); }
+  function open()  { panel.classList.add('is-open');    trigger.setAttribute('aria-expanded', 'true'); }
+  function close() { panel.classList.remove('is-open'); trigger.setAttribute('aria-expanded', 'false'); }
   function isOpen(){ return panel.classList.contains('is-open'); }
 
   // Toggle panel open/close
@@ -301,8 +303,13 @@ function buildMultiSelect({ wrapId, triggerId, panelId, searchId, listId,
     close();
   });
 
+  updateTrigger();
+  // Escape closes the panel and gives focus back to the trigger.
+  panel.addEventListener('keydown', e => { if (e.key === 'Escape' && isOpen()) { close(); trigger.focus(); } });
+
   return {
     getSelected: ()    => [...selected],
+    refresh:     ()    => updateTrigger(),
     clear:       ()    => { selected.clear(); updateTrigger(); },
     setSelected: (arr) => {
       selected.clear();
@@ -369,12 +376,23 @@ function _animateScoreRing(wrap) {
   requestAnimationFrame(tick);
 }
 
-function _observeScoreRings(rootEl) {
-  if (!_scoreRingObserver || !rootEl) return;
+// Rings animate on the first paint only; later renders (filters, a
+// language switch) show the final number straight away — a count-up from 0
+// on every re-render showed misleading scores mid-animation.
+let _ringsAnimatedOnce = false;
+function _setRingFinal(w) {
+  const fill = w.querySelector('.score-ring-fill');
+  const text = w.querySelector('.score-ring-text');
+  if (fill) fill.setAttribute('stroke-dashoffset', fill.dataset.finalOffset || '0');
+  if (text) text.textContent = w.dataset.scoreTarget || '0';
+}
+function _observeScoreRings(rootEl, animate = !_ringsAnimatedOnce) {
+  if (!rootEl) return;
   rootEl.querySelectorAll('.score-ring-wrap[data-score-target]').forEach(w => {
     if (w.dataset.scoreObserved) return;
     w.dataset.scoreObserved = '1';
-    _scoreRingObserver.observe(w);
+    if (!animate || !_scoreRingObserver) _setRingFinal(w);
+    else _scoreRingObserver.observe(w);
   });
 }
 

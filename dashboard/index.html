@@ -64,10 +64,7 @@
   }
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
-<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" integrity="sha384-pmjIAcz2bAn0xukfxADbZIb3t8oRT9Sv0rvO+BR5Csr6Dhqq+nZs59P0pPKQJkEV" crossorigin="anonymous">
-<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" integrity="sha384-wgw+aLYNQ7dlhK47ZPK7FRACiq7ROZwgFNg0m04avm4CaXS+Z9Y7nMu8yNjBKYC+" crossorigin="anonymous">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <script>
   // Saved theme before first paint (no light flash in dark mode). Values:
   // "light" / "dark"; none = follow the system. See setTheme() in shell.js.
@@ -137,7 +134,7 @@
     <div class="onboard-dot" data-slide="3"></div>
     <div class="onboard-dot" data-slide="4"></div>
   </div>
-  <button class="onboard-skip" id="onboardSkip">Skip</button>
+  <button type="button" class="onboard-skip" id="onboardSkip" data-i18n="ob.skip">Skip</button>
 
   <!-- Scrollable slides -->
   <div class="onboard-slides" id="onboardSlides">
@@ -168,40 +165,40 @@
         <!-- Star accent -->
         <text x="62" y="20" font-size="16" fill="#2D6A4F">✦</text>
       </svg>
-      <h2 class="ob-animate ob-delay-1">Lume sees through Milan&rsquo;s listings.</h2>
-      <p class="ob-animate ob-delay-2">Lume scores every listing so you don&rsquo;t have to guess. Built by someone tired of overpaying.</p>
+      <h2 class="ob-animate ob-delay-1" data-i18n="ob.s1_title">Lume sees through Milan’s listings.</h2>
+      <p class="ob-animate ob-delay-2" data-i18n="ob.s1_text">Lume scores every listing so you don’t have to guess. Built by someone tired of overpaying.</p>
     </div>
 
     <!-- Slide 2: The problem -->
     <div class="onboard-slide slide2">
       <div class="onboard-big-number ob-animate" id="ob2Number">0%</div>
-      <h2 class="ob-animate ob-delay-1">of Milan rentals are overpriced for what they offer. Lume tells you which ones.</h2>
-      <p class="ob-animate ob-delay-2">Based on OMI benchmarks + live market data — Lume sees the patterns.</p>
+      <h2 class="ob-animate ob-delay-1" data-i18n="ob.s2_title">of Milan rentals ask more than similar flats nearby. Lume tells you which ones.</h2>
+      <p class="ob-animate ob-delay-2" data-i18n="ob.s2_text">Every listing is compared with the nearest similar flats, read daily from Immobiliare.it and Idealista.</p>
     </div>
 
     <!-- Slide 3: How it works -->
     <div class="onboard-slide">
-      <h2 class="ob-animate">How Lume scores every listing</h2>
+      <h2 class="ob-animate" data-i18n="ob.s3_title">How Lume scores every listing</h2>
       <div class="onboard-step-cards">
         <div class="onboard-step-card ob-animate ob-delay-1">
           <span class="onboard-step-icon"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#home"></use></svg></span>
           <div class="onboard-step-body">
-            <h3>What you&rsquo;d pay vs similar flats nearby</h3>
-            <p>Lume compares asking rent against real flats within 500m — not just averages.</p>
+            <h3 data-i18n="ob.s3_a_title">What you’d pay vs similar flats nearby</h3>
+            <p data-i18n="ob.s3_a_text">Lume compares the asking rent with the nearest real flats of the same kind — not just averages.</p>
           </div>
         </div>
         <div class="onboard-step-card ob-animate ob-delay-2">
           <span class="onboard-step-icon"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#map-pin"></use></svg></span>
           <div class="onboard-step-body">
-            <h3>Where it actually is</h3>
-            <p>Metro distance, parks, supermarkets — Lume computes everything from coordinates.</p>
+            <h3 data-i18n="ob.s3_b_title">Where it actually is</h3>
+            <p data-i18n="ob.s3_b_text">Metro distance, parks, supermarkets — Lume works it out from the address.</p>
           </div>
         </div>
         <div class="onboard-step-card ob-animate ob-delay-3">
           <span class="onboard-step-icon"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#diamond"></use></svg></span>
           <div class="onboard-step-body">
-            <h3>Hidden Gems — Lume&rsquo;s favourite finds</h3>
-            <p>Listings priced below similar flats nearby in desirable areas. Rare. Lume flags them for you.</p>
+            <h3 data-i18n="ob.s3_c_title">Hidden Gems — Lume’s favourite finds</h3>
+            <p data-i18n="ob.s3_c_text">Good flats priced well below similar ones nearby. Rare. Lume flags them for you.</p>
           </div>
         </div>
       </div>
@@ -209,28 +206,28 @@
 
     <!-- Slide 4: Score explained -->
     <div class="onboard-slide">
-      <h2 class="ob-animate">One score. One read. Move on.</h2>
+      <h2 class="ob-animate" data-i18n="ob.s4_title">One score. One read. Move on.</h2>
       <div class="onboard-score-demo">
         <div class="onboard-score-circle ob-animate ob-delay-1" id="ob4Score">0</div>
         <div class="onboard-bars ob-animate ob-delay-2">
           <div class="onboard-bar-row">
-            <div class="onboard-bar-label"><span>Price vs comps</span><span>40%</span></div>
+            <div class="onboard-bar-label"><span data-i18n="lm.price">Price</span><span class="ob-w" data-w="w_price">45%</span></div>
             <div class="onboard-bar-track"><div class="onboard-bar-fill" data-width="85"></div></div>
           </div>
           <div class="onboard-bar-row">
-            <div class="onboard-bar-label"><span>Property quality</span><span>30%</span></div>
+            <div class="onboard-bar-label"><span data-i18n="lm.property">Property</span><span class="ob-w" data-w="w_property">25%</span></div>
             <div class="onboard-bar-track"><div class="onboard-bar-fill" data-width="78"></div></div>
           </div>
           <div class="onboard-bar-row">
-            <div class="onboard-bar-label"><span>Location</span><span>20%</span></div>
+            <div class="onboard-bar-label"><span data-i18n="lm.location">Location</span><span class="ob-w" data-w="w_location">20%</span></div>
             <div class="onboard-bar-track"><div class="onboard-bar-fill" data-width="92"></div></div>
           </div>
           <div class="onboard-bar-row">
-            <div class="onboard-bar-label"><span>Penalties</span><span>10%</span></div>
+            <div class="onboard-bar-label"><span data-i18n="lm.red_flags">No known defects</span><span class="ob-w" data-w="w_penalty">10%</span></div>
             <div class="onboard-bar-track"><div class="onboard-bar-fill" data-width="95"></div></div>
           </div>
         </div>
-        <p class="ob-animate ob-delay-2" style="font-size:11px;color:var(--text-secondary);margin-top:12px">Scores above 72 with a low price delta = Lume rates this a hidden gem.</p>
+        <p class="ob-animate ob-delay-2 onboard-note" data-i18n="ob.s4_note">A good score plus a clear discount on similar flats nearby = a Hidden Gem.</p>
       </div>
     </div>
 
@@ -248,9 +245,9 @@
         <rect x="8" y="68" width="64" height="4" rx="2" fill="white" opacity="0.4"/>
         <path d="M62 14 L65 22 L73 14 L65 6 Z M62 14 L54 11 L62 3 L70 11 Z M62 14 L59 22 L51 14 L59 6 Z M62 14 L70 17 L62 25 L54 17 Z" fill="white"/>
       </svg>
-      <h2 class="ob-animate ob-delay-1">138 hidden gems in Milan right now.</h2>
-      <p class="ob-animate ob-delay-2">Lume updates daily. See through the market.</p>
-      <button class="onboard-cta-btn ob-animate ob-delay-2" id="onboardStart">Show me what Lume sees →</button>
+      <h2 class="ob-animate ob-delay-1" id="ob5Title" data-i18n="ob.s5_title">Hidden gems in Milan, updated daily.</h2>
+      <p class="ob-animate ob-delay-2" data-i18n="ob.s5_text">Lume reads the market every day. See through it.</p>
+      <button type="button" class="onboard-cta-btn ob-animate ob-delay-2" id="onboardStart" data-i18n="ob.cta">Show me what Lume sees</button>
     </div>
 
   </div><!-- /onboard-slides -->
@@ -259,113 +256,126 @@
 <!-- ── Mobile filter backdrop ── -->
 <div id="mobileFilterBackdrop"></div>
 
-<!-- ── Mobile filter drawer (Rentals) ── -->
-<div id="mobileFilterDrawer" role="dialog" aria-label="Filters">
+<!-- ── Phone filter drawer — same filters as the bar, in the same order ── -->
+<div id="mobileFilterDrawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
   <div class="drawer-handle"></div>
   <div class="drawer-title-row">
-    <span class="drawer-title">Filters</span>
-    <button class="drawer-reset-btn" id="drawerReset">Start fresh</button>
+    <h2 class="drawer-title" id="drawerTitle" data-i18n="drawer.title">Filters</h2>
+    <button type="button" class="btn btn-ghost btn-sm" id="drawerReset" data-i18n="filter.clear_filters">Clear filters</button>
   </div>
 
   <div class="drawer-body">
-    <!-- ── Rentals inputs ── -->
     <div id="drawerRentInputs">
       <div class="drawer-field">
-        <label>Areas</label>
+        <label class="field-label" for="dAreaInput" data-i18n="filter.area">Area</label>
         <div class="area-msearch" id="dAreaMsearch">
           <div class="area-msearch-tags" id="dAreaTags"></div>
-          <input class="area-msearch-input" id="dAreaInput" type="text" placeholder="Search areas…" autocomplete="off">
+          <input class="area-msearch-input" id="dAreaInput" type="text" placeholder="Search areas…" data-i18n-placeholder="fb.search_areas" autocomplete="off">
           <div class="area-msearch-dropdown" id="dAreaDropdown" hidden></div>
         </div>
       </div>
-      <div class="drawer-field">
-        <label>Max rent €/mo</label>
-        <input type="number" id="dMaxRent" placeholder="any" min="0" step="100">
-      </div>
-      <div class="drawer-field">
-        <label>Min m²</label>
-        <input type="number" id="dMinSqm" placeholder="any" min="0" step="5">
-      </div>
-      <div class="drawer-field">
-        <label>Min rooms</label>
-        <input type="number" id="dMinRooms" placeholder="any" min="1" max="10">
-      </div>
-      <div class="drawer-field">
-        <label>Fascia</label>
-        <select id="dFascia">
-          <option value="">All</option>
-          <option value="B">B — Centrale</option>
-          <option value="C">C — Semicentrale</option>
-          <option value="D">D — Periferica</option>
-          <option value="E">E — Periferica outer</option>
-        </select>
-      </div>
-      <div class="drawer-field">
-        <label>Max metro distance</label>
-        <select id="dMaxMetro">
-          <option value="">Any</option>
-          <option value="500">≤500m</option>
-          <option value="800">≤800m</option>
-          <option value="1200">≤1200m</option>
-        </select>
-      </div>
-      <div class="drawer-field">
-        <label>Min score: <span id="dScoreVal" style="color:var(--green-deep);font-weight:700">0</span></label>
-        <div class="drawer-range-wrap">
-          <input type="range" id="dScore" min="0" max="100" value="0" step="5">
+      <div class="drawer-row3">
+        <div class="drawer-field">
+          <label class="field-label" for="dMaxRent" data-i18n="fb.max_rent">Max rent</label>
+          <input type="number" class="input" id="dMaxRent" placeholder="€" min="0" step="100" inputmode="numeric">
+        </div>
+        <div class="drawer-field">
+          <label class="field-label" for="dMinRooms" data-i18n="fb.rooms_min">Min rooms</label>
+          <input type="number" class="input" id="dMinRooms" placeholder="–" min="1" max="10" inputmode="numeric">
+        </div>
+        <div class="drawer-field">
+          <label class="field-label" for="dMinSqm" data-i18n="fb.sqm_min">Min m²</label>
+          <input type="number" class="input" id="dMinSqm" placeholder="–" min="0" step="5" inputmode="numeric">
         </div>
       </div>
       <div class="drawer-field">
-        <label>Gems</label>
-        <div class="drawer-gem-row" id="dGemFilter">
-          <button class="gem-tab active" data-gem="">All</button>
-          <button class="gem-tab" data-gem="good">Great Value</button>
-          <button class="gem-tab" data-gem="hidden">Hidden Gem</button>
+        <span class="field-label" data-i18n="fb.deal_type">Deals</span>
+        <div class="seg seg-full" id="dGemFilter" role="group">
+          <button type="button" class="seg-btn gem-tab active" data-gem="" aria-pressed="true" data-i18n="gem.all">All</button>
+          <button type="button" class="seg-btn gem-tab" data-gem="good" aria-pressed="false" data-i18n="gem.good">Great Value</button>
+          <button type="button" class="seg-btn gem-tab" data-gem="hidden" aria-pressed="false" data-i18n="gem.hidden">Hidden Gem</button>
         </div>
       </div>
-      <div class="drawer-field drawer-rent-only">
-        <label data-i18n="fb.must">Must-haves</label>
+      <div class="drawer-field">
+        <label class="field-label" for="dSort" data-i18n="filter.sort">Sort</label>
+        <select class="input" id="dSort">
+          <option value="score_total" data-i18n="sort.score">Score</option>
+          <option value="comps_delta_pct" data-i18n="sort.discount">Discount</option>
+          <option value="first_seen_date" data-i18n="sort.newest">Newest</option>
+          <option value="rent_mo" data-i18n="sort.rent_asc">Rent ↑</option>
+        </select>
+      </div>
+      <div class="drawer-field">
+        <span class="field-label" data-i18n="fb.must">Must-haves</span>
         <div class="must-grid" id="dMustGrid"></div>
-        <label class="fb-check" style="margin-top:8px"><input type="checkbox" id="dIncludeUnknown">
+        <label class="fb-check"><input type="checkbox" id="dIncludeUnknown">
           <span data-i18n="fb.include_unknown">Include listings where it's not known yet</span></label>
+        <label class="fb-check"><input type="checkbox" class="hide-suspect" id="dHideSuspect">
+          <span data-i18n="must.safe">Hide suspicious prices</span></label>
       </div>
-      <div class="drawer-field drawer-rent-only">
-        <label data-i18n="fb.condition">Condition</label>
-        <select id="dCondition">
-          <option value="" data-i18n="filter.any">Any</option>
-          <option value="premium" data-i18n="cond.premium">Renovated or new</option>
-          <option value="not_needs_work" data-i18n="cond.not_needs_work">Not to renovate</option>
-        </select>
+      <div class="drawer-row2">
+        <div class="drawer-field">
+          <label class="field-label" for="dCondition" data-i18n="fb.condition">Condition</label>
+          <select class="input" id="dCondition">
+            <option value="" data-i18n="filter.any">Any</option>
+            <option value="premium" data-i18n="cond.premium">Renovated or new</option>
+            <option value="not_needs_work" data-i18n="cond.not_needs_work">Not to renovate</option>
+          </select>
+        </div>
+        <div class="drawer-field">
+          <label class="field-label" for="dMinDiscount" data-i18n="fb.min_discount">Below nearby flats</label>
+          <select class="input" id="dMinDiscount">
+            <option value="" data-i18n="filter.any">Any</option>
+            <option value="5">5%+</option>
+            <option value="10">10%+</option>
+            <option value="20">20%+</option>
+          </select>
+        </div>
+        <div class="drawer-field">
+          <label class="field-label" for="dMaxMetro" data-i18n="filter.max_metro">Metro within</label>
+          <select class="input" id="dMaxMetro">
+            <option value="" data-i18n="filter.any">Any</option>
+            <option value="500">500 m</option>
+            <option value="800">800 m</option>
+            <option value="1200">1.200 m</option>
+          </select>
+        </div>
+        <div class="drawer-field">
+          <label class="field-label" for="dFascia" data-i18n="filter.fascia">Zone</label>
+          <select class="input" id="dFascia">
+            <option value="" data-i18n="filter.any">Any</option>
+            <option value="B" data-i18n="fascia.B">Central</option>
+            <option value="C" data-i18n="fascia.C">Semi-central</option>
+            <option value="D" data-i18n="fascia.D">Outskirts</option>
+            <option value="E" data-i18n="fascia.E">Outer outskirts</option>
+          </select>
+        </div>
       </div>
-      <div class="drawer-field drawer-rent-only">
-        <label data-i18n="fb.min_discount">Below nearby flats</label>
-        <select id="dMinDiscount">
-          <option value="" data-i18n="filter.any">Any</option>
-          <option value="5">5%+</option>
-          <option value="10">10%+</option>
-          <option value="20">20%+</option>
-        </select>
+      <div class="drawer-field">
+        <label class="field-label" for="dScore"><span data-i18n="filter.min_score">Min score</span>: <strong id="dScoreVal">0</strong></label>
+        <input type="range" id="dScore" min="0" max="100" value="0" step="5">
+      </div>
+      <div class="drawer-field">
+        <span class="field-label" data-i18n="drawer.language">Language</span>
+        <div class="seg" role="group" aria-label="Language">
+          <button class="seg-btn lang-btn" data-lang="en" type="button" onclick="setLang('en')" aria-pressed="false">English</button>
+          <button class="seg-btn lang-btn" data-lang="it" type="button" onclick="setLang('it')" aria-pressed="false">Italiano</button>
+        </div>
       </div>
     </div>
   </div>
-  <!-- Save-alert button (mobile parity with the desktop filter bar's
-       🔔 Save alert pill). Hidden by default — Auth._onLogin /
-       _onLogout toggle it the same way they do for #save-digest-btn.
-       Tapping it closes the drawer (so the modal stack stays clean)
-       then opens the digest-alert save modal seeded from the current
-       drawer filters. -->
-  <button id="drawerSaveAlertBtn" class="drawer-save-alert-btn"
-          type="button" style="display:none"
-          title="Save current filters as your daily email alert"
-          data-i18n="filter.save_alert">Save alert</button>
-  <button class="drawer-show-btn" id="drawerShowBtn">Show results</button>
+  <div class="drawer-foot">
+    <button id="drawerSaveAlertBtn" class="btn btn-secondary" type="button" hidden>
+      <svg class="i" aria-hidden="true"><use href="assets/icons.svg#bell"></use></svg><span data-i18n="filter.save_alert">Save alert</span></button>
+    <button type="button" class="btn btn-primary btn-lg" id="drawerShowBtn" data-i18n="drawer.show">Show results</button>
+  </div>
 </div>
 
 <!-- ── Header ── -->
 <header>
   <!-- Lume wordmark — flame dot + lowercase wordmark -->
   <div class="logo-wordmark" aria-label="Lume — see through the listings">
-    <svg width="130" height="28" viewBox="0 0 130 28" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <svg width="112" height="24" viewBox="0 0 130 28" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
       <defs>
         <radialGradient id="lume-glow-header" cx="50%" cy="50%" r="50%">
           <stop offset="40%" stop-color="#2A7A5A"/>
@@ -380,507 +390,350 @@
     </svg>
   </div>
 
-  <span class="server-note" title="Requires python3 api.py running locally — does not work as a static file">⚙ local · running on your machine</span>
-  <!-- Status pill: Live (local) or Snapshot (Cloudflare Pages) — toggled by applyStaticMode/init -->
-  <span class="status-pill" id="statusPill">
+  <!-- Data source: one dot, the label is its tooltip (set by init / applyStaticMode) -->
+  <span class="status-pill" id="statusPill" tabindex="0">
     <span class="status-dot"></span>
-    <span id="statusPillLabel">Snapshot</span>
+    <span class="sr-only" id="statusPillLabel">Snapshot</span>
   </span>
   <div class="meta" id="meta" data-i18n="loading.listings">Lume is reading the listings…</div>
-  <!-- "Run Lume now" + "Zones" header buttons removed (consolidation):
-       scanner moved to Settings → Scanner; the OMI-zone fixer was a
-       one-off Milan cleanup superseded by per-city update_omi.py runs.
-       The unmatchedBadge ("N listings need zone-mapping cleanup") that
-       used to live here is gone too — same info is in the stats bar as
-       "Keyword fallback N" with its own Apply-OMI button, so the
-       floating header number was just confusing noise.
-       _updateUnmatchedBadge() no-ops gracefully when the element is
-       absent (line 12503 guards with `if (!badge) return`). -->
 
-  <a class="fav-link fav-btn" href="/favourites" id="favLink">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-    <span class="fav-label" data-i18n="header.favourites"> Favourites</span>
+  <button type="button" class="hdr-btn fav-link" id="favLink" onclick="switchTab('saved')">
+    <svg class="i" aria-hidden="true"><use href="assets/icons.svg#heart"></use></svg>
+    <span class="fav-label" data-i18n="tab.saved">Saved</span>
     <span class="fav-badge" id="favBadge"></span>
-  </a>
-  <!-- Language toggle (EN / IT). State synced with currentLang via updateLangToggle(). -->
-  <button type="button" class="theme-toggle" id="themeToggle" onclick="cycleTheme()" aria-label="Theme" title="Theme"></button>
-  <div class="lang-toggle" role="group" aria-label="Language">
-    <button class="lang-btn" data-lang="en" type="button" onclick="setLang('en')">EN</button>
-    <button class="lang-btn" data-lang="it" type="button" onclick="setLang('it')">IT</button>
-  </div>
-  <!-- Mobile-only filter trigger -->
-  <button class="mobile-filter-btn" id="mobileFilterBtn" aria-label="Open filters" title="Filters">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
-    </svg>
   </button>
-  <!-- User avatar (shown after auth) — opens dropdown menu -->
-  <div id="user-avatar-wrap" style="position:relative;display:none;flex-shrink:0">
-    <div id="user-avatar" onclick="showUserMenu(event)" style="
-      width:32px;height:32px;border-radius:50%;
-      background:var(--green-deep);color:white;font-size:13px;font-weight:600;
-      display:flex;align-items:center;justify-content:center;cursor:pointer;
-      user-select:none" title="Account menu"></div>
-    <!-- Red dot — visible only when the user has ≥1 active digest alert.
-         Toggled by _refreshDigestAlertBadge() after sign-in + after every
-         save/pause/delete. -->
+  <button type="button" class="hdr-btn hdr-icon theme-toggle" id="themeToggle" onclick="cycleTheme()" aria-label="Theme" title="Theme"></button>
+  <div class="seg lang-toggle" role="group" aria-label="Language">
+    <button class="seg-btn lang-btn" data-lang="en" type="button" onclick="setLang('en')" aria-pressed="false">EN</button>
+    <button class="seg-btn lang-btn" data-lang="it" type="button" onclick="setLang('it')" aria-pressed="false">IT</button>
+  </div>
+  <!-- Phone-only filter trigger -->
+  <button type="button" class="hdr-btn hdr-icon mobile-filter-btn" id="mobileFilterBtn" aria-label="Filters" data-i18n-title="drawer.title" title="Filters">
+    <svg class="i" aria-hidden="true"><use href="assets/icons.svg#adjustments-horizontal"></use></svg>
+    <span class="fb-badge" id="mobileFilterBadge" hidden></span>
+  </button>
+  <!-- User avatar / Sign in (shown by updateUserAvatar) -->
+  <div id="user-avatar-wrap" class="user-avatar-wrap" hidden>
+    <button type="button" id="user-avatar" class="hdr-btn user-avatar" onclick="showUserMenu(event)" title="Account menu"></button>
+    <!-- Dot — visible only when the user has ≥1 active digest alert. -->
     <span id="avatar-alert-dot" class="avatar-alert-dot" style="display:none"></span>
   </div>
 </header>
 
 <!-- ── Tab bar ── -->
-<nav class="tab-bar">
-  <button class="tab-btn active" id="tabRentals" data-tab="rentals" onclick="switchTab('rentals')"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#home"></use></svg> <span data-i18n="tab.rentals">Rentals</span></button>
-  <button class="tab-btn" id="tabMap" data-tab="map" onclick="switchTab('map')"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#map"></use></svg> <span data-i18n="tab.map">Map</span></button>
-  <button class="tab-btn" id="tabInsights" data-tab="insights" onclick="switchTab('insights')"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#chart-bar"></use></svg> <span data-i18n="tab.stats">Stats</span></button>
-  <button class="tab-btn" id="tabSettings" data-tab="settings" onclick="switchTab('settings')"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#settings"></use></svg> <span data-i18n="tab.settings">Settings</span></button>
+<nav class="tab-bar" role="tablist" aria-label="Sections">
+  <button type="button" class="tab-btn active" id="tabRentals" data-tab="rentals" role="tab" aria-selected="true"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#home"></use></svg><span data-i18n="tab.rentals">Rentals</span></button>
+  <button type="button" class="tab-btn" id="tabMap" data-tab="map" role="tab" aria-selected="false"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#map"></use></svg><span data-i18n="tab.map">Map</span></button>
+  <button type="button" class="tab-btn" id="tabSaved" data-tab="saved" role="tab" aria-selected="false"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#heart"></use></svg><span data-i18n="tab.saved">Saved</span></button>
+  <button type="button" class="tab-btn" id="tabInsights" data-tab="insights" role="tab" aria-selected="false"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#chart-bar"></use></svg><span data-i18n="tab.stats">Stats</span></button>
+  <button type="button" class="tab-btn" id="tabSettings" data-tab="settings" role="tab" aria-selected="false"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#tool"></use></svg><span data-i18n="tab.settings">Tools</span></button>
 </nav>
+
+<main id="content">
+
+<!-- Filter bar (rentals list and map share it). Only this row is sticky;
+     the panels open as popovers below it and the active-filter chips
+     scroll with the page. Control ids are unchanged (getRentFilters,
+     saved filters, the phone drawer). -->
+<div class="filters fbar" id="filterBar">
+  <div class="fb-row">
+    <div class="msd-wrap fb-area" id="filterAreaWrap">
+      <button type="button" class="msd-trigger" id="filterAreaTrigger">All areas</button>
+      <div class="msd-panel" id="filterAreaPanel">
+        <input class="msd-search-input" id="filterAreaSearch" placeholder="Search areas…" data-i18n-placeholder="fb.search_areas" type="text" autocomplete="off">
+        <div class="msd-list" id="filterAreaList"></div>
+        <div class="msd-footer">
+          <button type="button" class="btn btn-ghost btn-sm msd-footer-clear" id="filterAreaClear" data-i18n="fb.clear">Clear</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="filterAreaDone" data-i18n="fb.done">Done</button>
+        </div>
+      </div>
+    </div>
+    <label class="fb-field fb-field-rent" data-i18n-title="fb.max_rent" title="Max rent">
+      <span class="fb-prefix">€</span>
+      <input type="number" id="rMaxRent" class="filter-num" placeholder="Max rent"
+             data-i18n-placeholder="fb.max_rent" min="0" step="50" inputmode="numeric" data-i18n-aria="fb.max_rent" aria-label="Max rent">
+    </label>
+    <label class="fb-field fb-field-narrow" data-i18n-title="fb.rooms_min" title="Min rooms">
+      <input type="number" id="rMinRooms" class="filter-num" placeholder="Rooms"
+             data-i18n-placeholder="fb.rooms" min="1" max="10" step="1" inputmode="numeric" data-i18n-aria="fb.rooms_min" aria-label="Min rooms">
+      <span class="fb-suffix">+</span>
+    </label>
+    <label class="fb-field fb-field-narrow" data-i18n-title="fb.sqm_min" title="Min m²">
+      <input type="number" id="rMinSqm" class="filter-num" placeholder="m²"
+             min="0" step="5" inputmode="numeric" data-i18n-aria="fb.sqm_min" aria-label="Min m²">
+      <span class="fb-suffix">+</span>
+    </label>
+    <button type="button" class="btn btn-secondary fb-btn" id="rMustBtn" data-i18n-title="fb.must" title="Must-haves" aria-expanded="false" aria-controls="rMustPanel">
+      <svg class="i" aria-hidden="true"><use href="assets/icons.svg#adjustments-horizontal"></use></svg>
+      <span data-i18n="fb.must">Must-haves</span>
+      <span class="fb-badge" id="rMustBadge" hidden></span>
+    </button>
+    <div class="seg" id="rGemFilter" role="group" data-i18n-aria="fb.deal_type" aria-label="Deals">
+      <button type="button" class="seg-btn gem-tab active" data-gem="" aria-pressed="true" data-i18n="gem.all">All</button>
+      <button type="button" class="seg-btn gem-tab" data-gem="good" aria-pressed="false" data-i18n="gem.good">Great Value</button>
+      <button type="button" class="seg-btn gem-tab" data-gem="hidden" aria-pressed="false" data-i18n="gem.hidden">Hidden Gem</button>
+    </div>
+    <label class="fb-field fb-sort">
+      <svg class="i" aria-hidden="true"><use href="assets/icons.svg#arrows-sort"></use></svg>
+      <select id="rSortSelect" data-i18n-aria="filter.sort" aria-label="Sort">
+        <option value="score_total" data-i18n="sort.score">Score</option>
+        <option value="comps_delta_pct" data-i18n="sort.discount">Discount</option>
+        <option value="first_seen_date" data-i18n="sort.newest">Newest</option>
+        <option value="rent_mo" data-i18n="sort.rent_asc">Rent ↑</option>
+      </select>
+    </label>
+    <button type="button" class="btn btn-secondary fb-btn" id="rMoreBtn" data-i18n-title="fb.more" title="More filters" aria-expanded="false" aria-controls="rMorePanel">
+      <svg class="i" aria-hidden="true"><use href="assets/icons.svg#filter"></use></svg>
+      <span data-i18n="fb.more">More filters</span>
+      <span class="fb-badge" id="rMoreBadge" hidden></span>
+    </button>
+    <input type="checkbox" id="rElevator" hidden>
+  </div>
+
+  <div class="fb-panel" id="rMustPanel" hidden>
+    <div class="must-grid" id="rMustGrid"></div>
+    <div class="fb-panel-foot">
+      <label class="fb-check"><input type="checkbox" id="rIncludeUnknown">
+        <span data-i18n="fb.include_unknown">Include listings where it's not known yet</span></label>
+      <label class="fb-check"><input type="checkbox" class="hide-suspect" id="rHideSuspect">
+        <span data-i18n="must.safe">Hide suspicious prices</span></label>
+    </div>
+    <p class="fb-hint" data-i18n="fb.must_hint">Counts are listings known to have it. Unknowns shrink daily as listing pages are read.</p>
+  </div>
+
+  <div class="fb-panel" id="rMorePanel" hidden>
+    <div class="fb-more-grid">
+      <div class="field">
+        <label class="field-label" for="rCondition" data-i18n="fb.condition">Condition</label>
+        <select id="rCondition" class="input">
+          <option value="" data-i18n="filter.any">Any</option>
+          <option value="premium" data-i18n="cond.premium">Renovated or new</option>
+          <option value="not_needs_work" data-i18n="cond.not_needs_work">Not to renovate</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="field-label" for="rMinDiscount" data-i18n="fb.min_discount">Below nearby flats</label>
+        <select id="rMinDiscount" class="input">
+          <option value="" data-i18n="filter.any">Any</option>
+          <option value="5">5%+</option>
+          <option value="10">10%+</option>
+          <option value="20">20%+</option>
+        </select>
+      </div>
+      <div class="field" id="rFilterMetroSection">
+        <label class="field-label" for="rMaxMetro" data-i18n="filter.max_metro">Metro within</label>
+        <select id="rMaxMetro" class="input">
+          <option value="" data-i18n="filter.any">Any</option>
+          <option value="500">500 m</option>
+          <option value="800">800 m</option>
+          <option value="1200">1.200 m</option>
+        </select>
+      </div>
+      <span id="rFilterMetroSep" hidden></span>
+      <div class="field">
+        <label class="field-label" for="rMinFloor" data-i18n="filter.min_floor">Min floor</label>
+        <select id="rMinFloor" class="input">
+          <option value="" data-i18n="filter.any">Any</option>
+          <option value="2">2+</option>
+          <option value="4">4+</option>
+          <option value="6">6+</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="field-label" for="rListed" data-i18n="filter.listed">Listed</label>
+        <select id="rListed" class="input">
+          <option value="" data-i18n="filter.any">Any</option>
+          <option value="today" data-i18n="listed.today">Today</option>
+          <option value="7" data-i18n="listed.7">Last 7 days</option>
+          <option value="14" data-i18n="listed.14">Last 14 days</option>
+          <option value="30" data-i18n="listed.30">Last 30 days</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="field-label" for="rFascia" data-i18n="filter.fascia">Zone</label>
+        <select id="rFascia" class="input">
+          <option value="" data-i18n="filter.any">Any</option>
+          <option value="B" data-i18n="fascia.B">Central</option>
+          <option value="C" data-i18n="fascia.C">Semi-central</option>
+          <option value="D" data-i18n="fascia.D">Outskirts</option>
+          <option value="E" data-i18n="fascia.E">Outer outskirts</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="field-label" for="rContract" data-i18n="fb.contract">Contract (partial data)</label>
+        <select id="rContract" class="input">
+          <option value="" data-i18n="filter.any">Any</option>
+          <option value="4+4">4+4</option>
+          <option value="3+2">3+2</option>
+          <option value="transitorio" data-i18n="fb.short_term">Short-term</option>
+          <option value="studenti" data-i18n="fb.students">Students</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="field-label" for="rMinEnergy" data-i18n="fb.min_energy">Min energy class (partial data)</label>
+        <select id="rMinEnergy" class="input">
+          <option value="" data-i18n="filter.any">Any</option>
+          <option value="C">C+</option>
+          <option value="B">B+</option>
+          <option value="A">A</option>
+        </select>
+      </div>
+      <div class="field">
+        <span class="field-label" data-i18n="filter.source">Source</span>
+        <div class="seg seg-full" id="rSourceFilter" role="group">
+          <button type="button" class="seg-btn sort-tab active" data-rsource="" aria-pressed="true" data-i18n="filter.all">All</button>
+          <button type="button" class="seg-btn sort-tab" data-rsource="immobiliare" aria-pressed="false">Immobiliare</button>
+          <button type="button" class="seg-btn sort-tab" data-rsource="idealista" aria-pressed="false">Idealista</button>
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label" for="rScoreNum" data-i18n="filter.min_score">Min score</label>
+        <div class="score-filter">
+          <input type="range"  id="rScore" class="score-slider" min="0" max="100" value="0" step="1" data-i18n-aria="filter.min_score" aria-label="Min score">
+          <input type="number" id="rScoreNum" class="input score-number-input" min="0" max="100" value="0" inputmode="numeric" data-i18n-aria="filter.min_score" aria-label="Min score">
+          <span id="rScoreVal" hidden>0</span>
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label" for="rIdSearch" data-i18n="fb.find_id">Find by ID</label>
+        <input type="search" id="rIdSearch" class="input" placeholder="132372560" autocomplete="off" inputmode="numeric">
+      </div>
+      <div class="field" id="rShowStaleGroup" hidden>
+        <span class="field-label" data-i18n="filter.expired">Archived listings</span>
+        <label class="fb-check fb-check-box"><input type="checkbox" id="rShowStale">
+          <span data-i18n="filter.show_expired">Show expired</span></label>
+      </div>
+    </div>
+    <div class="fb-panel-foot">
+      <button type="button" class="btn btn-ghost" id="rBtnReset" data-i18n="filter.clear_filters">Clear filters</button>
+      <button type="button" class="btn btn-primary" id="rMoreDone" data-i18n="fb.done">Done</button>
+    </div>
+  </div>
+</div>
+
+<div class="fchips" id="rActiveChips" aria-live="polite"></div>
+
 <!-- ══════════════════════════════════════════════════════════════
      RENTALS VIEW
 ═══════════════════════════════════════════════════════════════ -->
 <div id="rentalsView">
-
-  <!-- Scanner moved to Settings → Scanner. Empty placeholder so the
-       Rentals tab opens directly on the filter bar. -->
-
-
-  <!-- "What Lume sends" email panel removed (consolidation): the dashboard's
-       daily-digest config now lives in Settings → Daily Alerts (Supabase
-       digest_filters table). Local SMTP config lived here too, but is now
-       owned by GitHub Secrets / .env on the deployment side. -->
-
-  <!-- Rentals filter bar (2026-10-15): one compact row for the everyday
-       filters (area, budget, size, must-haves, deal type, sort); the rest
-       sits in "More filters"; active filters show as removable chips.
-       Control ids are unchanged (getRentFilters / saved filters / drawer). -->
-  <div class="filters fbar">
-    <div class="fb-row">
-      <div class="msd-wrap fb-area" id="filterAreaWrap">
-        <button type="button" class="msd-trigger filter-control" id="filterAreaTrigger">All areas <span class="msd-caret">▾</span></button>
-        <div class="msd-panel" id="filterAreaPanel">
-          <input class="msd-search-input" id="filterAreaSearch" placeholder="Search areas…" type="text" autocomplete="off">
-          <div class="msd-list" id="filterAreaList"></div>
-          <div class="msd-footer">
-            <button type="button" class="msd-footer-btn msd-footer-clear" id="filterAreaClear">Clear</button>
-            <button type="button" class="msd-footer-btn"                   id="filterAreaDone">Done ✓</button>
-          </div>
-        </div>
-      </div>
-      <label class="fb-field" title="Max rent €/mo">
-        <span class="fb-prefix">€</span>
-        <input type="number" id="rMaxRent" class="filter-control filter-num" placeholder="Max rent"
-               data-i18n-placeholder="fb.max_rent" min="0" step="50" aria-label="Max rent per month">
-      </label>
-      <label class="fb-field fb-field-narrow" title="Min rooms">
-        <input type="number" id="rMinRooms" class="filter-control filter-num" placeholder="Rooms"
-               data-i18n-placeholder="fb.rooms" min="1" max="10" step="1" aria-label="Min rooms">
-        <span class="fb-suffix">+</span>
-      </label>
-      <label class="fb-field fb-field-narrow" title="Min m²">
-        <input type="number" id="rMinSqm" class="filter-control filter-num" placeholder="m²"
-               min="0" step="5" aria-label="Min m²">
-        <span class="fb-suffix">+</span>
-      </label>
-      <button type="button" class="fb-btn" id="rMustBtn" aria-expanded="false" aria-controls="rMustPanel">
-        <svg class="i" aria-hidden="true"><use href="assets/icons.svg#adjustments-horizontal"></use></svg>
-        <span data-i18n="fb.must">Must-haves</span>
-        <span class="fb-badge" id="rMustBadge" hidden></span>
-      </button>
-      <div class="filter-pill-group filter-control" id="rGemFilter" aria-label="Deals">
-        <button class="filter-pill gem-tab active" data-gem=""       data-i18n="filter.all">All</button>
-        <button class="filter-pill gem-tab"        data-gem="good"   data-i18n="filter.great_value">Great Value</button>
-        <button class="filter-pill gem-tab"        data-gem="hidden" data-i18n="filter.hidden">Hidden Gem</button>
-      </div>
-      <label class="fb-field fb-sort" title="Sort">
-        <svg class="i" aria-hidden="true"><use href="assets/icons.svg#arrows-sort"></use></svg>
-        <select id="rSortSelect" aria-label="Sort">
-          <option value="score_total" data-i18n="sort.score">Score</option>
-          <option value="comps_delta_pct" data-i18n="sort.discount">Discount</option>
-          <option value="first_seen_date" data-i18n="sort.newest">Newest</option>
-          <option value="rent_mo" data-i18n="sort.rent_asc">Rent ↑</option>
-        </select>
-      </label>
-      <!-- The old sort pills stay (hidden) — saved filters and the sort
-           handlers still drive them; #rSortSelect mirrors them. -->
-      <div class="filter-pill-group filter-control" id="rentSortTabs" aria-label="Sort" hidden>
-        <button class="filter-pill sort-tab active" data-rsort="score_total"     data-i18n="sort.score">Score</button>
-        <button class="filter-pill sort-tab"        data-rsort="comps_delta_pct" data-i18n="sort.discount">Discount</button>
-        <button class="filter-pill sort-tab"        data-rsort="first_seen_date" data-i18n="sort.newest">Newest</button>
-        <button class="filter-pill sort-tab"        data-rsort="rent_mo"         data-i18n="sort.rent_asc">Rent ↑</button>
-      </div>
-      <button type="button" class="fb-btn" id="rMoreBtn" aria-expanded="false" aria-controls="rMorePanel">
-        <svg class="i" aria-hidden="true"><use href="assets/icons.svg#filter"></use></svg>
-        <span data-i18n="fb.more">More filters</span>
-        <span class="fb-badge" id="rMoreBadge" hidden></span>
-      </button>
-      <input type="checkbox" id="rElevator" hidden>
-    </div>
-
-    <div class="fb-panel" id="rMustPanel" hidden>
-      <div class="must-grid" id="rMustGrid"></div>
-      <div class="fb-panel-foot">
-        <label class="fb-check"><input type="checkbox" id="rIncludeUnknown">
-          <span data-i18n="fb.include_unknown">Include listings where it's not known yet</span></label>
-        <span class="fb-hint" data-i18n="fb.must_hint">Counts are listings known to have it. Unknowns shrink daily as listing pages are read.</span>
-      </div>
-    </div>
-
-    <div class="fb-panel" id="rMorePanel" hidden>
-      <div class="fb-more-grid">
-        <div class="filter-group">
-          <label class="filter-label" for="rCondition" data-i18n="fb.condition">Condition</label>
-          <select id="rCondition" class="filter-control">
-            <option value="" data-i18n="filter.any">Any</option>
-            <option value="premium" data-i18n="cond.premium">Renovated or new</option>
-            <option value="not_needs_work" data-i18n="cond.not_needs_work">Not to renovate</option>
-          </select>
-        </div>
-        <div class="filter-group">
-          <label class="filter-label" for="rMinDiscount" data-i18n="fb.min_discount">Below nearby flats</label>
-          <select id="rMinDiscount" class="filter-control">
-            <option value="" data-i18n="filter.any">Any</option>
-            <option value="5">5%+</option>
-            <option value="10">10%+</option>
-            <option value="20">20%+</option>
-          </select>
-        </div>
-        <div class="filter-group">
-          <label class="filter-label" for="rContract" data-i18n="fb.contract">Contract (filling in)</label>
-          <select id="rContract" class="filter-control">
-            <option value="" data-i18n="filter.any">Any</option>
-            <option value="4+4">4+4</option>
-            <option value="3+2">3+2</option>
-            <option value="transitorio" data-i18n="fb.short_term">Short-term (transitorio)</option>
-            <option value="studenti" data-i18n="fb.students">Students</option>
-          </select>
-        </div>
-        <div class="filter-group" id="rFilterMetroSection">
-          <label class="filter-label" for="rMaxMetro" data-i18n="filter.max_metro">Max metro</label>
-          <select id="rMaxMetro" class="filter-control">
-            <option value="" data-i18n="filter.any">Any</option>
-            <option value="500">≤500m</option>
-            <option value="800">≤800m</option>
-            <option value="1200">≤1200m</option>
-          </select>
-        </div>
-        <span id="rFilterMetroSep" hidden></span>
-        <div class="filter-group">
-          <label class="filter-label" for="rMinFloor" data-i18n="filter.min_floor">Min floor</label>
-          <select id="rMinFloor" class="filter-control">
-            <option value="" data-i18n="filter.any">Any</option>
-            <option value="2">2+</option>
-            <option value="4">4+</option>
-            <option value="6">6+</option>
-          </select>
-        </div>
-        <div class="filter-group">
-          <label class="filter-label" for="rListed" data-i18n="filter.listed">Listed</label>
-          <select id="rListed" class="filter-control">
-            <option value="" data-i18n="filter.any">Any</option>
-            <option value="today">Today</option>
-            <option value="7">Last 7 days</option>
-            <option value="14">Last 14 days</option>
-            <option value="30">Last 30 days</option>
-          </select>
-        </div>
-        <div class="filter-group">
-          <label class="filter-label" data-i18n="filter.source">Source</label>
-          <div class="filter-pill-group filter-control" id="rSourceFilter">
-            <button class="filter-pill sort-tab active" data-rsource="" data-i18n="filter.all">All</button>
-            <button class="filter-pill sort-tab" data-rsource="immobiliare">Immobiliare</button>
-            <button class="filter-pill sort-tab" data-rsource="idealista">Idealista</button>
-          </div>
-        </div>
-        <div class="filter-group">
-          <label class="filter-label" for="rFascia" data-i18n="filter.fascia">Fascia</label>
-          <select id="rFascia" class="filter-control">
-            <option value="" data-i18n="filter.all">All</option>
-            <option value="B">B — Centrale</option>
-            <option value="C">C — Semicentrale</option>
-            <option value="D">D — Periferica</option>
-            <option value="E">E — Periferica outer</option>
-          </select>
-        </div>
-        <div class="filter-group">
-          <label class="filter-label" for="rMinEnergy" data-i18n="fb.min_energy">Min energy (filling in)</label>
-          <select id="rMinEnergy" class="filter-control">
-            <option value="" data-i18n="filter.any">Any</option>
-            <option value="C">C+</option>
-            <option value="B">B+</option>
-            <option value="A">A</option>
-          </select>
-        </div>
-        <div class="filter-group filter-group-score">
-          <label class="filter-label" data-i18n="filter.min_score">Min score</label>
-          <div class="filter-control score-filter-control">
-            <input type="range"  id="rScore"    class="score-slider" min="0" max="100" value="0" step="1" aria-label="Min score">
-            <input type="number" id="rScoreNum" class="score-number-input" min="0" max="100" value="0" inputmode="numeric" aria-label="Min score">
-            <span id="rScoreVal" hidden>0</span>
-          </div>
-        </div>
-        <div class="filter-group">
-          <label class="filter-label" for="rIdSearch">Find by ID</label>
-          <input type="search" id="rIdSearch" class="filter-control filter-id-search" placeholder="Lume ID" autocomplete="off">
-        </div>
-        <div class="filter-group" id="rShowStaleGroup" hidden>
-          <label class="filter-label" data-i18n="filter.show_expired">Show expired</label>
-          <label class="filter-control filter-toggle" for="rShowStale"
-                 title="Show listings not seen by the scanner in 7+ days">
-            <input type="checkbox" id="rShowStale" class="filter-toggle-input">
-            <span class="filter-toggle-dot"></span>
-            <span class="filter-toggle-label" data-i18n="filter.show_expired">Show expired</span>
-          </label>
-        </div>
-      </div>
-      <div class="fb-panel-foot">
-        <!-- Save the current filters as a daily email alert (local dashboard). -->
-        <button id="save-digest-btn" class="btn-save-digest" type="button" onclick="saveDigestFilters()"
-                style="display:none" title="Save current filters as your daily email alert"
-                data-i18n="filter.save_alert">Save alert</button>
-        <button class="btn-clear-filters" id="rBtnReset" data-i18n="filter.clear_filters">Clear filters</button>
-      </div>
-    </div>
-
-    <div class="fchips" id="rActiveChips" aria-live="polite"></div>
-  </div>
-
-  <!-- Rentals stats bar -->
-  <div class="stats-bar">
-    <span><span data-i18n="stats.showing">Showing</span> <strong id="rShowCount">–</strong> <span data-i18n="stats.rentals">rentals</span></span>
-    <span><span data-i18n="stats.avg_score">Avg score</span> <strong id="rAvgScore">–</strong> / 100</span>
-    <span><span data-i18n="stats.avg_rent">Avg rent</span> <strong id="rAvgRent">–</strong> /mo</span>
-    <span id="rNewStat" style="display:none"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#sparkles"></use></svg> <strong id="rNewCount">–</strong> <span data-i18n="stats.new_3d">new in the last 3 days</span></span>
-    <span data-i18n-title="stats.zone_fallback_tip" title="Listings placed in an OMI zone by neighbourhood name, not by coordinates"><span data-i18n="stats.zone_fallback">Zone by name</span> <strong id="rFallbackCount">–</strong>
-      <button class="btn-enrich-geo" id="btnApplyOmi" title="Apply polygon OMI zones to all listings (fast, no network needed)" style="margin-left:6px">Apply OMI</button>
-      <span id="applyOmiStatus" style="font-size: 11px;color:var(--text-secondary);margin-left:4px"></span>
-    </span>
-    <span class="geo-coverage" id="geoCoverage"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#world"></use></svg> Geo: <strong id="geoCoverageCount">–</strong>
-      <button class="btn-enrich-geo" id="btnDownloadPois" title="Download all Milan POIs once — enables fast offline enrichment (no Overpass calls per listing)">POI data</button>
-      <!-- Multi-city Enrich workflow now lives in Settings → Data Enrichment.
-           Old single-city button stays in the DOM but hidden — the
-           updateScannerStatus poll still reads its element refs so we
-           don't have to gut that branch yet. The deep-link below replaces
-           the user-visible affordance. -->
-      <button class="btn-enrich-geo" id="btnEnrichGeo" title="Enrich existing listings with geo data" hidden style="display:none">Enrich</button>
-      <button class="btn-enrich-geo" id="btnEnrichGoSettings"
-              title="Open the multi-city Enrichment panel in Settings"
-              onclick="switchTab('settings'); setTimeout(() =&gt; { const el = document.getElementById('enrichmentPanel'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);">Enrich →</button>
-      <div class="geo-progress-bar" id="geoProgressBar" hidden style="display:none"><div class="geo-progress-fill" id="geoProgressFill" style="width:0%"></div></div>
-      <span id="geoEnrichStatus" style="font-size: 11px;color:var(--text-secondary)"></span>
-    </span>
-  </div>
-
   <!-- Agency-pinned banner (only visible when an agency filter is active) -->
   <div id="rAgencyBanner" class="agency-pin-banner" style="display:none">
-    <span>Filtered by agency: <strong id="rAgencyBannerName"></strong></span>
-    <button type="button" class="agency-pin-clear" onclick="clearPinnedAgency('rentals')">✕ Clear</button>
+    <span><span data-i18n="agency.filtered">Filtered by agency:</span> <strong id="rAgencyBannerName"></strong></span>
+    <button type="button" class="btn btn-ghost btn-sm agency-pin-clear" onclick="clearPinnedAgency('rentals')"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#x"></use></svg><span data-i18n="fb.clear">Clear</span></button>
   </div>
 
-  <!-- Rentals grid -->
+  <h1 class="sr-only" data-i18n="tab.rentals">Rentals</h1>
   <div class="grid" id="rentGrid"></div>
   <div class="scroll-status" id="rentScrollStatus"></div>
-
 </div><!-- /rentalsView -->
 
 <!-- ══════════════════════════════════════════════════════════════
-     MAP VIEW (item 9)
+     MAP VIEW — uses the same filters as the list
 ═══════════════════════════════════════════════════════════════ -->
 <div id="mapView" hidden>
-  <!-- ── Map toolbar: type toggle + count ── -->
-  <div style="background:var(--bg-card);border-bottom:1px solid var(--border-light);padding:8px 24px;display:flex;gap:12px;align-items:center;font-size:12px;color:var(--text-secondary)">
-    <strong style="color:var(--text-primary)">Map</strong>
-    <span id="mapListingCount">–</span> listings shown
-    <span style="margin-left:auto;display:flex;gap:6px;align-items:center">
-      <button class="mobile-filter-btn" id="mapFilterBtn" aria-label="Filter map" title="Filters">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
-        </svg>
-      </button>
+  <div class="map-toolbar">
+    <span><strong id="mapListingCount">–</strong></span>
+    <span class="map-legend" aria-label="Legend">
+      <span class="lg-item"><span class="lg-gem"></span><span data-i18n="gem.hidden">Hidden Gem</span></span>
+      <span class="lg-item"><span class="lg-dot lg-good"></span><span data-i18n="gem.good">Great Value</span></span>
+      <span class="lg-item"><span class="lg-dot sc-high"></span>70+</span>
+      <span class="lg-item"><span class="lg-dot sc-mid"></span>45–69</span>
+      <span class="lg-item"><span class="lg-dot sc-low"></span>&lt;45</span>
     </span>
   </div>
-
-  <!-- ── Map rental filters ── -->
-  <div class="filters" id="mapRentFilters">
-    <div class="filter-group" id="mapAreaFilterGroup">
-      <label>Area</label>
-      <div class="msd-wrap" id="mapAreaWrap">
-        <button class="msd-trigger" id="mapAreaTrigger" type="button">All areas <span class="msd-caret">▾</span></button>
-        <div class="msd-panel" id="mapAreaPanel" hidden>
-          <input class="msd-search" id="mapAreaSearch" placeholder="Search…">
-          <ul class="msd-list" id="mapAreaList"></ul>
-          <div class="msd-footer">
-            <button class="msd-btn" id="mapAreaClear">Clear</button>
-            <button class="msd-btn msd-btn-done" id="mapAreaDone">Done</button>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="filter-sep"></div>
-    <div class="filter-group">
-      <label>Fascia</label>
-      <select id="mRentFascia">
-        <option value="">All</option>
-        <option value="B">B — Centrale</option>
-        <option value="C">C — Semicentrale</option>
-        <option value="D">D — Periferica</option>
-        <option value="E">E — Periferica outer</option>
-      </select>
-    </div>
-    <div class="filter-sep"></div>
-    <div class="filter-group">
-      <label>Max rent €/mo</label>
-      <input type="number" id="mRentMaxRent" placeholder="any" min="0" step="50" style="width:90px">
-    </div>
-    <div class="filter-sep"></div>
-    <div class="filter-group">
-      <label>Min m²</label>
-      <input type="number" id="mRentMinSqm" placeholder="any" min="0" step="5" style="width:70px">
-    </div>
-    <div class="filter-sep"></div>
-    <div class="filter-group">
-      <label>Min rooms</label>
-      <input type="number" id="mRentMinRooms" placeholder="any" min="1" max="10" step="1" style="width:65px">
-    </div>
-    <div class="filter-sep"></div>
-    <div class="filter-group">
-      <label>Max metro</label>
-      <select id="mRentMaxMetro">
-        <option value="">Any</option>
-        <option value="500">≤500m</option>
-        <option value="800">≤800m</option>
-        <option value="1200">≤1200m</option>
-      </select>
-    </div>
-    <div class="filter-sep"></div>
-    <div class="filter-group">
-      <label>Min floor</label>
-      <select id="mRentMinFloor">
-        <option value="">Any</option>
-        <option value="2">2+</option>
-        <option value="4">4+</option>
-        <option value="6">6+</option>
-      </select>
-    </div>
-    <div class="filter-sep"></div>
-    <div class="filter-group">
-      <label style="display:flex;align-items:center;gap:5px;cursor:pointer;user-select:none">
-        <input type="checkbox" id="mRentElevator" style="accent-color:var(--green-deep);cursor:pointer">
-        Elevator
-      </label>
-    </div>
-    <div class="filter-sep"></div>
-    <div class="filter-group">
-      <label>Min energy</label>
-      <select id="mRentMinEnergy">
-        <option value="">Any</option>
-        <option value="C">C+</option>
-        <option value="B">B+</option>
-        <option value="A">A</option>
-      </select>
-    </div>
-    <div class="filter-sep"></div>
-    <div class="filter-group">
-      <label>Listed</label>
-      <select id="mRentListed">
-        <option value="">Any</option>
-        <option value="today">Today</option>
-        <option value="7">Last 7 days</option>
-        <option value="14">Last 14 days</option>
-        <option value="30">Last 30 days</option>
-      </select>
-    </div>
-    <div class="filter-sep"></div>
-    <div class="filter-group">
-      <label>Min score</label>
-      <input type="range" id="mRentScore" min="0" max="100" value="0" step="5">
-      <span class="range-val" id="mRentScoreVal">0</span>
-    </div>
-    <button class="btn-reset" id="mRentReset">Start fresh</button>
-  </div>
-
   <div id="mapContainer"></div>
-  <div id="mapCapNotice" style="display:none;text-align:center;padding:6px 12px;font-size:11px;color:#6B7280;background:rgba(255,255,255,0.9);border-top:1px solid var(--bg-pill)">
-    Showing top 400 listings in view — zoom in to see more.
+  <div class="map-cap-notice" id="mapCapNotice" hidden data-i18n="map.cap">Showing the 400 best listings in view — zoom in to see more.</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     SAVED VIEW — favourites and collections
+═══════════════════════════════════════════════════════════════ -->
+<div id="savedView" hidden>
+  <div class="page">
+    <section class="page-section">
+      <div class="section-head">
+        <h1 class="page-title" data-i18n="saved.favourites">Favourites</h1>
+        <span class="section-meta" id="savedFavCount"></span>
+      </div>
+      <div class="grid grid-flush" id="savedGrid"></div>
+    </section>
+    <section class="page-section">
+      <div class="section-head">
+        <h2 class="section-title" data-i18n="saved.collections">Collections</h2>
+      </div>
+      <form class="inline-form" id="savedNewColForm" autocomplete="off">
+        <input type="text" class="input" id="savedNewColName" maxlength="60" data-i18n-placeholder="col.new_placeholder" placeholder="New collection name">
+        <button type="submit" class="btn btn-secondary"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#plus"></use></svg><span data-i18n="col.create">Create</span></button>
+      </form>
+      <div class="collections-list" id="savedCollections"></div>
+    </section>
   </div>
 </div>
 
 <!-- ══════════════════════════════════════════════════════════════
-     INSIGHTS VIEW
+     STATS VIEW
 ═══════════════════════════════════════════════════════════════ -->
 <div id="insightsView" hidden>
-  <div style="max-width:900px;margin:0 auto;padding:24px 20px">
+  <div class="page page-narrow">
+    <h1 class="page-title" data-i18n="tab.stats">Stats</h1>
 
-    <div style="display:flex;gap:8px;margin-bottom:20px;align-items:center">
-      <strong style="font-size: 14px"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#chart-bar"></use></svg> Insights</strong>
-    </div>
-
-    <!-- Market Overview -->
-    <details open>
-      <summary class="settings-section-title" style="cursor:pointer;list-style:none">
-        Market Overview
-      </summary>
-      <div style="margin-top:12px">
-        <div id="insightsMetricCards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px"></div>
-        <canvas id="insightsScoreChart" height="110" style="max-height:160px"></canvas>
+    <details open class="stats-section">
+      <summary data-i18n="stats.market">Market overview</summary>
+      <div class="stats-body">
+        <div class="kpi-grid" id="insightsMetricCards"></div>
+        <div class="chart-title" data-i18n="stats.score_dist">How scores are spread</div>
+        <div class="chart-box"><canvas id="insightsScoreChart"></canvas></div>
       </div>
     </details>
 
-    <!-- Agency Leaderboard -->
-    <details open>
-      <summary class="settings-section-title" style="cursor:pointer;list-style:none;margin-top:24px">
-        Agency Leaderboard
-      </summary>
-      <div style="margin-top:12px">
-        <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
-          <input type="text" id="insightsAgencySearch" placeholder="Search agency…"
-            style="flex:1;min-width:160px;max-width:220px;padding:5px 10px;border:1px solid var(--border-light);border-radius:6px;font-size:13px;background:var(--bg-card);color:var(--text-primary)">
+    <details open class="stats-section">
+      <summary data-i18n="stats.new_listings">New listings, last 30 days</summary>
+      <div class="stats-body">
+        <div class="chart-box chart-box-sm"><canvas id="insightsNewChart"></canvas></div>
+      </div>
+    </details>
+
+    <details open class="stats-section">
+      <summary data-i18n="stats.zones">Neighbourhoods</summary>
+      <div class="stats-body">
+        <p class="section-hint" data-i18n="stats.zones_hint">Click a neighbourhood to see its listings.</p>
+        <div class="table-wrap">
+          <table class="area-table">
+            <thead><tr id="insightsZoneHead">
+              <th><button type="button" class="th-sort" onclick="_sortZone('name')"><span data-i18n="stats.col_zone">Neighbourhood</span> <span class="sort-ind" id="zh-name"></span></button></th>
+              <th class="num"><button type="button" class="th-sort" onclick="_sortZone('count')"><span data-i18n="stats.col_count">Listings</span> <span class="sort-ind" id="zh-count"></span></button></th>
+              <th class="num"><button type="button" class="th-sort" onclick="_sortZone('avg_score')"><span data-i18n="stats.col_score">Avg score</span> <span class="sort-ind" id="zh-avg_score"></span></button></th>
+              <th class="num"><button type="button" class="th-sort" onclick="_sortZone('avg_price')"><span data-i18n="stats.col_rent">Avg rent</span> <span class="sort-ind" id="zh-avg_price"></span></button></th>
+              <th class="num"><button type="button" class="th-sort" onclick="_sortZone('gems')"><span data-i18n="gem.hidden">Hidden Gem</span> <span class="sort-ind" id="zh-gems"></span></button></th>
+              <th class="num"><button type="button" class="th-sort" onclick="_sortZone('good')"><span data-i18n="gem.good">Great Value</span> <span class="sort-ind" id="zh-good"></span></button></th>
+            </tr></thead>
+            <tbody id="insightsZoneBody"></tbody>
+          </table>
         </div>
-        <div style="overflow-x:auto">
+        <button type="button" class="btn btn-ghost table-more" id="insightsZoneMore" hidden></button>
+      </div>
+    </details>
+
+    <details class="stats-section">
+      <summary data-i18n="stats.agencies">Agencies</summary>
+      <div class="stats-body">
+        <input type="search" class="input stats-search" id="insightsAgencySearch" data-i18n-placeholder="stats.search_agency" placeholder="Search agency…">
+        <div class="table-wrap">
           <table class="area-table">
             <thead><tr id="insightsAgencyHead">
-              <th onclick="_sortAgency('name')" style="cursor:pointer;user-select:none">Agency <span id="ah-name">↕</span></th>
-              <th onclick="_sortAgency('type')" style="cursor:pointer;user-select:none">Type <span id="ah-type">↕</span></th>
-              <th onclick="_sortAgency('count')" style="cursor:pointer;user-select:none">Listings <span id="ah-count">▼</span></th>
-              <th onclick="_sortAgency('avg_score')" style="cursor:pointer;user-select:none">Avg score <span id="ah-avg_score">↕</span></th>
-              <th onclick="_sortAgency('avg_price')" style="cursor:pointer;user-select:none">Avg price <span id="ah-avg_price">↕</span></th>
+              <th><button type="button" class="th-sort" onclick="_sortAgency('name')"><span data-i18n="stats.col_agency">Agency</span> <span class="sort-ind" id="ah-name"></span></button></th>
+              <th><button type="button" class="th-sort" onclick="_sortAgency('type')"><span data-i18n="stats.col_type">Type</span> <span class="sort-ind" id="ah-type"></span></button></th>
+              <th class="num"><button type="button" class="th-sort" onclick="_sortAgency('count')"><span data-i18n="stats.col_count">Listings</span> <span class="sort-ind" id="ah-count"></span></button></th>
+              <th class="num"><button type="button" class="th-sort" onclick="_sortAgency('avg_score')"><span data-i18n="stats.col_score">Avg score</span> <span class="sort-ind" id="ah-avg_score"></span></button></th>
+              <th class="num"><button type="button" class="th-sort" onclick="_sortAgency('avg_price')"><span data-i18n="stats.col_rent">Avg rent</span> <span class="sort-ind" id="ah-avg_price"></span></button></th>
             </tr></thead>
             <tbody id="insightsAgencyBody"></tbody>
           </table>
         </div>
+        <button type="button" class="btn btn-ghost table-more" id="insightsAgencyMore" hidden></button>
       </div>
     </details>
-
-    <!-- New Listings Activity -->
-    <details open>
-      <summary class="settings-section-title" style="cursor:pointer;list-style:none;margin-top:24px">
-        New Listings Activity
-      </summary>
-      <div style="margin-top:12px">
-        <div id="insightsNewCounters" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;margin-bottom:16px"></div>
-        <canvas id="insightsNewChart" height="90" style="max-height:130px"></canvas>
-      </div>
-    </details>
-
-    <!-- Zone Breakdown -->
-    <details open>
-      <summary class="settings-section-title" style="cursor:pointer;list-style:none;margin-top:24px">
-        Zone Breakdown
-      </summary>
-      <div style="margin-top:12px;overflow-x:auto">
-        <table class="area-table">
-          <thead><tr id="insightsZoneHead">
-            <th onclick="_sortZone('name')" style="cursor:pointer;user-select:none">Neighbourhood <span id="zh-name">↕</span></th>
-            <th onclick="_sortZone('count')" style="cursor:pointer;user-select:none">Count <span id="zh-count">▼</span></th>
-            <th onclick="_sortZone('avg_score')" style="cursor:pointer;user-select:none">Avg score <span id="zh-avg_score">↕</span></th>
-            <th onclick="_sortZone('avg_price')" style="cursor:pointer;user-select:none">Avg price <span id="zh-avg_price">↕</span></th>
-            <th onclick="_sortZone('gems')" style="cursor:pointer;user-select:none">Gems <span id="zh-gems">↕</span></th>
-            <th onclick="_sortZone('good')" style="cursor:pointer;user-select:none">Good Value <span id="zh-good">↕</span></th>
-          </tr></thead>
-          <tbody id="insightsZoneBody"></tbody>
-        </table>
-      </div>
-    </details>
-
   </div>
 </div>
 
@@ -904,10 +757,7 @@
     <div class="settings-card-header">
       <div>
         <h2 class="settings-card-title"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#search"></use></svg> Scanner</h2>
-        <p class="settings-card-subtitle">
-          Configure which cities Lume scans and how aggressively.
-          Multi-city: tick more than one box to scan them sequentially.
-        </p>
+        <p class="settings-card-subtitle" data-i18n="tools.scanner_sub">One scan of Milan a day, plus listing pages read between scans.</p>
       </div>
       <div class="scanner-status-indicator">
         <span class="status-dot status-idle" id="scannerDot"></span>
@@ -915,26 +765,19 @@
       </div>
     </div>
 
-    <!-- Cities to scan -->
-    <div class="settings-section-label">Cities to scan</div>
-    <div class="city-scan-grid" id="cityScanGrid">
-      <!-- populated by _renderCityScanGrid() so it stays in sync with
-           availableCities + the user's localStorage selection. -->
-    </div>
-
-    <!-- Scan settings -->
-    <div class="settings-section-label" style="margin-top:20px">Scan settings</div>
+    <!-- Scan settings (Milan only — the multi-city picker is parked in full.html) -->
+    <div class="settings-section-label" data-i18n="tools.scan_settings">Scan settings</div>
     <div class="scan-settings-grid">
       <div class="scan-setting">
-        <label class="scan-setting-label" for="sScanPages">Pages per area</label>
+        <label class="scan-setting-label" for="sScanPages" data-i18n="tools.pages">Pages per area</label>
         <input class="scan-setting-input" type="number" id="sScanPages" min="1" max="20" value="3">
       </div>
       <div class="scan-setting">
-        <label class="scan-setting-label" for="sScanMaxRent">Max rent €/mo</label>
+        <label class="scan-setting-label" for="sScanMaxRent" data-i18n="fb.max_rent">Max rent</label>
         <input class="scan-setting-input" type="number" id="sScanMaxRent" placeholder="any">
       </div>
       <div class="scan-setting">
-        <label class="scan-setting-label" for="sScanMinRooms">Min rooms</label>
+        <label class="scan-setting-label" for="sScanMinRooms" data-i18n="fb.rooms_min">Min rooms</label>
         <input class="scan-setting-input" type="number" id="sScanMinRooms" placeholder="any" min="1" max="10">
       </div>
     </div>
@@ -943,7 +786,7 @@
     <div class="scan-last-run">
       <span class="scanner-meta" id="scannerLastRun"></span>
       <span class="scanner-new-badge" id="scannerNewBadge"></span>
-      <button id="scannerSkippedWarn" style="display:none;border:none;background:rgba(217,119,6,0.12);color:var(--amber-ink);border-radius:6px;padding:2px 10px;font-size:11px;font-weight:600;cursor:pointer;margin-left:4px" title="Some areas were skipped on the last scan"></button>
+      <button id="scannerSkippedWarn" style="display:none;border:none;background:rgba(217,119,6,0.12);color:var(--amber-ink);border-radius:6px;padding:2px 10px;font-size:12px;font-weight:600;cursor:pointer;margin-left:4px" title="Some areas were skipped on the last scan"></button>
     </div>
 
     <!-- Skipped-areas drill-down — populated by updateScannerStatus().
@@ -963,8 +806,8 @@
     <!-- Action buttons. Start Lume kicks off the rentals scan; Stop Lume
          stops it. -->
     <div class="scan-actions">
-      <button class="btn-scan-start" id="btnStartScanner">▶ Start Lume</button>
-      <button class="btn-scan-stop"  id="btnStopScanner" disabled>■ Stop Lume</button>
+      <button type="button" class="btn btn-primary" id="btnStartScanner"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#player-play"></use></svg><span data-i18n="tools.start">Start scanner</span></button>
+      <button type="button" class="btn btn-danger" id="btnStopScanner" disabled><svg class="i" aria-hidden="true"><use href="assets/icons.svg#player-stop"></use></svg><span data-i18n="tools.stop">Stop scanner</span></button>
     </div>
 
     <!-- Idealista status (hidden by default; surfaces when the
@@ -984,9 +827,8 @@
         Cache: <span class="cache-count" id="cacheCount">–</span>
         <span id="cacheNewest"></span>
       </div>
-      <button class="btn-scan-secondary" id="btnCacheClear"
-              title="Delete Lume's memory — all listings will be re-enriched on the next scan"
-              style="padding:6px 12px;font-size:12px">Clear Lume's memory</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="btnCacheClear"
+              title="Delete Lume's memory — all listings will be re-enriched on the next scan">Clear Lume's memory</button>
     </div>
 
     <!-- Hidden legacy fields the existing handlers reference but we don't
@@ -1027,7 +869,7 @@
     </div>
 
     <!-- Per-city tab row. Click a tab to load that city's macro-areas. -->
-    <div class="settings-section-label" data-i18n="settings.city">City</div>
+    <div class="settings-section-label" id="scanAreasCityLabel" data-i18n="settings.city">City</div>
     <div class="scan-areas-city-tabs" id="scanAreasCityTabs">
       <!-- populated by _renderScanAreasCityTabs() -->
     </div>
@@ -1048,8 +890,8 @@
          saved as the macro slug directly (no display-name detour). -->
     <div id="areaPickerUI" style="display:none;margin-top:14px">
       <div class="scan-areas-actions">
-        <button class="btn-secondary" id="btnAreaSelectAll" data-i18n="settings.select_all">✓ Select all</button>
-        <button class="btn-secondary" id="btnAreaClearAll"  data-i18n="settings.clear_all">✗ Clear all</button>
+        <button type="button" class="btn btn-secondary btn-sm" id="btnAreaSelectAll" data-i18n="settings.select_all">Select all</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="btnAreaClearAll"  data-i18n="settings.clear_all">Clear all</button>
         <span class="scan-areas-count" id="scanAreasCount"></span>
       </div>
       <div class="scan-areas-grid" id="scanAreasGrid">
@@ -1058,7 +900,7 @@
     </div>
 
     <div style="display:flex;align-items:center;gap:12px;margin-top:18px">
-      <button class="btn-scan-start" id="btnSettingsSave"><span data-i18n="settings.save_areas">Save areas</span></button>
+      <button type="button" class="btn btn-primary" id="btnSettingsSave"><span data-i18n="settings.save_areas">Save areas</span></button>
       <span class="settings-status" id="settingsStatus"></span>
     </div>
   </div>
@@ -1079,18 +921,28 @@
   <div id="enrichmentPanel" class="settings-card" style="margin-bottom:16px" hidden>
     <div class="settings-card-header">
       <div>
-        <h2 class="settings-card-title"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#world"></use></svg> Data Enrichment</h2>
-        <p class="settings-card-subtitle">
-          Fill in missing geo data (metro distance, walk score, POIs, OMI zones)
-          for every city's listings. One click queues every city × rentals + sales.
-        </p>
+        <h2 class="settings-card-title"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#world"></use></svg> <span data-i18n="tools.enrich">Data enrichment</span></h2>
+        <p class="settings-card-subtitle" data-i18n="tools.enrich_sub">Fills in missing location data (metro, POIs, OMI zone) for Milan rentals.</p>
       </div>
     </div>
+    <!-- Maintenance (moved here from the Rentals view) -->
+    <div class="maint-row">
+      <span class="maint-item" data-i18n-title="stats.zone_fallback_tip" title="Listings placed in an OMI zone by neighbourhood name, not by coordinates">
+        <span data-i18n="stats.zone_fallback">Zone by name</span> <strong id="rFallbackCount">–</strong>
+        <button type="button" class="btn btn-secondary btn-sm" id="btnApplyOmi" title="Apply polygon OMI zones to all listings (fast, no network needed)">Apply OMI</button>
+        <span id="applyOmiStatus" class="maint-status"></span>
+      </span>
+      <span class="maint-item geo-coverage" id="geoCoverage">
+        <span data-i18n="tools.geo">Location data</span> <strong id="geoCoverageCount">–</strong>
+        <button type="button" class="btn btn-secondary btn-sm" id="btnDownloadPois" title="Download all Milan POIs once — enables fast offline enrichment (no Overpass calls per listing)">POI data</button>
+        <button type="button" class="btn btn-secondary btn-sm" id="btnEnrichGeo" hidden>Enrich</button>
+        <span class="geo-progress-bar" id="geoProgressBar" hidden><span class="geo-progress-fill" id="geoProgressFill"></span></span>
+        <span id="geoEnrichStatus" class="maint-status"></span>
+      </span>
+    </div>
     <div class="enrich-toolbar">
-      <button class="btn-run-all" type="button" id="btnEnrichAll">
-        ▶ Run for all cities
-      </button>
-      <button class="btn-stop" type="button" id="btnEnrichStop" hidden>■ Stop</button>
+      <button class="btn btn-primary" type="button" id="btnEnrichAll">Run enrichment</button>
+      <button class="btn btn-danger" type="button" id="btnEnrichStop" hidden>Stop</button>
       <span class="enrich-state" id="enrichQueueStatus" style="font-weight:600"></span>
     </div>
     <div class="enrich-panel" id="enrichmentPanelBody">
@@ -1114,8 +966,8 @@
       <!-- populated by JS -->
     </div>
     <div style="display:flex;align-items:center;gap:12px;margin-top:16px">
-      <button class="settings-save-btn" id="btnScoreSettingsSave">Save scoring settings</button>
-      <button class="settings-save-btn" id="btnRescore" style="background:var(--green-light);color:var(--green-deep)"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#refresh"></use></svg> Rescore now</button>
+      <button type="button" class="btn btn-primary" id="btnScoreSettingsSave">Save scoring settings</button>
+      <button type="button" class="btn btn-secondary" id="btnRescore"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#refresh"></use></svg> Rescore now</button>
       <span class="settings-status" id="scoreSettingsStatus"></span>
     </div>
   </div>
@@ -1135,16 +987,16 @@
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:8px" id="gemThresholdWrap">
       <div>
-        <div style="font-size:12px;font-weight:700;color:var(--green-deep);margin-bottom:8px">✦ Hidden Gem</div>
+        <div class="threshold-title gem-text"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#diamond"></use></svg> <span data-i18n="gem.hidden">Hidden Gem</span></div>
         <div class="score-settings-grid" id="gemSettingsGrid"></div>
       </div>
       <div>
-        <div style="font-size:12px;font-weight:700;color:var(--blue-ink);margin-bottom:8px">Good Value</div>
+        <div class="threshold-title good-text"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#coin"></use></svg> <span data-i18n="gem.good">Great Value</span></div>
         <div class="score-settings-grid" id="gvSettingsGrid"></div>
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:12px;margin-top:16px">
-      <button class="settings-save-btn" id="btnGemSettingsSave">Save &amp; Rescore</button>
+      <button type="button" class="btn btn-primary" id="btnGemSettingsSave">Save &amp; Rescore</button>
       <span class="settings-status" id="gemSettingsStatus"></span>
     </div>
   </div>
@@ -1162,7 +1014,7 @@
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-      <button class="dq-btn-sm" id="btnDqRefresh" style="margin-left:4px">↺ Refresh</button>
+      <button type="button" class="btn btn-secondary btn-sm" id="btnDqRefresh"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#refresh"></use></svg> Refresh</button>
       <span id="dqLastUpdated"></span>
     </div>
   <!-- skeleton shown while loading -->
@@ -1189,7 +1041,7 @@
     <!-- 3b: field coverage heatmap -->
     <div style="margin-bottom:22px">
       <div style="font-size:12px;font-weight:600;margin-bottom:10px">Field Coverage Heatmap
-        <span style="font-size:11px;font-weight:400;color:var(--text-secondary);margin-left:6px">click a cell to filter the table below</span>
+        <span style="font-size:12px;font-weight:400;color:var(--text-secondary);margin-left:6px">click a cell to filter the table below</span>
       </div>
       <div id="dqHeatmap"></div>
     </div>
@@ -1220,28 +1072,28 @@
         <option value="immobiliare">Immobiliare</option>
         <option value="idealista">Idealista</option>
       </select>
-      <button class="dq-btn-sm dq-btn-danger" id="btnDqReenrichF">Re-enrich all F-grade</button>
-      <button class="dq-btn-sm" id="btnDqExport">Export CSV</button>
+      <button type="button" class="btn btn-ghost btn-sm btn-danger-text" id="btnDqReenrichF">Re-enrich all F-grade</button>
+      <button type="button" class="btn btn-secondary btn-sm" id="btnDqExport">Export CSV</button>
     </div>
     <div style="overflow-x:auto">
       <table class="dq-tbl" id="dqTbl">
         <thead>
           <tr>
-            <th data-dqsort="neighbourhood">Neighbourhood ↕</th>
-            <th data-dqsort="address">Address ↕</th>
-            <th data-dqsort="source">Source ↕</th>
-            <th data-dqsort="grade">Grade ↕</th>
-            <th data-dqsort="completeness_pct">Complete ↕</th>
-            <th data-dqsort="n_critical">Critical ↕</th>
-            <th data-dqsort="n_important">Important ↕</th>
-            <th data-dqsort="omi_source">OMI source ↕</th>
+            <th data-dqsort="neighbourhood">Neighbourhood</th>
+            <th data-dqsort="address">Address</th>
+            <th data-dqsort="source">Source</th>
+            <th data-dqsort="grade">Grade</th>
+            <th data-dqsort="completeness_pct">Complete</th>
+            <th data-dqsort="n_critical">Critical</th>
+            <th data-dqsort="n_important">Important</th>
+            <th data-dqsort="omi_source">OMI source</th>
             <th>Action</th>
           </tr>
         </thead>
         <tbody id="dqTblBody"></tbody>
       </table>
     </div>
-    <div id="dqTblCount" style="font-size:11px;color:var(--text-secondary);margin-top:6px"></div>
+    <div class="dq-table-foot"><span id="dqTblCount"></span> <button type="button" class="btn btn-ghost btn-sm" id="dqMore" hidden>Show 50 more</button></div>
   </div>
   </div><!-- /.settings-card Data Quality -->
 
@@ -1266,9 +1118,10 @@
   </div><!-- /.settings-page -->
 </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" integrity="sha384-eXVCORTRlv4FUUgS/xmOyr66XBVraen8ATNLMESp92FKXLAMiKkerixTiBvXriZr" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js" integrity="sha384-e6cc9LaIG7xZ3XD5B+jtr1NhTWPQGQdRCh6xiZ+ZFUtWCpg4ycv3Sh+SkZoopvUY" crossorigin="anonymous"></script>
+</main>
+
+<!-- Leaflet and Chart.js load on first use of the Map / Stats / Tools tabs
+     (ensureLeaflet / ensureChart in shell.js). -->
 <!-- Listing Details view (assets/details.js) -->
 <div class="lm-backdrop" id="listingModal" hidden>
   <div class="lm" role="dialog" aria-modal="true" aria-labelledby="lmTitle">

@@ -62,27 +62,6 @@ function isNew(l) {
   cutoff.setDate(cutoff.getDate() - 3);
   return new Date(l.first_seen_date) >= cutoff;
 }
-function newBadgeHtml(l) {
-  return isNew(l) ? '<span class="new-badge">New</span>' : '';
-}
-
-// Format first_seen_date as "May 2, 2026 (2 days ago)" for the data-points panel.
-function firstSeenLabel(l) {
-  const fsd = l && l.first_seen_date;
-  if (!fsd) return null;
-  const d = new Date(fsd);
-  if (isNaN(d.getTime())) return fsd;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const dd = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const days = Math.round((today - dd) / 86400000);
-  const fmt = d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-  const rel = days === 0 ? 'today'
-            : days === 1 ? 'yesterday'
-            : days < 0   ? `in ${Math.abs(days)}d`
-            : `${days} days ago`;
-  return `${fmt} (${rel})`;
-}
 
 // Whole days since the scanner first saw the listing (local calendar days).
 function _daysSinceFirstSeen(l) {
@@ -107,82 +86,90 @@ function _distM(a1, o1, a2, o2) {
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
-// The comparable flats behind a listing's benchmark (comps_ids), nearest
-// first. Locally the rows come from the loaded grid or /rentals/by-ids
-// (archived comps too); online from Supabase, comps_ids included.
+// Rows behind a listing's benchmark (comps_ids). Locally the rows come from
+// the loaded grid or /rentals/by-ids (archived comps too); online from
+// Supabase, comps_ids included.
+async function _compRows(l) {
+  let ids = Array.isArray(l.comps_ids) ? l.comps_ids : null;
+  if (!ids && !IS_LIVE && SupabaseClient.configured) {
+    const r = await SupabaseClient.fetchByIds([l.id], 'id,comps_ids');
+    ids = (r[0] && r[0].comps_ids) || [];
+  }
+  ids = (ids || []).map(String);
+  const byId = new Map(ALL_RENT.map(x => [String(x.id), x]));
+  let rows = ids.map(i => byId.get(i)).filter(Boolean);
+  const missing = ids.filter(i => !byId.has(i));
+  if (missing.length) {
+    if (IS_LIVE) {
+      const r = await fetch(`/rentals/by-ids?ids=${encodeURIComponent(missing.join(','))}`);
+      if (r.ok) rows = rows.concat(await r.json());
+    } else {
+      rows = rows.concat(await SupabaseClient.fetchByIds(missing,
+        'id,price,sqm,rooms,ask_psqm,condition,source,url,latitude,longitude,is_stale,neighbourhood'));
+    }
+  }
+  return { ids, rows };
+}
+
+// The comparable flats table in Details: this flat first, then the comps
+// nearest first. Ten rows, the rest behind "Show all".
 async function _loadCompsList(l, box) {
   const msg = key => `<div class="comps-list-msg">${escapeHtml(t(key))}</div>`;
   box.innerHTML = msg('card.comps_loading');
   try {
-    let ids = Array.isArray(l.comps_ids) ? l.comps_ids : null;
-    if (!ids && !IS_LIVE && SupabaseClient.configured) {
-      const r = await SupabaseClient.fetchByIds([l.id], 'id,comps_ids');
-      ids = (r[0] && r[0].comps_ids) || [];
-    }
-    ids = (ids || []).map(String);
+    const { ids, rows } = await _compRows(l);
     if (!ids.length) { box.innerHTML = msg('card.comps_none'); return; }
-    const byId = new Map(ALL_RENT.map(x => [String(x.id), x]));
-    let rows = ids.map(i => byId.get(i)).filter(Boolean);
-    const missing = ids.filter(i => !byId.has(i));
-    if (missing.length) {
-      if (IS_LIVE) {
-        const r = await fetch(`/rentals/by-ids?ids=${encodeURIComponent(missing.join(','))}`);
-        if (r.ok) rows = rows.concat(await r.json());
-      } else {
-        rows = rows.concat(await SupabaseClient.fetchByIds(missing,
-          'id,price,sqm,rooms,ask_psqm,condition,source,url,latitude,longitude,is_stale,neighbourhood'));
-      }
-    }
     const withD = rows.map(x => ({ x, d: (l.latitude != null && x.latitude != null)
       ? _distM(l.latitude, l.longitude, x.latitude, x.longitude) : null }))
       .sort((a, b) => (a.d ?? 1e9) - (b.d ?? 1e9));
-    box.innerHTML = `<table class="comps-table"><thead><tr>
-        <th>m</th><th>€/m²</th><th>€/mo</th><th>m²</th><th></th></tr></thead><tbody>
-      ${withD.map(({ x, d }) => {
-        const rent = x.rent_mo ?? x.price;
-        const psqm = x.ask_psqm ?? (rent && x.sqm ? rent / x.sqm : null);
-        const cond = x.condition ? escapeHtml(String(x.condition).split(' / ')[0]) : '';
-        return `<tr class="${x.is_stale ? 'is-archived' : ''}">
-          <td>${d != null ? Math.round(d) : '–'}</td>
-          <td>${psqm != null ? Number(psqm).toFixed(1) : '–'}</td>
-          <td>${rent != null ? fmt(rent) : '–'}</td>
-          <td>${x.sqm ?? '–'}</td>
-          <td><a href="${_safeUrl(x.url)}" target="_blank" rel="noopener">${cond || '↗'}</a>${x.is_stale
-            ? ` <span class="comps-archived">${escapeHtml(t('card.comps_archived'))}</span>` : ''}</td></tr>`;
-      }).join('')}</tbody></table>${withD.length < ids.length
-        ? `<div class="comps-list-msg">${escapeHtml(t('card.comps_hidden', { n: ids.length - withD.length }))}</div>` : ''}`;
+    const row = (x, d, self) => {
+      const rent = x.rent_mo ?? x.price;
+      const psqm = x.ask_psqm ?? (rent && x.sqm ? rent / x.sqm : null);
+      const cond = x.condition ? escapeHtml(String(x.condition).split(' / ')[0].replace(' (Idealista)', '')) : '–';
+      const link = self ? `<strong>${escapeHtml(t('comps.this_flat'))}</strong>`
+        : `<a href="${_safeUrl(x.url)}" target="_blank" rel="noopener">${cond}${icon('external-link')}</a>`;
+      return `<tr class="${self ? 'is-self' : ''}${x.is_stale ? ' is-archived' : ''}">
+        <td>${d != null ? fmt(Math.round(d)) + ' m' : '–'}</td>
+        <td>${psqm != null ? '€' + fmt1(psqm) : '–'}</td>
+        <td>${rent != null ? '€' + fmt(rent) : '–'}</td>
+        <td>${x.sqm != null ? fmt(x.sqm) : '–'}</td>
+        <td>${link}${x.is_stale ? ` <span class="comps-archived">${escapeHtml(t('card.comps_archived'))}</span>` : ''}</td></tr>`;
+    };
+    const hiddenMsg = withD.length < ids.length
+      ? `<div class="comps-list-msg">${escapeHtml(t('card.comps_hidden', { n: ids.length - withD.length }))}</div>` : '';
+    const render = all => {
+      const shown = all ? withD : withD.slice(0, 10);
+      box.innerHTML = `<div class="table-wrap"><table class="comps-table"><thead><tr>
+          <th>${escapeHtml(t('comps.col_dist'))}</th><th>€/m²</th><th>${escapeHtml(t('comps.col_rent'))}</th><th>m²</th><th>${escapeHtml(t('comps.col_cond'))}</th>
+        </tr></thead><tbody>${row(l, null, true)}${shown.map(({ x, d }) => row(x, d, false)).join('')}</tbody></table></div>`
+        + (!all && withD.length > 10 ? `<button type="button" class="btn btn-ghost btn-sm" data-comps-all>${escapeHtml(t('comps.show_all', { n: withD.length }))}</button>` : '')
+        + hiddenMsg;
+      box.querySelector('[data-comps-all]')?.addEventListener('click', () => render(true));
+    };
+    render(false);
   } catch (e) {
     console.warn('comps list:', e);
     box.innerHTML = msg('card.comps_none');
   }
 }
 
-// Up to 3 explanatory bullets beneath the why-sentence callout.
-// Each bullet carries a component tag — Price / Property / Location / Penalty —
-// matching the rows in the score-breakdown panel. Sentiment governs the icon:
-// ✓ positive (strength), ⚠ negative (weakness), • neutral (informational).
-// Reads `listing.score_reasons` (populated by explain.py at score time).
-const _reasonIconMap = { positive: '✓', negative: '⚠', neutral: '•' };
+// Score reasons (explain.py) as bullets — Details view.
+// Sentiment governs the icon: positive / negative / neutral.
+const _reasonIconMap = { positive: 'check', negative: 'alert-triangle', neutral: 'info-circle' };
 
 function reasonsBulletsHtml(l) {
-  // The price reason repeats the sentence above it ("x% below similar
-  // flats") — and on a "verify first" discount its ✓ would contradict it.
+  // The price reason repeats the verdict ("x% below similar flats").
   const reasons = (Array.isArray(l && l.score_reasons) ? l.score_reasons : [])
     .filter(r => !(String(r.component || '').toLowerCase() === 'price' && l.comps_delta_pct != null));
   if (!reasons.length) return '';
   return `<ul class="callout-reasons">${reasons.map(r => {
     const sentiment = (_reasonIconMap[r.sentiment]) ? r.sentiment : 'negative';
-    const icon      = _reasonIconMap[sentiment];
     const component = (r.component || '').toString();
     const cKey      = component.toLowerCase();
-    // Translate the component badge ("PRICE" → "PREZZO" in Italian) and
-    // the body text. reasonText() prefers r.i18n_key/i18n_vars when present,
-    // falling back to the English r.text for older synced rows.
-    const compKey   = 'reason.component.' + cKey;
-    const compLabel = component ? t(compKey) : '';
+    const compLabel = component ? t('reason.component.' + cKey) : '';
     return `
       <li class="callout-reason callout-reason-${sentiment}">
-        <span class="reason-icon">${icon}</span>
+        <span class="reason-icon">${icon(_reasonIconMap[sentiment])}</span>
         ${component
           ? `<span class="reason-component reason-component-${escapeHtml(cKey)}">${escapeHtml(compLabel)}</span>`
           : ''}
@@ -195,8 +182,7 @@ function reasonsBulletsHtml(l) {
 //   - {i18n_key, i18n_vars} → t() lookup with placeholder substitution
 //   - i18n_vars._items (used by reason.property.strengths and friends) is
 //     a list of {key, vars} pairs that get individually translated and
-//     joined with ", " — gives Italian users localised sub-fragments
-//     like "recentemente ristrutturato, piano 5 con ascensore".
+//     joined with ", ".
 //   - Old rows lacking i18n_key fall back to the English r.text verbatim.
 function reasonTextLocalised(r) {
   if (!r) return '';
@@ -205,8 +191,6 @@ function reasonTextLocalised(r) {
     const sub  = vars._items;
     if (Array.isArray(sub) && sub.length) {
       vars.items = sub.map(s => t(s.key, s.vars || {})).join(', ');
-      // Capitalise the first character of the joined fragments (matches
-      // the Python side's `text[0].upper() + text[1:]` formatting).
       vars.items = vars.items.charAt(0).toUpperCase() + vars.items.slice(1);
     }
     delete vars._items;
@@ -215,486 +199,179 @@ function reasonTextLocalised(r) {
   return r.text || '';
 }
 
-// Combined specs pill: bed N · bath N · Xm²
-// Falls back gracefully when fields are missing.
-function specsPillHtml(l) {
-  const parts = [];
-  if (l.bedrooms !== null && l.bedrooms !== undefined) {
-    const label = l.bedrooms === 0 ? 'studio' : `${l.bedrooms}`;
-    parts.push(`${icon('bed')} ${label}`);
-  }
-  if (l.bathrooms) parts.push(`${icon('bath')} ${l.bathrooms}`);
-  if (l.sqm)        parts.push(`${l.sqm}m²`);
-  if (parts.length === 0) return '';
-  return `<span class="specs-pill">${parts.join(' · ')}</span>`;
+// How the benchmark was built — shown in Details.
+function compsMethodTip(l) {
+  const src    = l.comps_source || '';
+  const n      = l.comps_n || 0;
+  const radius = l.comps_radius_m ? fmt(Math.round(l.comps_radius_m)) : null;
+  const key = {
+    knn_stratified: 'comps.m_knn_same', knn: l.comps_adjusted ? 'comps.m_knn_adj' : 'comps.m_knn_mixed',
+    zone_stratified: 'comps.m_zone_same', zone_any_condition: 'comps.m_zone_adj',
+    radius_800m_same_fascia: 'comps.m_radius', fascia_fallback: 'comps.m_fascia',
+    omi_zone: 'comps.m_omi', omi_only: 'comps.m_omi',
+  }[src];
+  return key ? t(key, { n, m: radius || '–', zone: l.omi_zona || '?' }) : '';
 }
 
-// ── Card layout helpers (Fixes 1, 2, 4) ───────────────────────────────────────
-
-// 3 horizontally-scrollable stat pills (metro · floor · comps delta)
-function statPillsHtml(l, isRental) {
-  const pills = [];
-
-  // Pill 1 — Metro: Cadorna · 6 min M1
-  // Always show walking time, not distance. When metro_walk_min is missing
-  // (≈18 % of sale listings — geo enrichment didn't compute it), derive it
-  // from metro_nearest_dist_m using a 70 m/min walking pace, which matches
-  // the rest of our routed-time data within ±1 min.
-  let walkMin = (l.metro_walk_min != null) ? l.metro_walk_min : null;
-  if (walkMin == null && l.metro_nearest_dist_m != null) {
-    walkMin = Math.max(1, Math.round(l.metro_nearest_dist_m / 70));
-  }
-  if (walkMin != null) {
-    const color = walkMin <= 5  ? 'var(--green-deep)'
-                : walkMin <= 12 ? 'var(--amber)'
-                : 'var(--text-secondary)';
-    const name = l.metro_nearest_name ? `${escapeHtml(l.metro_nearest_name)} · ` : '';
-    const line = l.metro_nearest_line ? ` ${escapeHtml(l.metro_nearest_line)}` : '';
-    const distHint = (l.metro_walk_min == null && l.metro_nearest_dist_m != null)
-      ? ` (~${Math.round(l.metro_nearest_dist_m)}m)` : '';
-    const tip  = l.metro_nearest_name
-      ? `${l.metro_nearest_name}${l.metro_nearest_line ? ' (' + l.metro_nearest_line + ')' : ''} · ${walkMin} min walk${distHint}`
-      : `${walkMin} min walk to nearest metro${distHint}`;
-    pills.push(`<span class="stat-pill" style="color:${color}" title="${escapeHtml(tip)}">${icon('train')} ${name}${walkMin} min${line}</span>`);
-  } else {
-    pills.push(`<span class="stat-pill" style="color:var(--text-muted)">${icon('train')} —</span>`);
-  }
-
-  // Pill 2 — Floor + lift, falling back to rooms / lift when floor is unknown.
-  // Idealista's scraper occasionally misses floor entirely (~6 % of sales);
-  // showing an empty floor pill reads as a bug. Fall back to whatever's useful.
-  const floorLbl = (typeof _floorLabel === 'function' ? _floorLabel(l) : null)
-                || (l.floor_n != null ? `${l.floor_n}° piano` : null);
-  if (floorLbl) {
-    const fn = l.floor_n;
-    const fcol = fn != null && fn < 0   ? 'var(--coral)'
-              : fn === 0                 ? 'var(--amber)'
-              : 'var(--text-primary)';
-    const lift = l.elevator === true ? ` ${icon('elevator')}` : '';
-    pills.push(`<span class="stat-pill" style="color:${fcol}">${icon('building')} ${escapeHtml(floorLbl)}${lift}</span>`);
-  } else if (l.elevator === true || l.elevator === false) {
-    // Floor unknown but lift state known — still useful
-    const liftLabel = l.elevator === true ? `${icon('elevator')} With lift` : 'No lift';
-    pills.push(`<span class="stat-pill" style="color:var(--text-secondary)">${liftLabel}</span>`);
-  } else if (l.rooms != null) {
-    // Last fallback: rooms count
-    const roomsLabel = l.rooms === 1 ? '1 room' : `${l.rooms} rooms`;
-    pills.push(`<span class="stat-pill" style="color:var(--text-secondary)">${icon('bed')} ${roomsLabel}</span>`);
-  }
-  // If floor + lift + rooms are all unknown, simply omit the middle pill
-  // — the row stays clean rather than displaying a placeholder.
-
-  // Pill 3 — how fresh the listing is (the discount is already on the
-  // comps row and in the sentence below; good flats go in days).
-  const days = _daysSinceFirstSeen(l);
-  if (days != null) {
-    const txt = days <= 0 ? t('card.seen_today') : t('card.seen_days', { n: days });
-    const col = days <= 3 ? 'var(--green-deep)' : days > 30 ? 'var(--text-muted)' : 'var(--text-secondary)';
-    pills.push(`<span class="stat-pill" style="color:${col}" title="${escapeHtml(firstSeenLabel(l) || '')}">${icon('clock')} ${escapeHtml(txt)}</span>`);
-  }
-
-  return `<div class="stat-pills">${pills.join('')}</div>`;
-}
-
-// Short comps context: "50 comps · B21" or "133 comps · B13 · adj."
-function compsContextStr(l, isRental) {
-  const n   = isRental ? (l.comps_n || 0) : (l.comps_sale_n || 0);
-  const z   = l.omi_zona || '';
-  const adj = isRental ? !!l.comps_adjusted : !!l.comps_sale_adjusted;
-  const rad = isRental ? l.comps_radius_m : null;
-  const parts = [`${n} comps`];
-  if (rad)    parts.push(`≤${Math.round(rad)} m`);
-  else if (z) parts.push(escapeHtml(z));
-  if (adj) parts.push('adj.');
-  return parts.join(' · ');
-}
-
-// Short label for the detail panel's "Comps source" row.
-const _COMPS_SOURCE_SHORT = {
-  knn_stratified:          'nearest flats, same condition',
-  knn:                     'nearest flats, condition adjusted',
-  zone_stratified:         'same zone + same condition',
-  zone_any_condition:      'same zone + condition adjusted',
-  radius_800m_same_fascia: '≤800 m + same fascia',
-  fascia_fallback:         'same fascia (citywide)',
-  omi_zone:                'OMI zone fallback',
-  omi_only:                'OMI reference only',
-};
-
-// Methodology tooltip — full description on hover (kept for ⓘ icon)
-function compsMethodTip(l, isRental) {
-  const src    = (isRental ? l.comps_source : l.comps_sale_source) || '';
-  const cgroup = isRental ? l.comps_condition_group : l.comps_sale_condition_group;
-  const adj    = isRental ? !!l.comps_adjusted : !!l.comps_sale_adjusted;
-  const zona   = l.omi_zona || '?';
-  const fascia = l.omi_fascia || '?';
-  const nComps = (isRental ? l.comps_n : l.comps_sale_n) || 0;
-  const radius = isRental ? l.comps_radius_m : l.comps_sale_radius_m;
-  const within = radius ? ` within ${radius} m` : '';
-  if (src === 'knn_stratified')
-    return `The ${nComps} nearest flats${within} in the same condition group (${cgroup}) and OMI fascia ${fascia} — €/m² scaled to this flat's size, recently seen listings weighted more.`;
-  if (src === 'knn')
-    return adj
-      ? `The ${nComps} nearest flats${within} in OMI fascia ${fascia}, prices adjusted to ${cgroup} condition and scaled to this flat's size.`
-      : `The ${nComps} nearest flats${within} in OMI fascia ${fascia}, mixed conditions (this flat's condition is unknown — no adjustment), scaled to its size.`;
-  if (src === 'zone_stratified' && cgroup && cgroup !== 'unknown')
-    return `Comps from same OMI zone (${zona}) and same condition group (${cgroup}). Most reliable.`;
-  if (src === 'zone_any_condition')
-    return adj
-      ? `Comps include listings of different renovation states; prices adjusted to approximate ${cgroup || 'this'} condition before computing the median.`
-      : `Comps from OMI zone ${zona} with mixed conditions (target condition unknown — no adjustment).`;
-  if (src === 'radius_800m_same_fascia')
-    return `Zone too sparse — falling back to 800m radius within OMI fascia ${fascia}.`;
-  if (src === 'fascia_fallback')
-    return `No nearby comps — using full OMI fascia ${fascia} as benchmark.`;
-  if (src.startsWith('comps_')) return `Comps within ${src.replace('comps_','')}m radius.`;
-  if (src === 'omi_zone')       return `OMI zone benchmark (no per-listing comps).`;
-  if (src === 'omi_only')       return `No live comps — priced against OMI reference.`;
-  return '';
-}
-
-// Single-line comps row: [N comps · ZONE]  [━━━●━━]  [-19.9%]
-function compsRowHtml(l, isRental) {
-  const dp = isRental ? l.comps_delta_pct : l.comps_sale_delta_pct;
-  if (dp == null) return '';
-  const dpN  = Number(dp);
-  const pos  = Math.max(0, Math.min(100, Math.round((dpN + 20) / 40 * 100)));
-  const col  = dpN <= -5 ? 'var(--green-deep)'
-            : dpN >=  5 ? 'var(--coral)'
-            : 'var(--amber)';
-  const sign = dpN > 0 ? '+' : '';
-  const ctxText = compsContextStr(l, isRental);
-  const tipText = compsMethodTip(l, isRental);
-  const tip     = escapeHtml(tipText);
-  // Hover shows the title; a tap/click opens the same text under the row
-  // (title tooltips never appear on touch screens).
-  return `<div class="comps-row">
-    <span class="comps-context" title="${tip}" role="button" tabindex="0" data-comps-tip>${ctxText} <span class="comps-context-info">ⓘ</span></span>
-    <div class="comps-track-wrap" style="color:${col}">
-      <div class="comps-track-gradient"></div>
-      <div class="comps-track-dot" style="left:${pos}%"></div>
-    </div>
-    <span class="comps-delta-label" style="color:${col}">${sign}${dpN.toFixed(1)}%</span>
-  </div>${tipText ? `<div class="comps-tip-text" hidden>${tip}</div>` : ''}`;
-}
-
-// Listing-€/m² vs area-median pill — sits next to the listing's own
-// €/m² in the price row so the reader can see at a glance how this
-// listing's asking-€/m² compares to what the surrounding
-// neighbourhood is fetching. Renders whenever we have the listing's
-// €/m² AND a comps anchor (median OR delta) so the pill is either
-// present on every card or absent for the same reason (no comps)
-// — never conditional on direction (below/above market).
-//
-// Layout: "€18.7 vs €24/m²/mo"
-//   - Left number is the listing's own €/m², colour-coded by delta:
-//       ≤ -5 %  → green (below market)
-//       ≥ +5 %  → red   (above market)
-//       between → amber (at market)
-//   - Right number is the area median (preferred from comps_median
-//     when present, else derived from ask_psqm + delta — exact
-//     mathematical inverse).
-function areaPsqmPillHtml(l, isRental) {
-  const askPsqm = Number((isRental ? (l.ask_psqm_rent ?? l.ask_psqm) : l.ask_psqm) || 0);
-  if (!(askPsqm > 0)) return '';
-
-  const unit    = isRental ? '/m²/mo' : '/m²';
-  const askStr  = `€${askPsqm.toFixed(1)}`;
-  const delta   = isRental ? l.comps_delta_pct : l.comps_sale_delta_pct;
-
-  // Resolve the area median: prefer the actual comps median, fall back
-  // to deriving it from ask_psqm + delta (exact mathematical inverse).
-  let med = isRental ? l.comps_median : l.comps_sale_median;
-  med = Number(med);
-  if (!Number.isFinite(med) || med <= 0) {
-    if (delta == null) {
-      // No comps anchor at all — render the listing's €/m² alone so
-      // the price row still shows it (matches the pre-pill UI).
-      return `<span class="price-area-pill" title="Listing €/m²">
-                <span class="price-area-ask tone-neutral">${askStr}${unit}</span>
-              </span>`;
-    }
-    med = askPsqm / (1 + delta / 100);
-  }
-
-  const medStr  = `€${Math.round(med)}${unit}`;
-  const tone    = (delta == null) ? 'neutral'
-                : delta <= -5     ? 'good'
-                : delta >=  5     ? 'bad'
-                                  : 'at';
-  const nComps  = isRental ? (l.comps_n || 0) : (l.comps_sale_n || 0);
-  const title   = nComps
-    ? `Listing €/m² vs area median from ${nComps} comparables`
-    : 'Listing €/m² vs area median for similar nearby listings';
-  return `<span class="price-area-pill" title="${title}">
-            <span class="price-area-ask tone-${tone}">${askStr}</span>
-            <span class="price-area-vs">vs</span>${medStr}
-          </span>`;
-}
-
-// Stale-banner footer for cards — only renders when is_stale is set and
-// the "Show expired" toggle has been flipped on (otherwise stale listings
-// are filtered out entirely by applyRentFilters).
+// Card banners — archived listing, or a discount too large to trust.
 function staleBannerHtml(l) {
   if (!l.is_stale) return '';
   const days = l.days_since_seen;
-  const daysStr = (days != null) ? `${days} days` : 'a while';
-  return `<div class="stale-banner">⚠ Off-market — not seen by the scanner in ${daysStr}</div>`;
+  return `<div class="stale-banner">${icon('alert-triangle')} ${escapeHtml(days != null ? t('card.stale_days', { n: days }) : t('card.stale'))}</div>`;
 }
 
-// Banner shown on cards that crossed the extreme-underpricing threshold
-// (>60 % below comps). The row is NOT excluded (genuine distressed sales
-// exist), but the score is capped at 55 and gem badges stripped — this
-// banner surfaces the suspicion so the user verifies before acting on it.
-// Reads .extreme_underpricing (DB column from migration 010). The
-// legacy _extreme_underpricing key from scoring.py's apply_… helper
-// also works for listings that were scored locally without going
-// through Supabase.
 function extremeUnderpricingBannerHtml(l) {
   const flag = l.extreme_underpricing || l._extreme_underpricing;
   if (!flag) return '';
-  const dp = (l.extreme_underpricing_delta != null)
-    ? l.extreme_underpricing_delta
-    : (l._extreme_underpricing_delta != null
-        ? l._extreme_underpricing_delta
-        : (l.comps_sale_delta_pct != null
-            ? l.comps_sale_delta_pct
-            : l.comps_delta_pct));
-  const pctStr = (dp != null && !isNaN(dp))
-    ? `${Math.abs(dp).toFixed(0)}% below comps — `
-    : '';
-  return `<div class="extreme-underpricing-banner">⚠ ${pctStr}verify this listing — price unusually far below market</div>`;
+  return `<div class="extreme-underpricing-banner">${icon('alert-triangle')} ${escapeHtml(t('card.extreme'))}</div>`;
 }
 
 // ── Rentals — card renderer ───────────────────────────────────────────────────
-// Fav button content — the heart fills via .btn-fav.is-fav (CSS).
+// Card anatomy: photo · neighbourhood + score · street · source · price with
+// the discount vs nearby flats · rooms, size, floor · metro and freshness ·
+// [Details] [♡] … [Open]. The why-sentence, comps bar, €/m² and the ID live
+// in Details.
 function favBtnInner() {
-  return `${icon('heart')}<span>Fav</span>`;
+  return icon('heart');
 }
 
-function renderRentalCard(l) {
-  const sc       = scoreClass(l.score_total);
-  const barPct   = getRentBarPct(l);
-  const fasciaColour = barPct <= 33 ? 'var(--green-mid)' : barPct <= 66 ? 'var(--amber)' : 'var(--coral)';
+function _specsParts(l) {
+  const parts = [];
+  if (l.rooms != null) parts.push(l.rooms === 1 ? t('card.studio') : t('card.rooms', { n: l.rooms }));
+  if (l.sqm) parts.push(`${fmt(l.sqm)} m²`);
+  const fl = _floorLabel(l);
+  if (fl) parts.push(fl + (l.elevator === true ? ' · ' + t('lm.lift') : l.elevator === false && (l.floor_n ?? 0) > 1 ? ' · ' + t('lm.no_lift') : ''));
+  else if (l.elevator === true) parts.push(t('lm.lift'));
+  if (l.bathrooms >= 2) parts.push(t('card.baths', { n: l.bathrooms }));
+  return parts;
+}
 
-  const omiMid    = l.omi_loc_mid ?? l.omi_rent_mid;
+function _dealDeltaHtml(l) {
+  if (l.price_suspect) {
+    return `<span class="deal-delta tone-warn" title="${escapeHtml(t('card.suspect'))}">${icon('alert-triangle')}${escapeHtml(t('card.verify'))}</span>`;
+  }
+  const dp = l.comps_delta_pct;
+  if (dp == null) return '';
+  const tone = dp <= -5 ? 'good' : dp >= 5 ? 'bad' : 'at';
+  const tip = t('card.delta_tip', { n: l.comps_n || 0, m: l.comps_radius_m ? fmt(Math.round(l.comps_radius_m)) : '–' });
+  const label = Math.abs(dp) < 1 ? t('card.in_line') : t('card.vs_nearby', { pct: fmtPct(dp) });
+  return `<span class="deal-delta tone-${tone}" title="${escapeHtml(tip)}">${escapeHtml(label)}</span>`;
+}
 
-  // ── Score formula legend ──────────────────────────────────────────────────
+function _metroMeta(l) {
+  let walk = l.metro_walk_min != null ? l.metro_walk_min : null;
+  if (walk == null && l.metro_nearest_dist_m != null) walk = Math.max(1, Math.round(l.metro_nearest_dist_m / 70));
+  if (walk == null) return '';
+  const name = l.metro_nearest_name ? `${l.metro_nearest_name}${l.metro_nearest_line ? ' ' + l.metro_nearest_line : ''} · ` : '';
+  return `<span class="${walk <= 5 ? 'near' : ''}">${icon('train')}${escapeHtml(name + t('card.walk_min', { n: walk }))}</span>`;
+}
+
+function _freshMeta(l) {
+  const days = _daysSinceFirstSeen(l);
+  if (days == null) return '';
+  const txt = days <= 0 ? t('card.seen_today') : t('card.seen_days', { n: fmt(days) });
+  return `<span class="${days <= 3 ? 'fresh' : ''}" title="${escapeHtml(fmtDate(l.first_seen_date))}">${icon('clock')}${escapeHtml(txt)}</span>`;
+}
+
+// Score ring markup. animate=false (re-renders) paints the final state.
+function scoreRingHtml(l, size = 44) {
+  const score = l.score_total ?? 0;
+  const sc    = scoreClass(score);
+  const r     = size / 2 - 3;
+  const C     = 2 * Math.PI * r;
+  const off   = C * (1 - Math.max(0, Math.min(100, score)) / 100);
   const wP  = scoreSettings.w_price    ?? 0.45;
   const wPr = scoreSettings.w_property ?? 0.25;
   const wL  = scoreSettings.w_location ?? 0.20;
   const wPn = scoreSettings.w_penalty  ?? 0.10;
-
-
-  // ── Score breakdown tooltip ──────────────────────────────────────────────
-  // (Score breakdown shown via #globalTooltip on score-badge-wrap hover — see tooltip handler above)
-
-  // (The in-card "How Lume scored this" panel moved to the Details view —
-  //  details.js — together with the reasons and the comparable flats.)
-
-  // Lume's price alert (only shown when listing is priced above similar flats nearby)
-  const compsSugHtml = (() => {
-    const dp  = l.comps_delta_pct;
-    const med = l.comps_median;
-    const sqm = l.sqm;
-    const rentMo = l.rent_mo;
-    if (dp == null || dp <= 0 || !med || !sqm) return '';
-    const compsSugRent = Math.round(med * sqm / 25) * 25;
-    const diff = rentMo - compsSugRent;
-    if (diff <= 0) return '';
-    return `<div class="suggested-rent-row sug-warn">
-      <span class="sug-label">${escapeHtml(t('comps.suggest'))}</span>
-      <span class="sug-val" style="color:var(--amber);font-weight:700">€${fmt(compsSugRent)}/mo</span>
-      <span class="sug-label">${escapeHtml(t('comps.diff_rent', {diff: fmt(diff), n: l.comps_n || 0}))}</span>
-    </div>`;
-  })();
-
-  // (The OMI-benchmark "OMI suggests:" row used to render here as a
-  // second opinion alongside compsSugHtml. Removed — comps reflect the
-  // actual local market and the OMI number was confusing duplication.
-  // The OMI mid is still surfaced in the score-breakdown tooltip and
-  // the detail page for users who want the official benchmark.)
-
-  // ── Variant A: Calm Hierarchy ─────────────────────────────────────────────
-  const score     = l.score_total ?? 0;
-  const ringColor = sc === 'high' ? '#2A7A5A' : sc === 'mid' ? '#E8922A' : '#E05C4B';
-  const C         = 2 * Math.PI * 23;   // r=23 for size=52
-  const ringOffset = C * (1 - Math.max(0, Math.min(100, score)) / 100);
-
-  // SVG score ring (animated count-up via IntersectionObserver — see globals)
-  const scoreRingHtml = `
-    <div class="score-ring-wrap"
+  return `<div class="score-ring-wrap sc-${sc}" role="img" aria-label="${escapeHtml(t('lm.score', { n: score }))}"
          data-score-target="${score}"
-         data-score-color="${ringColor}"
-         data-sc-total="${l.score_total ?? ''}"
-         data-sc-price="${l.score_price ?? ''}"
-         data-sc-prop="${l.score_property ?? l.score_physical ?? ''}"
-         data-sc-loc="${l.score_location ?? l.geo_score ?? ''}"
-         data-sc-pen="${l.score_penalty ?? ''}"
-         data-sc-geo="${l.geo_score ?? ''}"
-         data-sc-phys="${l.score_physical ?? ''}"
-         data-sc-rent="${l.score_rent ?? ''}"
-         data-sc-value="${l.score_value ?? ''}"
-         data-sc-fascia="${l.score_fascia ?? ''}"
-         data-w-price="${wP}"
-         data-w-prop="${wPr}"
-         data-w-loc="${wL}"
-         data-w-pen="${wPn}"
+         data-sc-total="${l.score_total ?? ''}" data-sc-price="${l.score_price ?? ''}"
+         data-sc-prop="${l.score_property ?? l.score_physical ?? ''}" data-sc-loc="${l.score_location ?? l.geo_score ?? ''}"
+         data-sc-pen="${l.score_penalty ?? ''}" data-sc-rent="${l.score_rent ?? ''}"
+         data-w-price="${wP}" data-w-prop="${wPr}" data-w-loc="${wL}" data-w-pen="${wPn}"
          data-sc-cap="${escapeHtml(l.score_cap_reason || '')}">
-      <svg width="52" height="52" viewBox="0 0 52 52" style="display:block">
-        <circle cx="26" cy="26" r="23" fill="none" stroke="#EDEAE4" stroke-width="3.5"/>
-        <circle class="score-ring-fill" cx="26" cy="26" r="23" fill="none"
-                stroke="${ringColor}" stroke-width="3.5"
-                stroke-linecap="round"
-                stroke-dasharray="${C.toFixed(2)}"
-                stroke-dashoffset="${C.toFixed(2)}"
-                transform="rotate(-90 26 26)"
-                data-final-offset="${ringOffset.toFixed(2)}"/>
+      <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="display:block" aria-hidden="true">
+        <circle class="ring-track" cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke-width="3.5"/>
+        <circle class="score-ring-fill" cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke-width="3.5"
+                stroke-linecap="round" stroke-dasharray="${C.toFixed(2)}" stroke-dashoffset="${C.toFixed(2)}"
+                transform="rotate(-90 ${size / 2} ${size / 2})" data-final-offset="${off.toFixed(2)}"/>
       </svg>
-      <div class="score-ring-text"
-           style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-                  font-weight:800;font-size: 18px;letter-spacing:-0.3px;color:${ringColor};font-family:var(--font)">0</div>
+      <div class="score-ring-text">0</div>
     </div>`;
+}
 
-  // Gem chip on photo (replaces header badge)
-  const gemPhotoChip = l.hidden_gem
-    ? `<div class="gem-photo-chip chip-hidden">${icon('diamond')}<span>${escapeHtml(t('badge.hidden_gem').replace(/^✦\s*/, ''))}</span></div>`
+function renderRentalCard(l) {
+  const id   = escapeHtml(String(l.id));
+  const nb   = formatAddress(l.neighbourhood) || '–';
+  const site = l.source === 'idealista' ? 'Idealista' : 'Immobiliare.it';
+  const street = l.address ? formatAddress(String(l.address).replace(/,?\s*milano\s*$/i, '')) : '';
+
+  const gemChip = l.hidden_gem
+    ? `<span class="gem-photo-chip chip-hidden">${icon('diamond')}<span>${escapeHtml(t('gem.hidden'))}</span></span>`
     : l.good_value
-    ? `<div class="gem-photo-chip chip-good">${icon('coin')}<span>${escapeHtml(t('badge.great_value').replace(/^💰\s*/, ''))}</span></div>`
+    ? `<span class="gem-photo-chip chip-good">${icon('coin')}<span>${escapeHtml(t('gem.good'))}</span></span>`
+    : '';
+  const newChip = isNew(l) ? `<span class="card-photo-new-badge">${escapeHtml(t('badge.new'))}</span>` : '';
+  const photo = (l.thumbnail || gemChip || newChip)
+    ? `<button type="button" class="card-photo-wrap" data-open-details="${id}" aria-label="${escapeHtml(t('card.details') + ': ' + nb)}">${l.thumbnail ? `<img class="card-thumb" src="${_safeUrl(l.thumbnail)}" alt="" loading="lazy">` : ''}${gemChip}${newChip}</button>`
     : '';
 
-  // Photo section
-  // New badge as photo overlay (Fix 3)
-  const newOverlayHtml = isNew(l)
-    ? `<div class="card-photo-new-badge">${escapeHtml(t('badge.new'))}</div>`
-    : '';
-  const photoSection = (l.thumbnail || gemPhotoChip || newOverlayHtml)
-    ? `<div class="card-photo-wrap" data-open-details="${escapeHtml(String(l.id))}">${l.thumbnail ? `<img class="card-thumb" src="${_safeUrl(l.thumbnail)}" alt="" loading="lazy">` : ''}${gemPhotoChip}${newOverlayHtml}</div>`
-    : '';
+  const fees = Number(l.spese_condominiali) || 0;
+  const feesLine = fees
+    ? `<span class="price-fees">${escapeHtml(t('card.fees', { fees: fmt(fees), total: fmt((Number(l.rent_mo) || 0) + fees) }))}</span>` : '';
+  const history = priceHistoryText(l);
+  const meta = [_metroMeta(l), _freshMeta(l)].filter(Boolean).join('');
+  const fav = isRentFav(l.id);
 
-  // Single-line comps row (Fixes 1 + 4)
-  const compsBarHtml = compsRowHtml(l, true);
-
-  // Single "why" sentence — Lume voice, neighbours framing.
-  // STRINGS keys: callout.{hidden_gem,great_value,below_market,at_market,above_market}
-  // and conf.{high,medium,low,thin} carry the en/it phrasing.
-  const whySentence = (() => {
-    const dp  = l.comps_delta_pct;
-    const n   = l.comps_n || 0;
-    const med = l.comps_median;
-    const confRaw = (l.comps_conf_label || '').toLowerCase();
-    const confL = confRaw === 'high'   ? t('conf.high')
-                : confRaw === 'medium' ? t('conf.medium')
-                : confRaw === 'low'    ? t('conf.thin')
-                : '';
-    if (dp == null && !omiMid) return null;
-    if (l.price_suspect) return escapeHtml(t('card.suspect'));
-    if (dp != null && med != null) {
-      const abs   = Math.abs(dp).toFixed(1);
-      const psqm  = `€${med}/m²/mo`;
-      // {psqm} and {conf} are interpolated separately by the callout
-      // templates ("...({psqm} · {conf})"). Pre-concatenating the
-      // confidence into psqm here used to double-print it, e.g.
-      // "(€31.5/m²/mo · Lume is fairly sure · Lume is fairly sure)".
-      const vars  = { pct: abs, psqm, conf: confL, n };
-      // Wrap the badge name in <strong> in the templated output.
-      // The translated headline contains placeholders, not literal HTML, so
-      // we substitute the variable, then bold the leading badge phrase.
-      if (l.hidden_gem) {
-        const s = t('callout.hidden_gem', vars);
-        return s.replace(/^([^—]+)—/, '<strong>$1</strong>—');
-      }
-      if (l.good_value) {
-        const s = t('callout.great_value', vars);
-        return s.replace(/^([^—]+)—/, '<strong>$1</strong>—');
-      }
-      if (dp <= -3)      return t('callout.below_market', vars);
-      if (dp >= 5)       return t('callout.above_market', { ...vars, pct: dp.toFixed(1) });
-      return t('callout.at_market', vars);
-    }
-    return omiMid
-      ? `No local flats to compare — Lume benchmarked against OMI ${l.omi_zona || 'zone'} (€${omiMid}/m²/mo).`
-      : null;
-  })();
-  const whyClass  = l.price_suspect ? 'why-sentence why-neutral why-suspect'
-                  : (l.hidden_gem || l.good_value || (l.comps_delta_pct != null && l.comps_delta_pct < 0))
-                    ? 'why-sentence' : 'why-sentence why-neutral';
-
-  // Condo fees + the all-in monthly cost, when the listing states them.
-  const speseNote = l.spese_condominiali
-    ? `<span style="font-size:11px;color:var(--text-secondary)"> + €${fmt(l.spese_condominiali)} fees = €${fmt((Number(l.rent_mo) || 0) + Number(l.spese_condominiali))} all-in</span>`
-    : '';
-
-  const sourceBadge = l.source === 'idealista'
-    ? '<span class="source-badge idealista">Idealista</span>'
-    : '<span class="source-badge immobiliare">Immobiliare.it</span>';
-  const fascia = l.omi_fascia || '?';
-
-  const card = document.createElement('div');
+  const card = document.createElement('article');
   card.className = 'card' + (l.hidden_gem ? ' is-gem' : (l.good_value ? ' is-goodvalue' : ''));
   card.setAttribute('data-listing-id', String(l.id));
   card.innerHTML = `
-    ${photoSection}
-
-    <div class="card-header-a">
-      ${scoreRingHtml}
-      <div class="card-header-text">
-        <div class="card-neighbourhood-row">
-          <span class="card-neighbourhood" data-open-details="${escapeHtml(String(l.id))}">${escapeHtml(formatAddress(l.neighbourhood) || '–')}</span>
-          <span class="id-pill" data-listing-id="${escapeHtml(String(l.id))}"
-                title="Lume listing ID — click to search">${escapeHtml(String(l.id))}</span>
+    ${photo}
+    <div class="card-body">
+      <div class="card-head">
+        <div class="card-title-wrap">
+          <h2 class="card-title"><button type="button" class="card-title-btn" data-open-details="${id}">${escapeHtml(nb)}</button></h2>
+          <div class="card-sub">${escapeHtml([street && street.toLowerCase() !== nb.toLowerCase() ? street : '', site].filter(Boolean).join(' · '))}</div>
         </div>
-        <div class="card-address-row">
-          <span class="card-address">${escapeHtml(l.address ? formatAddress(l.address) : (formatAddress(l.neighbourhood) || '–'))}</span>
-          ${sourceBadge}
-        </div>
+        ${scoreRingHtml(l)}
       </div>
+      <div class="card-price">
+        <span class="price-main">${l.rent_mo != null ? '€' + fmt(l.rent_mo) : '–'}</span>
+        <span class="price-unit">${escapeHtml(t('card.per_month'))}</span>
+        ${_dealDeltaHtml(l)}
+        ${feesLine}
+      </div>
+      ${history ? `<div class="was-price lm-history">${icon('trending-down')}${escapeHtml(history)}</div>` : ''}
+      <div class="card-specs">${_specsParts(l).map(p => `<span>${escapeHtml(p)}</span>`).join('')}</div>
+      ${meta ? `<div class="card-meta">${meta}</div>` : ''}
     </div>
-
-    <div class="price-row-a">
-      <span class="price-main-a">${l.rent_mo != null ? '€' + fmt(l.rent_mo) : '–'}</span>
-      <span style="font-size:13px;color:var(--text-secondary);font-weight:500">${l.rent_mo != null ? '/mo' : ''}</span>
-      ${speseNote}
-      ${specsPillHtml(l)}
-      ${areaPsqmPillHtml(l, true)}
-    </div>
-    ${(() => { const h = priceHistoryText(l); return h ? `<div class="was-price">${icon('trending-down')}${escapeHtml(h)}</div>` : ''; })()}
-    ${compsSugHtml}
-    ${compsBarHtml}
-
-    ${statPillsHtml(l, true)}
-
-    ${whySentence ? `<div class="${whyClass}">${whySentence}</div>` : ''}
-
-    <div class="card-footer-a">
-      <button type="button" class="btn-details" data-open-details="${escapeHtml(String(l.id))}">${icon('layout-sidebar-right')}<span>${escapeHtml(t('card.details'))}</span></button>
-      <button class="btn-bookmark${Collections.isInAnyCollection(l.id) ? ' active' : ''}"
-              data-listing-id="${escapeHtml(String(l.id))}"
-              style="margin-left:auto"
-              onclick="openCollectionMenu(this.dataset.listingId, event)"
-              title="Save to collection" aria-label="Save to collection">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
-      </button>
-      <button class="btn-fav${isRentFav(l.id) ? ' is-fav' : ''}"
-              data-rent-id="${escapeHtml(String(l.id))}"
-              title="${isRentFav(l.id) ? 'Remove from favourites' : 'Add to favourites'}">
-        ${favBtnInner()}
-      </button>
-      <a class="link-btn" href="${_safeUrl(l.url)}" target="_blank" rel="noopener"
-         data-listing-id="${escapeHtml(String(l.id))}"
-         onclick="_promptArchiveListing(this.dataset.listingId, 'rental', this)">${escapeHtml(t('card.view'))}</a>
+    <div class="card-footer">
+      <button type="button" class="btn btn-secondary" data-open-details="${id}">${escapeHtml(t('card.details'))}</button>
+      <button type="button" class="btn btn-secondary btn-icon btn-fav${fav ? ' is-fav' : ''}" data-rent-id="${id}"
+              aria-pressed="${fav}" aria-label="${escapeHtml(t(fav ? 'card.unsave' : 'card.save'))}" title="${escapeHtml(t(fav ? 'card.unsave' : 'card.save'))}">${favBtnInner()}</button>
+      <a class="btn btn-primary btn-open" href="${_safeUrl(l.url)}" target="_blank" rel="noopener"
+         data-listing-id="${id}" onclick="_promptArchiveListing(this.dataset.listingId, 'rental', this)">${escapeHtml(t('card.open'))}${icon('external-link')}</a>
     </div>
     ${extremeUnderpricingBannerHtml(l)}
     ${staleBannerHtml(l)}
   `;
-
-  card.querySelector('[data-rent-id]').addEventListener('click', e => {
-    const id  = e.currentTarget.dataset.rentId;
-    const now = toggleRentFav(id);
-    e.currentTarget.innerHTML = favBtnInner();
-    e.currentTarget.classList.toggle('is-fav', now);
-    e.currentTarget.title = now ? 'Remove from favourites' : 'Add to favourites';
-  });
-
   return card;
+}
+
+// Every favourite toggle (cards, Details) ends here so all copies agree.
+function setFavUi(id, on) {
+  document.querySelectorAll(`.btn-fav[data-rent-id="${CSS.escape(String(id))}"]`).forEach(b => {
+    b.classList.toggle('is-fav', on);
+    b.setAttribute('aria-pressed', String(on));
+    b.title = t(on ? 'card.unsave' : 'card.save');
+    b.setAttribute('aria-label', b.title);
+  });
+  const lm = document.querySelector(`[data-lm-fav="${CSS.escape(String(id))}"]`);
+  if (lm) {
+    lm.classList.toggle('on', on);
+    lm.setAttribute('aria-pressed', String(on));
+    const sp = lm.querySelector('span'); if (sp) sp.textContent = t(on ? 'lm.saved' : 'lm.save');
+  }
 }

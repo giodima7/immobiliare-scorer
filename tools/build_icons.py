@@ -21,6 +21,8 @@ external-link heart bookmark share photo shopping-cart trees chevron-down chevro
 layout-sidebar-right info-circle trending-down refresh home chart-bar settings star bell
 user school search key bed stairs bolt sun eye calendar file-text air-conditioning
 diamond coin moon device-desktop arrow-up-right copy trash plus minus mail lock list-details world
+circle-half-2 language player-play player-stop player-pause pencil folder arrow-down arrow-up
+selector walk percentage tool database circle-check arrow-left dots-vertical door tag maximize
 """.split()
 
 

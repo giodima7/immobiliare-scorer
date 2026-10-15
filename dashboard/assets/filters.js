@@ -91,19 +91,22 @@ function rentMustCounts(f) {
   return counts;
 }
 
+// Must-have tiles: name on top, "5.768 · +5.798 not known yet" below.
+// 'safe' (hide suspicious prices) is an exclusion, so it's a separate
+// checkbox (.hide-suspect), not a tile.
 function renderMustGrid(container, counts) {
   if (!container) return;
   const active = new Set(rentMustActive());
-  container.innerHTML = RENT_MUSTS.map(m => {
+  container.innerHTML = RENT_MUSTS.filter(m => m.key !== 'safe').map(m => {
     const c = counts[m.key] || { yes: 0, unknown: 0 };
-    const unk = c.unknown > 0 && m.key !== 'safe'
-      ? ` <span class="must-unknown" title="${escapeHtml(t('must.unknown_tip'))}">+${fmt(c.unknown)} ?</span>` : '';
+    const unk = c.unknown > 0 ? ` · ${escapeHtml(t('must.unknown_n', { n: fmt(c.unknown) }))}` : '';
     return `<button type="button" class="must-chip${active.has(m.key) ? ' on' : ''}" data-must="${m.key}"
               aria-pressed="${active.has(m.key)}">
               <span class="must-label">${icon(m.icon)}${escapeHtml(t('must.' + m.key))}</span>
-              <span class="must-count">${fmt(c.yes)}${unk}</span>
+              <span class="must-count"><strong>${fmt(c.yes)}</strong>${unk}</span>
             </button>`;
   }).join('');
+  document.querySelectorAll('.hide-suspect').forEach(cb => { cb.checked = active.has('safe'); });
 }
 
 // ── Active-filter chips ───────────────────────────────────────────────────────
@@ -121,8 +124,8 @@ function rentActiveFilterChips(f) {
   if (f.condition)   add('condition', t('cond.' + f.condition));
   if (f.minDiscount) add('minDiscount', t('chip.min_discount', { n: f.minDiscount }));
   if (f.contract)    add('contract', f.contract);
-  if (f.fascia)      add('fascia', t('chip.fascia', { v: f.fascia }));
-  if (f.maxMetro)    add('maxMetro', t('chip.max_metro', { n: f.maxMetro }));
+  if (f.fascia)      add('fascia', t('fascia.' + f.fascia));
+  if (f.maxMetro)    add('maxMetro', t('chip.max_metro', { n: fmt(f.maxMetro) }));
   if (f.minFloor > -999) add('minFloor', t('chip.min_floor', { n: f.minFloor }));
   if (f.source)      add('source', f.source === 'idealista' ? 'Idealista' : 'Immobiliare.it');
   if (f.minEnergy)   add('minEnergy', t('chip.min_energy', { v: f.minEnergy }));
@@ -134,8 +137,11 @@ function rentActiveFilterChips(f) {
 }
 
 function renderRentFilterExtras(f, shown) {
-  const sortSel = document.getElementById('rSortSelect');
-  if (sortSel && typeof rentSortKey !== 'undefined' && sortSel.value !== rentSortKey) sortSel.value = rentSortKey;
+  ['rSortSelect', 'dSort'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (sel && typeof rentSortKey !== 'undefined' && sel.value !== rentSortKey) sel.value = rentSortKey;
+  });
+  document.querySelectorAll('.seg .seg-btn').forEach(b => b.setAttribute('aria-pressed', String(b.classList.contains('active'))));
   const counts = rentMustCounts(f);
   renderMustGrid(document.getElementById('rMustGrid'), counts);
   renderMustGrid(document.getElementById('dMustGrid'), counts);
@@ -152,21 +158,28 @@ function renderRentFilterExtras(f, shown) {
   if (moreBadge) { moreBadge.textContent = nMore || ''; moreBadge.hidden = !nMore; }
   document.getElementById('rMoreBtn')?.classList.toggle('on', nMore > 0);
 
+  // Phone header: how many filters are on.
+  const mBadge = document.getElementById('mobileFilterBadge');
+  if (mBadge) { mBadge.textContent = chips.length || ''; mBadge.hidden = !chips.length; }
+
   // The phone drawer's "Show N results" (must-haves apply immediately).
   const showBtn = document.getElementById('drawerShowBtn');
-  if (showBtn && document.getElementById('mobileFilterDrawer')?.classList.contains('is-open')
-      && !(typeof _drawerIsMap !== 'undefined' && _drawerIsMap)) {
-    showBtn.textContent = `Show ${shown} results`;
+  if (showBtn && document.getElementById('mobileFilterDrawer')?.classList.contains('is-open')) {
+    showBtn.textContent = t('drawer.show', { n: fmt(shown) });
   }
 
   const box = document.getElementById('rActiveChips');
   if (!box) return;
+  // Daily e-mail alerts run from the local dashboard only.
+  const alertBtn = (typeof IS_LIVE !== 'undefined' && IS_LIVE)
+    ? `<button type="button" class="btn btn-ghost btn-sm" data-save-alert>${icon('bell')}<span>${escapeHtml(t('filter.save_alert'))}</span></button>` : '';
   box.innerHTML = chips.map(c =>
-    `<button type="button" class="fchip" data-clear="${escapeHtml(c.key)}" title="${escapeHtml(t('chip.remove'))}">
+    `<button type="button" class="fchip" data-clear="${escapeHtml(c.key)}" aria-label="${escapeHtml(t('chip.remove') + ': ' + c.label)}">
        ${escapeHtml(c.label)}${icon('x')}
      </button>`).join('')
-    + `<span class="fchips-count"><strong>${fmt(shown)}</strong> ${escapeHtml(t('chip.flats'))}</span>`
-    + (chips.length ? `<button type="button" class="fchips-clear" data-clear="all">${escapeHtml(t('filter.clear_filters'))}</button>` : '');
+    + (chips.length ? `<button type="button" class="btn btn-ghost btn-sm" data-clear="all">${escapeHtml(t('filter.clear_filters'))}</button>` : '')
+    + `<span class="fchips-count"><strong>${fmt(shown)}</strong> ${escapeHtml(t(shown === 1 ? 'chip.flat' : 'chip.flats'))}</span>`
+    + alertBtn;
 }
 
 // Remove one filter (chip ×) — or all of them.
@@ -183,7 +196,7 @@ function clearRentFilter(key) {
     case 'minRooms': el('rMinRooms').value = ''; break;
     case 'minSqm':   el('rMinSqm').value = ''; break;
     case 'gemFilter':
-      document.querySelectorAll('#rGemFilter .gem-tab').forEach(b => b.classList.toggle('active', b.dataset.gem === ''));
+      document.querySelectorAll('#rGemFilter .gem-tab, #dGemFilter .gem-tab').forEach(b => b.classList.toggle('active', b.dataset.gem === ''));
       break;
     case 'includeUnknown': rentIncludeUnknown = false; if (el('rIncludeUnknown')) el('rIncludeUnknown').checked = false; break;
     case 'condition':   el('rCondition').value = ''; break;
@@ -201,7 +214,6 @@ function clearRentFilter(key) {
     case 'idQuery':     el('rIdSearch').value = ''; break;
     case 'showStale':   el('rShowStale').checked = false; if (IS_LIVE) loadRentals(); break;
   }
-  if (typeof _updateAllPillThumbs === 'function') requestAnimationFrame(_updateAllPillThumbs);
   renderRentals();
   saveFilters();
 }

@@ -423,56 +423,26 @@ function hideApp() {
   if (r) r.style.display = 'none';
 }
 
+// Signed in: a round initial that opens the account menu. Signed out
+// (online only): a quiet "Sign in" button. The local dashboard has no
+// accounts, so nothing shows there.
 function updateUserAvatar() {
   const el   = document.getElementById('user-avatar');
   const wrap = document.getElementById('user-avatar-wrap');
-  // Toggle the WRAPPER so the alert dot inherits visibility together
-  // with the avatar circle. Falls back gracefully if the wrap isn't in
-  // the DOM yet (very early call ordering).
-  if (wrap) wrap.style.display = 'flex';
-  if (!el) return;
-  if (typeof Auth !== 'undefined' && Auth.isSignedIn && Auth.isSignedIn()) {
-    // Signed in — round avatar with initial, opens account menu
-    el.textContent     = Auth.userInitial();
-    el.style.display   = 'flex';
-    el.style.width     = '32px';
-    el.style.padding   = '0';
-    el.style.fontSize  = '13px';
-    el.style.borderRadius = '50%';
-    el.style.background = '#2A7A5A';
-    el.style.color     = 'white';
-    el.title           = `Signed in as ${Auth.userName()} — click to sign out`;
+  if (!el || !wrap) return;
+  const local = ['localhost', '127.0.0.1'].includes(location.hostname);
+  const signedIn = typeof Auth !== 'undefined' && Auth.isSignedIn && Auth.isSignedIn();
+  wrap.hidden = local && !signedIn;
+  el.classList.toggle('is-signed-in', !!signedIn);
+  if (signedIn) {
+    el.textContent = Auth.userInitial();
+    el.title = Auth.userName();
+    el.setAttribute('aria-label', t('menu.account'));
     el.setAttribute('onclick', 'showUserMenu(event)');
   } else {
-    // Signed out — desktop shows a pill-shaped "Sign in" button; mobile
-    // collapses it to a 32×32 person-icon circle so the header doesn't
-    // overflow (the old "Sign in" pill was ~80 px wide and getting
-    // clipped by `header { overflow: hidden }` on a 390 px viewport).
-    const _isMobile = window.matchMedia
-      ? window.matchMedia('(max-width: 768px)').matches
-      : (window.innerWidth || 0) <= 768;
-    el.style.display   = 'flex';
-    el.style.background = '#2A7A5A';
-    el.style.color     = 'white';
-    el.title           = 'Sign in to save listings';
+    el.innerHTML = `${icon('user')}<span class="fav-label">${escapeHtml(t('header.sign_in'))}</span>`;
+    el.title = t('header.sign_in_tip');
     el.setAttribute('onclick', 'Auth.openSignIn()');
-    if (_isMobile) {
-      // Compact icon-only circle, same size as the signed-in avatar
-      el.textContent       = '';
-      el.innerHTML         = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
-      el.style.width       = '32px';
-      el.style.height      = '32px';
-      el.style.padding     = '0';
-      el.style.borderRadius = '50%';
-    } else {
-      el.textContent     = 'Sign in';
-      el.innerHTML       = 'Sign in';
-      el.style.width     = 'auto';
-      el.style.height    = '32px';
-      el.style.padding   = '0 14px';
-      el.style.fontSize  = '13px';
-      el.style.borderRadius = '999px';
-    }
   }
 }
 
@@ -538,8 +508,8 @@ function restoreFilters() {
   }
   setTab('#rSourceFilter .sort-tab', 'rsource', r.source);
   setTab('#rGemFilter .gem-tab',     'gem',     r.gemFilter);
-  setTab('#rentSortTabs .sort-tab',  'rsort',   r.sortKey);
   if (r.sortKey && typeof rentSortKey !== 'undefined') rentSortKey = r.sortKey;
+  ['rSortSelect', 'dSort'].forEach(id => setVal(id, r.sortKey));
   if (Array.isArray(r.areas)) {
     if (typeof rentSelectedAreas !== 'undefined') rentSelectedAreas = r.areas.slice();
     if (typeof filterAreaMsd !== 'undefined' && filterAreaMsd && filterAreaMsd.setSelected) {
@@ -578,11 +548,6 @@ function restoreFilters() {
     }
   }
 
-  // The active class on pill groups may have moved — recompute the sliding
-  // thumb so it sits under the restored option, not the visual default.
-  if (typeof _updateAllPillThumbs === 'function') {
-    requestAnimationFrame(_updateAllPillThumbs);
-  }
 }
 
 function saveFilters() {
