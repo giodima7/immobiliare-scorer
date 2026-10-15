@@ -1,11 +1,11 @@
-# Handover — immobiliare-scorer (as of 2026-10-15 ~07:50)
+# Handover — immobiliare-scorer (as of 2026-10-15 afternoon)
 
 Personal tool: scrapes Milan rentals (Immobiliare.it + Idealista.it), enriches with location data, scores deals, shows them in a local dashboard (`localhost:8000`) and an online one (Supabase-backed, Cloudflare Pages `immobiliare-scorer.pages.dev`). **Scope right now: Milan only, one scan per day.** Other cities and sales are parked (`dashboard/full.html` keeps the old full dashboard).
 
 ## Current state (verified 07:50)
-- `main` = `0b1a853` (PRs #2–#6 merged; #6 = listing pages, scoring flags, safer sync, split dashboard). Live online.
-- **Uncommitted on the working tree, running locally** (API + daemons restarted 07:45): the 2026-10-15 work below — relistings, price-drop history, nightly full rescore, online ghost-row archiving, new filter bar, Details view, design system / dark mode / icons. **Waiting for the user's go to commit → PR → merge** (merging publishes the frontend online; Cloudflare builds from git, so `dashboard/assets/*` incl. the new `filters.js`, `details.js`, `icons.svg` must be committed).
-- **Pending for the user: run `supabase_migration_015.sql`** (relisting columns). Until then those three fields stay local-only; nothing fails (sync skips missing columns, the dashboard drops them from its select). Migrations 013/014 are done.
+- `main` = `851625b` (PRs #2–#7 merged; #7 = relisting links, filter bar, Details view, dark mode). Live online. Migration 015 done (relisting columns online, 656 = local).
+- **Uncommitted, running locally:** the design-review rework (see "2026-10-15 afternoon" below) — dashboard only, plus a slim `/rentals` payload in `api.py`. Commit → PR → merge when the user says so (merging publishes it online).
+- **`api.py` changed but not restarted** (an automated restart was refused): the slim payload (`/rentals?slim=1`, `/rentals/extras`) turns on at the next API restart. Until then the old API ignores `slim=1` and serves the full rows — everything works, just heavier. Restart per gotcha 1, then re-run `/start-scanner`.
 - API: `nohup python3 -u api.py >> /tmp/lume-api.log` (unbuffered). Daemons via `POST /start-scanner` `{"pages":50,"cities":["milano"],"max_rent":3000,"min_rooms":2}`.
 - Last night's scans ran (Immobiliare 00:29→01:53, +1,396 new; Idealista →03:05, +1,274 new; both rescored the full file). **Next: Immobiliare 2026-10-16 01:53, Idealista ~03:05** — the schedule drifts later each night (next = last *finish* + 24 h).
 - Listing-page drip: 38 pages read so far (20 ok, 18 gone). Runs 08–23 h, ≤150/day/site.
@@ -56,6 +56,23 @@ Personal tool: scrapes Milan rentals (Immobiliare.it + Idealista.it), enriches w
 **Design system**: canonical tokens only (264 alias uses → 0), colours 74 → 18 hard-coded (ink tokens for text on tints), 11 font sizes (was 19), radius tokens (+`--radius-xs`), dark mode (system or header toggle, `data-theme`, no-flash inline script), emoji → Tabler SVG sprite (`assets/icons.svg`, `icon()` helper, `tools/build_icons.py` to add icons). `tools/normalize_css.py` was a one-off migration.
 **Online ghost rows** (07:40): see gotcha 8 — 566 archived, `archive_missing_online` added to every push.
 **Fixes found on the way**: header count overwritten by the start-up translation pass; a restored Stats/Map tab started a Supabase load before local/online was known, so the local dashboard could end up on online data (`_liveKnown` gate + one shared load); Stats/Map re-render after data arrives; undefined `--accent-light/-dark` tokens.
+
+## 2026-10-15 afternoon — design review fixes
+A UI/UX review (report in the session scratchpad, grades 4/10 overall) found broken basics; all of its top findings are done:
+- **Broken things:** map tiles (CARTO now needs a key → OpenStreetMap tiles, inverted in dark mode); the Map view leaking under the list (`[hidden]` now always wins); form controls in Arial (`button, input, select { font: inherit }`); 59 dead `.filters-grid` rules removed.
+- **Tokens:** `--text-muted` #6F6962 (was 2.8:1), `--focus` ring, `--gem*` (Hidden Gem is violet; Great Value green; source/fav neutral), type scale (12 px floor, 11 → 12 everywhere), spacing, control height/radius, z-index layers. Visible text failing WCAG AA: 500 → 0. Status text uses the `-ink` tokens.
+- **Buttons:** one system — `.btn` primary / secondary / ghost / danger, sm 32 · md 36 · lg 44 (44 on touch); `.seg` segmented controls; pills only for chips/badges.
+- **Layout:** stats bar removed from Rentals (OMI / POI / geo tools moved to Tools → Data enrichment); only the filter row is sticky, panels are popovers, chips scroll; first card at 249 px of 800 at 1280 (was 366 at 1024). The row stays on one line down to ~1100 px (counts, then labels collapse).
+- **Cards:** photo 5:2 everywhere, price + "−27% vs nearby" in one block, rooms · m² · floor on one line, metro + freshness, footer [Details] [♡] … [Open] at equal height. Why-sentence, comps bar, €/m² and ID moved to Details. ~370 px tall (was 450–510).
+- **Details:** header and actions fixed, only the middle scrolls; focus trapped and returned; unknown facts on one line; score bars coloured by value; comps table (this flat first, 10 rows + "Show all", right-aligned numbers); collections inline (no `prompt()`).
+- **Saved tab:** favourites + collections in-app (`favourites.html` now redirects to `/?tab=saved`); header heart shows the real count (it used to read the sales key → 0). Collections no longer need a sign-in.
+- **Phone / tablet:** drawer rebuilt from the bar's filters (sort and language included, all translated); tabs stack icon over label; tablet gets 2 columns + the bar; closed drawer is out of the tab order.
+- **Map:** shares the Rentals filters (the old second filter UI is gone), legend in the toolbar, markers from the score classes.
+- **Stats:** top 20 + "Show all", neighbourhood rows open the list filtered, KPIs neutral, charts from tokens; page 42,000 → ~1,750 px. **Tools** (was Settings): Milan only, cards fold (state remembered), Data Quality paginated 50 at a time — page 182,000 → ~1,650 px, 103k → 5k DOM nodes.
+- **Numbers / i18n:** `fmt` follows the language with grouping always on, `fmt1`, `fmtPct`; ~150 new strings, every visible label EN + IT (map, stats, drawer, empty states, onboarding included); jargon rewritten ("vs 30 nearby flats", "Hide suspicious prices", "No known defects").
+- **Performance:** Leaflet and Chart.js load on first use; cities config and listings load in parallel; infinite scroll prefetches 1,200 px ahead (it pointed the wrong way); score rings count up on first paint only.
+- **Empty state** names the filter that hides the most, with a one-click remove.
+- Not done (bigger rethinks in the report): compact list view / daily-triage mode, split list + map, self-hosting Inter, deleting ~137 dead CSS classes.
 
 ## Open items / next steps
 - **Validate scoring against outcomes** once ~3–6 weeks of daily scans exist: listing lifetime (first→last seen) vs price_z / score. Pre-October scans were too sporadic. Location already predicts faster renting (ρ ≈ −0.19).
