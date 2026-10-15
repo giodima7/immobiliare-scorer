@@ -1048,21 +1048,47 @@ def dashboard_assets(fname):
 _rentals_payload_cache: dict = {}   # (path, mtime, visible) → (etag, gzip bytes, raw bytes)
 
 
-def _rentals_payload(path: Path, visible: bool) -> tuple[str, bytes, bytes]:
+# The grid never reads these (sales-era and scorer-internal fields)...
+_RENTALS_UNUSED = frozenset({
+    "omi_descr", "geo_pois_version", "fetched_at", "comps_label", "comps_condition_group",
+    "vs_omi_label", "effective_psqm_rent", "ask_psqm_effective", "suggested_rent_psqm",
+    "effective_rent_mo", "metro_walk_routed", "score_was_capped", "boosted_price_score",
+    "is_below_ground", "is_ground_floor", "condo_pct_of_rent", "last_seen_date",
+    "omi_compr_max", "omi_compr_min", "omi_compr_mid", "vs_omi_rent_pct", "city_label",
+    "city_key", "omi_loc_mid", "is_misrepresented_address", "vs_omi_pct", "ldi_bonus",
+    "score_geo", "ldi_score", "is_nuda_proprieta", "is_outside_city", "is_auction", "is_fake",
+})
+# ...and these are the heaviest, needed only when one listing's Details
+# opens (/rentals/extras). ?slim=1 drops both: ~43 MB → ~17 MB per load.
+_RENTALS_ON_DEMAND = ("photos", "comps_ids", "score_reasons", "description")
+_rentals_extras: dict = {}          # {"key": (path, mtime), "rows": {id: json bytes}}
+
+
+def _rentals_payload(path: Path, visible: bool, slim: bool = False) -> tuple[str, bytes, bytes]:
     """The rentals file as served: visible rows only when asked (the file
     also keeps ~18k archived rows the grid never shows), compact JSON, and
-    a gzip copy — 87 MB → ~4 MB over the wire. Cached per file version."""
+    a gzip copy — 87 MB → ~4 MB over the wire (~2.5 MB slim). Cached per
+    file version; a slim build also caches every row's on-demand fields."""
     import gzip
     mtime = path.stat().st_mtime_ns
-    key = (str(path), mtime, visible)
+    key = (str(path), mtime, visible, slim)
     hit = _rentals_payload_cache.get(key)
     if hit:
         return hit
     rows = _json.loads(path.read_text())
+    if slim:
+        _rentals_extras["key"] = (str(path), mtime)
+        _rentals_extras["rows"] = {
+            str(l.get("id")): _json.dumps(
+                {"id": l.get("id"), **{k: l[k] for k in _RENTALS_ON_DEMAND if k in l}},
+                ensure_ascii=False, separators=(",", ":")).encode()
+            for l in rows}
+        drop = _RENTALS_UNUSED.union(_RENTALS_ON_DEMAND)
+        rows = [{k: v for k, v in l.items() if k not in drop} for l in rows]
     if visible:
         rows = [l for l in rows if not l.get("is_stale")]
     raw = _json.dumps(rows, ensure_ascii=False, separators=(",", ":")).encode()
-    hit = (f'"{mtime}-{int(visible)}"', gzip.compress(raw, compresslevel=5), raw)
+    hit = (f'"{mtime}-{int(visible)}-{int(slim)}"', gzip.compress(raw, compresslevel=5), raw)
     _rentals_payload_cache.clear()          # one version at a time — they're big
     _rentals_payload_cache[key] = hit
     return hit
@@ -1084,7 +1110,8 @@ def rentals():
     path = _resolve_city_path(city, "rental")
     if not path.exists():
         return jsonify([])
-    etag, gz, raw = _rentals_payload(path, request.args.get("visible") == "1")
+    etag, gz, raw = _rentals_payload(path, request.args.get("visible") == "1",
+                                     request.args.get("slim") == "1")
     if request.headers.get("If-None-Match") == etag:
         return Response(status=304, headers={"ETag": etag})
     use_gz = "gzip" in (request.headers.get("Accept-Encoding") or "")
@@ -1095,6 +1122,21 @@ def rentals():
     resp.headers["Cache-Control"] = "no-cache"
     resp.headers["Vary"] = "Accept-Encoding"
     return resp
+
+
+@app.route("/rentals/extras")
+def rentals_extras():
+    """Photos, comparable ids, score reasons and description for the given
+    ids (?ids=a,b) — what a slim /rentals load leaves out, for Details."""
+    city = (request.args.get("city") or "milano").lower()
+    ids = [i for i in (request.args.get("ids") or "").split(",") if i]
+    path = _resolve_city_path(city, "rental")
+    if not ids or not path.exists():
+        return jsonify([])
+    if _rentals_extras.get("key") != (str(path), path.stat().st_mtime_ns):
+        _rentals_payload(path, True, True)
+    found = [_rentals_extras["rows"][i] for i in ids if i in _rentals_extras.get("rows", {})]
+    return Response(b"[" + b",".join(found) + b"]", mimetype="application/json")
 
 
 @app.route("/rentals/by-ids")
