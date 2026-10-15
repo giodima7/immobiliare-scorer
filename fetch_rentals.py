@@ -1822,6 +1822,21 @@ def write_output(listings: list, source: str = "immobiliare",
                 pass
 
         new_ids = {l["id"] for l in listings}
+        # Price drop on the same listing between scans: keep the old rent
+        # (previous_price / price_changed_date — the Supabase columns), and
+        # carry an earlier drop forward while the price stays put.
+        on_disk = {l["id"]: l for l in existing if l.get("source") in (source, None)}
+        today_iso = str(date.today())
+        for l in listings:
+            old = on_disk.get(l["id"])
+            if not old:
+                continue
+            was, now = old.get("rent_mo"), l.get("rent_mo")
+            if was and now and now < was:
+                l["previous_price"], l["price_changed_date"] = was, today_iso
+            elif l.get("previous_price") is None and old.get("previous_price") is not None:
+                l["previous_price"] = old["previous_price"]
+                l["price_changed_date"] = old.get("price_changed_date")
         stale_removed = 0
         kept = []
         for l in existing:
@@ -1875,6 +1890,29 @@ def write_output(listings: list, source: str = "immobiliare",
         except Exception:
             pass
         lock_fh.close()
+
+
+def rescore_output() -> None:
+    """Rescore the whole listings file against the whole pool (archived
+    rows, both sites). A scan scores only what it fetched — against itself
+    for Immobiliare (a fraction of the city) — so without this the night's
+    listings kept thin-pool benchmarks until something else rescored, and
+    autosync pushed them online like that."""
+    import fcntl
+    lock_path = OUTPUT_PATH.with_suffix(OUTPUT_PATH.suffix + ".lock")
+    with open(lock_path, "w") as lock_fh:
+        fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX)
+        try:
+            rows = json.loads(OUTPUT_PATH.read_text())
+        except Exception as exc:
+            print(f"  [rescore] skipped ({exc})")
+            return
+        t0 = time.time()
+        scored = score_all(rows)
+        clean = [{k: v for k, v in l.items() if k != "omi"} for l in scored]
+        from dashboard_io import write_snapshot
+        write_snapshot(OUTPUT_PATH, clean)
+        print(f"  [rescore] {len(clean)} listings rescored against the full pool in {time.time() - t0:.0f}s")
 
 
 def write_status(new_count: int, total_seen: int, skipped_areas: list = None):
@@ -2001,6 +2039,7 @@ def run_once(args) -> list:
     # Cloudflare, every deploy failed with 401/403, and the online data comes
     # from Supabase anyway.)
 
+    rescore_output()
     return new_listings
 
 

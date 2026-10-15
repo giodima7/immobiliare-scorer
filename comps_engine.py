@@ -198,6 +198,10 @@ def condition_group(listing: dict) -> str:
     c = str(raw).lower().strip()
     if c in CONDITION_GROUPS:
         return CONDITION_GROUPS[c]
+    # Idealista's "buono stato" covers renovated flats too (listing_details)
+    # — it says nothing about premium vs standard.
+    if "idealista" in c:
+        return 'unknown'
     # Keyword fallback for noisy data
     if 'da ' in c and 'ristruttur' in c:
         return 'needs_work'
@@ -293,13 +297,104 @@ def _dup_near(a: dict, b: dict) -> bool:
 
 def _dup_rank(l: dict) -> tuple:
     """Which copy of a duplicate group stays in the pool: one still on the
-    market, then Immobiliare (scraped coords beat geocoded ones), then the
-    most recently seen. max() keeps pool order on ties."""
-    return (not l.get("excluded"), l.get("source") == "immobiliare",
-            l.get("last_seen_date") or "")
+    market (not excluded, not archived), then Immobiliare (scraped coords
+    beat geocoded ones), then the most recently seen. max() keeps pool
+    order on ties."""
+    return (not l.get("excluded"), not l.get("is_stale"),
+            l.get("source") == "immobiliare", l.get("last_seen_date") or "")
 
 
-def build_comps_index(all_listings: list[dict]) -> dict:
+# Same flat at another price — a relisting, a price change between scans,
+# or two agencies asking different rents. Price-blind, so it has to be
+# strict about place: same rooms, size within RELIST_SQM_TOL, same floor
+# (when both state it) and the same building, and the same street when both
+# addresses name one. Milan 2026-10-14: 851 live listings had an archived
+# copy at another price (median −7 %); one was its own nearest comparable.
+RELIST_MAX_M     = 40    # same building (Idealista coords are geocoded)
+RELIST_NOFLOOR_M = 15    # floor unknown on either side → same entrance only
+RELIST_SQM_TOL   = 2     # m² — the same flat gets re-measured
+_STREET_WORDS = re.compile(
+    r"^(via|viale|v\.le|corso|c\.so|piazza|p\.za|p\.zza|piazzale|largo|vicolo|"
+    r"alzaia|ripa|strada|galleria|passaggio|bastioni|foro|vial)\b\.?\s*", re.I)
+
+
+def _street(l: dict) -> tuple | None:
+    """(street name key, house number or None) — only for a real street
+    ("Via A. Maffei, 10" → ("maffei", "10")). Idealista's "Navigli - Porta
+    Genova" style addresses name an area, not a street → None."""
+    parts = [p.strip().lower() for p in (l.get("address") or "").split(",")]
+    if not parts or not _STREET_WORDS.match(parts[0]):
+        return None
+    words = re.findall(r"[a-zà-ÿ']{3,}", _STREET_WORDS.sub("", parts[0]))
+    if not words:
+        return None
+    num = None
+    for p in parts[1:2]:
+        m = re.match(r"^(\d+)", p)
+        num = m.group(1) if m else None
+    m = re.search(r"\b(\d+)\s*$", parts[0])
+    return words[-1], num or (m.group(1) if m else None)
+
+
+def _same_flat(a: dict, b: dict, streets: dict | None = None) -> bool:
+    """Price-blind same-flat test. Needs a real street on both sides: an
+    Idealista listing without a house number is geocoded to a street or
+    area centre that many flats share, so its coordinates can't tell two
+    flats apart."""
+    if a.get("rooms") is None or a.get("rooms") != b.get("rooms"):
+        return False
+    sa, sb = a.get("sqm"), b.get("sqm")
+    if not sa or not sb or abs(sa - sb) > RELIST_SQM_TOL:
+        return False
+    if streets is None:
+        st_a, st_b = _street(a), _street(b)
+    else:
+        st_a = streets[id(a)] if id(a) in streets else streets.setdefault(id(a), _street(a))
+        st_b = streets[id(b)] if id(b) in streets else streets.setdefault(id(b), _street(b))
+    if not st_a or not st_b or st_a[0] != st_b[0]:
+        return False
+    if st_a[1] and st_b[1] and st_a[1] != st_b[1]:
+        return False
+    for l, st in ((a, st_a), (b, st_b)):
+        if l.get("source") == "idealista" and not st[1]:
+            return False
+    la, lb = _ll(a), _ll(b)
+    if not (all(la) and all(lb)):
+        return False
+    d = _haversine_m(float(la[0]), float(la[1]), float(lb[0]), float(lb[1]))
+    fa, fb = a.get("floor_n"), b.get("floor_n")
+    if fa is not None and fb is not None:
+        return fa == fb and d <= RELIST_MAX_M
+    return d <= RELIST_NOFLOOR_M
+
+
+def _span(l: dict, cache: dict) -> tuple | None:
+    """(first seen, last seen) as day ordinals, cached per listing."""
+    k = id(l)
+    if k not in cache:
+        try:
+            cache[k] = (date.fromisoformat(l.get("first_seen_date") or "").toordinal(),
+                        date.fromisoformat(l.get("last_seen_date") or "").toordinal())
+        except ValueError:
+            cache[k] = None
+    return cache[k]
+
+
+def _relist_order(a: dict, b: dict, cache: dict) -> tuple | None:
+    """(earlier, later, days between) when one listing ended before the
+    other began (7 days' overlap allowed — agencies changing hands);
+    None when they were on the market together or dates are missing."""
+    sa, sb = _span(a, cache), _span(b, cache)
+    if not sa or not sb:
+        return None
+    if sa[1] <= sb[0] + 7 and sa[0] < sb[0]:
+        return a, b, sb[0] - sa[1]
+    if sb[1] <= sa[0] + 7 and sb[0] < sa[0]:
+        return b, a, sa[0] - sb[1]
+    return None
+
+
+def build_comps_index(all_listings: list[dict], relist: bool = True) -> dict:
     """
     Prepare the comps pool once per scoring run:
 
@@ -325,32 +420,86 @@ def build_comps_index(all_listings: list[dict]) -> dict:
         if k is not None:
             by_key.setdefault(k, []).append(l)
 
-    # Single-link clusters inside each key: A~B and B~C → one group.
+    # Single-link groups (A~B and B~C → one group) over two relations:
+    # same asking price + size + rooms + floor within DUP_MAX_M (cross-posts),
+    # and — with relist — the same flat at another price (_same_flat).
+    parent: dict[int, int] = {}
+    obj: dict[int, dict] = {}
+
+    def find(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a: dict, b: dict) -> None:
+        for m in (a, b):
+            if id(m) not in parent:
+                parent[id(m)] = id(m)
+                obj[id(m)] = m
+        ra, rb = find(id(a)), find(id(b))
+        if ra != rb:
+            parent[ra] = rb
+
+    for members in by_key.values():
+        for i, a in enumerate(members):
+            for b in members[i + 1:]:
+                if _dup_near(a, b):
+                    union(a, b)
+    # Relistings stay links (earlier → later copy), not duplicate groups:
+    # merged into groups they chained identical flats of one building.
+    relist_succ: dict[int, dict] = {}
+    relist_prev: dict[int, list[dict]] = {}
+    if relist:
+        by_shape: dict[tuple, list[dict]] = {}
+        for l in all_listings:
+            if id(l) in skip or l.get("rooms") is None or not l.get("sqm") or not all(_ll(l)):
+                continue
+            by_shape.setdefault((l["rooms"], l["sqm"]), []).append(l)
+        # Only one listing after the other (a relisting): two copies on the
+        # market at the same time at different rents are usually two flats
+        # of the same size in one building (Via Spartaco: 11 live 50–52 m²
+        # flats on one floor) — they stay separate. Each earlier listing
+        # links to its nearest successor only, so such buildings can't chain.
+        successor: dict[int, tuple] = {}
+        spans: dict[int, tuple] = {}
+        streets: dict[int, tuple] = {}
+        for (rooms, sqm), members in by_shape.items():
+            near = [m for d in range(0, RELIST_SQM_TOL + 1)
+                    for m in by_shape.get((rooms, sqm + d), ())]
+            for a in members:
+                for b in near:
+                    if b is a or not (b["sqm"] > sqm or id(b) > id(a)):
+                        continue
+                    order = _relist_order(a, b, spans)
+                    if order is None or not _same_flat(a, b, streets):
+                        continue
+                    old, new, gap = order
+                    best = successor.get(id(old))
+                    if best is None or (gap, abs(old["sqm"] - new["sqm"])) < best[0]:
+                        successor[id(old)] = ((gap, abs(old["sqm"] - new["sqm"])), old, new)
+        for _, old, new in successor.values():
+            relist_succ[id(old)] = new
+            relist_prev.setdefault(id(new), []).append(old)
+            if old.get("is_stale"):
+                skip.add(id(old))      # its successor stands for the flat now
+
+    clusters: dict[int, list[dict]] = {}
+    for l in all_listings:          # pool order inside each group
+        if id(l) in parent:
+            clusters.setdefault(find(id(l)), []).append(l)
     groups: list[list[int]] = []
     group_of: dict[int, int] = {}
-    for members in by_key.values():
-        if len(members) < 2:
+    for cluster in clusters.values():
+        if len(cluster) < 2:
             continue
-        unassigned = list(members)
-        while unassigned:
-            cluster = [unassigned.pop(0)]
-            grew = True
-            while grew:
-                grew = False
-                for m in list(unassigned):
-                    if any(_dup_near(m, c) for c in cluster):
-                        cluster.append(m)
-                        unassigned.remove(m)
-                        grew = True
-            if len(cluster) < 2:
-                continue
-            keep = max(cluster, key=_dup_rank)
-            gid = len(groups)
-            groups.append([id(m) for m in cluster])
-            for m in cluster:
-                group_of[id(m)] = gid
-                if m is not keep:
-                    skip.add(id(m))
+        keep = max(cluster, key=_dup_rank)
+        gid = len(groups)
+        groups.append([id(m) for m in cluster])
+        for m in cluster:
+            group_of[id(m)] = gid
+            if m is not keep:
+                skip.add(id(m))
 
     by_zone: dict[str, list[dict]] = {}
     by_fascia: dict[str, list[dict]] = {}
@@ -366,9 +515,26 @@ def build_comps_index(all_listings: list[dict]) -> dict:
     geo = [l for l in all_listings if id(l) not in skip and all(_ll(l))]
     return {"by_zone": by_zone, "by_fascia": by_fascia, "skip": skip,
             "by_key": by_key, "groups": groups, "group_of": group_of,
+            "relist_succ": relist_succ, "relist_prev": relist_prev,
             "geo": geo,
             "geo_lat": np.array([float(_ll(l)[0]) for l in geo]),
             "geo_lon": np.array([float(_ll(l)[1]) for l in geo])}
+
+
+def relist_chain(listing: dict, index: dict) -> list[dict]:
+    """Earlier and later listings of the same flat (relisting links),
+    nearest first in each direction."""
+    out, seen = [], {id(listing)}
+    todo = [listing]
+    while todo:
+        cur = todo.pop()
+        for m in index.get("relist_prev", {}).get(id(cur), []) + \
+                 ([index["relist_succ"][id(cur)]] if id(cur) in index.get("relist_succ", {}) else []):
+            if id(m) not in seen:
+                seen.add(id(m))
+                out.append(m)
+                todo.append(m)
+    return out
 
 
 def _twin_ids(listing: dict, index: dict) -> set[int]:
@@ -387,6 +553,7 @@ def _twin_ids(listing: dict, index: dict) -> set[int]:
             mg = index["group_of"].get(id(m))
             if mg is not None:
                 twins.update(index["groups"][mg])
+    twins.update(id(m) for m in relist_chain(listing, index))
     twins.discard(id(listing))
     return twins
 

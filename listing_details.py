@@ -140,11 +140,11 @@ def fill_from_twins(pool: list, comps_index: dict) -> int:
     groups, group_of = comps_index.get("groups") or [], comps_index.get("group_of") or {}
     by_obj = {id(l): l for l in pool}
     n = 0
+    from comps_engine import relist_chain
     for l in pool:
         g = group_of.get(id(l))
-        if g is None:
-            continue
-        twins = [by_obj[i] for i in groups[g] if i != id(l) and i in by_obj]
+        twins = [by_obj[i] for i in groups[g] if i != id(l) and i in by_obj] if g is not None else []
+        twins += relist_chain(l, comps_index)
         if not twins:
             continue
         filled = []
@@ -158,6 +158,27 @@ def fill_from_twins(pool: list, comps_index: dict) -> int:
                     break
         if filled:
             l["twin_filled"] = filled
+            n += 1
+    return n
+
+
+def stamp_relistings(listings: list, pool: list, comps_index: dict) -> int:
+    """relisted_from_rent / _date / _id: the same flat was listed before at
+    another rent and that listing is gone (comps_engine relisting links:
+    same rooms/size/floor/building/street, one after the other). Cleared on
+    every run so a stale stamp never survives. Returns the count."""
+    prev = comps_index.get("relist_prev") or {}
+    n = 0
+    for l in listings:
+        l["relisted_from_rent"] = l["relisted_from_date"] = l["relisted_from_id"] = None
+        if l.get("is_stale") or not l.get("rent_mo"):
+            continue
+        before = [m for m in prev.get(id(l), []) if m.get("rent_mo") and m["rent_mo"] != l["rent_mo"]]
+        if before:
+            p = max(before, key=lambda m: m.get("last_seen_date") or "")
+            l["relisted_from_rent"] = p["rent_mo"]
+            l["relisted_from_date"] = p.get("last_seen_date")
+            l["relisted_from_id"] = str(p["id"])
             n += 1
     return n
 

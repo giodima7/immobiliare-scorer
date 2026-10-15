@@ -290,6 +290,11 @@ def detect_price_drops(rows: list[dict]) -> list[dict]:
     drops = 0
 
     for row in rows:
+        # The scanners now record drops locally (write_output) and carry
+        # them forward — keep those instead of re-deriving (which nulled
+        # every drop on the next push).
+        if row.get("previous_price") is not None:
+            continue
         lid       = row.get("id")
         new_price = row.get("price")
         old_price = current_prices.get(lid)
@@ -464,6 +469,70 @@ LEGACY_FILES = {"rentals_latest.json", "sales_latest.json"}
 PUSHED_MTIME: dict[str, float] = {}
 
 
+def archive_missing_online(path: Path, listing_type: str) -> int:
+    """Mark online rows stale when the local file no longer has them.
+
+    Pushes are upserts and never delete: a listing the scanners trim from
+    the file after it went stale (trim_stale_listings) stayed *live* online
+    forever — 566 such rows after one night (2026-10-15). Returns the count."""
+    try:
+        rows = json.loads(path.read_text())
+    except Exception:
+        return 0
+    if not rows:
+        return 0
+    city = (rows[0].get("city") or rows[0].get("city_key") or "").lower()
+    if not city:
+        return 0
+    local = {str(r.get("id")) for r in rows}
+    headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}",
+               "Content-Type": "application/json"}
+    online, offset = set(), 0
+    while True:
+        url = (f"{SUPABASE_URL}/rest/v1/listings?select=id&listing_type=eq.{listing_type}"
+               f"&city=eq.{urllib.parse.quote(city)}&is_stale=eq.false&order=id.asc&limit=1000&offset={offset}")
+        page = None
+        for attempt in range(4):
+            try:
+                with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=60) as r:
+                    page = json.loads(r.read())
+                break
+            except Exception:
+                time.sleep(10)
+        if page is None:
+            print("[archive] could not list online rows — skipped")
+            return 0
+        online.update(str(x["id"]) for x in page)
+        if len(page) < 1000:
+            break
+        offset += 1000
+    missing = sorted(online - local)
+    for i in range(0, len(missing), 100):
+        ids = ",".join(f'"{m}"' for m in missing[i:i + 100])
+        url = (f"{SUPABASE_URL}/rest/v1/listings?listing_type=eq.{listing_type}"
+               f"&id=in.({urllib.parse.quote(ids)})")
+        body = json.dumps({"is_stale": True}).encode()
+        for attempt in range(4):
+            status, _ = _http_patch(url, body, {**headers, "Prefer": "return=minimal"})
+            if 200 <= status < 300:
+                break
+            time.sleep(10)
+    if missing:
+        print(f"[archive] {len(missing)} online-only {city} {listing_type}s marked stale")
+    return len(missing)
+
+
+def _http_patch(url: str, body_bytes: bytes, headers: dict) -> tuple[int, str]:
+    req = urllib.request.Request(url, data=body_bytes, headers=headers, method="PATCH")
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            return resp.status, ""
+    except urllib.error.HTTPError as e:
+        return e.code, e.read().decode(errors="replace")
+    except Exception as exc:
+        return 0, str(exc)
+
+
 def push_local_json(path: Path, listing_type: str) -> bool:
     """Upsert the local JSON's contents back to Supabase. Wraps sync_file
     so callers can refresh the DB after a local mutation (e.g. enrichment
@@ -478,7 +547,9 @@ def push_local_json(path: Path, listing_type: str) -> bool:
         return False
     try:
         PUSHED_MTIME[str(path)] = path.stat().st_mtime
-        return sync_file(path, listing_type)
+        ok = sync_file(path, listing_type)
+        archive_missing_online(path, listing_type)
+        return ok
     except Exception as exc:
         print(f"[push] sync_file failed: {exc}")
         return False
