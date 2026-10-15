@@ -60,7 +60,7 @@ from fetch_rentals import (
     NETLIFY_CONFIG_PATH, STATUS_PATH, DIGEST_SENT_PATH,
     # Constants
     CITY_KEY, CITY_LABEL, EDGE_PATH, DAEMON_INTERVAL_SEC, DAEMON_RETRY_SEC,
-    last_scan_at, mark_scan_done, sleep_until, wait_and_drip, run_marked, sweep_slugs_for_today, record_sweeps,
+    last_scan_at, mark_scan_done, sleep_until, wait_and_drip, run_marked, rescore_output, sweep_slugs_for_today, record_sweeps,
     _parse_condo_from_description,
     # OMI + scoring
     match_omi, score_all,
@@ -2152,6 +2152,7 @@ def run_once(args) -> list:
 
     write_idealista_status(new_count=len(new_listings), skipped_areas=skipped_areas)
     print(f"  ✓ {len(scored)} Idealista listings written · {len(new_listings)} new")
+    rescore_output()
 
     # (The Netlify deploy that used to follow is gone: the dashboard moved to
     # Cloudflare, every deploy failed with 401/403, and the online data comes

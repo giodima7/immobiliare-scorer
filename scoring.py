@@ -47,7 +47,7 @@ from pathlib import Path
 from re import compile as re_compile
 
 from comps_engine import get_comps_benchmark, build_comps_index, SHORTLET_PLATFORMS
-from listing_details import apply_details, fill_from_twins
+from listing_details import apply_details, fill_from_twins, stamp_relistings
 import omi_lookup
 
 
@@ -376,6 +376,9 @@ _DEFAULT_SETTINGS: dict = {
     # = rent + fees wherever stated — only ~2 % state them, so exactly those
     # looked 10–20 % dearer than neighbours whose fees were unknown.
     "rent_condo_basis":  "asking",
+    # Treat the same flat listed at another price as the same flat (comps,
+    # twins, "relisted from €X") — price-blind, strict on place.
+    "comps_relist_twins": True,
     # Discounts beyond rent_label_delta_floor are more often bad data, fake
     # or already-let listings than deals (the labels already skip them):
     # neutral price score and a "verify" flag instead of a top ranking.
@@ -2063,7 +2066,10 @@ def score_all(listings: list, settings: dict | None = None,
             l["ask_psqm_effective"] = compute_effective_psqm(l)
         l["condo_fee_flag"]     = get_condo_fee_flag(l)
 
-    comps_index = build_comps_index(pool)
+    # Same flat at another price (relisting, two agencies) groups with its
+    # copies, so it is never its own comparable (comps_engine._same_flat).
+    comps_index = build_comps_index(pool, relist=settings.get("comps_relist_twins", True))
+    stamp_relistings(listings, pool, comps_index)
     # Same flat on both sites: each copy gets what the other knows.
     if settings.get("fill_from_twins", True):
         fill_from_twins(pool, comps_index)
