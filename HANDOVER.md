@@ -1,14 +1,17 @@
-# Handover — immobiliare-scorer (as of 2026-10-14 ~22:15)
+# Handover — immobiliare-scorer (as of 2026-10-15 ~07:50)
 
-Personal tool: scrapes Milan rentals (Immobiliare.it + Idealista.it), enriches with location data, scores deals, shows them in a local dashboard (`localhost:8000`) and an online one (Supabase-backed). **Scope right now: Milan only, one scan per day.** Other cities are parked.
+Personal tool: scrapes Milan rentals (Immobiliare.it + Idealista.it), enriches with location data, scores deals, shows them in a local dashboard (`localhost:8000`) and an online one (Supabase-backed, Cloudflare Pages `immobiliare-scorer.pages.dev`). **Scope right now: Milan only, one scan per day.** Other cities and sales are parked (`dashboard/full.html` keeps the old full dashboard).
 
-## Current state (verified)
-- `main` = `90da3c9` (PRs #2–#5). Evening work (section "2026-10-14 evening") is on branch `claude/data-coverage-frontend-fixes`, **uncommitted**, and already running locally (API + daemons restarted on it).
-- **Two SQL files must be run once in the Supabase SQL editor:** `supabase_migration_013.sql` (closes the alerts table `digest_filters` to the public key — it was readable/writable by anyone) and `supabase_migration_014.sql` (columns for the new fields; until then the online page falls back to `select=*` and the new fields stay local-only).
-- API: `nohup python3 -u api.py >> /tmp/lume-api.log` (unbuffered log), serves dashboard + endpoints.
-- Daemons (started via `POST /start-scanner`, daily mode): next scans **2026-10-15 ~00:29 (Immobiliare)** and **~00:34 (Idealista)**; if the laptop sleeps, they run on wake.
-- Milan rentals: 28,424 rows; **9,944 visible**; **Great Value 337, Hidden Gem 70**. Online (Supabase) = local: identical visible set and labels (checked 22:20).
-- Supabase project `sexbjvmedgappzqmcdjv` was paused (DNS gone) until today; user resumed it. Pushes fail **silently** — check `/tmp/lume-api.log` for `[supabase_sync] ... batches succeeded`.
+## Current state (verified 07:50)
+- `main` = `0b1a853` (PRs #2–#6 merged; #6 = listing pages, scoring flags, safer sync, split dashboard). Live online.
+- **Uncommitted on the working tree, running locally** (API + daemons restarted 07:45): the 2026-10-15 work below — relistings, price-drop history, nightly full rescore, online ghost-row archiving, new filter bar, Details view, design system / dark mode / icons. **Waiting for the user's go to commit → PR → merge** (merging publishes the frontend online; Cloudflare builds from git, so `dashboard/assets/*` incl. the new `filters.js`, `details.js`, `icons.svg` must be committed).
+- **Pending for the user: run `supabase_migration_015.sql`** (relisting columns). Until then those three fields stay local-only; nothing fails (sync skips missing columns, the dashboard drops them from its select). Migrations 013/014 are done.
+- API: `nohup python3 -u api.py >> /tmp/lume-api.log` (unbuffered). Daemons via `POST /start-scanner` `{"pages":50,"cities":["milano"],"max_rent":3000,"min_rooms":2}`.
+- Last night's scans ran (Immobiliare 00:29→01:53, +1,396 new; Idealista →03:05, +1,274 new; both rescored the full file). **Next: Immobiliare 2026-10-16 01:53, Idealista ~03:05** — the schedule drifts later each night (next = last *finish* + 24 h).
+- Listing-page drip: 38 pages read so far (20 ok, 18 gone). Runs 08–23 h, ≤150/day/site.
+- Milan rentals: 30,020 rows; **12,111 visible**; **Great Value 435, Hidden Gem 88**; 656 relisted-from signals, 346 price drops. **Online = local**: identical 12,361 live ids + labels (07:40, after a re-push and archiving 566 ghost rows).
+- Supabase is on the free tier and returns transient 500s right after big pushes (some autosync batches failed overnight: 139/144, 150/151) — re-push fixes it; consider retrying failed batches inside sync.
+- The laptop slept on battery (2–4 %) during last night's scans → wall-clock times inflated (Idealista rescore 954 s vs ~30 s normally). Keep it plugged in overnight.
 
 ## Operational gotchas (read before touching anything)
 1. **Restarting `api.py` kills the scanner daemons** (startup orphan sweep) — **even a second `api.py` that then fails to bind the port** sweeps them. Kill the old API by PID first, wait for port 8000 to free, then start, then re-run `POST /start-scanner` with `{"pages":50,"cities":["milano"],"max_rent":3000,"min_rooms":2}`. In zsh, `kill $VAR` with several PIDs doesn't split — use an array (`pids=($(pgrep …)); kill "${pids[@]}"`). The API's process name is `Python -u api.py` (match `"u api.py"`).
@@ -18,12 +21,13 @@ Personal tool: scrapes Milan rentals (Immobiliare.it + Idealista.it), enriches w
 5. Before rewriting a data file use the scanners' lock (`<file>.lock`, `fcntl.flock`) and atomic tmp+replace (`dashboard_io.write_snapshot`). `/api/rescore` and the enrichment worker already do (`_flush_geo`).
 6. Supabase sometimes returns transient HTTP 500 right after a big push — retry with 10 s backoff.
 7. Don't run `archive_old_listings.py` until every active listing has been re-seen once (Idealista rentals only got `last_seen_date` from 2026-10-14; rotation needs ~4 days).
+8. **Pushes are upserts and never delete.** Rows trimmed from the local file stayed live online (566 after one night). `supabase_sync.archive_missing_online` now runs after every `push_local_json` and marks such rows stale. Verify parity after big changes (ids + labels, `order=score_total.desc,id.asc`).
 
-## What changed today (by area)
+## 2026-10-14 (day) — what changed, by area
 **Ops / reliability**
 - Geo-enrich Stop works (stop checks around rescore, no redundant second rescore, stale queue-stop flag).
 - `browser_session.py`: Chrome (Edge 122 is blocked by Immobiliare), persistent profiles `~/.lume-scanner/profiles/<name>`, 30 s launch wait, timeouts on every navigation/evaluate, restart on hang, SIGTERM cleanup (`os._exit`). Used by all scrapers, the View-button probe (minimized), the single-listing scrape and the manual tools.
-- Daily scan mode (`--scan daily`, default with `--daemon`): discover newest-first → sweep 1/4 of areas (rotates daily) → Immobiliare detail pages for new listings (50/day; energy class, publication date, condo fees). Wall-clock scheduling, last scan stored in `.last_scan_<source>_milano`.
+- Daily scan mode (`--scan daily`, default with `--daemon`): discover newest-first → sweep 1/4 of areas (rotates daily) → (the 50/day Immobiliare listing-page step is now 0 — replaced by the listing-page drip, see 2026-10-14 evening). Wall-clock scheduling, last scan stored in `.last_scan_<source>_milano`.
 - Stale/trim is **coverage-aware**: only judges listings whose areas were all swept since last seen (`.sweep_coverage_milano.json`); never revives archived rows. Until all 17 Immobiliare areas / 10 Idealista zones are swept (~4 days), nothing is trimmed.
 - Parser fixes: ga4features/ga4Heating/ga4Garage (heating, balcony, parking, furnished, exposure were 100 % null), no typology in `condition`, sales `date` import, redirect re-filter (`navigli → navigli-darsena`), Fiera slug `fiera-sempione-city-life-portello`, Idealista zone matcher (17/17 areas), Idealista stamps `last_seen_date` + `is_stale=False`.
 - POI query fixed (`out center;` → parks restored, Milan only), city-aware OMI pass, fascia repaired from zone table, `is_stale` pushed as boolean.
@@ -32,7 +36,7 @@ Personal tool: scrapes Milan rentals (Immobiliare.it + Idealista.it), enriches w
 - Comps speedup (zone/fascia buckets, 417 s → ~25 s), suspect listings and duplicates out of comps.
 - Benchmark (`comps_engine.RENT_BENCHMARK_DEFAULTS`): short-let platforms out of comps (Spacest/Roomless/HousingAnywhere/Uniplaces/Spotahome), nearest 30 flats ≤1.5 km same fascia (same condition first), size elasticity −0.30, recency half-life 90 d, symmetric trim, no OMI blend. Backtest: median error 12.8 % → 11.9 %, bias 0, source gap 0.
 - Score structure (`scoring._DEFAULT_SETTINGS`): smooth price `100·Φ(−1.4·delta/σ)`, σ = 0.134 + 0.56 × comps spread; property: unknown features = run average, condition left to the benchmark.
-- Labels (`scoring.rental_labels`, `rent_*` settings, editable in the dashboard settings panel): GV z ≤ −1.1; HG z ≤ −1.3 + property ≥65, location ≥80, metro ≤700 m, ≥22 m²/room, ≥20 comps; never for short-lets, listings first seen >60 days ago, discounts beyond −30 %.
+- Labels (`scoring.rental_labels`, `rent_*` settings, editable in the dashboard settings panel): GV z ≤ −1.1; HG z ≤ −1.3 + property ≥62 (was 65, recalibrated in the evening), location ≥80, metro ≤700 m, ≥22 m²/room, ≥20 comps; never for short-lets, listings first seen >60 days ago, discounts beyond −30 %.
 - Display: excluded/fake rows hidden in rentals grid; explanation lead uses real labels; dead LDI "price bonus" removed.
 
 ## 2026-10-14 evening — data coverage + frontend
@@ -41,6 +45,17 @@ Personal tool: scrapes Milan rentals (Immobiliare.it + Idealista.it), enriches w
 **Supabase**: `supabase_sync.schema_columns()` reads the live table columns (10-min cache) so new fields never fail a push. Migrations 013/014 above.
 **API**: `/rentals?visible=1` (live rows only, gzip, ETag — 87 MB → ~5 MB), `/rentals/by-ids`, `/api/user-data` (favourites/collections mirrored to `user_data.json`), `/api/digest-filters` (alerts proxy with the service key), `scanning` in `/scanner-status` (`.scan_running_<source>` markers), `/full.html`, `/assets/*`, auto-enrichment limited to Milan rentals (`ACTIVE_ENRICH_CITIES`). Dead Netlify deploys removed.
 **Frontend**: `dashboard/full.html` = the old full dashboard (sales/investor/valuation/cities) kept as is. `index.html` (1.4k lines) + `assets/`: `lume.css`, `core.js` (auth, Supabase client, storage), `i18n.js`, `shell.js`, `widgets.js`, `alerts.js`, `collections.js`, `cards.js`, `rentals.js`, `scanner.js`, `controls.js`, `map.js`, `insights.js`, `settings.js`, `init.js` — plain files, no build. **Rule: feature files hold declarations only; anything that runs at load (event wiring, start-up, values built by calling app functions) goes in `init.js`, which loads last** — classic scripts don't hoist functions across files, so a load-time call into a later file would throw. The split was checked with acorn (every load-time reference resolves; all 372 statements byte-identical) and in the browser (both modes, every tab). `build.sh` substitutes placeholders in assets/*.js too; **Cloudflare builds from git, so assets/ must be committed with index.html**. Fixes: online loading parallel + first page painted at ~2 s (was ~18 s), slim column list with `select=*` fallback, id tie-breaker, partial-data note; archived rows dropped before duplicate merging; counts over displayable rows; real weights (0.45/0.25) + cap reason in breakdown; sorts Score / Discount / Newest / Rent; card: discount shown once, "first seen" pill, "verify" message on suspect discounts, discount strength (price_z), comparable-flats list, condition/contract/availability/AC rows, twin note; dead settings knobs and CI pill removed; saving without sign-in; alerts local-only (identity from the existing alert row); scraped text escaped (cards, map popups, data-quality table, favourites page); SRI on CDN scripts; local dates; `lang` attribute; focus outline. Favourites page fetches only its rows.
+
+## 2026-10-15 — relistings, filters, Details view, design system
+**Relistings** (`comps_engine`): the same flat at another price — same rooms, size ±2 m², same floor, same building (≤40 m; ≤15 m without floor), same street name and number when both give one; Idealista without a house number never matches (geocoded to a street/area centre). Only *sequential* listings link (one gone before the other appeared, 7 days' overlap), each earlier listing to its nearest successor — two identical flats live at once in one building stay separate (Via Spartaco had 11). Links are `relist_succ` / `relist_prev` in the comps index, **not** duplicate groups (merging chained buildings). Effects: a listing never uses its own earlier copy as a comparable (Porta Venezia 132240972 did: −28.5 % Hidden Gem → −27.8 % Great Value), archived predecessors drop out of everyone's pool, `relisted_from_rent/_date/_id` stamped (503 listings), twins fill includes the chain. Measured: GV 345 → 351, HG 71 → 70, median discount change 0, p90 3.3 pp. Setting `comps_relist_twins`.
+**Price drops on the same listing**: the scanners' `write_output` keeps `previous_price` / `price_changed_date` (drops only) across scans; `supabase_sync.detect_price_drops` no longer nulls them on the next push (it used to — 0 drops were ever visible online).
+**Nightly scans now rescore the whole file** (`fetch_rentals.rescore_output`, both scanners, end of `run_once`): Immobiliare scored a scan against itself only (a fraction of the city), and autosync would push those thin-pool scores.
+**Condition**: Idealista "Buono stato (Idealista)" → condition group *unknown* (was read as standard).
+**Filter bar**: one compact row (area, max rent, rooms, m², Must-haves, deals, sort, More filters) + removable active-filter chips; Must-haves (furnished, balcony, parking, lift, own heating, 2+ baths, renovated/new, hide verify-first) show known-yes and not-yet-known counts, strict unless "include not yet known"; More filters adds condition, min discount, contract (+ the old ones). Same in the phone drawer. Code: `assets/filters.js`; control ids unchanged.
+**Details view** (`assets/details.js`): opened from the card's Details button / photo / title — verdict, price history, all facts with "Not known yet", listing-page provenance, location, score bars with weights, reasons, comparable flats, Save / Collection / Share / Open on site. Card is lighter (in-card panel, reasons and share moved there).
+**Design system**: canonical tokens only (264 alias uses → 0), colours 74 → 18 hard-coded (ink tokens for text on tints), 11 font sizes (was 19), radius tokens (+`--radius-xs`), dark mode (system or header toggle, `data-theme`, no-flash inline script), emoji → Tabler SVG sprite (`assets/icons.svg`, `icon()` helper, `tools/build_icons.py` to add icons). `tools/normalize_css.py` was a one-off migration.
+**Online ghost rows** (07:40): see gotcha 8 — 566 archived, `archive_missing_online` added to every push.
+**Fixes found on the way**: header count overwritten by the start-up translation pass; a restored Stats/Map tab started a Supabase load before local/online was known, so the local dashboard could end up on online data (`_liveKnown` gate + one shared load); Stats/Map re-render after data arrives; undefined `--accent-light/-dark` tokens.
 
 ## Open items / next steps
 - **Validate scoring against outcomes** once ~3–6 weeks of daily scans exist: listing lifetime (first→last seen) vs price_z / score. Pre-October scans were too sporadic. Location already predicts faster renting (ρ ≈ −0.19).
@@ -51,15 +66,18 @@ Personal tool: scrapes Milan rentals (Immobiliare.it + Idealista.it), enriches w
 - Show failed Supabase pushes in the dashboard enrichment panel.
 - PR branch `claude/scanner-reliability-enrichment-speed`, `claude/scoring-*`, `claude/supabase-visibility-fixes` still exist (merged; safe to delete).
 - After ~10 days of drip: re-measure labels with real Idealista condition/condo data; reconsider `rent_condo_basis` (imputed fees for unknowns once enough are known) and whether Idealista "buono stato" needs the description heuristic.
-- The local API now serves `/manifest.json` and `/icon-*.png` (were 404s) — live after the next API restart.
+- Scan schedule drifts later each night (next = last finish + 24 h): pin it to a clock time (e.g. 02:00) in `daemon_loop`.
+- Supabase sync: retry failed batches inside `sync_file` (free tier 500s after big pushes).
+- Card/Details still use some inline styles (~160) and 18 one-off colours; shadows not consolidated.
 - Clerk uses a development (`pk_test`) key; no CSP. The unused Netlify token in `netlify_config.json` (gitignored, 401 now) can be revoked.
 
-## Incidents today (all repaired)
+## Incidents (2026-10-14/15, all repaired)
 1. First daily scan trimmed ~12k rows incl. live ones → restored from backup; trim made coverage-aware.
 2. Restore + no-date branch revived ~18k archived rows in the grid → flags restored; stale pass now keeps flags it can't judge.
 3. API force-killed during an auto Roma enrichment (guard failed open) → no data damage.
 4. Old `/api/rescore` pushed 6/28 batches of stale legacy rows to Supabase → Milan re-pushed, 13 legacy-only rows flagged stale; parity verified.
 5. (22:00) A restart's start-up rescore of the legacy file + the autosync watcher pushed it again (5,576 rows) → root cause removed (see gotcha 4), Milan re-pushed, 17 legacy-only rows flagged stale; parity verified.
 6. (21:59) A second `api.py` started while the first still held the port: its orphan sweep killed both daemons before it failed to bind → clean restart; no data impact.
+7. (10-15 07:40) 566 ghost rows live online after the nightly trim (upserts never delete) → archived; `archive_missing_online` added.
 
 Backups of pre-change data files were taken to the session scratchpad (`…/scratchpad/verify/backup/`), which is session-specific and may be gone.
