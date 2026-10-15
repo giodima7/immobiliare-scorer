@@ -32,6 +32,12 @@ function getRentFilters() {
     minEnergy: document.getElementById('rMinEnergy').value,
     gemFilter: document.querySelector('#rGemFilter .gem-tab.active')?.dataset.gem || '',
     fListed:   document.getElementById('rListed')?.value || '',
+    // filters.js: must-haves (lift = elevator above), condition, discount, contract
+    must:           rentMustActive(),
+    includeUnknown: rentIncludeUnknown,
+    condition:      document.getElementById('rCondition')?.value || '',
+    minDiscount:    parseInt(document.getElementById('rMinDiscount')?.value) || 0,
+    contract:       document.getElementById('rContract')?.value || '',
   };
 }
 
@@ -87,7 +93,8 @@ function applyRentFilters(data, f) {
     if (f.minFloor > -999) {
       if ((l.floor_n ?? -999) < f.minFloor) return false;
     }
-    if (f.elevator && l.elevator !== true) return false;
+    if (f.elevator && !(l.elevator === true || (f.includeUnknown && l.elevator == null))) return false;
+    if (!passesExtraFilters(l, f)) return false;
     if (f.gemFilter === 'hidden' && !l.hidden_gem) return false;
     if (f.gemFilter === 'good'   && !(l.good_value === true && l.hidden_gem !== true)) return false;
     if (f.fListed) {
@@ -253,7 +260,7 @@ function renderRentals() {
       const n = gem === 'hidden' ? nHidden : gem === 'good' ? nGood : shown.length;
       // Keep the label text, add/update a small count badge
       const label = gem === 'hidden' ? t('gem.hidden') : gem === 'good' ? t('gem.good') : t('gem.all');
-      btn.textContent = `${label} (${n})`;
+      btn.innerHTML = `${escapeHtml(label)} <span class="pill-count">${fmt(n)}</span>`;
     });
     // The active button just changed width (e.g. "All" → "All (7107)"),
     // so the sliding thumb is now narrower than its target pill. Defer
@@ -271,6 +278,7 @@ function renderRentals() {
   }
 
   // Stats always reflect the full filtered set, not just rendered cards
+  renderRentFilterExtras(f, _rentFilteredData.length);
   document.getElementById('rShowCount').textContent     = _rentFilteredData.length;
   const as = avg(_rentFilteredData, 'score_total');
   const ar = avg(_rentFilteredData, 'rent_mo');
@@ -352,7 +360,22 @@ function _rentWithStale() {
   return IS_LIVE && !!document.getElementById('rShowStale')?.checked;
 }
 
-async function loadRentals() {
+// Callers fire early (a restored Stats/Map tab, tab switches) before the
+// page knows whether the local API is up; loading then would take the
+// Supabase path even on the local dashboard. Until init sets _liveKnown,
+// calls wait; concurrent calls share one load.
+let _liveKnown = false;
+let _rentLoadPromise = null;
+
+function loadRentals() {
+  if (!_liveKnown) return Promise.resolve();      // init calls it once it knows
+  if (!_rentLoadPromise) {
+    _rentLoadPromise = _loadRentalsNow().finally(() => { _rentLoadPromise = null; });
+  }
+  return _rentLoadPromise;
+}
+
+async function _loadRentalsNow() {
   // Three paths, tried in priority order:
   //   1. Local dev (IS_LIVE) — Flask /rentals serves the freshest scanner
   //      output from dashboard/rentals_latest.json. Best for testing a
@@ -420,14 +443,29 @@ async function loadRentals() {
   // count. Skipped on the failure paths above — those already wrote a
   // diagnostic into #meta and we don't want to clobber it. fmtDate() picks
   // the locale ("15 mag 2026" in Italian, "15 May 2026" in English).
-  const _meta = document.getElementById('meta');
-  if (_meta && ALL_RENT.length) {
-    _meta.textContent = t('header.listings_count', {
-      n:    ALL_RENT.filter(l => !l.excluded).length,
-      city: _cityDisplayName(_currentCityConfig()),
-      date: fmtDate(new Date()),
-    }) + (_partial ? ' · ' + t('error.partial') : '');
+  _rentLoadPartial = _partial;
+  renderHeaderMeta();
+  // A tab restored on reload (Stats, Map) rendered before the data was in.
+  if (typeof activeTab !== 'undefined') {
+    if (activeTab === 'insights' && typeof showInsightsTab === 'function') showInsightsTab();
+    if (activeTab === 'map' && typeof _mapRender === 'function') _mapRender();
   }
+}
+
+let _rentLoadPartial = false;
+
+// Header line "N listings in Milan · date". Its data-i18n (the loading
+// text) is dropped once data is in, so a later translation pass — the
+// start-up one, or a language switch — doesn't put "reading…" back.
+function renderHeaderMeta() {
+  const meta = document.getElementById('meta');
+  if (!meta || !ALL_RENT.length) return;
+  meta.removeAttribute('data-i18n');
+  meta.textContent = t('header.listings_count', {
+    n:    ALL_RENT.filter(l => !l.excluded).length,
+    city: _cityDisplayName(_currentCityConfig()),
+    date: fmtDate(new Date()),
+  }) + (_rentLoadPartial ? ' · ' + t('error.partial') : '');
 }
 
 function _updateUnmatchedBadge() {

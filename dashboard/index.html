@@ -68,6 +68,11 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" integrity="sha384-pmjIAcz2bAn0xukfxADbZIb3t8oRT9Sv0rvO+BR5Csr6Dhqq+nZs59P0pPKQJkEV" crossorigin="anonymous">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" integrity="sha384-wgw+aLYNQ7dlhK47ZPK7FRACiq7ROZwgFNg0m04avm4CaXS+Z9Y7nMu8yNjBKYC+" crossorigin="anonymous">
+<script>
+  // Saved theme before first paint (no light flash in dark mode). Values:
+  // "light" / "dark"; none = follow the system. See setTheme() in shell.js.
+  try { const th = localStorage.getItem('lume_theme'); if (th) document.documentElement.dataset.theme = th; } catch (_) {}
+</script>
 <link rel="stylesheet" href="assets/lume.css">
 </head>
 <body>
@@ -81,7 +86,7 @@
   5. API Keys → copy the publishable key into window.__CLERK_PUBLISHABLE_KEY (top of <head>)
 -->
 <div id="login-screen" style="display:none;flex-direction:column;align-items:center;
-  justify-content:center;min-height:100svh;background:#F7F5F2;
+  justify-content:center;min-height:100svh;background:var(--bg-page);
   padding:24px;box-sizing:border-box">
   <div style="margin-bottom:40px;text-align:center">
     <!-- Lume wordmark -->
@@ -96,20 +101,20 @@
       <circle cx="14" cy="14" r="6"  fill="#2A7A5A"/>
       <text x="32" y="22" font-family="Inter, -apple-system, sans-serif" font-size="22" font-weight="700" fill="#1A1A1A" letter-spacing="-0.5">lume</text>
     </svg>
-    <div style="font-size:14px;color:#6B6560;margin-top:10px">
+    <div style="font-size:14px;color:var(--text-secondary);margin-top:10px">
       See through Milan&rsquo;s listings.
     </div>
   </div>
   <div style="background:white;border-radius:20px;padding:32px;
     width:100%;max-width:360px;box-shadow:0 4px 24px rgba(0,0,0,0.08)">
-    <h2 style="font-size:20px;font-weight:700;color:#1A1A1A;margin:0 0 6px">Welcome to Lume</h2>
-    <p style="font-size:13px;color:#6B6560;margin:0 0 24px">Lume is invite-only. Ask whoever sent you the link.</p>
+    <h2 style="font-size:20px;font-weight:700;color:var(--text-primary);margin:0 0 6px">Welcome to Lume</h2>
+    <p style="font-size:13px;color:var(--text-secondary);margin:0 0 24px">Lume is invite-only. Ask whoever sent you the link.</p>
     <button onclick="Auth.openSignIn()" style="
-      width:100%;padding:14px;border-radius:12px;background:#2A7A5A;color:white;
-      border:none;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:10px">
+      width:100%;padding:14px;border-radius:12px;background:var(--green-deep);color:white;
+      border:none;font-size: 14px;font-weight:600;cursor:pointer;margin-bottom:10px">
       Sign in
     </button>
-    <p style="font-size:12px;color:#A09990;text-align:center;margin:0">
+    <p style="font-size:12px;color:var(--text-muted);text-align:center;margin:0">
       No invite yet? Lume&rsquo;s a small thing — ask whoever shared it.
     </p>
   </div>
@@ -179,21 +184,21 @@
       <h2 class="ob-animate">How Lume scores every listing</h2>
       <div class="onboard-step-cards">
         <div class="onboard-step-card ob-animate ob-delay-1">
-          <span class="onboard-step-icon">🏠</span>
+          <span class="onboard-step-icon"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#home"></use></svg></span>
           <div class="onboard-step-body">
             <h3>What you&rsquo;d pay vs similar flats nearby</h3>
             <p>Lume compares asking rent against real flats within 500m — not just averages.</p>
           </div>
         </div>
         <div class="onboard-step-card ob-animate ob-delay-2">
-          <span class="onboard-step-icon">📍</span>
+          <span class="onboard-step-icon"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#map-pin"></use></svg></span>
           <div class="onboard-step-body">
             <h3>Where it actually is</h3>
             <p>Metro distance, parks, supermarkets — Lume computes everything from coordinates.</p>
           </div>
         </div>
         <div class="onboard-step-card ob-animate ob-delay-3">
-          <span class="onboard-step-icon">✦</span>
+          <span class="onboard-step-icon"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#diamond"></use></svg></span>
           <div class="onboard-step-body">
             <h3>Hidden Gems — Lume&rsquo;s favourite finds</h3>
             <p>Listings priced below similar flats nearby in desirable areas. Rare. Lume flags them for you.</p>
@@ -225,7 +230,7 @@
             <div class="onboard-bar-track"><div class="onboard-bar-fill" data-width="95"></div></div>
           </div>
         </div>
-        <p class="ob-animate ob-delay-2" style="font-size:11px;color:var(--muted);margin-top:12px">Scores above 72 with a low price delta = Lume rates this a hidden gem.</p>
+        <p class="ob-animate ob-delay-2" style="font-size:11px;color:var(--text-secondary);margin-top:12px">Scores above 72 with a low price delta = Lume rates this a hidden gem.</p>
       </div>
     </div>
 
@@ -305,7 +310,7 @@
         </select>
       </div>
       <div class="drawer-field">
-        <label>Min score: <span id="dScoreVal" style="color:var(--accent);font-weight:700">0</span></label>
+        <label>Min score: <span id="dScoreVal" style="color:var(--green-deep);font-weight:700">0</span></label>
         <div class="drawer-range-wrap">
           <input type="range" id="dScore" min="0" max="100" value="0" step="5">
         </div>
@@ -314,9 +319,32 @@
         <label>Gems</label>
         <div class="drawer-gem-row" id="dGemFilter">
           <button class="gem-tab active" data-gem="">All</button>
-          <button class="gem-tab" data-gem="hidden">✦ Hidden</button>
           <button class="gem-tab" data-gem="good">Great Value</button>
+          <button class="gem-tab" data-gem="hidden">Hidden Gem</button>
         </div>
+      </div>
+      <div class="drawer-field drawer-rent-only">
+        <label data-i18n="fb.must">Must-haves</label>
+        <div class="must-grid" id="dMustGrid"></div>
+        <label class="fb-check" style="margin-top:8px"><input type="checkbox" id="dIncludeUnknown">
+          <span data-i18n="fb.include_unknown">Include listings where it's not known yet</span></label>
+      </div>
+      <div class="drawer-field drawer-rent-only">
+        <label data-i18n="fb.condition">Condition</label>
+        <select id="dCondition">
+          <option value="" data-i18n="filter.any">Any</option>
+          <option value="premium" data-i18n="cond.premium">Renovated or new</option>
+          <option value="not_needs_work" data-i18n="cond.not_needs_work">Not to renovate</option>
+        </select>
+      </div>
+      <div class="drawer-field drawer-rent-only">
+        <label data-i18n="fb.min_discount">Below nearby flats</label>
+        <select id="dMinDiscount">
+          <option value="" data-i18n="filter.any">Any</option>
+          <option value="5">5%+</option>
+          <option value="10">10%+</option>
+          <option value="20">20%+</option>
+        </select>
       </div>
     </div>
   </div>
@@ -329,7 +357,7 @@
   <button id="drawerSaveAlertBtn" class="drawer-save-alert-btn"
           type="button" style="display:none"
           title="Save current filters as your daily email alert"
-          data-i18n="filter.save_alert">🔔 Save alert</button>
+          data-i18n="filter.save_alert">Save alert</button>
   <button class="drawer-show-btn" id="drawerShowBtn">Show results</button>
 </div>
 
@@ -347,7 +375,7 @@
       <circle cx="14" cy="14" r="12" fill="url(#lume-glow-header)"/>
       <circle cx="14" cy="14" r="6"  fill="#2A7A5A"/>
       <text x="32" y="22" font-family="Inter, -apple-system, sans-serif"
-            font-size="22" font-weight="700" fill="#1A1A1A"
+            font-size="22" font-weight="700" fill="currentColor"
             letter-spacing="-0.5">lume</text>
     </svg>
   </div>
@@ -375,6 +403,7 @@
     <span class="fav-badge" id="favBadge"></span>
   </a>
   <!-- Language toggle (EN / IT). State synced with currentLang via updateLangToggle(). -->
+  <button type="button" class="theme-toggle" id="themeToggle" onclick="cycleTheme()" aria-label="Theme" title="Theme"></button>
   <div class="lang-toggle" role="group" aria-label="Language">
     <button class="lang-btn" data-lang="en" type="button" onclick="setLang('en')">EN</button>
     <button class="lang-btn" data-lang="it" type="button" onclick="setLang('it')">IT</button>
@@ -389,7 +418,7 @@
   <div id="user-avatar-wrap" style="position:relative;display:none;flex-shrink:0">
     <div id="user-avatar" onclick="showUserMenu(event)" style="
       width:32px;height:32px;border-radius:50%;
-      background:#2A7A5A;color:white;font-size:13px;font-weight:600;
+      background:var(--green-deep);color:white;font-size:13px;font-weight:600;
       display:flex;align-items:center;justify-content:center;cursor:pointer;
       user-select:none" title="Account menu"></div>
     <!-- Red dot — visible only when the user has ≥1 active digest alert.
@@ -401,10 +430,10 @@
 
 <!-- ── Tab bar ── -->
 <nav class="tab-bar">
-  <button class="tab-btn active" id="tabRentals" data-tab="rentals" onclick="switchTab('rentals')">🔑 <span data-i18n="tab.rentals">Rentals</span></button>
-  <button class="tab-btn" id="tabMap" data-tab="map" onclick="switchTab('map')">🗺 <span data-i18n="tab.map">Map</span></button>
-  <button class="tab-btn" id="tabInsights" data-tab="insights" onclick="switchTab('insights')">📊 <span data-i18n="tab.stats">Stats</span></button>
-  <button class="tab-btn" id="tabSettings" data-tab="settings" onclick="switchTab('settings')">⚙ <span data-i18n="tab.settings">Settings</span></button>
+  <button class="tab-btn active" id="tabRentals" data-tab="rentals" onclick="switchTab('rentals')"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#home"></use></svg> <span data-i18n="tab.rentals">Rentals</span></button>
+  <button class="tab-btn" id="tabMap" data-tab="map" onclick="switchTab('map')"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#map"></use></svg> <span data-i18n="tab.map">Map</span></button>
+  <button class="tab-btn" id="tabInsights" data-tab="insights" onclick="switchTab('insights')"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#chart-bar"></use></svg> <span data-i18n="tab.stats">Stats</span></button>
+  <button class="tab-btn" id="tabSettings" data-tab="settings" onclick="switchTab('settings')"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#settings"></use></svg> <span data-i18n="tab.settings">Settings</span></button>
 </nav>
 <!-- ══════════════════════════════════════════════════════════════
      RENTALS VIEW
@@ -420,187 +449,199 @@
        digest_filters table). Local SMTP config lived here too, but is now
        owned by GitHub Secrets / .env on the deployment side. -->
 
-  <!-- Rentals filter bar (restructured)
-       Three rows with consistent 36 px control height:
-         Row 1 — location + size: Area, Fascia, Max rent, Min m², Min rooms, Max metro, Min floor
-         Row 2 — quality / sort:  Source, Elevator, Min energy, Min score, Sort
-         Row 3 — meta / utilities: Listed, Gems, Show expired, Save alert, Clear filters
-       OMI Zone filter removed (Milan-only legacy, superseded by the Area
-       picker once cities became first-class). Score moved to slider +
-       editable number input. "Start fresh" renamed to "Clear filters"
-       and pushed to the right edge by a flex spacer. -->
-  <div class="filters filters-grid">
-
-    <!-- Row 1 — location + size ─────────────────────────────────── -->
-    <div class="filter-row">
-      <div class="filter-group">
-        <label class="filter-label" data-i18n="filter.area">Area</label>
-        <div class="msd-wrap" id="filterAreaWrap">
-          <button type="button" class="msd-trigger filter-control" id="filterAreaTrigger">All areas <span class="msd-caret">▾</span></button>
-          <div class="msd-panel" id="filterAreaPanel">
-            <input class="msd-search-input" id="filterAreaSearch" placeholder="Search areas…" type="text" autocomplete="off">
-            <div class="msd-list" id="filterAreaList"></div>
-            <div class="msd-footer">
-              <button type="button" class="msd-footer-btn msd-footer-clear" id="filterAreaClear">Clear</button>
-              <button type="button" class="msd-footer-btn"                   id="filterAreaDone">Done ✓</button>
-            </div>
+  <!-- Rentals filter bar (2026-10-15): one compact row for the everyday
+       filters (area, budget, size, must-haves, deal type, sort); the rest
+       sits in "More filters"; active filters show as removable chips.
+       Control ids are unchanged (getRentFilters / saved filters / drawer). -->
+  <div class="filters fbar">
+    <div class="fb-row">
+      <div class="msd-wrap fb-area" id="filterAreaWrap">
+        <button type="button" class="msd-trigger filter-control" id="filterAreaTrigger">All areas <span class="msd-caret">▾</span></button>
+        <div class="msd-panel" id="filterAreaPanel">
+          <input class="msd-search-input" id="filterAreaSearch" placeholder="Search areas…" type="text" autocomplete="off">
+          <div class="msd-list" id="filterAreaList"></div>
+          <div class="msd-footer">
+            <button type="button" class="msd-footer-btn msd-footer-clear" id="filterAreaClear">Clear</button>
+            <button type="button" class="msd-footer-btn"                   id="filterAreaDone">Done ✓</button>
           </div>
         </div>
       </div>
-      <div class="filter-group">
-        <label class="filter-label" data-i18n="filter.fascia">Fascia</label>
-        <select id="rFascia" class="filter-control">
-          <option value="" data-i18n="filter.all">All</option>
-          <option value="B">B — Centrale</option>
-          <option value="C">C — Semicentrale</option>
-          <option value="D">D — Periferica</option>
-          <option value="E">E — Periferica outer</option>
+      <label class="fb-field" title="Max rent €/mo">
+        <span class="fb-prefix">€</span>
+        <input type="number" id="rMaxRent" class="filter-control filter-num" placeholder="Max rent"
+               data-i18n-placeholder="fb.max_rent" min="0" step="50" aria-label="Max rent per month">
+      </label>
+      <label class="fb-field fb-field-narrow" title="Min rooms">
+        <input type="number" id="rMinRooms" class="filter-control filter-num" placeholder="Rooms"
+               data-i18n-placeholder="fb.rooms" min="1" max="10" step="1" aria-label="Min rooms">
+        <span class="fb-suffix">+</span>
+      </label>
+      <label class="fb-field fb-field-narrow" title="Min m²">
+        <input type="number" id="rMinSqm" class="filter-control filter-num" placeholder="m²"
+               min="0" step="5" aria-label="Min m²">
+        <span class="fb-suffix">+</span>
+      </label>
+      <button type="button" class="fb-btn" id="rMustBtn" aria-expanded="false" aria-controls="rMustPanel">
+        <svg class="i" aria-hidden="true"><use href="assets/icons.svg#adjustments-horizontal"></use></svg>
+        <span data-i18n="fb.must">Must-haves</span>
+        <span class="fb-badge" id="rMustBadge" hidden></span>
+      </button>
+      <div class="filter-pill-group filter-control" id="rGemFilter" aria-label="Deals">
+        <button class="filter-pill gem-tab active" data-gem=""       data-i18n="filter.all">All</button>
+        <button class="filter-pill gem-tab"        data-gem="good"   data-i18n="filter.great_value">Great Value</button>
+        <button class="filter-pill gem-tab"        data-gem="hidden" data-i18n="filter.hidden">Hidden Gem</button>
+      </div>
+      <label class="fb-field fb-sort" title="Sort">
+        <svg class="i" aria-hidden="true"><use href="assets/icons.svg#arrows-sort"></use></svg>
+        <select id="rSortSelect" aria-label="Sort">
+          <option value="score_total" data-i18n="sort.score">Score</option>
+          <option value="comps_delta_pct" data-i18n="sort.discount">Discount</option>
+          <option value="first_seen_date" data-i18n="sort.newest">Newest</option>
+          <option value="rent_mo" data-i18n="sort.rent_asc">Rent ↑</option>
         </select>
+      </label>
+      <!-- The old sort pills stay (hidden) — saved filters and the sort
+           handlers still drive them; #rSortSelect mirrors them. -->
+      <div class="filter-pill-group filter-control" id="rentSortTabs" aria-label="Sort" hidden>
+        <button class="filter-pill sort-tab active" data-rsort="score_total"     data-i18n="sort.score">Score</button>
+        <button class="filter-pill sort-tab"        data-rsort="comps_delta_pct" data-i18n="sort.discount">Discount</button>
+        <button class="filter-pill sort-tab"        data-rsort="first_seen_date" data-i18n="sort.newest">Newest</button>
+        <button class="filter-pill sort-tab"        data-rsort="rent_mo"         data-i18n="sort.rent_asc">Rent ↑</button>
       </div>
-      <div class="filter-group">
-        <label class="filter-label" data-i18n="filter.max_rent">Max rent €/mo</label>
-        <input type="number" id="rMaxRent" class="filter-control filter-num" placeholder="Any"
-               data-i18n-placeholder="filter.any" min="0" step="50">
-      </div>
-      <div class="filter-group">
-        <label class="filter-label" data-i18n="filter.min_sqm">Min m²</label>
-        <input type="number" id="rMinSqm" class="filter-control filter-num" placeholder="Any"
-               data-i18n-placeholder="filter.any" min="0" step="5">
-      </div>
-      <div class="filter-group">
-        <label class="filter-label" data-i18n="filter.min_rooms">Min rooms</label>
-        <input type="number" id="rMinRooms" class="filter-control filter-num filter-num-narrow" placeholder="Any"
-               data-i18n-placeholder="filter.any" min="1" max="10" step="1">
-      </div>
-      <div class="filter-group" id="rFilterMetroSection">
-        <label class="filter-label" data-i18n="filter.max_metro">Max metro</label>
-        <select id="rMaxMetro" class="filter-control">
-          <option value="" data-i18n="filter.any">Any</option>
-          <option value="500">≤500m</option>
-          <option value="800">≤800m</option>
-          <option value="1200">≤1200m</option>
-        </select>
-      </div>
-      <span id="rFilterMetroSep" hidden></span>
-      <div class="filter-group">
-        <label class="filter-label" data-i18n="filter.min_floor">Min floor</label>
-        <select id="rMinFloor" class="filter-control">
-          <option value="" data-i18n="filter.any">Any</option>
-          <option value="2">2+</option>
-          <option value="4">4+</option>
-          <option value="6">6+</option>
-        </select>
+      <button type="button" class="fb-btn" id="rMoreBtn" aria-expanded="false" aria-controls="rMorePanel">
+        <svg class="i" aria-hidden="true"><use href="assets/icons.svg#filter"></use></svg>
+        <span data-i18n="fb.more">More filters</span>
+        <span class="fb-badge" id="rMoreBadge" hidden></span>
+      </button>
+      <input type="checkbox" id="rElevator" hidden>
+    </div>
+
+    <div class="fb-panel" id="rMustPanel" hidden>
+      <div class="must-grid" id="rMustGrid"></div>
+      <div class="fb-panel-foot">
+        <label class="fb-check"><input type="checkbox" id="rIncludeUnknown">
+          <span data-i18n="fb.include_unknown">Include listings where it's not known yet</span></label>
+        <span class="fb-hint" data-i18n="fb.must_hint">Counts are listings known to have it. Unknowns shrink daily as listing pages are read.</span>
       </div>
     </div>
 
-    <!-- Row 2 — quality / sort ─────────────────────────────────── -->
-    <div class="filter-row">
-      <div class="filter-group">
-        <label class="filter-label" data-i18n="filter.source">Source</label>
-        <div class="filter-pill-group filter-control" id="rSourceFilter">
-          <!-- Dual-classed (filter-pill + sort-tab) so the new visual matches
-               the rounded-pill look while every existing handler that
-               queries '.sort-tab' keeps binding without changes. -->
-          <button class="filter-pill sort-tab active" data-rsource="" data-i18n="filter.all">All</button>
-          <button class="filter-pill sort-tab" data-rsource="immobiliare">Immobiliare</button>
-          <button class="filter-pill sort-tab" data-rsource="idealista">Idealista</button>
+    <div class="fb-panel" id="rMorePanel" hidden>
+      <div class="fb-more-grid">
+        <div class="filter-group">
+          <label class="filter-label" for="rCondition" data-i18n="fb.condition">Condition</label>
+          <select id="rCondition" class="filter-control">
+            <option value="" data-i18n="filter.any">Any</option>
+            <option value="premium" data-i18n="cond.premium">Renovated or new</option>
+            <option value="not_needs_work" data-i18n="cond.not_needs_work">Not to renovate</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label" for="rMinDiscount" data-i18n="fb.min_discount">Below nearby flats</label>
+          <select id="rMinDiscount" class="filter-control">
+            <option value="" data-i18n="filter.any">Any</option>
+            <option value="5">5%+</option>
+            <option value="10">10%+</option>
+            <option value="20">20%+</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label" for="rContract" data-i18n="fb.contract">Contract (filling in)</label>
+          <select id="rContract" class="filter-control">
+            <option value="" data-i18n="filter.any">Any</option>
+            <option value="4+4">4+4</option>
+            <option value="3+2">3+2</option>
+            <option value="transitorio" data-i18n="fb.short_term">Short-term (transitorio)</option>
+            <option value="studenti" data-i18n="fb.students">Students</option>
+          </select>
+        </div>
+        <div class="filter-group" id="rFilterMetroSection">
+          <label class="filter-label" for="rMaxMetro" data-i18n="filter.max_metro">Max metro</label>
+          <select id="rMaxMetro" class="filter-control">
+            <option value="" data-i18n="filter.any">Any</option>
+            <option value="500">≤500m</option>
+            <option value="800">≤800m</option>
+            <option value="1200">≤1200m</option>
+          </select>
+        </div>
+        <span id="rFilterMetroSep" hidden></span>
+        <div class="filter-group">
+          <label class="filter-label" for="rMinFloor" data-i18n="filter.min_floor">Min floor</label>
+          <select id="rMinFloor" class="filter-control">
+            <option value="" data-i18n="filter.any">Any</option>
+            <option value="2">2+</option>
+            <option value="4">4+</option>
+            <option value="6">6+</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label" for="rListed" data-i18n="filter.listed">Listed</label>
+          <select id="rListed" class="filter-control">
+            <option value="" data-i18n="filter.any">Any</option>
+            <option value="today">Today</option>
+            <option value="7">Last 7 days</option>
+            <option value="14">Last 14 days</option>
+            <option value="30">Last 30 days</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label" data-i18n="filter.source">Source</label>
+          <div class="filter-pill-group filter-control" id="rSourceFilter">
+            <button class="filter-pill sort-tab active" data-rsource="" data-i18n="filter.all">All</button>
+            <button class="filter-pill sort-tab" data-rsource="immobiliare">Immobiliare</button>
+            <button class="filter-pill sort-tab" data-rsource="idealista">Idealista</button>
+          </div>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label" for="rFascia" data-i18n="filter.fascia">Fascia</label>
+          <select id="rFascia" class="filter-control">
+            <option value="" data-i18n="filter.all">All</option>
+            <option value="B">B — Centrale</option>
+            <option value="C">C — Semicentrale</option>
+            <option value="D">D — Periferica</option>
+            <option value="E">E — Periferica outer</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label" for="rMinEnergy" data-i18n="fb.min_energy">Min energy (filling in)</label>
+          <select id="rMinEnergy" class="filter-control">
+            <option value="" data-i18n="filter.any">Any</option>
+            <option value="C">C+</option>
+            <option value="B">B+</option>
+            <option value="A">A</option>
+          </select>
+        </div>
+        <div class="filter-group filter-group-score">
+          <label class="filter-label" data-i18n="filter.min_score">Min score</label>
+          <div class="filter-control score-filter-control">
+            <input type="range"  id="rScore"    class="score-slider" min="0" max="100" value="0" step="1" aria-label="Min score">
+            <input type="number" id="rScoreNum" class="score-number-input" min="0" max="100" value="0" inputmode="numeric" aria-label="Min score">
+            <span id="rScoreVal" hidden>0</span>
+          </div>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label" for="rIdSearch">Find by ID</label>
+          <input type="search" id="rIdSearch" class="filter-control filter-id-search" placeholder="Lume ID" autocomplete="off">
+        </div>
+        <div class="filter-group" id="rShowStaleGroup" hidden>
+          <label class="filter-label" data-i18n="filter.show_expired">Show expired</label>
+          <label class="filter-control filter-toggle" for="rShowStale"
+                 title="Show listings not seen by the scanner in 7+ days">
+            <input type="checkbox" id="rShowStale" class="filter-toggle-input">
+            <span class="filter-toggle-dot"></span>
+            <span class="filter-toggle-label" data-i18n="filter.show_expired">Show expired</span>
+          </label>
         </div>
       </div>
-      <div class="filter-group">
-        <label class="filter-label" data-i18n="filter.elevator">Elevator</label>
-        <!-- Toggle pill that visually matches every other .filter-control:
-             same 36px height, muted background, rounded border. Clicking
-             anywhere on the pill flips the hidden checkbox so existing
-             handlers reading getElementById('rElevator').checked keep
-             working. -->
-        <label class="filter-control filter-toggle" for="rElevator">
-          <input type="checkbox" id="rElevator" class="filter-toggle-input">
-          <span class="filter-toggle-dot"></span>
-          <span class="filter-toggle-label" data-i18n="filter.elevator">Elevator</span>
-        </label>
-      </div>
-      <div class="filter-group">
-        <label class="filter-label" data-i18n="filter.min_energy">Min energy</label>
-        <select id="rMinEnergy" class="filter-control">
-          <option value="" data-i18n="filter.any">Any</option>
-          <option value="C">C+</option>
-          <option value="B">B+</option>
-          <option value="A">A</option>
-        </select>
-      </div>
-      <div class="filter-group filter-group-score">
-        <label class="filter-label" data-i18n="filter.min_score">Min score</label>
-        <div class="filter-control score-filter-control">
-          <input type="range"  id="rScore"    class="score-slider" min="0" max="100" value="0" step="1">
-          <!-- Number input is the visible "0" — clickable + editable. The
-               slider stays the source of truth so any code reading rScore
-               keeps working. rScoreVal is kept as a hidden mirror so the
-               existing 'rScoreVal' updates from elsewhere don't throw. -->
-          <input type="number" id="rScoreNum" class="score-number-input" min="0" max="100" value="0" inputmode="numeric">
-          <span id="rScoreVal" hidden>0</span>
-        </div>
-      </div>
-      <div class="filter-group">
-        <label class="filter-label" data-i18n="filter.sort">Sort</label>
-        <div class="filter-pill-group filter-control" id="rentSortTabs">
-          <button class="filter-pill sort-tab active" data-rsort="score_total"     data-i18n="sort.score">Score</button>
-          <button class="filter-pill sort-tab"        data-rsort="comps_delta_pct" data-i18n="sort.discount">Discount</button>
-          <button class="filter-pill sort-tab"        data-rsort="first_seen_date" data-i18n="sort.newest">Newest</button>
-          <button class="filter-pill sort-tab"        data-rsort="rent_mo"         data-i18n="sort.rent_asc">Rent ↑</button>
-        </div>
+      <div class="fb-panel-foot">
+        <!-- Save the current filters as a daily email alert (local dashboard). -->
+        <button id="save-digest-btn" class="btn-save-digest" type="button" onclick="saveDigestFilters()"
+                style="display:none" title="Save current filters as your daily email alert"
+                data-i18n="filter.save_alert">Save alert</button>
+        <button class="btn-clear-filters" id="rBtnReset" data-i18n="filter.clear_filters">Clear filters</button>
       </div>
     </div>
 
-    <!-- Row 3 — meta / utilities ───────────────────────────────── -->
-    <div class="filter-row filter-row-bottom">
-      <div class="filter-group">
-        <label class="filter-label">Find by ID</label>
-        <input type="search" id="rIdSearch"
-               class="filter-control filter-id-search"
-               placeholder="Lume ID" autocomplete="off">
-      </div>
-      <div class="filter-group">
-        <label class="filter-label" data-i18n="filter.listed">Listed</label>
-        <select id="rListed" class="filter-control">
-          <option value="" data-i18n="filter.any">Any</option>
-          <option value="today">Today</option>
-          <option value="7">Last 7 days</option>
-          <option value="14">Last 14 days</option>
-          <option value="30">Last 30 days</option>
-        </select>
-      </div>
-      <div class="filter-group">
-        <label class="filter-label" data-i18n="filter.gems">Gems</label>
-        <div class="filter-pill-group filter-control" id="rGemFilter">
-          <button class="filter-pill gem-tab active" data-gem=""       data-i18n="filter.all">All</button>
-          <button class="filter-pill gem-tab"        data-gem="hidden" data-i18n="filter.hidden">✦ Hidden</button>
-          <button class="filter-pill gem-tab"        data-gem="good"   data-i18n="filter.great_value">Great Value</button>
-        </div>
-      </div>
-      <div class="filter-group" id="rShowStaleGroup" hidden>
-        <label class="filter-label" data-i18n="filter.show_expired">Show expired</label>
-        <label class="filter-control filter-toggle" for="rShowStale"
-               title="Show listings not seen by the scanner in 7+ days">
-          <input type="checkbox" id="rShowStale" class="filter-toggle-input">
-          <span class="filter-toggle-dot"></span>
-          <span class="filter-toggle-label" data-i18n="filter.show_expired">Show expired</span>
-        </label>
-      </div>
-      <!-- Spacer pushes Save-alert + Clear-filters to the right edge. -->
-      <span class="filter-spacer"></span>
-      <!-- Save the current filter state as a daily email alert. Hidden until
-           the user signs in via Clerk (toggled by Auth._onLogin/_onLogout). -->
-      <button id="save-digest-btn"
-              class="btn-save-digest"
-              type="button"
-              onclick="saveDigestFilters()"
-              style="display:none"
-              title="Save current filters as your daily email alert"
-              data-i18n="filter.save_alert">🔔 Save alert</button>
-      <button class="btn-clear-filters" id="rBtnReset"
-              data-i18n="filter.clear_filters">Clear filters</button>
-    </div>
-
+    <div class="fchips" id="rActiveChips" aria-live="polite"></div>
   </div>
 
   <!-- Rentals stats bar -->
@@ -608,13 +649,13 @@
     <span><span data-i18n="stats.showing">Showing</span> <strong id="rShowCount">–</strong> <span data-i18n="stats.rentals">rentals</span></span>
     <span><span data-i18n="stats.avg_score">Avg score</span> <strong id="rAvgScore">–</strong> / 100</span>
     <span><span data-i18n="stats.avg_rent">Avg rent</span> <strong id="rAvgRent">–</strong> /mo</span>
-    <span id="rNewStat" style="display:none">🆕 <strong id="rNewCount">–</strong> <span data-i18n="stats.new_3d">new in the last 3 days</span></span>
+    <span id="rNewStat" style="display:none"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#sparkles"></use></svg> <strong id="rNewCount">–</strong> <span data-i18n="stats.new_3d">new in the last 3 days</span></span>
     <span data-i18n-title="stats.zone_fallback_tip" title="Listings placed in an OMI zone by neighbourhood name, not by coordinates"><span data-i18n="stats.zone_fallback">Zone by name</span> <strong id="rFallbackCount">–</strong>
       <button class="btn-enrich-geo" id="btnApplyOmi" title="Apply polygon OMI zones to all listings (fast, no network needed)" style="margin-left:6px">Apply OMI</button>
-      <span id="applyOmiStatus" style="font-size:10px;color:var(--muted);margin-left:4px"></span>
+      <span id="applyOmiStatus" style="font-size: 11px;color:var(--text-secondary);margin-left:4px"></span>
     </span>
-    <span class="geo-coverage" id="geoCoverage">🌍 Geo: <strong id="geoCoverageCount">–</strong>
-      <button class="btn-enrich-geo" id="btnDownloadPois" title="Download all Milan POIs once — enables fast offline enrichment (no Overpass calls per listing)">📡 POI data</button>
+    <span class="geo-coverage" id="geoCoverage"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#world"></use></svg> Geo: <strong id="geoCoverageCount">–</strong>
+      <button class="btn-enrich-geo" id="btnDownloadPois" title="Download all Milan POIs once — enables fast offline enrichment (no Overpass calls per listing)">POI data</button>
       <!-- Multi-city Enrich workflow now lives in Settings → Data Enrichment.
            Old single-city button stays in the DOM but hidden — the
            updateScannerStatus poll still reads its element refs so we
@@ -625,7 +666,7 @@
               title="Open the multi-city Enrichment panel in Settings"
               onclick="switchTab('settings'); setTimeout(() =&gt; { const el = document.getElementById('enrichmentPanel'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);">Enrich →</button>
       <div class="geo-progress-bar" id="geoProgressBar" hidden style="display:none"><div class="geo-progress-fill" id="geoProgressFill" style="width:0%"></div></div>
-      <span id="geoEnrichStatus" style="font-size:10px;color:var(--muted)"></span>
+      <span id="geoEnrichStatus" style="font-size: 11px;color:var(--text-secondary)"></span>
     </span>
   </div>
 
@@ -646,8 +687,8 @@
 ═══════════════════════════════════════════════════════════════ -->
 <div id="mapView" hidden>
   <!-- ── Map toolbar: type toggle + count ── -->
-  <div style="background:var(--surface);border-bottom:1px solid var(--border);padding:8px 24px;display:flex;gap:12px;align-items:center;font-size:12px;color:var(--muted)">
-    <strong style="color:var(--text)">Map</strong>
+  <div style="background:var(--bg-card);border-bottom:1px solid var(--border-light);padding:8px 24px;display:flex;gap:12px;align-items:center;font-size:12px;color:var(--text-secondary)">
+    <strong style="color:var(--text-primary)">Map</strong>
     <span id="mapListingCount">–</span> listings shown
     <span style="margin-left:auto;display:flex;gap:6px;align-items:center">
       <button class="mobile-filter-btn" id="mapFilterBtn" aria-label="Filter map" title="Filters">
@@ -723,7 +764,7 @@
     <div class="filter-sep"></div>
     <div class="filter-group">
       <label style="display:flex;align-items:center;gap:5px;cursor:pointer;user-select:none">
-        <input type="checkbox" id="mRentElevator" style="accent-color:var(--accent);cursor:pointer">
+        <input type="checkbox" id="mRentElevator" style="accent-color:var(--green-deep);cursor:pointer">
         Elevator
       </label>
     </div>
@@ -758,7 +799,7 @@
   </div>
 
   <div id="mapContainer"></div>
-  <div id="mapCapNotice" style="display:none;text-align:center;padding:6px 12px;font-size:11px;color:#6B7280;background:rgba(255,255,255,0.9);border-top:1px solid #e5e7eb">
+  <div id="mapCapNotice" style="display:none;text-align:center;padding:6px 12px;font-size:11px;color:#6B7280;background:rgba(255,255,255,0.9);border-top:1px solid var(--bg-pill)">
     Showing top 400 listings in view — zoom in to see more.
   </div>
 </div>
@@ -770,7 +811,7 @@
   <div style="max-width:900px;margin:0 auto;padding:24px 20px">
 
     <div style="display:flex;gap:8px;margin-bottom:20px;align-items:center">
-      <strong style="font-size:15px">📊 Insights</strong>
+      <strong style="font-size: 14px"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#chart-bar"></use></svg> Insights</strong>
     </div>
 
     <!-- Market Overview -->
@@ -792,7 +833,7 @@
       <div style="margin-top:12px">
         <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
           <input type="text" id="insightsAgencySearch" placeholder="Search agency…"
-            style="flex:1;min-width:160px;max-width:220px;padding:5px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface);color:var(--text)">
+            style="flex:1;min-width:160px;max-width:220px;padding:5px 10px;border:1px solid var(--border-light);border-radius:6px;font-size:13px;background:var(--bg-card);color:var(--text-primary)">
         </div>
         <div style="overflow-x:auto">
           <table class="area-table">
@@ -862,7 +903,7 @@
   <div class="settings-card scanner-card" id="scannerCard" hidden>
     <div class="settings-card-header">
       <div>
-        <h2 class="settings-card-title">🔍 Scanner</h2>
+        <h2 class="settings-card-title"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#search"></use></svg> Scanner</h2>
         <p class="settings-card-subtitle">
           Configure which cities Lume scans and how aggressively.
           Multi-city: tick more than one box to scan them sequentially.
@@ -902,7 +943,7 @@
     <div class="scan-last-run">
       <span class="scanner-meta" id="scannerLastRun"></span>
       <span class="scanner-new-badge" id="scannerNewBadge"></span>
-      <button id="scannerSkippedWarn" style="display:none;border:none;background:rgba(217,119,6,0.12);color:#92400E;border-radius:6px;padding:2px 10px;font-size:11px;font-weight:600;cursor:pointer;margin-left:4px" title="Some areas were skipped on the last scan"></button>
+      <button id="scannerSkippedWarn" style="display:none;border:none;background:rgba(217,119,6,0.12);color:var(--amber-ink);border-radius:6px;padding:2px 10px;font-size:11px;font-weight:600;cursor:pointer;margin-left:4px" title="Some areas were skipped on the last scan"></button>
     </div>
 
     <!-- Skipped-areas drill-down — populated by updateScannerStatus().
@@ -929,7 +970,7 @@
     <!-- Idealista status (hidden by default; surfaces when the
          Idealista API is configured) -->
     <div id="idealistaStatusRow" style="display:none;margin-top:12px;
-         display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)">
+         display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-secondary)">
       <div class="status-dot status-idle" id="idealistaDot"></div>
       <span class="status-label" id="idealistaLabel">Idealista — Lume idle</span>
       <span class="scanner-meta" id="idealistaLastRun"></span>
@@ -938,9 +979,9 @@
 
     <!-- Cache row (deletes enrichment cache so the next scan re-enriches) -->
     <div id="cacheRow" style="margin-top:12px;display:flex;align-items:center;gap:10px;
-         font-size:12px;color:var(--muted)">
+         font-size:12px;color:var(--text-secondary)">
       <div class="cache-indicator">
-        📦 Cache: <span class="cache-count" id="cacheCount">–</span>
+        Cache: <span class="cache-count" id="cacheCount">–</span>
         <span id="cacheNewest"></span>
       </div>
       <button class="btn-scan-secondary" id="btnCacheClear"
@@ -976,7 +1017,7 @@
   <div class="settings-card" id="scanAreasCard" hidden>
     <div class="settings-card-header">
       <div>
-        <h2 class="settings-card-title">📍 <span data-i18n="settings.scan_areas">Scan Areas</span></h2>
+        <h2 class="settings-card-title"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#map-pin"></use></svg> <span data-i18n="settings.scan_areas">Scan Areas</span></h2>
         <p class="settings-card-subtitle" data-i18n="settings.scan_areas_sub">
           Choose which areas of each city Lume scans. Each area = one search
           request to Immobiliare and Idealista. Saved per city in
@@ -999,7 +1040,7 @@
       to <code>area_slug_mapping.json</code> for finer control.
     </div>
 
-    <div id="settingsLoading" style="color:var(--muted);font-size:13px;margin-top:14px">
+    <div id="settingsLoading" style="color:var(--text-secondary);font-size:13px;margin-top:14px">
       <span data-i18n="settings.loading_areas">Loading areas…</span>
     </div>
 
@@ -1017,7 +1058,7 @@
     </div>
 
     <div style="display:flex;align-items:center;gap:12px;margin-top:18px">
-      <button class="btn-scan-start" id="btnSettingsSave">💾 <span data-i18n="settings.save_areas">Save areas</span></button>
+      <button class="btn-scan-start" id="btnSettingsSave"><span data-i18n="settings.save_areas">Save areas</span></button>
       <span class="settings-status" id="settingsStatus"></span>
     </div>
   </div>
@@ -1038,7 +1079,7 @@
   <div id="enrichmentPanel" class="settings-card" style="margin-bottom:16px" hidden>
     <div class="settings-card-header">
       <div>
-        <h2 class="settings-card-title">📍 Data Enrichment</h2>
+        <h2 class="settings-card-title"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#world"></use></svg> Data Enrichment</h2>
         <p class="settings-card-subtitle">
           Fill in missing geo data (metro distance, walk score, POIs, OMI zones)
           for every city's listings. One click queues every city × rentals + sales.
@@ -1061,7 +1102,7 @@
   <div class="settings-card">
     <div class="settings-card-header">
       <div>
-        <h2 class="settings-card-title">⚖️ Scoring Parameters</h2>
+        <h2 class="settings-card-title"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#adjustments-horizontal"></use></svg> Scoring Parameters</h2>
         <p class="settings-card-subtitle">
           Tune the composite score formula. Changes save to <code>scoring_settings.json</code> and
           apply on the next scan. Weights must sum to 1.0. <strong>Rescore now</strong> re-runs
@@ -1073,8 +1114,8 @@
       <!-- populated by JS -->
     </div>
     <div style="display:flex;align-items:center;gap:12px;margin-top:16px">
-      <button class="settings-save-btn" id="btnScoreSettingsSave">💾 Save scoring settings</button>
-      <button class="settings-save-btn" id="btnRescore" style="background:var(--accent-light);color:var(--accent)">⚡ Rescore now</button>
+      <button class="settings-save-btn" id="btnScoreSettingsSave">Save scoring settings</button>
+      <button class="settings-save-btn" id="btnRescore" style="background:var(--green-light);color:var(--green-deep)"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#refresh"></use></svg> Rescore now</button>
       <span class="settings-status" id="scoreSettingsStatus"></span>
     </div>
   </div>
@@ -1083,7 +1124,7 @@
   <div class="settings-card">
     <div class="settings-card-header">
       <div>
-        <h2 class="settings-card-title">🏷️ Badge Thresholds</h2>
+        <h2 class="settings-card-title"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#star"></use></svg> Badge Thresholds</h2>
         <p class="settings-card-subtitle">
           Rental badges: a discount that's large relative to its uncertainty, a solid
           benchmark (nearest comparable flats), and minimum sub-scores — all at once.
@@ -1094,16 +1135,16 @@
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:8px" id="gemThresholdWrap">
       <div>
-        <div style="font-size:12px;font-weight:700;color:#2A7A5A;margin-bottom:8px">✦ Hidden Gem</div>
+        <div style="font-size:12px;font-weight:700;color:var(--green-deep);margin-bottom:8px">✦ Hidden Gem</div>
         <div class="score-settings-grid" id="gemSettingsGrid"></div>
       </div>
       <div>
-        <div style="font-size:12px;font-weight:700;color:#0E7490;margin-bottom:8px">💰 Good Value</div>
+        <div style="font-size:12px;font-weight:700;color:var(--blue-ink);margin-bottom:8px">Good Value</div>
         <div class="score-settings-grid" id="gvSettingsGrid"></div>
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:12px;margin-top:16px">
-      <button class="settings-save-btn" id="btnGemSettingsSave">💾 Save &amp; Rescore</button>
+      <button class="settings-save-btn" id="btnGemSettingsSave">Save &amp; Rescore</button>
       <span class="settings-status" id="gemSettingsStatus"></span>
     </div>
   </div>
@@ -1112,7 +1153,7 @@
   <div class="settings-card">
     <div class="settings-card-header">
       <div>
-        <h2 class="settings-card-title">🩺 Data Quality</h2>
+        <h2 class="settings-card-title"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#list-details"></use></svg> Data Quality</h2>
         <p class="settings-card-subtitle">
           Field completeness audit — see how many listings are missing key
           enrichment fields (metro, POI, address, OMI zone) so you know
@@ -1132,12 +1173,12 @@
   </div>
 
   <!-- empty state -->
-  <div id="dqEmpty" style="display:none;color:var(--muted);font-size:13px;padding:20px 0">
+  <div id="dqEmpty" style="display:none;color:var(--text-secondary);font-size:13px;padding:20px 0">
     No listings loaded — run a scan first.
   </div>
 
   <!-- error state -->
-  <div id="dqError" style="display:none;color:#dc2626;font-size:13px;padding:8px 0"></div>
+  <div id="dqError" style="display:none;color:var(--coral-ink);font-size:13px;padding:8px 0"></div>
 
   <!-- main content -->
   <div id="dqContent" style="display:none">
@@ -1148,7 +1189,7 @@
     <!-- 3b: field coverage heatmap -->
     <div style="margin-bottom:22px">
       <div style="font-size:12px;font-weight:600;margin-bottom:10px">Field Coverage Heatmap
-        <span style="font-size:11px;font-weight:400;color:var(--muted);margin-left:6px">click a cell to filter the table below</span>
+        <span style="font-size:11px;font-weight:400;color:var(--text-secondary);margin-left:6px">click a cell to filter the table below</span>
       </div>
       <div id="dqHeatmap"></div>
     </div>
@@ -1200,7 +1241,7 @@
         <tbody id="dqTblBody"></tbody>
       </table>
     </div>
-    <div id="dqTblCount" style="font-size:11px;color:var(--muted);margin-top:6px"></div>
+    <div id="dqTblCount" style="font-size:11px;color:var(--text-secondary);margin-top:6px"></div>
   </div>
   </div><!-- /.settings-card Data Quality -->
 
@@ -1208,7 +1249,7 @@
   <div class="settings-card">
     <div class="settings-card-header">
       <div>
-        <h2 class="settings-card-title">🔐 Access</h2>
+        <h2 class="settings-card-title"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#lock"></use></svg> Access</h2>
         <p class="settings-card-subtitle">Invite a friend to Lume.</p>
       </div>
     </div>
@@ -1228,6 +1269,13 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" integrity="sha384-eXVCORTRlv4FUUgS/xmOyr66XBVraen8ATNLMESp92FKXLAMiKkerixTiBvXriZr" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js" integrity="sha384-e6cc9LaIG7xZ3XD5B+jtr1NhTWPQGQdRCh6xiZ+ZFUtWCpg4ycv3Sh+SkZoopvUY" crossorigin="anonymous"></script>
+<!-- Listing Details view (assets/details.js) -->
+<div class="lm-backdrop" id="listingModal" hidden>
+  <div class="lm" role="dialog" aria-modal="true" aria-labelledby="lmTitle">
+    <div id="lmBody"></div>
+  </div>
+</div>
+
 <!-- Feature files hold declarations only; init.js (last) wires events and
      starts the app, so the order of the files before it doesn't matter. -->
 <script src="assets/i18n.js"></script>
@@ -1242,6 +1290,8 @@
 <script src="assets/map.js"></script>
 <script src="assets/insights.js"></script>
 <script src="assets/settings.js"></script>
+<script src="assets/filters.js"></script>
+<script src="assets/details.js"></script>
 <script src="assets/init.js"></script>
 
 <!-- ════════════════════════════════════════════════════════════════
@@ -1255,7 +1305,7 @@
 <div id="saveAlertBackdrop" class="save-alert-backdrop" hidden onclick="closeSaveAlertModal(event)">
   <div class="save-alert-modal" onclick="event.stopPropagation()" role="dialog" aria-labelledby="saveAlertTitle" aria-modal="true">
     <div class="save-alert-header">
-      <h2 id="saveAlertTitle" data-i18n="alert_modal.title">🔔 Daily email alert</h2>
+      <h2 id="saveAlertTitle" data-i18n="alert_modal.title">Daily email alert</h2>
       <button type="button" class="save-alert-close" onclick="closeSaveAlertModal()" aria-label="Close" data-i18n-title="alert_modal.close">×</button>
     </div>
     <p class="save-alert-subtitle" data-i18n="alert_modal.subtitle">
@@ -1389,7 +1439,7 @@
       <!-- ── Buttons ── -->
       <div class="save-alert-footer">
         <button type="button" class="save-alert-btn save-alert-btn-secondary" onclick="closeSaveAlertModal()" data-i18n="alert_modal.cancel">Cancel</button>
-        <button type="submit" class="save-alert-btn save-alert-btn-primary" id="amSubmitBtn" data-i18n="alert_modal.save">💾 Save alert</button>
+        <button type="submit" class="save-alert-btn save-alert-btn-primary" id="amSubmitBtn" data-i18n="alert_modal.save">Save alert</button>
       </div>
       <div class="save-alert-error" id="amError" hidden></div>
     </form>

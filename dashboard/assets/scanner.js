@@ -38,7 +38,7 @@ async function updateScannerStatus() {
     if (scanning)        label = t('scan.scanning');
     else if (anyRunning) label = t('scan.daily_on');
     lbl.textContent   = label;
-    lbl.style.color   = anyRunning ? 'var(--green)' : 'var(--muted)';
+    lbl.style.color   = anyRunning ? 'var(--green-mid)' : 'var(--text-secondary)';
 
     document.getElementById('btnStartScanner').disabled = anyRunning;
     document.getElementById('btnStopScanner').disabled  = !anyRunning;
@@ -57,7 +57,7 @@ async function updateScannerStatus() {
           if (bar) {
             const flash = document.createElement('span');
             flash.textContent = '↻ Updated';
-            flash.style.cssText = 'color:var(--green);font-weight:700;transition:opacity 1.5s';
+            flash.style.cssText = 'color:var(--green-mid);font-weight:700;transition:opacity 1.5s';
             bar.appendChild(flash);
             setTimeout(() => { flash.style.opacity = '0'; }, 1500);
             setTimeout(() => { flash.remove(); }, 3000);
@@ -79,7 +79,7 @@ async function updateScannerStatus() {
         iDot.classList.toggle('running', !!st.idealista.running);
         iLbl.textContent  = st.idealista.scanning ? t('scan.idealista_scanning')
                           : st.idealista.running ? t('scan.idealista_on') : t('scan.idealista_stopped');
-        iLbl.style.color  = st.idealista.running ? 'var(--green)' : 'var(--muted)';
+        iLbl.style.color  = st.idealista.running ? 'var(--green-mid)' : 'var(--text-secondary)';
         if (st.idealista.last_run)
           iMeta.textContent = 'Last: ' + st.idealista.last_run.replace('T', ' ');
         if (st.idealista.new_count > 0)
@@ -334,7 +334,7 @@ async function _promptArchiveListing(lid, listingType, anchorEl) {
     } catch (err) {
       banner.classList.add('is-error');
       const lbl = (typeof t === 'function' && t('card.archive_failed')) || 'Could not archive listing';
-      banner.innerHTML = `<div class="archive-banner-text" style="color:var(--coral,#ef4444)">✗ ${escapeHtml(lbl)}: ${escapeHtml(err.message)}</div>`;
+      banner.innerHTML = `<div class="archive-banner-text" style="color:var(--coral,var(--coral))">✗ ${escapeHtml(lbl)}: ${escapeHtml(err.message)}</div>`;
       setTimeout(() => banner.remove(), 4500);
     }
   });
@@ -445,7 +445,7 @@ function _renderEnrichmentPanel(st) {
       const done    = Object.values(jobs).filter(j => j && j.state === 'done').length;
       const total   = _ENRICH_CITY_ORDER.length * _ENRICH_KINDS.length;
       queueLabel.textContent = `Queue: ${done}/${total} jobs done`;
-      queueLabel.style.color = 'var(--accent)';
+      queueLabel.style.color = 'var(--green-deep)';
     } else {
       queueLabel.textContent = '';
     }

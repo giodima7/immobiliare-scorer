@@ -18,10 +18,10 @@ function _destroyChart(id) {
 
 function _metricCard(label, value, accent) {
   const border = accent ? `border-left:3px solid ${accent};padding-left:13px` : '';
-  const valColor = accent ? `color:${accent}` : 'color:var(--text)';
-  return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;${border}">
-    <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">${label}</div>
-    <div style="font-size:22px;font-weight:800;margin-top:4px;${valColor}">${value}</div>
+  const valColor = accent ? `color:${accent}` : 'color:var(--text-primary)';
+  return `<div style="background:var(--bg-card);border:1px solid var(--border-light);border-radius:10px;padding:14px 16px;${border}">
+    <div style="font-size:11px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">${label}</div>
+    <div style="font-size: 24px;font-weight:800;margin-top:4px;${valColor}">${value}</div>
   </div>`;
 }
 
@@ -124,10 +124,10 @@ function _scoreColor(s) {
   return s >= 70 ? 'color:#16a34a;font-weight:600' : s >= 50 ? 'color:#d97706;font-weight:600' : 'color:#dc2626;font-weight:600';
 }
 function _agencyTypeBadge(type) {
-  if (!type || type === '–') return '<span style="color:var(--muted)">–</span>';
+  if (!type || type === '–') return '<span style="color:var(--text-secondary)">–</span>';
   const t = type.toLowerCase();
   const s = t.includes('agenc') ? 'background:#DBEAFE;color:#1E40AF' : t.includes('privat') ? 'background:#D1FAE5;color:#065F46' : 'background:#F3F4F6;color:#6B7280';
-  return `<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;${s}">${type}</span>`;
+  return `<span style="font-size: 11px;font-weight:600;padding:2px 7px;border-radius:10px;${s}">${type}</span>`;
 }
 function _updateSortIndicators(headerId, sortKey, sortAsc, colKeys) {
   const tr = document.getElementById(headerId);
@@ -167,8 +167,8 @@ function _renderZoneTable() {
     return _zoneSortAsc ? av - bv : bv - av;
   });
   const rows = data.map(z => {
-    const gemStyle  = z.gems > 0 ? 'color:#7C3AED;font-weight:700' : 'color:var(--muted)';
-    const goodStyle = z.good > 0 ? 'color:#2563EB;font-weight:700' : 'color:var(--muted)';
+    const gemStyle  = z.gems > 0 ? 'color:#7C3AED;font-weight:700' : 'color:var(--text-secondary)';
+    const goodStyle = z.good > 0 ? 'color:#2563EB;font-weight:700' : 'color:var(--text-secondary)';
     return `<tr>
       <td>${z.name === '_unknown' ? '–' : z.name}</td>
       <td>${fmt(z.count)}</td>
@@ -179,7 +179,7 @@ function _renderZoneTable() {
     </tr>`;
   });
   const tbody = document.getElementById('insightsZoneBody');
-  if (tbody) tbody.innerHTML = rows.join('') || '<tr><td colspan="6" style="color:var(--muted);text-align:center;padding:16px">No zone data yet</td></tr>';
+  if (tbody) tbody.innerHTML = rows.join('') || '<tr><td colspan="6" style="color:var(--text-secondary);text-align:center;padding:16px">No zone data yet</td></tr>';
 }
 
 function _sortZone(key) {
@@ -220,7 +220,7 @@ function _renderAgencyTable() {
   const tbody = document.getElementById('insightsAgencyBody');
   if (!tbody) return;
   if (_insightsAgencyMissingData) {
-    tbody.innerHTML = `<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px;line-height:1.6">
+    tbody.innerHTML = `<tr><td colspan="5" style="color:var(--text-secondary);text-align:center;padding:20px;line-height:1.6">
       Agency data not yet available.<br>
       <span style="font-size:11px">It will populate automatically after the next scan.</span>
     </td></tr>`;
@@ -244,7 +244,7 @@ function _renderAgencyTable() {
     const name = a.name || a.id || '–';
     const safe = String(name).replace(/'/g, "\\'");
     const ext  = a.url
-      ? ` <a href="${a.url}" target="_blank" rel="noopener" title="Open agency on ${insightsMode === 'sales' ? 'sales' : 'rentals'} source site" style="color:var(--muted);text-decoration:none;margin-left:6px">↗</a>`
+      ? ` <a href="${a.url}" target="_blank" rel="noopener" title="Open agency on ${insightsMode === 'sales' ? 'sales' : 'rentals'} source site" style="color:var(--text-secondary);text-decoration:none;margin-left:6px">↗</a>`
       : '';
     return `<tr>
       <td>
@@ -256,7 +256,7 @@ function _renderAgencyTable() {
       <td>${a.avg_price != null ? '€' + fmt(a.avg_price) : '–'}</td>
     </tr>`;
   });
-  tbody.innerHTML = rows.join('') || '<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:16px">No agencies with 2+ listings</td></tr>';
+  tbody.innerHTML = rows.join('') || '<tr><td colspan="5" style="color:var(--text-secondary);text-align:center;padding:16px">No agencies with 2+ listings</td></tr>';
 }
 
 // Agency-pin: clicking an agency name in the Stats leaderboard switches

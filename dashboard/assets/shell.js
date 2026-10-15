@@ -214,8 +214,8 @@ function _gtPosition(point = null) {
 function _scoreBreakdownHtml(bdWrap) {
   const d = bdWrap.dataset;
   const _fmtSub = (v, w) => v !== '' && v != null
-    ? `<span style="font-weight:700">${v}</span> <span style="color:var(--muted);font-size:10px">×${w} = ${Math.round(Number(v)*w)}</span>`
-    : `<span style="color:var(--muted)">– (neutral 50×${w} = ${Math.round(50*w)})</span>`;
+    ? `<span style="font-weight:700">${v}</span> <span style="color:var(--text-secondary);font-size: 11px">×${w} = ${Math.round(Number(v)*w)}</span>`
+    : `<span style="color:var(--text-secondary)">– (neutral 50×${w} = ${Math.round(50*w)})</span>`;
   const wP  = Number(d.wPrice || 0.45);
   const wPr = Number(d.wProp  || 0.25);
   const wL  = Number(d.wLoc   || 0.20);
@@ -226,7 +226,7 @@ function _scoreBreakdownHtml(bdWrap) {
     <div class="sb-row"><span class="sb-label">Property quality (×${wPr})</span>${_fmtSub(d.scProp,wPr)}</div>
     <div class="sb-row"><span class="sb-label">Location / geo (×${wL})</span>${_fmtSub(d.scLoc,wL)}</div>
     <div class="sb-row"><span class="sb-label">Penalty score (×${wPn})</span>${_fmtSub(d.scPen,wPn)}</div>
-    ${d.scCap ? `<div class="gt-sep"></div><div style="font-size:10px;color:var(--coral)">${escapeHtml(t('card.cap', { reason: d.scCap }))}</div>` : ''}
+    ${d.scCap ? `<div class="gt-sep"></div><div style="font-size: 11px;color:var(--coral)">${escapeHtml(t('card.cap', { reason: d.scCap }))}</div>` : ''}
     <div class="gt-sep"></div>
     <div class="sb-row"><span class="sb-label" style="font-weight:700">Total</span><span style="font-weight:800;font-size:14px">${d.scTotal ?? '–'} / 100</span></div>`;
 }
@@ -278,16 +278,6 @@ function _floorLabel(l) {
   // Legacy: old data had R→-1 incorrectly; detect via raw floor field
   if (fn === 1 && l.floor === 'R') return 'Piano rialzato';
   return `${fn}° piano`;
-}
-
-function conditionEmoji(cond) {
-  if (!cond) return '';
-  const c = cond.toLowerCase();
-  if (c.includes('da ') && c.includes('ristruttur')) return '🔨';
-  if (c.includes('ottim') || c.includes('ristruttur') || c.includes('eccellent')) return '🌟';
-  if (c.includes('nuovo') || c.includes('nuova') || c.includes('costruz')) return '✨';
-  if (c.includes('buon') || c.includes('abitabil')) return '✅';
-  return '🏠';
 }
 
 function avg(arr, key) {
@@ -435,6 +425,7 @@ async function init() {
       IS_LIVE = false;
     }
   }
+  _liveKnown = true;   // loadRentals() may run now (see rentals.js)
   if (!IS_LIVE) {
     applyStaticMode();
   } else {
@@ -575,4 +566,36 @@ function restoreActiveTab() {
       switchTab(saved, { persist: false });
     }
   } catch (_) { /* localStorage unavailable — fall back to default rentals tab */ }
+}
+
+// ── Theme ─────────────────────────────────────────────────────────────────────
+// System (default) → light → dark. The choice sits on <html data-theme> and
+// in localStorage (read before first paint by the inline script in index.html).
+const _THEMES = ['system', 'light', 'dark'];
+
+function currentTheme() {
+  return document.documentElement.dataset.theme || 'system';
+}
+
+function setTheme(mode) {
+  if (mode === 'system') delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = mode;
+  try {
+    if (mode === 'system') localStorage.removeItem('lume_theme');
+    else localStorage.setItem('lume_theme', mode);
+  } catch (_) {}
+  renderThemeToggle();
+}
+
+function cycleTheme() {
+  setTheme(_THEMES[(_THEMES.indexOf(currentTheme()) + 1) % _THEMES.length]);
+}
+
+function renderThemeToggle() {
+  const btn = document.getElementById('themeToggle');
+  if (!btn) return;
+  const mode = currentTheme();
+  btn.innerHTML = icon({ system: 'device-desktop', light: 'sun', dark: 'moon' }[mode]);
+  btn.title = t('theme.' + mode);
+  btn.setAttribute('aria-label', t('theme.' + mode));
 }

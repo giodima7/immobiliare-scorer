@@ -473,11 +473,11 @@ function _dqBuildCards(s, targetId) {
       <div class="dq-card-label">Avg completeness</div>
     </div>
     <div class="dq-card">
-      <div class="dq-card-value" style="color:${re>0?'#dc2626':'#16a34a'}">${re}${re>0?' <span style="display:inline-block;width:9px;height:9px;background:#dc2626;border-radius:50%;vertical-align:middle;margin-left:2px"></span>':''}</div>
+      <div class="dq-card-value" style="color:${re>0?'var(--coral-ink)':'var(--green-ink)'}">${re}${re>0?' <span style="display:inline-block;width:9px;height:9px;background:var(--coral-ink);border-radius:50%;vertical-align:middle;margin-left:2px"></span>':''}</div>
       <div class="dq-card-label">Need re-enrichment</div>
     </div>
     <div class="dq-card">
-      <div class="dq-card-value" style="color:${cg>0?'#dc2626':'#16a34a'}">${cg}</div>
+      <div class="dq-card-value" style="color:${cg>0?'var(--coral-ink)':'var(--green-ink)'}">${cg}</div>
       <div class="dq-card-label">Critical fields &lt; 80%</div>
     </div>
     <div class="dq-card" style="flex:2">
@@ -534,7 +534,7 @@ function _dqRenderDonut(breakdown) {
   if (typeof Chart !== 'undefined' && total > 0) {
     _dqChart = new Chart(canvas, {
       type: 'doughnut',
-      data: { labels, datasets: [{ data: values, backgroundColor: colors, borderWidth: 1, borderColor: 'var(--surface)' }] },
+      data: { labels, datasets: [{ data: values, backgroundColor: colors, borderWidth: 1, borderColor: 'var(--bg-card)' }] },
       options: {
         responsive: false,
         cutout: '65%',
@@ -551,7 +551,7 @@ function _dqRenderDonut(breakdown) {
       return `<div style="display:flex;align-items:center;gap:7px">
         <div style="width:11px;height:11px;border-radius:2px;background:${c};flex-shrink:0"></div>
         <span>${lbl}</span>
-        <span style="color:var(--muted)">${cnt} (${total?Math.round(cnt/total*100):0}%)</span>
+        <span style="color:var(--text-secondary)">${cnt} (${total?Math.round(cnt/total*100):0}%)</span>
       </div>`;
     }).join('');
   }
@@ -597,7 +597,7 @@ function _dqRenderTable(rows) {
   data.sort(_dqSortComparator(_dqSortKey, _dqSortDir));
 
   if (!data.length) {
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:20px">Nothing matches yet. Loosen up a filter.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--text-secondary);padding:20px">Nothing matches yet. Loosen up a filter.</td></tr>`;
     if (count) count.textContent = '';
     return;
   }
@@ -615,8 +615,8 @@ function _dqRenderTable(rows) {
       <td>${r.source||'—'}</td>
       <td><span class="grade-badge-${r.grade}" style="padding:2px 9px;border-radius:10px;font-size:11px;font-weight:700">${r.grade}</span></td>
       <td>${r.completeness_pct}%</td>
-      <td>${critN>0?`<span class="dq-pill dq-pill-crit" onmouseenter="_gtShow(event,'${critTip}')" onmouseleave="_gtHide()">${critN}</span>`:'<span style="color:var(--muted)">—</span>'}</td>
-      <td>${impN>0?`<span class="dq-pill dq-pill-imp" onmouseenter="_gtShow(event,'${impTip}')" onmouseleave="_gtHide()">${impN}</span>`:'<span style="color:var(--muted)">—</span>'}</td>
+      <td>${critN>0?`<span class="dq-pill dq-pill-crit" onmouseenter="_gtShow(event,'${critTip}')" onmouseleave="_gtHide()">${critN}</span>`:'<span style="color:var(--text-secondary)">—</span>'}</td>
+      <td>${impN>0?`<span class="dq-pill dq-pill-imp" onmouseenter="_gtShow(event,'${impTip}')" onmouseleave="_gtHide()">${impN}</span>`:'<span style="color:var(--text-secondary)">—</span>'}</td>
       <td><span class="omi-tag ${omiCls}">${omiSrc}</span></td>
       <td><button class="dq-btn-sm" style="font-size:11px;padding:2px 8px" onclick="_dqClearSingle('${r.id}',this)">Re-enrich</button></td>
     </tr>`;

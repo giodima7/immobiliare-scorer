@@ -54,7 +54,7 @@ const SupabaseClient = {
   // heaviest (a third of each page) and only needed on demand. If the table
   // lacks one of these (e.g. before migration 014 ran) the first page comes
   // back 400 and fetchAll falls back to select=*.
-  _RENT_COLUMNS: 'absolute_value_gate_applied,address,agency_id,agency_name,agency_type,agency_url,air_conditioning,ask_psqm,ask_psqm_rent,availability,bathrooms,bedrooms,city,comps_adjusted,comps_conf_label,comps_delta_pct,comps_median,comps_n,comps_p40,comps_p60,comps_radius_m,comps_source,condition,condominium_fees,contract_type,days_on_market,days_since_seen,detail_fetched_at,elevator,energy_class,excluded,extreme_underpricing,extreme_underpricing_delta,first_seen_date,floor,floor_label,floor_n,furnished,geo_score,gone_checked,good_value,has_balcony,has_parking,heating_type,hidden_gem,id,is_corporate_rental,is_external,is_stale,last_seen_date,latitude,ldi_score,listing_type,longitude,metro_nearest_dist_m,metro_nearest_line,metro_nearest_name,metro_walk_min,neighbourhood,omi_descr,omi_fallback,omi_fascia,omi_loc_max,omi_loc_mid,omi_loc_min,omi_source,omi_zona,park_nearest_dist_m,photo_count,price,price_suspect,price_z,room_efficiency_flag,rooms,score_cap_reason,score_location,score_penalty,score_physical,score_price,score_property,score_reasons,score_total,score_was_capped,source,sqm,suggested_rent_mo,suggested_rent_psqm,supermarket_nearest_dist_m,thumbnail,title,tram_nearest_dist_m,twin_filled,university_nearest_dist_m,url,vs_omi_label,vs_omi_pct,year_built',
+  _RENT_COLUMNS: 'absolute_value_gate_applied,address,agency_id,agency_name,agency_type,agency_url,air_conditioning,ask_psqm,ask_psqm_rent,availability,bathrooms,bedrooms,city,comps_adjusted,comps_conf_label,comps_delta_pct,comps_median,comps_n,comps_p40,comps_p60,comps_radius_m,comps_source,condition,condominium_fees,contract_type,days_on_market,days_since_seen,detail_fetched_at,elevator,energy_class,excluded,extreme_underpricing,extreme_underpricing_delta,first_seen_date,floor,floor_label,floor_n,furnished,geo_score,gone_checked,good_value,has_balcony,has_parking,heating_type,hidden_gem,id,is_corporate_rental,is_external,is_stale,last_seen_date,latitude,ldi_score,listing_type,longitude,metro_nearest_dist_m,metro_nearest_line,metro_nearest_name,metro_walk_min,neighbourhood,omi_descr,omi_fallback,omi_fascia,omi_loc_max,omi_loc_mid,omi_loc_min,omi_source,omi_zona,park_nearest_dist_m,photo_count,previous_price,price,price_changed_date,price_suspect,price_z,relisted_from_date,relisted_from_id,relisted_from_rent,room_efficiency_flag,rooms,score_cap_reason,score_location,score_penalty,score_physical,score_price,score_property,score_reasons,score_total,score_was_capped,source,sqm,suggested_rent_mo,suggested_rent_psqm,supermarket_nearest_dist_m,thumbnail,title,tram_nearest_dist_m,twin_filled,university_nearest_dist_m,url,vs_omi_label,vs_omi_pct,year_built',
   lastLoadPartial: false,
 
   _headers() {
@@ -84,7 +84,7 @@ const SupabaseClient = {
         });
         if (resp.ok) return { ok: true, status: resp.status, rows: await resp.json() };
         console.warn(`[supabase] HTTP ${resp.status} at offset ${offset}`);
-        if (resp.status < 500) return { ok: false, status: resp.status, rows: [] };
+        if (resp.status < 500) return { ok: false, status: resp.status, rows: [], error: await resp.text().catch(() => '') };
       } catch (err) {
         console.warn(`[supabase] fetch error at offset ${offset}: ${err.message}`);
       }
@@ -124,8 +124,13 @@ const SupabaseClient = {
     this.lastLoadPartial = false;
 
     let first = await this._page(listingType, _city, order, 0, select);
-    if (!first.ok && first.status === 400 && select !== '*') {
-      select = '*';
+    // A column the table doesn't have yet (migration not run): drop just
+    // that one and retry; anything else → all columns.
+    for (let tries = 0; !first.ok && first.status === 400 && select !== '*' && tries < 8; tries++) {
+      const m = /column (?:\w+\.)?(\w+) does not exist/.exec(first.error || '');
+      select = m && select.split(',').includes(m[1])
+        ? select.split(',').filter(c => c !== m[1]).join(',')
+        : '*';
       first = await this._page(listingType, _city, order, 0, select);
     }
     if (!first.ok) return null;
@@ -520,6 +525,17 @@ function restoreFilters() {
   }
   setChk('rElevator',  r.elevator);
   setChk('rShowStale', r.showStale);
+  setVal('rCondition',   r.condition);
+  setVal('rMinDiscount', r.minDiscount);
+  setVal('rContract',    r.contract);
+  if (typeof rentMust !== 'undefined' && Array.isArray(r.must)) {
+    rentMust = new Set(r.must.filter(k => k !== 'lift'));
+  }
+  if (typeof rentIncludeUnknown !== 'undefined' && r.includeUnknown != null) {
+    rentIncludeUnknown = !!r.includeUnknown;
+    setChk('rIncludeUnknown', rentIncludeUnknown);
+    setChk('dIncludeUnknown', rentIncludeUnknown);
+  }
   setTab('#rSourceFilter .sort-tab', 'rsource', r.source);
   setTab('#rGemFilter .gem-tab',     'gem',     r.gemFilter);
   setTab('#rentSortTabs .sort-tab',  'rsort',   r.sortKey);
@@ -586,6 +602,11 @@ function saveFilters() {
       minScore:  get('rScore')?.value,
       elevator:  get('rElevator')?.checked,
       showStale: get('rShowStale')?.checked,
+      must:           typeof rentMust !== 'undefined' ? [...rentMust] : [],
+      includeUnknown: typeof rentIncludeUnknown !== 'undefined' ? rentIncludeUnknown : false,
+      condition:      get('rCondition')?.value || '',
+      minDiscount:    get('rMinDiscount')?.value || '',
+      contract:       get('rContract')?.value || '',
       source:    document.querySelector('#rSourceFilter .sort-tab.active')?.dataset.rsource || '',
       gemFilter: document.querySelector('#rGemFilter .gem-tab.active')?.dataset.gem || '',
       sortKey:   typeof rentSortKey !== 'undefined' ? rentSortKey : 'score_total',

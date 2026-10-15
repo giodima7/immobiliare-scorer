@@ -497,3 +497,9 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c =>
     ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
+
+// ── Icons ─────────────────────────────────────────────────────────────────────
+// Tabler outline icons from the assets/icons.svg sprite (tools/build_icons.py).
+function icon(name, cls = '') {
+  return `<svg class="i${cls ? ' ' + cls : ''}" aria-hidden="true"><use href="assets/icons.svg#${name}"></use></svg>`;
+}
