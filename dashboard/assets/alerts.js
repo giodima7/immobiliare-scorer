@@ -611,8 +611,10 @@ async function renderDigestSettingsSection() {
 
 function formatRelativeTime(iso) {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (diff < 60)    return 'just now';
-  if (diff < 3600)  return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
+  if (!Number.isFinite(diff)) return '';
+  const rtf = new Intl.RelativeTimeFormat(currentLang === 'it' ? 'it' : 'en', { numeric: 'auto' });
+  if (diff < 60)    return rtf.format(0, 'second');
+  if (diff < 3600)  return rtf.format(-Math.floor(diff / 60), 'minute');
+  if (diff < 86400) return rtf.format(-Math.floor(diff / 3600), 'hour');
+  return rtf.format(-Math.floor(diff / 86400), 'day');
 }

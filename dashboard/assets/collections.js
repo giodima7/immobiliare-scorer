@@ -123,122 +123,14 @@ async function shareListing(listingId, ev) {
   }
   try {
     await navigator.clipboard.writeText(url);
-    showToast(sourceLbl ? `${sourceLbl} link copied` : 'Link copied to clipboard');
+    showToast(t('toast.link_copied'));
   } catch {
-    prompt('Copy this link:', url);
+    prompt(t('toast.copy_link'), url);
   }
 }
 
-let _outsideClickHandler = null;
-function closeCollectionMenu() {
-  const m = document.getElementById('active-collection-menu');
-  if (m) m.remove();
-  if (_outsideClickHandler) {
-    document.removeEventListener('click', _outsideClickHandler, true);
-    _outsideClickHandler = null;
-  }
-}
-
-function openCollectionMenu(listingId, ev) {
-  if (ev) ev.stopPropagation();
-  // Sign-in required to save to a collection. Opens Clerk modal if guest.
-  if (typeof Auth !== 'undefined'
-      && !Auth.requireSignIn('Sign in to save listings to collections')) {
-    return;
-  }
-  closeCollectionMenu();
-
-  const collections = Collections.getAll();
-  const trigger = (ev && ev.currentTarget) || document.activeElement;
-  const rect = trigger.getBoundingClientRect();
-
-  const menu = document.createElement('div');
-  menu.className = 'collection-menu';
-  menu.id = 'active-collection-menu';
-
-  const items = [];
-  if (!collections.length) {
-    items.push(`<div class="collection-empty">No collections yet</div>`);
-  } else {
-    collections.forEach(col => {
-      const inCol = Collections.isInCollection(col.id, listingId);
-      items.push(`
-        <button class="collection-item${inCol ? ' checked' : ''}"
-                onclick="toggleListingInCollection('${col.id}', '${escapeHtml(String(listingId))}', this)">
-          <span class="collection-check">${inCol ? '✓' : ''}</span>
-          <span class="collection-name">${escapeHtml(col.name)}</span>
-          <span class="collection-count">${col.listing_ids.length}</span>
-        </button>`);
-    });
-  }
-  items.push(`
-    <button class="collection-item collection-create"
-            onclick="createCollectionFromMenu('${escapeHtml(String(listingId))}')">
-      <span class="collection-check">+</span>
-      <span class="collection-name">Create new collection</span>
-    </button>`);
-
-  menu.innerHTML = items.join('');
-  document.body.appendChild(menu);
-
-  // Position above or below the trigger depending on viewport space
-  const menuHeight = Math.min(collections.length * 44 + 60, 320);
-  const fitsBelow = (window.innerHeight - rect.bottom) > menuHeight + 10;
-  menu.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 268))}px`;
-  menu.style.top  = fitsBelow
-    ? `${rect.bottom + 6}px`
-    : `${rect.top - menuHeight - 6}px`;
-
-  _outsideClickHandler = (e) => {
-    if (!menu.contains(e.target)) closeCollectionMenu();
-  };
-  setTimeout(() => document.addEventListener('click', _outsideClickHandler, true), 0);
-}
-
-function toggleListingInCollection(collectionId, listingId, btnEl) {
-  const wasIn = Collections.isInCollection(collectionId, listingId);
-  if (wasIn) {
-    Collections.removeListing(collectionId, listingId);
-    btnEl.classList.remove('checked');
-    btnEl.querySelector('.collection-check').textContent = '';
-    showToast('Removed from collection');
-  } else {
-    const result = Collections.addListing(collectionId, listingId);
-    if (result === 'full') {
-      showToast('Collections are capped at 100 listings to keep share links short.');
-      return;
-    }
-    btnEl.classList.add('checked');
-    btnEl.querySelector('.collection-check').textContent = '✓';
-    showToast('Added to collection');
-  }
-  updateBookmarkIcon(listingId);
-  const newCount = Collections.getAll().find(c => c.id === collectionId)?.listing_ids.length || 0;
-  btnEl.querySelector('.collection-count').textContent = newCount;
-}
-
-function createCollectionFromMenu(listingId) {
-  const name = prompt('Collection name:', '');
-  if (!name || !name.trim()) return;
-  const col = Collections.create(name.trim());
-  Collections.addListing(col.id, listingId);
-  updateBookmarkIcon(listingId);
-  closeCollectionMenu();
-  showToast(`Created "${col.name}" and added listing`);
-}
-
-function updateBookmarkIcon(listingId) {
-  const isInAny = Collections.isInAnyCollection(listingId);
-  document.querySelectorAll(`.btn-bookmark[data-listing-id="${CSS.escape(String(listingId))}"]`)
-    .forEach(btn => btn.classList.toggle('active', isInAny));
-}
-
-function refreshAllBookmarkIcons() {
-  document.querySelectorAll('.btn-bookmark[data-listing-id]').forEach(btn => {
-    const id = btn.getAttribute('data-listing-id');
-    btn.classList.toggle('active', Collections.isInAnyCollection(id));
-  });
-}
+function updateBookmarkIcon() { /* bookmark buttons retired — Details shows collections inline */ }
+function refreshAllBookmarkIcons() {}
 
 // ── Avatar dropdown menu ──────────────────────────────────────────────────────
 let _avatarMenuOutside = null;
@@ -268,9 +160,9 @@ function showUserMenu(ev) {
   menu.className = 'avatar-menu';
   menu.id = 'active-avatar-menu';
   menu.innerHTML = `
-    <div class="avatar-menu-header">Signed in as <strong>${escapeHtml(userName)}</strong></div>
-    <button class="avatar-menu-item" onclick="closeAvatarMenu(); openCollectionsDrawer();">
-      ${icon('bookmark')} My collections <span class="badge">${collectionsCount}</span>
+    <div class="avatar-menu-header">${escapeHtml(t('menu.signed_in'))} <strong>${escapeHtml(userName)}</strong></div>
+    <button class="avatar-menu-item" onclick="closeAvatarMenu(); switchTab('saved');">
+      ${icon('heart')} ${escapeHtml(t('tab.saved'))} <span class="badge">${fmt(getRentFavs().length)} · ${fmt(collectionsCount)}</span>
     </button>
     <button class="avatar-menu-item" onclick="closeAvatarMenu(); openAlertsManager();">
       ${icon('bell')} ${escapeHtml(t('menu.my_alerts') || 'My alerts')}
@@ -370,145 +262,125 @@ async function _refreshDigestAlertBadge() {
   }
 }
 
-// ── Collections drawer ────────────────────────────────────────────────────────
-function openCollectionsDrawer() {
-  let backdrop = document.getElementById('collections-drawer-backdrop');
-  let drawer   = document.getElementById('collections-drawer');
-  if (!drawer) {
-    backdrop = document.createElement('div');
-    backdrop.id = 'collections-drawer-backdrop';
-    backdrop.className = 'collections-drawer-backdrop';
-    backdrop.onclick = closeCollectionsDrawer;
-    document.body.appendChild(backdrop);
+// ── Saved view: favourites + collections ──────────────────────────────────────
+// Favourites not in the loaded grid (archived since) are fetched by id.
+let _savedRows = [];
 
-    drawer = document.createElement('aside');
-    drawer.id = 'collections-drawer';
-    drawer.className = 'collections-drawer';
-    drawer.innerHTML = `
-      <div class="drawer-header">
-        <h2>My collections</h2>
-        <button class="drawer-close" onclick="closeCollectionsDrawer()" aria-label="Close">×</button>
-      </div>
-      <div class="drawer-body" id="collections-list"></div>
-      <div class="drawer-footer">
-        <button class="btn-create-collection" onclick="createCollectionFromDrawer()">
-          + Create new collection
-        </button>
-      </div>`;
-    document.body.appendChild(drawer);
+async function _savedListings(ids) {
+  const byId = new Map(ALL_RENT.map(x => [String(x.id), x]));
+  for (const r of _savedRows) if (!byId.has(String(r.id))) byId.set(String(r.id), r);
+  const missing = ids.filter(i => !byId.has(i));
+  if (missing.length) {
+    let rows = [];
+    try {
+      if (IS_LIVE) {
+        const r = await fetch(`/rentals/by-ids?ids=${encodeURIComponent(missing.join(','))}`);
+        if (r.ok) rows = await r.json();
+      } else if (SupabaseClient.configured) {
+        rows = await SupabaseClient.fetchByIds(missing, SupabaseClient._RENT_COLUMNS);
+      }
+    } catch { /* show what we have */ }
+    for (const r of rows) { _savedRows.push(r); byId.set(String(r.id), r); }
   }
-  renderCollectionsList();
-  requestAnimationFrame(() => {
-    backdrop.classList.add('open');
-    drawer.classList.add('open');
-  });
-  document.addEventListener('keydown', _drawerEscHandler);
+  return ids.map(i => byId.get(i)).filter(Boolean);
 }
 
-function closeCollectionsDrawer() {
-  const backdrop = document.getElementById('collections-drawer-backdrop');
-  const drawer   = document.getElementById('collections-drawer');
-  if (backdrop) backdrop.classList.remove('open');
-  if (drawer) drawer.classList.remove('open');
-  document.removeEventListener('keydown', _drawerEscHandler);
-  setTimeout(() => {
-    backdrop?.remove();
-    drawer?.remove();
-  }, 280);
+async function renderSaved() {
+  const grid = document.getElementById('savedGrid');
+  if (!grid) return;
+  const ids = getRentFavs().map(String);
+  const count = document.getElementById('savedFavCount');
+  if (count) count.textContent = ids.length ? t(ids.length === 1 ? 'saved.n_one' : 'saved.n', { n: fmt(ids.length) }) : '';
+  if (!ids.length) {
+    grid.innerHTML = `<div class="empty-block" style="grid-column:1/-1">${escapeHtml(t('saved.empty'))}</div>`;
+  } else {
+    if (!grid.children.length) grid.innerHTML = `<div class="empty-block" style="grid-column:1/-1">${escapeHtml(t('loading.listings'))}</div>`;
+    const rows = await _savedListings(ids);
+    grid.innerHTML = '';
+    const frag = document.createDocumentFragment();
+    rows.forEach(l => { const c = renderRentalCard(l); c.classList.add('no-anim'); frag.appendChild(c); });
+    grid.appendChild(frag);
+    _observeScoreRings(grid, false);
+    if (rows.length < ids.length) {
+      grid.insertAdjacentHTML('beforeend', `<div class="empty-block" style="grid-column:1/-1">${escapeHtml(t('saved.gone', { n: ids.length - rows.length }))}</div>`);
+    }
+  }
+  renderSavedCollections();
 }
-function _drawerEscHandler(e) { if (e.key === 'Escape') closeCollectionsDrawer(); }
 
-function renderCollectionsList() {
-  const list = document.getElementById('collections-list');
+function renderSavedCollections() {
+  const list = document.getElementById('savedCollections');
   if (!list) return;
   const all = Collections.getAll();
   if (!all.length) {
-    list.innerHTML = `
-      <div class="collections-empty">
-        <div class="empty-icon">${icon('bookmark')}</div>
-        <div class="empty-title">No collections yet</div>
-        <div class="empty-text">Save listings into collections to organise them and share with friends.</div>
-      </div>`;
+    list.innerHTML = `<div class="empty-block">${escapeHtml(t('col.empty'))}</div>`;
     return;
   }
   list.innerHTML = all.map(col => `
-    <div class="collection-card" data-id="${col.id}">
-      <div class="collection-card-main">
-        <div class="collection-card-name" onclick="renameCollectionInline('${col.id}', this)">${escapeHtml(col.name)}</div>
-        <div class="collection-card-meta">
-          ${col.listing_ids.length} listing${col.listing_ids.length === 1 ? '' : 's'}
-          · updated ${formatRelativeTime(col.updated_at)}
-        </div>
+    <div class="col-card" data-col-id="${escapeHtml(col.id)}">
+      <div class="col-card-main">
+        <div class="col-card-name">${escapeHtml(col.name)}</div>
+        <div class="col-card-meta">${escapeHtml(t(col.listing_ids.length === 1 ? 'col.meta_one' : 'col.meta', { n: fmt(col.listing_ids.length), when: formatRelativeTime(col.updated_at) }))}</div>
       </div>
-      <div class="collection-card-actions">
-        <button onclick="shareCollection('${col.id}')" title="Share collection" aria-label="Share">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
-            <line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/>
-          </svg>
-        </button>
-        <button onclick="viewCollection('${col.id}')" title="View collection" aria-label="View">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
-          </svg>
-        </button>
-        <button class="danger" onclick="deleteCollectionConfirm('${col.id}')" title="Delete collection" aria-label="Delete">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>
-          </svg>
-        </button>
+      <div class="col-card-actions">
+        <button type="button" class="btn btn-secondary btn-sm" data-col-action="view">${icon('eye')}<span>${escapeHtml(t('col.view'))}</span></button>
+        <button type="button" class="btn btn-ghost btn-sm btn-icon" data-col-action="share" aria-label="${escapeHtml(t('col.share'))}" title="${escapeHtml(t('col.share'))}">${icon('share')}</button>
+        <button type="button" class="btn btn-ghost btn-sm btn-icon" data-col-action="rename" aria-label="${escapeHtml(t('col.rename'))}" title="${escapeHtml(t('col.rename'))}">${icon('pencil')}</button>
+        <button type="button" class="btn btn-ghost btn-sm btn-icon btn-danger-text" data-col-action="delete" aria-label="${escapeHtml(t('col.delete'))}" title="${escapeHtml(t('col.delete'))}">${icon('trash')}</button>
       </div>
     </div>`).join('');
 }
 
+// Rename in place: the name turns into an input; Enter saves, Escape cancels.
+function _renameCollectionInline(card) {
+  const id = card.dataset.colId;
+  const col = Collections.getAll().find(c => c.id === id);
+  if (!col) return;
+  const nameEl = card.querySelector('.col-card-name');
+  nameEl.innerHTML = `<input type="text" class="input" maxlength="60" value="${escapeHtml(col.name)}" aria-label="${escapeHtml(t('col.rename'))}">`;
+  const input = nameEl.querySelector('input');
+  input.focus(); input.select();
+  const done = save => {
+    if (save && input.value.trim() && input.value.trim() !== col.name) Collections.rename(id, input.value.trim());
+    renderSavedCollections();
+  };
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') done(true); if (e.key === 'Escape') done(false); });
+  input.addEventListener('blur', () => done(true));
+}
+
 async function shareCollection(collectionId) {
   const url = Collections.buildShareUrl(collectionId);
-  if (!url) { showToast('Collection is empty — add listings first'); return; }
+  if (!url) { showToast(t('col.empty_share')); return; }
   const col = Collections.getAll().find(c => c.id === collectionId);
   if (navigator.share && /Mobi|Android|iPhone/i.test(navigator.userAgent)) {
-    try { await navigator.share({ title: `Lume — ${col.name}`, url, text: 'Lume collection' }); return; }
+    try { await navigator.share({ title: `Lume — ${col.name}`, url, text: 'Lume' }); return; }
     catch (e) {}
   }
   try {
     await navigator.clipboard.writeText(url);
-    showToast('Share link copied to clipboard');
+    showToast(t('toast.link_copied'));
   } catch {
-    prompt('Copy this link:', url);
+    prompt(t('toast.copy_link'), url);
   }
 }
 
+// Show a collection's flats in the Rentals list (same as opening its link).
 function viewCollection(collectionId) {
-  const url = Collections.buildShareUrl(collectionId);
-  if (!url) { showToast('Collection is empty'); return; }
-  closeCollectionsDrawer();
-  location.href = url;
+  const col = Collections.getAll().find(c => c.id === collectionId);
+  if (!col || !col.listing_ids.length) { showToast(t('col.empty_share')); return; }
+  window.sharedCollection = { name: col.name, listing_ids: col.listing_ids.map(String), own: true };
+  switchTab('rentals');
+  renderRentals();
+  window.scrollTo({ top: 0 });
 }
 
 function deleteCollectionConfirm(collectionId) {
   const col = Collections.getAll().find(c => c.id === collectionId);
   if (!col) return;
-  if (confirm(`Delete "${col.name}"? This cannot be undone.`)) {
+  if (confirm(t('col.delete_confirm', { name: col.name }))) {
     Collections.delete(collectionId);
-    renderCollectionsList();
-    refreshAllBookmarkIcons();
-    showToast('Collection deleted');
-  }
-}
-
-function createCollectionFromDrawer() {
-  const name = prompt('Collection name:', '');
-  if (!name || !name.trim()) return;
-  Collections.create(name.trim());
-  renderCollectionsList();
-  showToast('Collection created');
-}
-
-function renameCollectionInline(collectionId, el) {
-  const current = el.textContent;
-  const newName = prompt('Rename collection:', current);
-  if (newName && newName.trim() && newName !== current) {
-    Collections.rename(collectionId, newName.trim());
-    renderCollectionsList();
+    renderSavedCollections();
+    showToast(t('col.deleted'));
   }
 }
 
@@ -519,7 +391,7 @@ function handleSharedCollectionParam() {
   if (!encoded) return false;
   const decoded = Collections.decodeFromUrl(encoded);
   if (!decoded) {
-    showToast('Shared collection link is invalid');
+    showToast(t('col.bad_link'));
     return false;
   }
   window.sharedCollection = decoded;
@@ -541,24 +413,20 @@ function renderSharedCollectionBanner(visibleCount, totalRequested) {
   document.querySelectorAll('.shared-collection-banner').forEach(b => b.remove());
   if (!window.sharedCollection) return;
   const sc = window.sharedCollection;
-  const isLoggedOut = !(typeof Auth !== 'undefined' && Auth.user);
-  const cta = isLoggedOut
-    ? `· <a href="#" onclick="Auth.openSignIn();return false;">Sign up to see all of Milan with Lume scoring →</a>`
-    : '';
-  const missing = sc.listing_ids.length - totalRequested;
+  const missing = sc.listing_ids.length - visibleCount;
   const missingNote = missing > 0
-    ? `<div class="banner-sub" style="color:var(--amber)">${missing} listing${missing===1?'':'s'} in this collection ${missing===1?'is':'are'} no longer available.</div>`
+    ? `<div class="banner-sub">${escapeHtml(t('col.missing', { n: missing }))}</div>`
     : '';
   const banner = document.createElement('div');
   banner.className = 'shared-collection-banner';
   banner.innerHTML = `
-    <div class="banner-icon">${icon('bookmark')}</div>
+    <div class="banner-icon">${icon('folder')}</div>
     <div class="banner-text">
-      <div class="banner-title">Shared collection: <strong>${escapeHtml(sc.name)}</strong></div>
-      <div class="banner-sub">${visibleCount} listing${visibleCount===1?'':'s'} ${cta}</div>
+      <div class="banner-title">${escapeHtml(t(sc.own ? 'col.viewing' : 'col.shared'))} <strong>${escapeHtml(sc.name)}</strong></div>
+      <div class="banner-sub">${escapeHtml(t(visibleCount === 1 ? 'saved.n_one' : 'saved.n', { n: fmt(visibleCount) }))}</div>
       ${missingNote}
     </div>
-    <button class="banner-clear" onclick="exitSharedCollection()">Show all listings</button>`;
+    <button type="button" class="btn btn-secondary" onclick="exitSharedCollection()">${escapeHtml(t('col.show_all'))}</button>`;
 
   // Insert above whichever grid is currently visible
   const target = document.querySelector('#rentalsView:not([hidden]) .grid');

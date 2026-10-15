@@ -92,9 +92,7 @@ requestAnimationFrame(_wireFilterBarStickyShadow);
 requestAnimationFrame(() => {
   updateLangToggle();
   // Apply translations to any data-i18n labels already in the DOM.
-  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
-  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.dataset.i18nPlaceholder); });
-  document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.dataset.i18nTitle); });
+  applyStaticTranslations();
   // City selector — first paint uses the baked-in fallback list. init()
   // re-runs both updates once loadAvailableCities() resolves, so any
   // localised display_name / centre / has_metro from Supabase
@@ -120,15 +118,6 @@ requestAnimationFrame(() => {
     rInput.addEventListener('input',  fireRent);
     rInput.addEventListener('search', fireRent);
   }
-  // Click-to-search from any card's #id pill.
-  document.addEventListener('click', (e) => {
-    const pill = e.target.closest && e.target.closest('.id-pill[data-listing-id]');
-    if (!pill) return;
-    const id = pill.dataset.listingId;
-    if (rInput) rInput.value = id;
-    rInput?.focus();
-    fireRent();
-  });
 })();
 updateFavBadge();
 init();
@@ -162,12 +151,6 @@ const filterAreaMsd = buildMultiSelect({
 if (Array.isArray(rentSelectedAreas) && rentSelectedAreas.length && filterAreaMsd?.setSelected) {
   try { filterAreaMsd.setSelected(rentSelectedAreas); } catch (_) {}
 }
-const mapAreaMsd = buildMultiSelect({
-  wrapId: 'mapAreaWrap', triggerId: 'mapAreaTrigger', panelId: 'mapAreaPanel',
-  searchId: 'mapAreaSearch', listId: 'mapAreaList',
-  clearId: 'mapAreaClear', doneId: 'mapAreaDone',
-  onChange: areas => { mapSelectedAreas = areas; if (typeof _mapRender === 'function') _mapRender(); },
-});
 
 // ── from alerts.js · Email alerts: identity + transport ──
 // One delegator that handles every per-alert action (edit / toggle /
@@ -200,17 +183,12 @@ if (!window._digestActionDelegatorBound) {
   }, true);
 }
 
-// ── from cards.js · New listing badge helpers ──
-// Tap/click (or Enter) on a card's "N comps ⓘ" opens the method text below
-// the row — the title tooltip alone never shows on touch screens.
+// ── from cards.js · favourite button on every card (delegated) ──
 document.addEventListener('click', e => {
-  const c = e.target.closest && e.target.closest('[data-comps-tip]');
-  if (!c) return;
-  const tip = c.closest('.comps-row')?.nextElementSibling;
-  if (tip && tip.classList.contains('comps-tip-text')) tip.hidden = !tip.hidden;
-});
-document.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && e.target.matches && e.target.matches('[data-comps-tip]')) e.target.click();
+  const btn = e.target.closest && e.target.closest('.btn-fav[data-rent-id]');
+  if (!btn) return;
+  const id = btn.dataset.rentId;
+  setFavUi(id, toggleRentFav(id));
 });
 
 // ── from rentals.js · Rentals — data loading ──
@@ -373,38 +351,10 @@ document.querySelectorAll('#rSourceFilter .sort-tab').forEach(btn =>
   }));
 document.querySelectorAll('#rGemFilter .gem-tab').forEach(btn =>
   btn.addEventListener('click', () => {
-    document.querySelectorAll('#rGemFilter .gem-tab').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
+    document.querySelectorAll('#rGemFilter .gem-tab').forEach(b => b.classList.toggle('active', b === btn));
     renderRentals();
     saveFilters();
   }));
-
-// ── from controls.js · Pill-group sliding thumb ──
-// Hook into every existing pill-click. The .active class flip already
-// happens inside each handler above; we just need to recompute the thumb
-// once the DOM has settled. Capture-phase listener wins the race against
-// the per-group click handlers without needing to reorder them.
-document.addEventListener('click', e => {
-  const pill = e.target.closest('.filter-pill');
-  if (!pill) return;
-  const group = pill.closest('.filter-pill-group');
-  if (!group) return;
-  // Defer one tick so the .active class change made by the handler is
-  // already applied when we measure.
-  requestAnimationFrame(() => _updatePillThumb(group));
-}, true);
-// Initial paint + responsive recompute. The filter-bar wraps on narrow
-// viewports so the thumb width can change without any click.
-requestAnimationFrame(_updateAllPillThumbs);
-window.addEventListener('resize', () => {
-  // Throttle: one rAF coalesces multiple resize events into a single
-  // measurement pass.
-  if (window._pillThumbRaf) return;
-  window._pillThumbRaf = requestAnimationFrame(() => {
-    window._pillThumbRaf = null;
-    _updateAllPillThumbs();
-  });
-});
 document.getElementById('rScoreNum')?.addEventListener('input', function () {
   syncScoreFromNumber(this.value);
   renderRentals();
@@ -419,14 +369,10 @@ document.getElementById('rScore').addEventListener('input', function () {
   renderRentals();
   saveFilters();
 });
-document.querySelectorAll('#rentSortTabs .sort-tab').forEach(btn => {
-  btn.addEventListener('click', () => {
-    rentSortKey = btn.dataset.rsort;
-    document.querySelectorAll('#rentSortTabs .sort-tab').forEach(t =>
-      t.classList.toggle('active', t === btn));
-    renderRentals();
-    saveFilters();
-  });
+document.getElementById('rSortSelect')?.addEventListener('change', e => {
+  rentSortKey = e.target.value;
+  renderRentals();
+  saveFilters();
 });
 document.getElementById('rBtnReset').addEventListener('click', () => {
   const _idEl = document.getElementById('rIdSearch');
@@ -454,19 +400,12 @@ document.getElementById('rBtnReset').addEventListener('click', () => {
   rentIncludeUnknown = false;
   ['rIncludeUnknown', 'dIncludeUnknown'].forEach(id => { const c = document.getElementById(id); if (c) c.checked = false; });
   ['rCondition', 'rMinDiscount', 'rContract'].forEach(id => { const c = document.getElementById(id); if (c) c.value = ''; });
-  document.querySelectorAll('#rGemFilter .gem-tab').forEach(t =>
+  document.querySelectorAll('#rGemFilter .gem-tab, #dGemFilter .gem-tab').forEach(t =>
     t.classList.toggle('active', t.dataset.gem === ''));
   document.querySelectorAll('#rSourceFilter .sort-tab').forEach(t =>
     t.classList.toggle('active', (t.dataset.rsource || '') === ''));
   rentSortKey = 'score_total';
-  document.querySelectorAll('#rentSortTabs .sort-tab').forEach(t =>
-    t.classList.toggle('active', t.dataset.rsort === 'score_total'));
-  // Reset moved the .active class on the pill groups → recompute thumbs
-  // so the indicator snaps back to position 1 (All / Score) instead of
-  // staying parked under the previously-selected option.
-  if (typeof _updateAllPillThumbs === 'function') {
-    requestAnimationFrame(_updateAllPillThumbs);
-  }
+  if (window.sharedCollection && window.sharedCollection.own) exitSharedCollection();
   renderRentals();
   saveFilters();
 });
@@ -552,12 +491,10 @@ document.getElementById('btnCacheClear')?.addEventListener('click', async () => 
   const btn = document.getElementById('btnDownloadPois');
   if (!btn) return;
 
-  // Show current status on load
-  fetch('/api/pois-status').then(r => r.json()).then(d => {
-    if (d.exists) {
-      btn.title = `POI data downloaded ${d.downloaded_at || ''}. Click to refresh.`;
-      btn.style.opacity = '0.6';
-    }
+  // Show current status once the page knows it runs on the local API
+  // (shell.js init calls this; the online copy has no /api).
+  window._loadPoisStatus = () => fetch('/api/pois-status').then(r => r.json()).then(d => {
+    if (d.exists) btn.title = `POI data downloaded ${d.downloaded_at || ''}. Click to refresh.`;
   }).catch(() => {});
 
   btn.addEventListener('click', async () => {
@@ -618,226 +555,120 @@ document.getElementById('btnCacheClear')?.addEventListener('click', async () => 
   });
 })();
 
-// ── from controls.js · Mobile filter drawer (Rentals) ──
+// ── from controls.js · Phone filter drawer ──
+// Same filters as the bar, applied on "Show N results". Must-haves and
+// "include not known yet" apply straight away (they share state).
 (function () {
-  const backdrop     = document.getElementById('mobileFilterBackdrop');
-  const drawer       = document.getElementById('mobileFilterDrawer');
-  const openBtn      = document.getElementById('mobileFilterBtn');
-  const mapFilterBtn = document.getElementById('mapFilterBtn');
-  const showBtn      = document.getElementById('drawerShowBtn');
-  const resetBtn     = document.getElementById('drawerReset');
+  const backdrop = document.getElementById('mobileFilterBackdrop');
+  const drawer   = document.getElementById('mobileFilterDrawer');
+  const openBtn  = document.getElementById('mobileFilterBtn');
+  const showBtn  = document.getElementById('drawerShowBtn');
+  const resetBtn = document.getElementById('drawerReset');
   if (!drawer) return;
+  const get = id => document.getElementById(id);
+  let _lastFocus = null;
 
-  // Instantiate the searchable area multiselects once the drawer DOM exists
-  dRentAreaMsearch = AreaMSearch('dAreaInput',  'dAreaTags',  'dAreaDropdown',  [], () => _updateShowBtn());
-  // Populate options from whatever area data is already loaded
+  dRentAreaMsearch = AreaMSearch('dAreaInput', 'dAreaTags', 'dAreaDropdown', [], () => {});
   if (typeof _populateDrawerAreaFromActive === 'function') _populateDrawerAreaFromActive();
 
-  // Update "Show X results" label
-  function _updateShowBtn() {
-    if (_drawerIsMap) {
-      const countEl = document.getElementById('mapListingCount');
-      const n = countEl ? countEl.textContent : '–';
-      showBtn.textContent = (n === '–' || n == null) ? 'Show results' : `Show ${n} results`;
-      return;
-    }
-    if (typeof _rentFilteredData !== 'undefined') {
-      showBtn.textContent = `Show ${_rentFilteredData.length} results`;
-    }
+  const pairs = [['rMaxRent', 'dMaxRent'], ['rMinSqm', 'dMinSqm'], ['rMinRooms', 'dMinRooms'],
+                 ['rFascia', 'dFascia'], ['rMaxMetro', 'dMaxMetro'], ['rCondition', 'dCondition'],
+                 ['rMinDiscount', 'dMinDiscount'], ['rScore', 'dScore']];
+
+  function syncFromBar() {
+    if (dRentAreaMsearch) dRentAreaMsearch.setSelected(rentSelectedAreas);
+    for (const [r, d] of pairs) if (get(r) && get(d)) get(d).value = get(r).value;
+    get('dScoreVal').textContent = get('dScore').value;
+    get('dSort').value = rentSortKey;
+    const gem = document.querySelector('#rGemFilter .gem-tab.active')?.dataset.gem || '';
+    document.querySelectorAll('#dGemFilter .gem-tab').forEach(b => b.classList.toggle('active', b.dataset.gem === gem));
+    get('dIncludeUnknown').checked = rentIncludeUnknown;
   }
 
-  function openDrawer(opts = {}) {
-    const mode = opts.mode || 'rent';
-    _drawerIsMap = (mode === 'rent') && !!opts.isMap;
-    // Gem filter only applies to the rentals list (not map)
-    const gemField = document.getElementById('dGemFilter')?.closest('.drawer-field');
-    if (gemField) gemField.style.display = _drawerIsMap ? 'none' : '';
-    drawer.querySelectorAll('.drawer-rent-only').forEach(el => { el.style.display = _drawerIsMap ? 'none' : ''; });
+  function applyToBar() {
+    const areas = dRentAreaMsearch ? dRentAreaMsearch.getSelected() : [];
+    rentSelectedAreas = areas;
+    if (typeof filterAreaMsd !== 'undefined') { areas.length ? filterAreaMsd.setSelected(areas) : filterAreaMsd.clear(); }
+    for (const [r, d] of pairs) if (get(r) && get(d)) get(r).value = get(d).value;
+    syncScoreFromSlider(get('rScore').value);
+    rentSortKey = get('dSort').value;
+    const gem = document.querySelector('#dGemFilter .gem-tab.active')?.dataset.gem || '';
+    document.querySelectorAll('#rGemFilter .gem-tab').forEach(b => b.classList.toggle('active', b.dataset.gem === gem));
+    renderRentals();
+    saveFilters();
+  }
+
+  function openDrawer() {
+    _lastFocus = document.activeElement;
+    syncFromBar();
     backdrop.classList.add('is-open');
     drawer.classList.remove('is-closing');
     drawer.classList.add('is-open');
     document.body.style.overflow = 'hidden';
-    _syncDrawerFromMain();
-    _updateShowBtn();
+    renderRentals();                       // refreshes the must-have counts + "Show N"
+    showBtn.textContent = t('drawer.show', { n: fmt(_rentFilteredData.length) });
+    requestAnimationFrame(() => get('drawerTitle')?.focus?.());
   }
   function closeDrawer(apply) {
+    if (!drawer.classList.contains('is-open')) return;
     drawer.classList.add('is-closing');
     drawer.classList.remove('is-open');
     backdrop.classList.remove('is-open');
     document.body.style.overflow = '';
-    if (apply) _applyDrawerToMain();
+    if (apply) applyToBar();
+    if (_lastFocus && _lastFocus.isConnected) _lastFocus.focus();
   }
+  window.closeFilterDrawer = closeDrawer;
 
-  // Sync drawer controls from the appropriate main filter source
-  function _syncDrawerFromMain() {
-    const get = id => document.getElementById(id);
-
-    // Rentals (and rentals-on-map) mode
-    const idPrefix = _drawerIsMap ? 'mRent' : 'r';
-    const fMaxRent  = get(idPrefix + 'MaxRent');
-    const fMinSqm   = get(idPrefix + 'MinSqm');
-    const fMinRooms = get(idPrefix + 'MinRooms');
-    const fFascia   = get(idPrefix + 'Fascia');
-    const fMaxMetro = get(idPrefix + 'MaxMetro');
-    const fScore    = get(idPrefix + 'Score');
-    const sourceAreas = _drawerIsMap ? mapSelectedAreas : rentSelectedAreas;
-    if (dRentAreaMsearch) dRentAreaMsearch.setSelected(sourceAreas);
-    if (fMaxRent)  get('dMaxRent').value  = fMaxRent.value;
-    if (fMinSqm)   get('dMinSqm').value   = fMinSqm.value;
-    if (fMinRooms) get('dMinRooms').value = fMinRooms.value;
-    if (fFascia)   get('dFascia').value   = fFascia.value;
-    if (fMaxMetro) get('dMaxMetro').value = fMaxMetro.value;
-    if (fScore) {
-      const sv = fScore.value;
-      get('dScore').value = sv;
-      get('dScoreVal').textContent = sv;
-    }
-    if (!_drawerIsMap) {
-      const fGemActive = document.querySelector('#rGemFilter .gem-tab.active');
-      const gem = fGemActive ? (fGemActive.dataset.gem || '') : '';
-      document.querySelectorAll('#dGemFilter .gem-tab').forEach(b => {
-        b.classList.toggle('active', b.dataset.gem === gem);
-      });
-      get('dCondition').value   = get('rCondition')?.value || '';
-      get('dMinDiscount').value = get('rMinDiscount')?.value || '';
-      get('dIncludeUnknown').checked = rentIncludeUnknown;
-    }
-  }
-
-  // Apply drawer values back to the appropriate main filters and re-render
-  function _applyDrawerToMain() {
-    const get = id => document.getElementById(id);
-
-    // Rentals mode — apply to BOTH the rentals list AND the map
-    const areas = dRentAreaMsearch ? dRentAreaMsearch.getSelected() : [];
-
-    // List state
-    rentSelectedAreas = areas;
-    if (typeof filterAreaMsd !== 'undefined') {
-      areas.length ? filterAreaMsd.setSelected(areas) : filterAreaMsd.clear();
-    }
-    if (get('rMaxRent'))  get('rMaxRent').value  = get('dMaxRent').value;
-    if (get('rMinSqm'))   get('rMinSqm').value   = get('dMinSqm').value;
-    if (get('rMinRooms')) get('rMinRooms').value = get('dMinRooms').value;
-    if (get('rFascia'))   get('rFascia').value   = get('dFascia').value;
-    if (get('rMaxMetro')) get('rMaxMetro').value = get('dMaxMetro').value;
-    if (get('rScore')) {
-      const sv = get('dScore').value;
-      get('rScore').value = sv;
-      const rvEl = get('rScoreVal');
-      if (rvEl) rvEl.textContent = sv;
-    }
-    const dGemActive = document.querySelector('#dGemFilter .gem-tab.active');
-    const gem = dGemActive ? (dGemActive.dataset.gem || '') : '';
-    document.querySelectorAll('#rGemFilter .gem-tab').forEach(b => {
-      b.classList.toggle('active', b.dataset.gem === gem);
-    });
-    if (get('rCondition'))   get('rCondition').value   = get('dCondition').value;
-    if (get('rMinDiscount')) get('rMinDiscount').value = get('dMinDiscount').value;
-
-    // Map state — mirror rental filters into mRent* and mapSelectedAreas
-    mapSelectedAreas = areas;
-    if (typeof mapAreaMsd !== 'undefined') mapAreaMsd.setSelected(areas);
-    if (get('mRentMaxRent'))  get('mRentMaxRent').value  = get('dMaxRent').value;
-    if (get('mRentMinSqm'))   get('mRentMinSqm').value   = get('dMinSqm').value;
-    if (get('mRentMinRooms')) get('mRentMinRooms').value = get('dMinRooms').value;
-    if (get('mRentFascia'))   get('mRentFascia').value   = get('dFascia').value;
-    if (get('mRentMaxMetro')) get('mRentMaxMetro').value = get('dMaxMetro').value;
-    if (get('mRentScore')) {
-      const sv = get('dScore').value;
-      get('mRentScore').value = sv;
-      const lb = document.getElementById('mRentScoreVal');
-      if (lb) lb.textContent = sv;
-    }
-
-    if (typeof renderRentals === 'function') renderRentals();
-    if (typeof _mapRender === 'function')    _mapRender();
-    if (typeof saveFilters === 'function')   saveFilters();
-  }
-
-  // Header filter button — choose mode based on active tab
-  if (openBtn) openBtn.addEventListener('click', () => {
-    const activeTab = document.querySelector('.tab-btn.active')?.dataset.tab;
-    if (activeTab === 'map') {
-      openDrawer({ mode: 'rent', isMap: true });
-    } else {
-      openDrawer({ mode: 'rent' });
-    }
-  });
-  if (mapFilterBtn) mapFilterBtn.addEventListener('click', () => openDrawer({ mode: 'rent', isMap: true }));
+  get('drawerTitle')?.setAttribute('tabindex', '-1');
+  if (openBtn) openBtn.addEventListener('click', openDrawer);
   backdrop.addEventListener('click', () => closeDrawer(false));
-  showBtn.addEventListener('click',  () => closeDrawer(true));
+  showBtn.addEventListener('click', () => closeDrawer(true));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(false); });
 
-  // Save-alert button (mobile parity with desktop's pill). Apply the
-  // drawer's filters back to the main filter bar FIRST (closeDrawer
-  // with apply=true), then open the save-alert modal. Without the
-  // apply step, the modal would seed from the stale pre-drawer state.
-  const drawerSaveAlertBtn = document.getElementById('drawerSaveAlertBtn');
+  // Save alert (local dashboard): apply the drawer first, then open the alert form.
+  const drawerSaveAlertBtn = get('drawerSaveAlertBtn');
   if (drawerSaveAlertBtn) {
+    drawerSaveAlertBtn.hidden = !IS_LIVE;
     drawerSaveAlertBtn.addEventListener('click', () => {
       closeDrawer(true);
-      if (typeof saveDigestFilters === 'function') {
-        // setTimeout 0 so the drawer's closing animation paints first;
-        // the save-alert modal then layers on top without flicker.
-        setTimeout(() => saveDigestFilters(), 0);
-      }
+      setTimeout(() => saveDigestFilters(), 0);
     });
   }
 
-  // Drawer range sync (rent)
-  const dScore = document.getElementById('dScore');
-  if (dScore) dScore.addEventListener('input', () => {
-    document.getElementById('dScoreVal').textContent = dScore.value;
-  });
-
-  // Drawer gem tabs (rent)
+  get('dScore')?.addEventListener('input', () => { get('dScoreVal').textContent = get('dScore').value; });
   document.querySelectorAll('#dGemFilter .gem-tab').forEach(btn =>
     btn.addEventListener('click', () => {
-      document.querySelectorAll('#dGemFilter .gem-tab').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
+      document.querySelectorAll('#dGemFilter .gem-tab').forEach(b => b.classList.toggle('active', b === btn));
     }));
 
-  // Drawer reset
   if (resetBtn) resetBtn.addEventListener('click', () => {
-    ['dMaxRent','dMinSqm','dMinRooms'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-    ['dFascia','dMaxMetro'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    for (const [, d] of pairs) { const el = get(d); if (el) el.value = d === 'dScore' ? 0 : ''; }
+    get('dScoreVal').textContent = '0';
+    get('dSort').value = 'score_total';
     if (dRentAreaMsearch) dRentAreaMsearch.clear();
-    const dsc = document.getElementById('dScore'); if (dsc) dsc.value = 0;
-    document.getElementById('dScoreVal').textContent = '0';
-    document.querySelectorAll('#dGemFilter .gem-tab').forEach(b =>
-      b.classList.toggle('active', b.dataset.gem === ''));
-    ['dCondition', 'dMinDiscount'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    document.querySelectorAll('#dGemFilter .gem-tab').forEach(b => b.classList.toggle('active', b.dataset.gem === ''));
     rentMust.clear();
-    const el = document.getElementById('rElevator'); if (el) el.checked = false;
+    const el = get('rElevator'); if (el) el.checked = false;
     rentIncludeUnknown = false;
-    ['rIncludeUnknown', 'dIncludeUnknown'].forEach(id => { const c = document.getElementById(id); if (c) c.checked = false; });
+    ['rIncludeUnknown', 'dIncludeUnknown'].forEach(id => { const c = get(id); if (c) c.checked = false; });
     renderRentals();
   });
 
-  // Swipe-down to close. Restrict to touches that START on the drawer
-  // handle / title row — NOT inside the scrollable body. Previously any
-  // downward scroll of >80px inside the area-list closed the drawer,
-  // which made list scrolling feel like the modal was being dragged out
-  // from under the user's finger.
+  // Swipe down on the handle / title closes it.
   let _touchStartY = 0;
   let _touchInHandle = false;
   const _handleEls = drawer.querySelectorAll('.drawer-handle, .drawer-title-row');
-  _handleEls.forEach(el => {
-    el.addEventListener('touchstart', e => {
-      _touchStartY   = e.touches[0].clientY;
-      _touchInHandle = true;
-    }, { passive: true });
-  });
+  _handleEls.forEach(el => el.addEventListener('touchstart', e => {
+    _touchStartY = e.touches[0].clientY;
+    _touchInHandle = true;
+  }, { passive: true }));
   drawer.addEventListener('touchstart', e => {
-    // Reset the in-handle flag if the touch starts elsewhere.
-    if (!Array.from(_handleEls).some(el => el.contains(e.target))) {
-      _touchInHandle = false;
-    }
+    if (!Array.from(_handleEls).some(el => el.contains(e.target))) _touchInHandle = false;
   }, { passive: true });
   drawer.addEventListener('touchend', e => {
     if (!_touchInHandle) return;
-    const dy = e.changedTouches[0].clientY - _touchStartY;
-    if (dy > 80) closeDrawer(false);
+    if (e.changedTouches[0].clientY - _touchStartY > 80) closeDrawer(false);
     _touchInHandle = false;
   }, { passive: true });
 })();
@@ -899,33 +730,45 @@ document.getElementById('btnCacheClear')?.addEventListener('click', async () => 
   });
 
   function _triggerSlideAnimations(idx) {
-    // Slide 2: count up 0→73
+    // Slide 2: share of listings asking ≥5% more than similar flats nearby
+    // (from the loaded data — no made-up number).
     if (idx === 1 && !_ob2Done && ob2Number) {
       _ob2Done = true;
-      let v = 0;
+      const withComps = ALL_RENT.filter(l => l.comps_delta_pct != null);
+      const target = withComps.length
+        ? Math.round(withComps.filter(l => l.comps_delta_pct >= 5).length / withComps.length * 100) : null;
+      if (target == null) { ob2Number.textContent = '–'; return; }
       const start = performance.now();
       const dur = 800;
       function tick(now) {
-        const t = Math.min((now - start) / dur, 1);
-        const ease = 1 - Math.pow(1 - t, 3);
-        v = Math.round(ease * 73);
-        ob2Number.textContent = v + '%';
-        if (t < 1) requestAnimationFrame(tick);
+        const k = Math.min((now - start) / dur, 1);
+        ob2Number.textContent = Math.round((1 - Math.pow(1 - k, 3)) * target) + '%';
+        if (k < 1) requestAnimationFrame(tick);
       }
       requestAnimationFrame(tick);
     }
-    // Slide 4: score count up + bar fills
+    // Slide 5: live Hidden Gem count
+    if (idx === 4) {
+      const n = ALL_RENT.filter(l => l.hidden_gem && !l.excluded).length;
+      const h = document.getElementById('ob5Title');
+      if (h && n) h.textContent = t('ob.s5_title_n', { n: fmt(n) });
+    }
+    // Slide 4: score count up + bar fills (weights = the live settings)
     if (idx === 3 && !_ob4Done && ob4Score) {
       _ob4Done = true;
+      document.querySelectorAll('.ob-w').forEach(el => {
+        const w = scoreSettings[el.dataset.w];
+        if (w != null) el.textContent = Math.round(w * 100) + '%';
+      });
       let v = 0;
       const start = performance.now();
       const dur = 600;
       function tick(now) {
-        const t = Math.min((now - start) / dur, 1);
-        const ease = 1 - Math.pow(1 - t, 3);
+        const k = Math.min((now - start) / dur, 1);
+        const ease = 1 - Math.pow(1 - k, 3);
         v = Math.round(ease * 84);
         ob4Score.textContent = v;
-        if (t < 1) requestAnimationFrame(tick);
+        if (k < 1) requestAnimationFrame(tick);
       }
       requestAnimationFrame(tick);
       // Animate bars
@@ -943,6 +786,18 @@ startScannerPoll();
 
 // ── from insights.js · Insights tab ──
 document.getElementById('insightsAgencySearch')?.addEventListener('input', _renderAgencyTable);
+document.getElementById('insightsZoneBody')?.addEventListener('click', e => {
+  const row = e.target.closest('tr[data-zone]');
+  if (row) openZoneInRentals(row.dataset.zone);
+});
+document.getElementById('insightsZoneBody')?.addEventListener('keydown', e => {
+  const row = e.target.closest('tr[data-zone]');
+  if (row && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openZoneInRentals(row.dataset.zone); }
+});
+document.getElementById('insightsAgencyBody')?.addEventListener('click', e => {
+  const b = e.target.closest('[data-pin-agency]');
+  if (b) pinAgency(b.dataset.pinAgency);
+});
 
 // ── from settings.js · Macro-area card grid (Scan Areas Settings redesign) ──
 document.getElementById('btnAreaSelectAll')?.addEventListener('click', () => {
@@ -1144,10 +999,28 @@ document.getElementById('rMoreBtn')?.addEventListener('click', () => toggleRentP
   document.getElementById(id)?.addEventListener('change', () => { renderRentals(); saveFilters(); }));
 document.getElementById('rActiveChips')?.addEventListener('click', e => {
   const chip = e.target.closest('[data-clear]');
-  if (chip) clearRentFilter(chip.dataset.clear);
+  if (chip) { clearRentFilter(chip.dataset.clear); return; }
+  if (e.target.closest('[data-save-alert]')) saveDigestFilters();
 });
-// Panels close on Escape and on a click outside the filter bar.
-document.addEventListener('keydown', e => { if (e.key === 'Escape') toggleRentPanel(null); });
+// Empty state: "Remove: N flats" drops the filter that blocks the most.
+document.getElementById('rentGrid')?.addEventListener('click', e => {
+  const b = e.target.closest('[data-clear-empty]');
+  if (b) clearRentFilter(b.dataset.clearEmpty);
+});
+document.getElementById('rMoreDone')?.addEventListener('click', () => toggleRentPanel(null));
+// "Hide suspicious prices" — a must-have key, shown as a checkbox.
+document.querySelectorAll('.hide-suspect').forEach(cb => cb.addEventListener('change', () => {
+  if (cb.checked !== rentMust.has('safe')) toggleRentMust('safe');
+}));
+// Panels close on Escape (focus back on their button) and on a click
+// outside the filter bar.
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  const open = document.querySelector('.fb-panel:not([hidden])');
+  if (!open) return;
+  toggleRentPanel(null);
+  document.querySelector(`[aria-controls="${open.id}"]`)?.focus();
+});
 document.addEventListener('click', e => {
   // A must-have chip re-renders while handling its own click, so the target
   // may already be detached — that's a click inside, not outside.
@@ -1164,19 +1037,68 @@ document.addEventListener('click', e => {
   if (!box || box.hidden) return;
   if (e.target === box || e.target.closest('.lm-close')) { closeListingModal(); return; }
   const fav = e.target.closest('[data-lm-fav]');
-  if (fav) {
-    const now = toggleRentFav(fav.dataset.lmFav);
-    fav.classList.toggle('on', now);
-    fav.querySelector('span').textContent = now ? t('lm.saved') : t('lm.save');
-    document.querySelectorAll(`.btn-fav[data-rent-id="${CSS.escape(fav.dataset.lmFav)}"]`).forEach(b => {
-      b.classList.toggle('is-fav', now);
-      b.innerHTML = favBtnInner();
-    });
+  if (fav) { setFavUi(fav.dataset.lmFav, toggleRentFav(fav.dataset.lmFav)); return; }
+  const colBtn = e.target.closest('[data-lm-collections]');
+  if (colBtn) {
+    const panel = document.getElementById('lmCollections');
+    if (!panel) return;
+    panel.hidden = !panel.hidden;
+    colBtn.setAttribute('aria-expanded', String(!panel.hidden));
+    if (!panel.hidden) {
+      renderLmCollections(colBtn.dataset.lmCollections);
+      panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      panel.querySelector('input')?.focus();
+    }
   }
 });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeListingModal(); });
-document.getElementById('rSortSelect')?.addEventListener('change', e => {
-  document.querySelector(`#rentSortTabs .sort-tab[data-rsort="${CSS.escape(e.target.value)}"]`)?.click();
+document.addEventListener('change', e => {
+  const cb = e.target.closest && e.target.closest('[data-col-toggle]');
+  if (!cb || !_lmListing) return;
+  const id = String(_lmListing.id);
+  if (cb.checked) {
+    if (Collections.addListing(cb.dataset.colToggle, id) === 'full') { cb.checked = false; showToast(t('col.full')); }
+  } else Collections.removeListing(cb.dataset.colToggle, id);
+  renderLmCollections(id);
+});
+document.addEventListener('submit', e => {
+  const form = e.target.closest && e.target.closest('[data-col-new]');
+  if (!form) return;
+  e.preventDefault();
+  const name = form.querySelector('input').value.trim();
+  if (!name) return;
+  const col = Collections.create(name);
+  Collections.addListing(col.id, form.dataset.colNew);
+  renderLmCollections(form.dataset.colNew);
+  showToast(t('col.created', { name: col.name }));
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeListingModal();
+  _lmTrapFocus(e);
+});
+
+// ── Saved view: new collection, collection actions ──
+document.getElementById('savedNewColForm')?.addEventListener('submit', e => {
+  e.preventDefault();
+  const input = document.getElementById('savedNewColName');
+  const name = input.value.trim();
+  if (!name) { input.focus(); return; }
+  Collections.create(name);
+  input.value = '';
+  renderSavedCollections();
+  showToast(t('col.created', { name }));
+});
+document.getElementById('savedCollections')?.addEventListener('click', e => {
+  const btn = e.target.closest('[data-col-action]');
+  if (!btn) return;
+  const card = btn.closest('[data-col-id]');
+  const id = card.dataset.colId;
+  ({ view: () => viewCollection(id), share: () => shareCollection(id),
+     rename: () => _renameCollectionInline(card), delete: () => deleteCollectionConfirm(id) })[btn.dataset.colAction]?.();
+});
+
+// System theme changes (theme "follows the system")
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => {
+  if (!document.documentElement.dataset.theme) onThemeChanged();
 });
 
 // ── from shell.js · theme toggle ──

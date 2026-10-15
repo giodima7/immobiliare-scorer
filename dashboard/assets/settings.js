@@ -17,15 +17,21 @@ function _activeScanCity() {
       || 'milano';
 }
 
-const _SCAN_AREAS_CITY_ORDER = ['milano', 'roma', 'napoli', 'la_maddalena'];
+// Milan only — the multi-city picker is parked in full.html.
+const _SCAN_AREAS_CITY_ORDER = ['milano'];
 
 function _renderScanAreasCityTabs() {
   const wrap = document.getElementById('scanAreasCityTabs');
   if (!wrap) return;
+  const single = _SCAN_AREAS_CITY_ORDER.length < 2;
+  wrap.hidden = single;
+  const lbl = document.getElementById('scanAreasCityLabel');
+  if (lbl) lbl.hidden = single;
+  if (single) return;
   const active = _activeScanCity();
   wrap.innerHTML = _SCAN_AREAS_CITY_ORDER.map(code => {
     const meta  = (typeof _SCAN_CITY_META !== 'undefined' && _SCAN_CITY_META[code])
-                  || { flag: '📍', label: code };
+                  || { flag: '', label: code };
     const klass = code === active ? 'scan-areas-city-tab is-active' : 'scan-areas-city-tab';
     return `<button type="button" class="${klass}" data-scancity="${code}"
                     onclick="_setScanAreasCity('${code}')">
@@ -465,7 +471,7 @@ function _dqBuildCards(s, targetId) {
     return w > 0 ? `<div class="dq-grade-seg" style="width:${w}%;background:${_DQ_GRADE_COLORS[g]}"></div>` : '';
   }).join('');
   const gradeLabels = grades.filter(g => gd[g]).map(g =>
-    `<span style="color:${_DQ_GRADE_COLORS[g]};font-size:11px">${g}: ${gd[g]}</span>`
+    `<span style="color:${_DQ_GRADE_COLORS[g]};font-size:12px">${g}: ${gd[g]}</span>`
   ).join(' ');
   el.innerHTML = `
     <div class="dq-card">
@@ -595,14 +601,22 @@ function _dqRenderTable(rows) {
   if (src !== 'all') data = data.filter(r => r.source === src);
 
   data.sort(_dqSortComparator(_dqSortKey, _dqSortDir));
+  const more = document.getElementById('dqMore');
 
   if (!data.length) {
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--text-secondary);padding:20px">Nothing matches yet. Loosen up a filter.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--text-secondary);padding:20px">${escapeHtml(t('empty.no_results'))}</td></tr>`;
     if (count) count.textContent = '';
+    if (more) more.hidden = true;
     return;
   }
 
-  tbody.innerHTML = data.map(r => {
+  // 50 rows at a time — the full table (5k+ rows) made Tools 180,000 px tall.
+  const shown = data.slice(0, _dqLimit);
+  if (more) {
+    more.hidden = shown.length >= data.length;
+    more.onclick = () => { _dqLimit += 50; _dqRenderTable(rows); };
+  }
+  tbody.innerHTML = shown.map(r => {
     const critN = (r.critical_missing||[]).length;
     const impN  = (r.important_missing||[]).length;
     const critTip = (r.critical_missing||[]).join(', ') || '—';
@@ -612,17 +626,51 @@ function _dqRenderTable(rows) {
     return `<tr>
       <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(r.neighbourhood||'')}">${escapeHtml(r.neighbourhood||'—')}</td>
       <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(r.address||'')}">${escapeHtml(r.address||'—')}</td>
-      <td>${r.source||'—'}</td>
-      <td><span class="grade-badge-${r.grade}" style="padding:2px 9px;border-radius:10px;font-size:11px;font-weight:700">${r.grade}</span></td>
+      <td>${escapeHtml(r.source||'—')}</td>
+      <td><span class="grade-badge-${escapeHtml(r.grade)}" style="padding:2px 9px;border-radius:10px;font-size:12px;font-weight:700">${escapeHtml(r.grade)}</span></td>
       <td>${r.completeness_pct}%</td>
-      <td>${critN>0?`<span class="dq-pill dq-pill-crit" onmouseenter="_gtShow(event,'${critTip}')" onmouseleave="_gtHide()">${critN}</span>`:'<span style="color:var(--text-secondary)">—</span>'}</td>
-      <td>${impN>0?`<span class="dq-pill dq-pill-imp" onmouseenter="_gtShow(event,'${impTip}')" onmouseleave="_gtHide()">${impN}</span>`:'<span style="color:var(--text-secondary)">—</span>'}</td>
-      <td><span class="omi-tag ${omiCls}">${omiSrc}</span></td>
-      <td><button class="dq-btn-sm" style="font-size:11px;padding:2px 8px" onclick="_dqClearSingle('${r.id}',this)">Re-enrich</button></td>
+      <td>${critN>0?`<span class="dq-pill dq-pill-crit" title="${escapeHtml(critTip)}">${critN}</span>`:'<span style="color:var(--text-secondary)">—</span>'}</td>
+      <td>${impN>0?`<span class="dq-pill dq-pill-imp" title="${escapeHtml(impTip)}">${impN}</span>`:'<span style="color:var(--text-secondary)">—</span>'}</td>
+      <td><span class="omi-tag ${omiCls}">${escapeHtml(omiSrc)}</span></td>
+      <td><button type="button" class="btn btn-ghost btn-sm" data-dq-id="${escapeHtml(String(r.id))}" onclick="_dqClearSingle(this.dataset.dqId,this)">Re-enrich</button></td>
     </tr>`;
   }).join('');
 
-  if (count) count.textContent = `Showing ${data.length} of ${rows.length} listings`;
+  if (count) count.textContent = t('scroll.of', { a: fmt(shown.length), b: fmt(data.length) });
+}
+let _dqLimit = 50;
+
+// Tools cards fold away (the header toggles them); the open/closed state
+// is remembered. Scanner and alerts start open, the rest folded.
+const _CARD_OPEN_DEFAULT = new Set(['scannerCard', 'digestSettingsWrap']);
+function initCollapsibleCards() {
+  let state = {};
+  try { state = JSON.parse(localStorage.getItem('lume_tools_open') || '{}'); } catch { /* defaults */ }
+  document.querySelectorAll('#settingsView .settings-card').forEach((card, i) => {
+    if (card.dataset.collapsible) return;
+    const head = card.querySelector(':scope > .settings-card-header');
+    if (!head) return;
+    const key = card.id || 'card' + i;
+    card.dataset.collapsible = key;
+    card.classList.add('is-collapsible');
+    const open = key in state ? state[key] : _CARD_OPEN_DEFAULT.has(key);
+    card.classList.toggle('is-collapsed', !open);
+    const ind = document.createElement('span');
+    ind.className = 'collapse-ind';
+    ind.innerHTML = icon('chevron-down');
+    head.appendChild(ind);
+    head.setAttribute('role', 'button');
+    head.tabIndex = 0;
+    head.setAttribute('aria-expanded', String(open));
+    const toggle = () => {
+      const nowOpen = card.classList.toggle('is-collapsed') === false;
+      head.setAttribute('aria-expanded', String(nowOpen));
+      state[key] = nowOpen;
+      try { localStorage.setItem('lume_tools_open', JSON.stringify(state)); } catch { /* not persisted */ }
+    };
+    head.addEventListener('click', e => { if (!e.target.closest('button, a, input, select')) toggle(); });
+    head.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+  });
 }
 
 async function _dqClearSingle(id, btn) {
@@ -632,7 +680,7 @@ async function _dqClearSingle(id, btn) {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({listing_id: id}),
     });
-    btn.textContent = r.ok ? '✓ cleared' : '✗ failed';
-    btn.style.color = r.ok ? '#16a34a' : '#dc2626';
+    btn.textContent = r.ok ? 'Cleared' : 'Failed';
+    btn.style.color = r.ok ? 'var(--green-ink)' : 'var(--coral-ink)';
   } catch(e) { btn.textContent = '✗'; btn.disabled = false; }
 }

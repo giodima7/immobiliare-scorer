@@ -7,31 +7,6 @@
 const _debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
 const _renderRentalsDebounced = _debounce(() => { renderRentals(); saveFilters(); }, 350);
 
-// ── Pill-group sliding thumb ───────────────────────────────────────────────
-// Each .filter-pill-group has a single absolutely-positioned ::before
-// pseudo-element acting as the "thumb" — its left + width are driven by
-// two CSS custom properties that we update here. The CSS transition on
-// those properties does the sliding animation; no JS-side animation
-// frame work required.
-function _updatePillThumb(group) {
-  if (!group) return;
-  const active = group.querySelector('.filter-pill.active');
-  if (!active) {
-    group.style.removeProperty('--thumb-width');
-    return;
-  }
-  const groupRect = group.getBoundingClientRect();
-  const btnRect   = active.getBoundingClientRect();
-  // Subtract the group's padding-start so the thumb sits flush inside
-  // the rail's 3 px inner gutter at left:0 + 3px.
-  const left = btnRect.left - groupRect.left;
-  group.style.setProperty('--thumb-left',  `${left}px`);
-  group.style.setProperty('--thumb-width', `${btnRect.width}px`);
-}
-function _updateAllPillThumbs() {
-  document.querySelectorAll('.filter-pill-group').forEach(_updatePillThumb);
-}
-
 // Score slider ↔ number-input sync. Slider stays the source of truth so
 // getRentFilters() + every other reader of rScore.value keeps working.
 // rScoreVal (the old text mirror) is now a hidden node — preserved so
@@ -115,11 +90,11 @@ async function loadCacheStats() {
     const r = await fetch('/cache-stats');
     if (!r.ok) return;
     const s = await r.json();
-    if (countEl)  countEl.textContent  = s.total != null ? s.total.toLocaleString('it-IT') + ' enriched' : '–';
+    if (countEl)  countEl.textContent  = s.total != null ? t('tools.cache_n', { n: fmt(s.total) }) : '–';
     if (newestEl && s.newest) {
       const d = new Date(s.newest);
-      const ts = d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-      newestEl.textContent = '· last updated ' + ts;
+      const ts = d.toLocaleTimeString(currentLang === 'it' ? 'it-IT' : 'en-GB', { hour: '2-digit', minute: '2-digit' });
+      newestEl.textContent = '· ' + t('tools.cache_updated', { when: ts });
       newestEl.style.color = 'var(--text-secondary)';
     } else if (newestEl) {
       newestEl.textContent = '';
@@ -134,7 +109,6 @@ async function loadCacheStats() {
 // ── Geo enrichment button ─────────────────────────────────────────────────────
 
 // ── Mobile filter drawer (Rentals) ──────────────────────────────────────────
-let _drawerIsMap = false;            // true when the drawer was opened from the map view
 
 // ── Onboarding ──────────────────────────────────────────────────────────────
 // Called by showApp() AFTER auth resolves so Auth.userId() is the real user ID.

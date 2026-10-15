@@ -121,13 +121,13 @@ function applyRentFilters(data, f) {
 }
 
 // ── Progressive card loading ──────────────────────────────────────────────────
-// Initial render: 100 cards painted synchronously (so first paint is fast).
-// Subsequent batches: 100 more cards each time the scroll sentinel enters
-// the viewport (with a 600px root margin so cards arrive before the user
-// reaches the bottom). Filter changes reset the cursor and re-arm.
-const RENT_PAGE_INITIAL    = 100;
-const RENT_PAGE_SUBSEQUENT = 100;
-const SCROLL_ROOT_MARGIN   = '600px 0px 0px 0px';
+// Initial render: 60 cards painted synchronously (so first paint is fast).
+// Subsequent batches: 60 more cards each time the scroll sentinel comes
+// within 1,200 px of the viewport's bottom edge, so cards arrive before the
+// user reaches the end. Filter changes reset the cursor and re-arm.
+const RENT_PAGE_INITIAL    = 60;
+const RENT_PAGE_SUBSEQUENT = 60;
+const SCROLL_ROOT_MARGIN   = '0px 0px 1200px 0px';
 
 let _rentFilteredData  = [];
 let _rentRenderedCount = 0;
@@ -141,13 +141,11 @@ function _updateRentScrollStatus() {
   if (total === 0) {
     el.innerHTML = '';
   } else if (shown >= total) {
-    el.innerHTML = total > RENT_PAGE_INITIAL
-      ? `Showing all ${total.toLocaleString()} rentals`
-      : '';
+    el.textContent = total > RENT_PAGE_INITIAL ? t('scroll.all', { n: fmt(total) }) : '';
   } else {
     el.innerHTML =
-      `<span class="loading-dots">Loading more</span>` +
-      `<span class="scroll-meta">${shown.toLocaleString()} of ${total.toLocaleString()}</span>`;
+      `<span class="loading-dots">${escapeHtml(t('scroll.more'))}</span>` +
+      `<span class="scroll-meta">${escapeHtml(t('scroll.of', { a: fmt(shown), b: fmt(total) }))}</span>`;
   }
 }
 
@@ -162,22 +160,24 @@ function _rentAppendBatch() {
   const oldSentinel = document.getElementById('rentSentinel');
   if (oldSentinel) oldSentinel.remove();
 
-  const isFirstBatch = _rentRenderedCount === 0;
+  // Entrance animation and score count-up: first paint of the page only.
+  const animate = _rentRenderedCount === 0 && !_ringsAnimatedOnce;
   const frag = document.createDocumentFragment();
   batch.forEach(l => {
     const c = renderRentalCard(l);
-    if (!isFirstBatch) c.classList.add('no-anim');  // skip entrance animation
+    if (!animate) c.classList.add('no-anim');
     frag.appendChild(c);
   });
   grid.appendChild(frag);
   _rentRenderedCount += batch.length;
-  _observeScoreRings(grid);
+  _observeScoreRings(grid, animate);
+  if (animate && ALL_RENT.length) _ringsAnimatedOnce = true;
   _updateRentScrollStatus();
 
   if (_rentRenderedCount < _rentFilteredData.length) {
     const s = document.createElement('div');
     s.id = 'rentSentinel';
-    s.style.cssText = 'height:1px;pointer-events:none';
+    s.style.cssText = 'height:1px;pointer-events:none;grid-column:1/-1';
     grid.appendChild(s);
 
     if (_rentObserver) _rentObserver.disconnect();
@@ -200,14 +200,13 @@ function renderRentals() {
   }
   const asc = (rentSortKey === 'rent_mo' || rentSortKey === 'comps_delta_pct');
 
-  // If the user is scrolled past the filter bar, bring the grid back into view
-  // so they can see the updated results instead of empty space below a shorter list.
-  const statsBar = document.querySelector('#rentalsView .stats-bar');
-  if (statsBar && ALL_RENT.length > 0) {
-    const barTop = statsBar.getBoundingClientRect().top + window.scrollY;
-    if (window.scrollY > barTop) {
-      window.scrollTo({ top: Math.max(0, barTop - 10), behavior: 'smooth' });
-    }
+  // If the user is scrolled past the top of the results, bring them back so
+  // the updated list starts in view instead of empty space below it.
+  const chipsRow = document.getElementById('rActiveChips');
+  if (chipsRow && ALL_RENT.length > 0 && activeTab === 'rentals') {
+    const top = chipsRow.getBoundingClientRect().top + window.scrollY
+              - (document.getElementById('filterBar')?.offsetHeight || 0) - 120;
+    if (window.scrollY > top + 200) window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
   }
 
   _rentFilteredData = applyRentFilters(ALL_RENT, f);
@@ -238,11 +237,11 @@ function renderRentals() {
     //   (b) Initial fetch in flight (_rentLoading) → branded loading shimmer
     //   (c) Fetch completed but dataset is genuinely empty → scan-now copy
     if (ALL_RENT.length) {
-      grid.innerHTML = '<div class="empty"><h3>Nothing matches yet.</h3><p>Loosen up a filter.</p></div>';
+      grid.innerHTML = _emptyStateHtml(f);
     } else if (typeof _rentLoading !== 'undefined' && _rentLoading) {
       grid.innerHTML = _renderLumeLoading();
     } else {
-      grid.innerHTML = '<div class="empty"><h3>Lume hasn&rsquo;t scanned yet.</h3><p>Run the scanner to begin, or run <code>python3 fetch_rentals.py</code> to fetch listings.</p></div>';
+      grid.innerHTML = `<div class="empty"><h3>${escapeHtml(t('empty.no_data'))}</h3><p>${escapeHtml(t('empty.no_data_hint'))}</p></div>`;
     }
     _updateRentScrollStatus();
   } else {
@@ -255,49 +254,19 @@ function renderRentals() {
     const shown   = ALL_RENT.filter(l => !l.excluded);
     const nHidden = shown.filter(l => l.hidden_gem).length;
     const nGood   = shown.filter(l => l.good_value && !l.hidden_gem).length;
-    document.querySelectorAll('#rGemFilter .gem-tab').forEach(btn => {
+    // Deal-type buttons: label + count (the count hides on narrower bars).
+    ['rGemFilter', 'dGemFilter'].forEach(gid => document.querySelectorAll(`#${gid} .gem-tab`).forEach(btn => {
       const gem = btn.dataset.gem;
-      const n = gem === 'hidden' ? nHidden : gem === 'good' ? nGood : shown.length;
-      // Keep the label text, add/update a small count badge
       const label = gem === 'hidden' ? t('gem.hidden') : gem === 'good' ? t('gem.good') : t('gem.all');
-      btn.innerHTML = `${escapeHtml(label)} <span class="pill-count">${fmt(n)}</span>`;
-    });
-    // The active button just changed width (e.g. "All" → "All (7107)"),
-    // so the sliding thumb is now narrower than its target pill. Defer
-    // one frame so layout has flushed before we measure.
-    if (typeof _updateAllPillThumbs === 'function') {
-      requestAnimationFrame(_updateAllPillThumbs);
-    }
-    const nNew = ALL_RENT.filter(l => !l.excluded && isNew(l)).length;
-    const newStatEl  = document.getElementById('rNewStat');
-    const newCountEl = document.getElementById('rNewCount');
-    if (newStatEl && newCountEl) {
-      newStatEl.style.display = nNew > 0 ? '' : 'none';
-      newCountEl.textContent  = nNew;
-    }
+      const n = gem === 'hidden' ? nHidden : gem === 'good' ? nGood : null;
+      btn.innerHTML = `${escapeHtml(label)}${n != null ? ` <span class="pill-count">${fmt(n)}</span>` : ''}`;
+      btn.removeAttribute('data-i18n');
+    }));
   }
 
-  // Stats always reflect the full filtered set, not just rendered cards
+  // Counts reflect the full filtered set, not just rendered cards
   renderRentFilterExtras(f, _rentFilteredData.length);
-  document.getElementById('rShowCount').textContent     = _rentFilteredData.length;
-  const as = avg(_rentFilteredData, 'score_total');
-  const ar = avg(_rentFilteredData, 'rent_mo');
-  document.getElementById('rAvgScore').textContent      = as != null ? as.toFixed(0) : '–';
-  document.getElementById('rAvgRent').textContent       = ar != null ? '€' + fmt(Math.round(ar)) : '–';
-  document.getElementById('rFallbackCount').textContent = ALL_RENT.filter(l => l.omi_fallback).length;
-
-  // Geo coverage indicator
-  const geoTotal  = ALL_RENT.length;
-  const geoHaveIt = ALL_RENT.filter(l => l.metro_nearest_dist_m != null).length;
-  const geoPct    = geoTotal ? Math.round(geoHaveIt / geoTotal * 100) : 0;
-  const geoCovEl  = document.getElementById('geoCoverageCount');
-  if (geoCovEl) {
-    geoCovEl.textContent = `${geoHaveIt}/${geoTotal} (${geoPct}%)`;
-    const covWrap = document.getElementById('geoCoverage');
-    if (covWrap) covWrap.title =
-      `${geoHaveIt} of ${geoTotal} listings have geo data (metro/park/etc). ` +
-      (geoHaveIt === 0 ? 'Run the scanner to populate.' : `${geoTotal - geoHaveIt} still pending.`);
-  }
+  _updateMaintenanceCounts();
   if (activeTab === 'map' && _mapDataType === 'rentals') _mapRender();
 
   // Shared-collection banner — render above the grid when ?c=… is active
@@ -401,7 +370,9 @@ async function _loadRentalsNow() {
       // shows; the server drops them (and gzips) — ~4 MB instead of ~90.
       // "Show expired" (local only) asks for the archived rows too.
       const _city = (typeof currentCity === 'string' && currentCity) || 'milano';
-      const resp = await fetch(`/rentals?city=${encodeURIComponent(_city)}${_rentWithStale() ? '' : '&visible=1'}`);
+      // slim=1: photos, comparable ids and score reasons come per listing
+      // when its Details opens (/rentals/extras) — less than half the bytes.
+      const resp = await fetch(`/rentals?city=${encodeURIComponent(_city)}&slim=1${_rentWithStale() ? '' : '&visible=1'}`);
       if (resp.ok) raw = await resp.json();
     } catch { /* fall through to Supabase */ }
   }
@@ -454,6 +425,56 @@ async function _loadRentalsNow() {
 
 let _rentLoadPartial = false;
 
+// Tools → Data enrichment: zone-by-name and location-data coverage.
+function _updateMaintenanceCounts() {
+  const fb = document.getElementById('rFallbackCount');
+  if (fb) fb.textContent = fmt(ALL_RENT.filter(l => l.omi_fallback).length);
+  const geoCovEl = document.getElementById('geoCoverageCount');
+  if (!geoCovEl) return;
+  const geoTotal  = ALL_RENT.length;
+  const geoHaveIt = ALL_RENT.filter(l => l.metro_nearest_dist_m != null).length;
+  geoCovEl.textContent = `${fmt(geoHaveIt)} / ${fmt(geoTotal)}`;
+}
+
+// Empty state: name the filter that removes the most results, with a
+// one-click way to drop it ("0 with 'Up to €1' — Remove: 812 flats").
+function _emptyStateHtml(f) {
+  const chips = rentActiveFilterChips(f);
+  let best = null;
+  for (const c of chips) {
+    const g = _filtersWithout(f, c.key);
+    if (!g) continue;
+    const n = applyRentFilters(ALL_RENT, g).length;
+    if (!best || n > best.n) best = { ...c, n };
+  }
+  const tip = best && best.n > 0
+    ? `<p>${escapeHtml(t('empty.blocker', { f: best.label }))}</p>
+       <div class="empty-actions">
+         <button type="button" class="btn btn-primary" data-clear-empty="${escapeHtml(best.key)}">${escapeHtml(t('empty.remove', { n: fmt(best.n) }))}</button>
+         <button type="button" class="btn btn-ghost" data-clear-empty="all">${escapeHtml(t('filter.clear_filters'))}</button>
+       </div>`
+    : `<p>${escapeHtml(t('empty.loosen'))}</p>`;
+  return `<div class="empty"><h3>${escapeHtml(t('empty.no_results'))}</h3>${tip}</div>`;
+}
+
+// A copy of the filter state f without one filter (chip key) — null when
+// that filter isn't part of f.
+function _filtersWithout(f, key) {
+  const g = { ...f, must: [...(f.must || [])] };
+  if (key.startsWith('must:')) {
+    const k = key.slice(5);
+    g.must = g.must.filter(x => x !== k);
+    if (k === 'lift') g.elevator = false;
+    return g;
+  }
+  const blank = { areas: [], maxRent: 0, minRooms: 0, minSqm: 0, gemFilter: '', includeUnknown: false,
+                  condition: '', minDiscount: 0, contract: '', fascia: '', maxMetro: 0, minFloor: -999,
+                  source: '', minEnergy: '', minScore: 0, fListed: '', idQuery: '' };
+  if (!(key in blank)) return null;
+  g[key] = blank[key];
+  return g;
+}
+
 // Header line "N listings in Milan · date". Its data-i18n (the loading
 // text) is dropped once data is in, so a later translation pass — the
 // start-up one, or a language switch — doesn't put "reading…" back.
@@ -462,7 +483,7 @@ function renderHeaderMeta() {
   if (!meta || !ALL_RENT.length) return;
   meta.removeAttribute('data-i18n');
   meta.textContent = t('header.listings_count', {
-    n:    ALL_RENT.filter(l => !l.excluded).length,
+    n:    fmt(ALL_RENT.filter(l => !l.excluded).length),
     city: _cityDisplayName(_currentCityConfig()),
     date: fmtDate(new Date()),
   }) + (_rentLoadPartial ? ' · ' + t('error.partial') : '');

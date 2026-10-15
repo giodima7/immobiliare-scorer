@@ -61,7 +61,7 @@ function updateMetaCity() {
   const m = meta.textContent.match(/^(\d[\d.,\s]*)\s+(listings|annunci)\b/);
   if (!m) return;
   meta.textContent = t('header.listings_count', {
-    n:    parseInt(m[1].replace(/[^\d]/g, ''), 10),
+    n:    fmt(parseInt(m[1].replace(/[^\d]/g, ''), 10)),
     city: cityName,
     date: fmtDate(new Date()),
   });
@@ -138,14 +138,27 @@ function fmtDate(dateLike, opts) {
   return d.toLocaleDateString(locale, opts || { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-// Locale-aware number — Italian: "1.234,56", English: "1,234.56".
+// Locale-aware numbers — Italian "1.234,5", English "1,234.5". Grouping
+// always on: it-IT alone leaves 4-digit numbers ungrouped ("5768" next to
+// "11.480").
+const _nfCache = {};
+function _nf(opts) {
+  const key = currentLang + JSON.stringify(opts || {});
+  return _nfCache[key] || (_nfCache[key] = new Intl.NumberFormat(
+    currentLang === 'it' ? 'it-IT' : 'en-GB', { useGrouping: 'always', ...(opts || {}) }));
+}
 function fmtNum(n, decimals) {
-  if (n == null || Number.isNaN(Number(n))) return '–';
-  const locale = currentLang === 'it' ? 'it-IT' : 'en-GB';
+  if (n == null || n === '' || Number.isNaN(Number(n))) return '–';
   const d = decimals == null ? 0 : decimals;
-  return Number(n).toLocaleString(locale, {
-    minimumFractionDigits: d, maximumFractionDigits: d,
-  });
+  return _nf({ minimumFractionDigits: d, maximumFractionDigits: d }).format(Number(n));
+}
+// One decimal ("15,3" / "15.3").
+const fmt1 = n => fmtNum(n, 1);
+// Signed percentage with a real minus sign: "−27%", "+4%".
+function fmtPct(n, decimals = 0) {
+  if (n == null || Number.isNaN(Number(n))) return '–';
+  const v = Number(n);
+  return (v < 0 ? '−' : v > 0 ? '+' : '') + fmtNum(Math.abs(v), decimals) + '%';
 }
 
 // ── Global state ──────────────────────────────────────────────────────────────
@@ -214,7 +227,7 @@ function _gtPosition(point = null) {
 function _scoreBreakdownHtml(bdWrap) {
   const d = bdWrap.dataset;
   const _fmtSub = (v, w) => v !== '' && v != null
-    ? `<span style="font-weight:700">${v}</span> <span style="color:var(--text-secondary);font-size: 11px">×${w} = ${Math.round(Number(v)*w)}</span>`
+    ? `<span style="font-weight:700">${v}</span> <span style="color:var(--text-secondary);font-size: 12px">×${w} = ${Math.round(Number(v)*w)}</span>`
     : `<span style="color:var(--text-secondary)">– (neutral 50×${w} = ${Math.round(50*w)})</span>`;
   const wP  = Number(d.wPrice || 0.45);
   const wPr = Number(d.wProp  || 0.25);
@@ -226,7 +239,7 @@ function _scoreBreakdownHtml(bdWrap) {
     <div class="sb-row"><span class="sb-label">Property quality (×${wPr})</span>${_fmtSub(d.scProp,wPr)}</div>
     <div class="sb-row"><span class="sb-label">Location / geo (×${wL})</span>${_fmtSub(d.scLoc,wL)}</div>
     <div class="sb-row"><span class="sb-label">Penalty score (×${wPn})</span>${_fmtSub(d.scPen,wPn)}</div>
-    ${d.scCap ? `<div class="gt-sep"></div><div style="font-size: 11px;color:var(--coral)">${escapeHtml(t('card.cap', { reason: d.scCap }))}</div>` : ''}
+    ${d.scCap ? `<div class="gt-sep"></div><div style="font-size: 12px;color:var(--coral-ink)">${escapeHtml(t('card.cap', { reason: d.scCap }))}</div>` : ''}
     <div class="gt-sep"></div>
     <div class="sb-row"><span class="sb-label" style="font-weight:700">Total</span><span style="font-weight:800;font-size:14px">${d.scTotal ?? '–'} / 100</span></div>`;
 }
@@ -264,20 +277,21 @@ function formatAddress(str) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+// The one place the score thresholds live — cards, map, Details and Stats
+// all colour by it (CSS: .sc-high / .sc-mid / .sc-low).
 const scoreClass = s => s >= 70 ? 'high' : s >= 45 ? 'mid' : 'low';
-const fmt = n => n != null ? Number(n).toLocaleString('it-IT') : '–';
+const fmt = n => (n == null || n === '' || Number.isNaN(Number(n))) ? '–' : _nf().format(Number(n));
 
 // ── Floor display helpers ─────────────────────────────────────────────────────
 function _floorLabel(l) {
-  if (l.floor_label) return l.floor_label;
   const fn = l.floor_n;
-  if (fn == null) return null;
-  if (fn <= -2) return 'Interrato';
-  if (fn === -1) return 'Seminterrato';
-  if (fn === 0) return 'Piano terra';
+  if (fn == null) return l.floor_label || null;
+  if (fn <= -2) return t('floor.basement');
+  if (fn === -1) return t('floor.semi');
+  if (fn === 0) return t('floor.ground');
   // Legacy: old data had R→-1 incorrectly; detect via raw floor field
-  if (fn === 1 && l.floor === 'R') return 'Piano rialzato';
-  return `${fn}° piano`;
+  if (fn === 1 && l.floor === 'R') return t('floor.raised');
+  return t('floor.n', { n: fn });
 }
 
 function avg(arr, key) {
@@ -288,11 +302,12 @@ function avg(arr, key) {
 // ── Favourites ────────────────────────────────────────────────────────────────
 function getFavourites()     { return Storage.get('favourites', []); }
 
+// Header "Saved" count — rental favourites (the sales list is retired).
 function updateFavBadge() {
-  const n     = getFavourites().length;
+  const n     = getRentFavs().length;
   const badge = document.getElementById('favBadge');
   if (!badge) return;
-  badge.textContent = n;
+  badge.textContent = fmt(n);
   badge.classList.toggle('visible', n > 0);
 }
 
@@ -308,6 +323,8 @@ function toggleRentFav(id) {
   const i   = ids.indexOf(String(id));
   if (i === -1) ids.push(String(id)); else ids.splice(i, 1);
   saveRentFavs(ids);
+  updateFavBadge();
+  if (typeof activeTab !== 'undefined' && activeTab === 'saved' && typeof renderSaved === 'function') renderSaved();
   return i === -1;
 }
 
@@ -321,8 +338,6 @@ async function applyStaticMode() {
     if (el) el.style.display = 'none';
   });
 
-  // Header: local-server badge (Run-Lume + Zones buttons removed entirely).
-  document.querySelectorAll('.server-note').forEach(el => el.style.display = 'none');
 
   // Scanner panels (querySelectorAll — there are two .scanner-panel elements).
   // The .email-panel was removed in the UI consolidation.
@@ -343,13 +358,9 @@ async function applyStaticMode() {
   // useful when working locally against the scanner, meaningless to a
   // visitor on immobiliare-scorer.pages.dev. Show both only on localhost.
   const onLocalhost = ['localhost', '127.0.0.1', '0.0.0.0'].includes(location.hostname);
-  if (onLocalhost) {
-    const pill = document.getElementById('statusPill');
-    if (pill) pill.style.display = '';
-  } else {
-    const pill   = document.getElementById('statusPill');
-    if (pill)   pill.style.display   = 'none';
-  }
+  setStatusPill(false);
+  const pill = document.getElementById('statusPill');
+  if (pill) pill.hidden = !onLocalhost;
 
   // Last-scan time used to come from the JSON snapshot's Last-Modified
   // header. Supabase doesn't expose a per-table mtime, but renderRentals()
@@ -429,13 +440,7 @@ async function init() {
   if (!IS_LIVE) {
     applyStaticMode();
   } else {
-    const pill = document.getElementById('statusPill');
-    if (pill) {
-      pill.classList.add('is-live');
-      pill.style.display = '';
-      const lbl = document.getElementById('statusPillLabel');
-      if (lbl) lbl.textContent = 'Live';
-    }
+    setStatusPill(true);
     // Late-binding fix: if the user already clicked Settings BEFORE the
     // /api-ping above resolved, switchTab('settings') ran with IS_LIVE
     // still false and left #scannerCard hidden. Re-run the IS_LIVE-gated
@@ -454,23 +459,95 @@ async function init() {
     // Real scoring weights for the score breakdown (not just when Settings
     // is opened) + the local copy of saved favourites/collections.
     if (typeof _loadScoreSettings === 'function') _loadScoreSettings();
+    if (typeof window._loadPoisStatus === 'function') window._loadPoisStatus();
     await _syncUserDataFromServer();
     _loadLocalAlertIdentity();
   }
 
-  // Load the cities config first so currentCity → display name + map
-  // centre + has_metro are accurate before any listings render. The
-  // fallback availableCities baked into the script already covers the
-  // four seeded cities so a failure here is a no-op.
-  try { await loadAvailableCities(); } catch (_) { /* keep fallback */ }
-  updateCityToggleUI();
-  updateFiltersForCurrentCity();
-
+  // The cities config (display name, map centre) and the listings load in
+  // parallel — the baked-in fallback covers Milan until the config lands.
+  const citiesReady = loadAvailableCities().catch(() => {}).then(() => {
+    updateCityToggleUI();
+    updateFiltersForCurrentCity();
+  });
   // Load initial data now that IS_LIVE is settled — avoids a race where a
   // standalone loadRentals() call fires before init() and picks the wrong
   // path (Supabase REST in deployed mode vs Flask /rentals locally).
   await loadRentals();
+  await citiesReady;
   loadCacheStats();
+}
+
+// Header data-source dot: the label lives in its tooltip.
+function setStatusPill(live) {
+  const pill = document.getElementById('statusPill');
+  if (!pill) return;
+  pill.classList.toggle('is-live', !!live);
+  const label = live ? t('status.live') : t('status.snapshot');
+  pill.title = label;
+  pill.setAttribute('aria-label', label);
+  const lbl = document.getElementById('statusPillLabel');
+  if (lbl) lbl.textContent = label;
+}
+
+// ── Heavy libraries, loaded on first use ──────────────────────────────────────
+// Leaflet (Map tab) and Chart.js (Stats, Tools) used to load with the page.
+function _loadAsset(tag, attrs) {
+  return new Promise((resolve, reject) => {
+    const el = document.createElement(tag);
+    Object.assign(el, attrs);
+    el.crossOrigin = 'anonymous';
+    el.onload = () => resolve();
+    el.onerror = () => reject(new Error('could not load ' + (attrs.src || attrs.href)));
+    document.head.appendChild(el);
+  });
+}
+let _leafletPromise = null;
+function ensureLeaflet() {
+  if (window.L && L.markerClusterGroup) return Promise.resolve();
+  if (!_leafletPromise) {
+    const css = (href, integrity) => _loadAsset('link', { rel: 'stylesheet', href, integrity });
+    _leafletPromise = Promise.all([
+      css('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css', 'sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H'),
+      css('https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css', 'sha384-pmjIAcz2bAn0xukfxADbZIb3t8oRT9Sv0rvO+BR5Csr6Dhqq+nZs59P0pPKQJkEV'),
+      css('https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css', 'sha384-wgw+aLYNQ7dlhK47ZPK7FRACiq7ROZwgFNg0m04avm4CaXS+Z9Y7nMu8yNjBKYC+'),
+      _loadAsset('script', { src: 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js', integrity: 'sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH' })
+        .then(() => _loadAsset('script', { src: 'https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js', integrity: 'sha384-eXVCORTRlv4FUUgS/xmOyr66XBVraen8ATNLMESp92FKXLAMiKkerixTiBvXriZr' })),
+    ]).catch(e => { _leafletPromise = null; throw e; });
+  }
+  return _leafletPromise;
+}
+let _chartPromise = null;
+function ensureChart() {
+  if (window.Chart) { applyChartTheme(); return Promise.resolve(); }
+  if (!_chartPromise) {
+    _chartPromise = _loadAsset('script', { src: 'https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js', integrity: 'sha384-e6cc9LaIG7xZ3XD5B+jtr1NhTWPQGQdRCh6xiZ+ZFUtWCpg4ycv3Sh+SkZoopvUY' })
+      .then(applyChartTheme)
+      .catch(e => { _chartPromise = null; throw e; });
+  }
+  return _chartPromise;
+}
+// Chart.js reads plain colours: hand it the current theme's tokens.
+function cssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+function applyChartTheme() {
+  if (!window.Chart) return;
+  Chart.defaults.font.family = cssVar('--font') || 'Inter, sans-serif';
+  Chart.defaults.font.size = 12;
+  Chart.defaults.color = cssVar('--text-secondary');
+  Chart.defaults.borderColor = cssVar('--border-light');
+}
+function isDarkTheme() {
+  const th = document.documentElement.dataset.theme;
+  return th === 'dark' || (!th && window.matchMedia('(prefers-color-scheme: dark)').matches);
+}
+// After a theme change: re-colour what paints with plain colours.
+function onThemeChanged() {
+  applyChartTheme();
+  if (typeof insightsLoaded !== 'undefined' && insightsLoaded && typeof computeInsights === 'function' && activeTab === 'insights') computeInsights();
+  else if (typeof insightsLoaded !== 'undefined') insightsLoaded = false;
+  if (typeof _mapApplyTheme === 'function') _mapApplyTheme();
 }
 
 // ── ID search: lives inside the rentals filter bar ─
@@ -483,15 +560,18 @@ const TAB_STORAGE_KEY = 'active_tab';
 function switchTab(tab, opts) {
   const persist = !opts || opts.persist !== false;
   activeTab = tab;
-  ['rentalsView','mapView','insightsView','settingsView'].forEach(id => {
+  document.body.dataset.tab = tab;
+  ['rentalsView','mapView','savedView','insightsView','settingsView'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
-    const show = id === tab + 'View';
-    el.hidden = !show;
-    el.style.display = show ? '' : 'none';
+    el.hidden = id !== tab + 'View';
   });
-  document.querySelectorAll('.tab-btn').forEach(b =>
-    b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    const on = b.dataset.tab === tab;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-selected', String(on));
+  });
+  if (typeof toggleRentPanel === 'function') toggleRentPanel(null);
   // Recalc after the tab swap so the filter bar lands at the right top.
   if (typeof _updateStickyTops === 'function') {
     requestAnimationFrame(_updateStickyTops);
@@ -505,22 +585,23 @@ function switchTab(tab, opts) {
   if (tab === 'rentals') {
     startScannerPoll();
     if (!ALL_RENT.length) loadRentals();
-    // First-paint of the filter bar happens with display:none on the
-    // rentalsView container — getBoundingClientRect returns zeros and
-    // the pill-thumbs land at 0/0. Recompute now that the bar is laid
-    // out so the thumbs snap to the correct positions immediately.
-    if (typeof _updateAllPillThumbs === 'function') {
-      requestAnimationFrame(_updateAllPillThumbs);
-    }
   } else if (tab === 'map') {
     stopScannerPoll();
-    _mapInit();
-    if (_map) _map.invalidateSize();  // Leaflet needs this when container was hidden
-    if (_mapDataType === 'rentals' && !ALL_RENT.length) loadRentals().then(() => _mapRender());
-    else _mapRender();
+    ensureLeaflet().then(() => {
+      if (activeTab !== 'map') return;
+      _mapInit();
+      _sizeMapView();
+      if (_map) _map.invalidateSize();  // Leaflet needs this when container was hidden
+      if (!ALL_RENT.length) loadRentals().then(() => _mapRender());
+      else _mapRender();
+    }).catch(e => showToast(t('error.lib', { what: 'Leaflet' }) + ' ' + e.message));
+  } else if (tab === 'saved') {
+    stopScannerPoll();
+    if (typeof renderSaved === 'function') renderSaved();
   } else if (tab === 'insights') {
     stopScannerPoll();
-    showInsightsTab();
+    ensureChart().then(() => { if (activeTab === 'insights') showInsightsTab(); })
+      .catch(e => showToast(t('error.lib', { what: 'Chart.js' }) + ' ' + e.message));
   } else if (tab === 'settings') {
     // Keep the scanner poll alive on Settings — the multi-city Enrichment
     // panel reads its progress from /scanner-status. Polling here is also
@@ -528,7 +609,8 @@ function switchTab(tab, opts) {
     startScannerPoll();
     _settingsLoad();
     _loadScoreSettings();
-    _dqLoad();
+    ensureChart().catch(() => {}).finally(() => _dqLoad());
+    if (typeof initCollapsibleCards === 'function') initCollapsibleCards();
     // Scanner card is localhost-only (the Cloudflare deployment doesn't
     // have api.py running). Re-render the city grid each time we open
     // Settings so it picks up any localStorage edits made elsewhere.
@@ -559,8 +641,16 @@ function restoreActiveTab() {
     const params = new URLSearchParams(location.search);
     if (params.get('c'))                  return;
 
+    const validTabs = ['rentals', 'map', 'saved', 'insights', 'settings'];
+    // ?tab=saved — the old /favourites page redirects here.
+    const asked = params.get('tab');
+    if (asked && validTabs.includes(asked)) {
+      const url = new URL(location); url.searchParams.delete('tab');
+      history.replaceState({}, '', url);
+      switchTab(asked);
+      return;
+    }
     const saved = Storage.get(TAB_STORAGE_KEY, 'rentals');
-    const validTabs = ['rentals', 'map', 'insights', 'settings'];
     // Avoid a redundant re-render when the saved tab matches the default.
     if (validTabs.includes(saved) && saved !== 'rentals') {
       switchTab(saved, { persist: false });
@@ -585,6 +675,7 @@ function setTheme(mode) {
     else localStorage.setItem('lume_theme', mode);
   } catch (_) {}
   renderThemeToggle();
+  onThemeChanged();
 }
 
 function cycleTheme() {
@@ -595,7 +686,7 @@ function renderThemeToggle() {
   const btn = document.getElementById('themeToggle');
   if (!btn) return;
   const mode = currentTheme();
-  btn.innerHTML = icon({ system: 'device-desktop', light: 'sun', dark: 'moon' }[mode]);
+  btn.innerHTML = icon({ system: 'circle-half-2', light: 'sun', dark: 'moon' }[mode]);
   btn.title = t('theme.' + mode);
   btn.setAttribute('aria-label', t('theme.' + mode));
 }
