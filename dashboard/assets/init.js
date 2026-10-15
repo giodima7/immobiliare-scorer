@@ -449,6 +449,11 @@ document.getElementById('rBtnReset').addEventListener('click', () => {
   const rst = document.getElementById('rShowStale'); if (rst) rst.checked = false;
   document.getElementById('rMinEnergy').value = '';
   document.getElementById('rListed').value    = '';
+  // filters.js state: must-haves, not-yet-known, condition / discount / contract
+  rentMust.clear();
+  rentIncludeUnknown = false;
+  ['rIncludeUnknown', 'dIncludeUnknown'].forEach(id => { const c = document.getElementById(id); if (c) c.checked = false; });
+  ['rCondition', 'rMinDiscount', 'rContract'].forEach(id => { const c = document.getElementById(id); if (c) c.value = ''; });
   document.querySelectorAll('#rGemFilter .gem-tab').forEach(t =>
     t.classList.toggle('active', t.dataset.gem === ''));
   document.querySelectorAll('#rSourceFilter .sort-tab').forEach(t =>
@@ -568,11 +573,11 @@ document.getElementById('btnCacheClear')?.addEventListener('click', async () => 
         btn.style.opacity = '0.6';
         if (gStatus) gStatus.textContent = `✓ ${j.metro ?? 0} metro · ${j.tram ?? 0} tram · ${j.supermarket ?? 0} supermarkets · ${j.park ?? 0} parks`;
       } else {
-        btn.textContent = '📡 POI data';
+        btn.textContent = 'POI data';
         if (gStatus) gStatus.textContent = '✗ ' + (j.error || 'download failed');
       }
     } catch (e) {
-      btn.textContent = '📡 POI data';
+      btn.textContent = 'POI data';
       if (gStatus) gStatus.textContent = '✗ ' + e.message;
     } finally {
       btn.disabled = false;
@@ -647,6 +652,7 @@ document.getElementById('btnCacheClear')?.addEventListener('click', async () => 
     // Gem filter only applies to the rentals list (not map)
     const gemField = document.getElementById('dGemFilter')?.closest('.drawer-field');
     if (gemField) gemField.style.display = _drawerIsMap ? 'none' : '';
+    drawer.querySelectorAll('.drawer-rent-only').forEach(el => { el.style.display = _drawerIsMap ? 'none' : ''; });
     backdrop.classList.add('is-open');
     drawer.classList.remove('is-closing');
     drawer.classList.add('is-open');
@@ -692,6 +698,9 @@ document.getElementById('btnCacheClear')?.addEventListener('click', async () => 
       document.querySelectorAll('#dGemFilter .gem-tab').forEach(b => {
         b.classList.toggle('active', b.dataset.gem === gem);
       });
+      get('dCondition').value   = get('rCondition')?.value || '';
+      get('dMinDiscount').value = get('rMinDiscount')?.value || '';
+      get('dIncludeUnknown').checked = rentIncludeUnknown;
     }
   }
 
@@ -723,6 +732,8 @@ document.getElementById('btnCacheClear')?.addEventListener('click', async () => 
     document.querySelectorAll('#rGemFilter .gem-tab').forEach(b => {
       b.classList.toggle('active', b.dataset.gem === gem);
     });
+    if (get('rCondition'))   get('rCondition').value   = get('dCondition').value;
+    if (get('rMinDiscount')) get('rMinDiscount').value = get('dMinDiscount').value;
 
     // Map state — mirror rental filters into mRent* and mapSelectedAreas
     mapSelectedAreas = areas;
@@ -741,6 +752,7 @@ document.getElementById('btnCacheClear')?.addEventListener('click', async () => 
 
     if (typeof renderRentals === 'function') renderRentals();
     if (typeof _mapRender === 'function')    _mapRender();
+    if (typeof saveFilters === 'function')   saveFilters();
   }
 
   // Header filter button — choose mode based on active tab
@@ -794,6 +806,12 @@ document.getElementById('btnCacheClear')?.addEventListener('click', async () => 
     document.getElementById('dScoreVal').textContent = '0';
     document.querySelectorAll('#dGemFilter .gem-tab').forEach(b =>
       b.classList.toggle('active', b.dataset.gem === ''));
+    ['dCondition', 'dMinDiscount'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    rentMust.clear();
+    const el = document.getElementById('rElevator'); if (el) el.checked = false;
+    rentIncludeUnknown = false;
+    ['rIncludeUnknown', 'dIncludeUnknown'].forEach(id => { const c = document.getElementById(id); if (c) c.checked = false; });
+    renderRentals();
   });
 
   // Swipe-down to close. Restrict to touches that START on the drawer
@@ -969,11 +987,11 @@ document.getElementById('btnGemSettingsSave')?.addEventListener('click', async (
     if (!rescoreR.ok) throw new Error(j.error || 'Rescore failed');
 
     statusEl.textContent = `✓ Saved & rescored ${j.count || ''} listings`;
-    statusEl.style.color = 'var(--green)';
+    statusEl.style.color = 'var(--green-mid)';
     await loadRentals();   // refresh cards
   } catch (e) {
     statusEl.textContent = '✗ ' + e.message;
-    statusEl.style.color = 'var(--red)';
+    statusEl.style.color = 'var(--coral)';
   }
   setTimeout(() => { statusEl.textContent = ''; statusEl.style.color = ''; }, 4000);
 });
@@ -995,12 +1013,12 @@ document.getElementById('btnScoreSettingsSave')?.addEventListener('click', async
     });
     const j = await r.json();
     statusEl.textContent = r.ok ? '✓ Saved' : '✗ ' + (j.error || 'Error');
-    statusEl.style.color = r.ok ? 'var(--green)' : 'var(--red)';
+    statusEl.style.color = r.ok ? 'var(--green-mid)' : 'var(--coral)';
     if (r.ok) Object.assign(scoreSettings, payload);
     setTimeout(() => { statusEl.textContent = ''; statusEl.style.color = ''; }, 3000);
   } catch (e) {
     statusEl.textContent = '✗ ' + e.message;
-    statusEl.style.color = 'var(--red)';
+    statusEl.style.color = 'var(--coral)';
   }
 });
 document.getElementById('btnRescore')?.addEventListener('click', async () => {
@@ -1010,12 +1028,12 @@ document.getElementById('btnRescore')?.addEventListener('click', async () => {
     const r = await fetch('/api/rescore', { method: 'POST' });
     const j = await r.json();
     statusEl.textContent = r.ok ? `✓ Rescored ${j.count || ''} listings` : '✗ ' + (j.error || 'Error');
-    statusEl.style.color = r.ok ? 'var(--green)' : 'var(--red)';
+    statusEl.style.color = r.ok ? 'var(--green-mid)' : 'var(--coral)';
     if (r.ok) { await loadRentals(); }
     setTimeout(() => { statusEl.textContent = ''; statusEl.style.color = ''; }, 4000);
   } catch (e) {
     statusEl.textContent = '✗ ' + e.message;
-    statusEl.style.color = 'var(--red)';
+    statusEl.style.color = 'var(--coral)';
   }
 });
 document.getElementById('btnSettingsSave')?.addEventListener('click', async () => {
@@ -1036,7 +1054,7 @@ document.getElementById('btnSettingsSave')?.addEventListener('click', async () =
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
     const savedLbl = (typeof t === 'function' && t('settings.areas_saved')) || 'Scan areas saved';
-    setStatus(`✓ ${savedLbl} — ${city} (${activeSlugs.length})`, 'var(--green)');
+    setStatus(`✓ ${savedLbl} — ${city} (${activeSlugs.length})`, 'var(--green-mid)');
     // Drawer chips still speak display names. Hand them the prettified
     // macro labels so the user sees the same set the Settings card just
     // confirmed (Milan only — other cities don't anchor those multi-selects).
@@ -1048,7 +1066,7 @@ document.getElementById('btnSettingsSave')?.addEventListener('click', async () =
     }
   } catch (e) {
     const errLbl = (typeof t === 'function' && t('settings.areas_save_error')) || 'Could not save scan areas';
-    setStatus('✗ ' + errLbl + ': ' + e.message, 'var(--red)');
+    setStatus('✗ ' + errLbl + ': ' + e.message, 'var(--coral)');
   }
   setTimeout(() => setStatus(''), 4000);
 });
@@ -1108,3 +1126,58 @@ document.getElementById('btnDqExport')?.addEventListener('click', () => {
 // ── Boot Auth ─────────────────────────────────────────────────────────────────
 Auth.init();
 
+
+// ── from filters.js · filter bar wiring ──
+document.getElementById('rMustBtn')?.addEventListener('click', () => toggleRentPanel('must'));
+document.getElementById('rMoreBtn')?.addEventListener('click', () => toggleRentPanel('more'));
+['rMustGrid', 'dMustGrid'].forEach(id => document.getElementById(id)?.addEventListener('click', e => {
+  const chip = e.target.closest('[data-must]');
+  if (chip) toggleRentMust(chip.dataset.must);
+}));
+['rIncludeUnknown', 'dIncludeUnknown'].forEach(id => document.getElementById(id)?.addEventListener('change', e => {
+  rentIncludeUnknown = e.target.checked;
+  ['rIncludeUnknown', 'dIncludeUnknown'].forEach(o => { const c = document.getElementById(o); if (c) c.checked = rentIncludeUnknown; });
+  renderRentals();
+  saveFilters();
+}));
+['rCondition', 'rMinDiscount', 'rContract'].forEach(id =>
+  document.getElementById(id)?.addEventListener('change', () => { renderRentals(); saveFilters(); }));
+document.getElementById('rActiveChips')?.addEventListener('click', e => {
+  const chip = e.target.closest('[data-clear]');
+  if (chip) clearRentFilter(chip.dataset.clear);
+});
+// Panels close on Escape and on a click outside the filter bar.
+document.addEventListener('keydown', e => { if (e.key === 'Escape') toggleRentPanel(null); });
+document.addEventListener('click', e => {
+  // A must-have chip re-renders while handling its own click, so the target
+  // may already be detached — that's a click inside, not outside.
+  if (!e.target.isConnected) return;
+  if (!e.target.closest('.fbar') && !e.target.closest('.msd-panel')) toggleRentPanel(null);
+});
+
+
+// ── from details.js · Details view wiring ──
+document.addEventListener('click', e => {
+  const opener = e.target.closest && e.target.closest('[data-open-details]');
+  if (opener) { e.preventDefault(); openListingModal(opener.dataset.openDetails); return; }
+  const box = document.getElementById('listingModal');
+  if (!box || box.hidden) return;
+  if (e.target === box || e.target.closest('.lm-close')) { closeListingModal(); return; }
+  const fav = e.target.closest('[data-lm-fav]');
+  if (fav) {
+    const now = toggleRentFav(fav.dataset.lmFav);
+    fav.classList.toggle('on', now);
+    fav.querySelector('span').textContent = now ? t('lm.saved') : t('lm.save');
+    document.querySelectorAll(`.btn-fav[data-rent-id="${CSS.escape(fav.dataset.lmFav)}"]`).forEach(b => {
+      b.classList.toggle('is-fav', now);
+      b.innerHTML = favBtnInner();
+    });
+  }
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeListingModal(); });
+document.getElementById('rSortSelect')?.addEventListener('change', e => {
+  document.querySelector(`#rentSortTabs .sort-tab[data-rsort="${CSS.escape(e.target.value)}"]`)?.click();
+});
+
+// ── from shell.js · theme toggle ──
+renderThemeToggle();

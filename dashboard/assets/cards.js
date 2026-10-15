@@ -215,15 +215,15 @@ function reasonTextLocalised(r) {
   return r.text || '';
 }
 
-// Combined specs pill: 🛏 N · 🛁 N · Xm²
+// Combined specs pill: bed N · bath N · Xm²
 // Falls back gracefully when fields are missing.
 function specsPillHtml(l) {
   const parts = [];
   if (l.bedrooms !== null && l.bedrooms !== undefined) {
     const label = l.bedrooms === 0 ? 'studio' : `${l.bedrooms}`;
-    parts.push(`🛏 ${label}`);
+    parts.push(`${icon('bed')} ${label}`);
   }
-  if (l.bathrooms) parts.push(`🛁 ${l.bathrooms}`);
+  if (l.bathrooms) parts.push(`${icon('bath')} ${l.bathrooms}`);
   if (l.sqm)        parts.push(`${l.sqm}m²`);
   if (parts.length === 0) return '';
   return `<span class="specs-pill">${parts.join(' · ')}</span>`;
@@ -235,7 +235,7 @@ function specsPillHtml(l) {
 function statPillsHtml(l, isRental) {
   const pills = [];
 
-  // Pill 1 — Metro: 🚇 Cadorna · 6 min M1
+  // Pill 1 — Metro: Cadorna · 6 min M1
   // Always show walking time, not distance. When metro_walk_min is missing
   // (≈18 % of sale listings — geo enrichment didn't compute it), derive it
   // from metro_nearest_dist_m using a 70 m/min walking pace, which matches
@@ -255,14 +255,14 @@ function statPillsHtml(l, isRental) {
     const tip  = l.metro_nearest_name
       ? `${l.metro_nearest_name}${l.metro_nearest_line ? ' (' + l.metro_nearest_line + ')' : ''} · ${walkMin} min walk${distHint}`
       : `${walkMin} min walk to nearest metro${distHint}`;
-    pills.push(`<span class="stat-pill" style="color:${color}" title="${escapeHtml(tip)}">🚇 ${name}${walkMin} min${line}</span>`);
+    pills.push(`<span class="stat-pill" style="color:${color}" title="${escapeHtml(tip)}">${icon('train')} ${name}${walkMin} min${line}</span>`);
   } else {
-    pills.push(`<span class="stat-pill" style="color:var(--text-muted)">🚇 —</span>`);
+    pills.push(`<span class="stat-pill" style="color:var(--text-muted)">${icon('train')} —</span>`);
   }
 
   // Pill 2 — Floor + lift, falling back to rooms / lift when floor is unknown.
   // Idealista's scraper occasionally misses floor entirely (~6 % of sales);
-  // showing an empty `🏢 —` reads as a bug. Fall back to whatever's useful.
+  // showing an empty floor pill reads as a bug. Fall back to whatever's useful.
   const floorLbl = (typeof _floorLabel === 'function' ? _floorLabel(l) : null)
                 || (l.floor_n != null ? `${l.floor_n}° piano` : null);
   if (floorLbl) {
@@ -270,16 +270,16 @@ function statPillsHtml(l, isRental) {
     const fcol = fn != null && fn < 0   ? 'var(--coral)'
               : fn === 0                 ? 'var(--amber)'
               : 'var(--text-primary)';
-    const lift = l.elevator === true ? ' 🛗' : '';
-    pills.push(`<span class="stat-pill" style="color:${fcol}">🏢 ${escapeHtml(floorLbl)}${lift}</span>`);
+    const lift = l.elevator === true ? ` ${icon('elevator')}` : '';
+    pills.push(`<span class="stat-pill" style="color:${fcol}">${icon('building')} ${escapeHtml(floorLbl)}${lift}</span>`);
   } else if (l.elevator === true || l.elevator === false) {
     // Floor unknown but lift state known — still useful
-    const liftLabel = l.elevator === true ? '🛗 With lift' : '🚫 No lift';
+    const liftLabel = l.elevator === true ? `${icon('elevator')} With lift` : 'No lift';
     pills.push(`<span class="stat-pill" style="color:var(--text-secondary)">${liftLabel}</span>`);
   } else if (l.rooms != null) {
     // Last fallback: rooms count
     const roomsLabel = l.rooms === 1 ? '1 room' : `${l.rooms} rooms`;
-    pills.push(`<span class="stat-pill" style="color:var(--text-secondary)">🛏 ${roomsLabel}</span>`);
+    pills.push(`<span class="stat-pill" style="color:var(--text-secondary)">${icon('bed')} ${roomsLabel}</span>`);
   }
   // If floor + lift + rooms are all unknown, simply omit the middle pill
   // — the row stays clean rather than displaying a placeholder.
@@ -290,7 +290,7 @@ function statPillsHtml(l, isRental) {
   if (days != null) {
     const txt = days <= 0 ? t('card.seen_today') : t('card.seen_days', { n: days });
     const col = days <= 3 ? 'var(--green-deep)' : days > 30 ? 'var(--text-muted)' : 'var(--text-secondary)';
-    pills.push(`<span class="stat-pill" style="color:${col}" title="${escapeHtml(firstSeenLabel(l) || '')}">🕒 ${escapeHtml(txt)}</span>`);
+    pills.push(`<span class="stat-pill" style="color:${col}" title="${escapeHtml(firstSeenLabel(l) || '')}">${icon('clock')} ${escapeHtml(txt)}</span>`);
   }
 
   return `<div class="stat-pills">${pills.join('')}</div>`;
@@ -467,10 +467,15 @@ function extremeUnderpricingBannerHtml(l) {
 }
 
 // ── Rentals — card renderer ───────────────────────────────────────────────────
+// Fav button content — the heart fills via .btn-fav.is-fav (CSS).
+function favBtnInner() {
+  return `${icon('heart')}<span>Fav</span>`;
+}
+
 function renderRentalCard(l) {
   const sc       = scoreClass(l.score_total);
   const barPct   = getRentBarPct(l);
-  const fasciaColour = barPct <= 33 ? 'var(--green)' : barPct <= 66 ? 'var(--yellow)' : 'var(--red)';
+  const fasciaColour = barPct <= 33 ? 'var(--green-mid)' : barPct <= 66 ? 'var(--amber)' : 'var(--coral)';
 
   const omiMid    = l.omi_loc_mid ?? l.omi_rent_mid;
 
@@ -479,79 +484,13 @@ function renderRentalCard(l) {
   const wPr = scoreSettings.w_property ?? 0.25;
   const wL  = scoreSettings.w_location ?? 0.20;
   const wPn = scoreSettings.w_penalty  ?? 0.10;
-  const _yesNo = v => v === true ? 'Yes ✓' : v === false ? 'No' : null;
-  const _heat  = { autonomous: 'Autonomous', centralised: 'Central', none: 'None', unknown: null };
+
 
   // ── Score breakdown tooltip ──────────────────────────────────────────────
   // (Score breakdown shown via #globalTooltip on score-badge-wrap hover — see tooltip handler above)
 
-  // ── Expandable details panel ─────────────────────────────────────────────
-  // val is escaped here — scraped text (condition, heating, floor, metro …)
-  // goes straight into innerHTML.
-  const _dRow = (lbl, val, cls) => {
-    const dv = (val != null && val !== '') ? escapeHtml(String(val)) : '–';
-    const cs = cls ? ' ' + cls : '';
-    return `<div class="dg-row"><span class="dg-lbl">${lbl}</span><span class="dg-val${cs}">${dv}</span></div>`;
-  };
-  const detailsHtml = `
-    <button class="btn-details-toggle" data-details-toggle>${escapeHtml(t('card.how_lume_scored'))} <span class="details-caret">▾</span></button>
-    <div class="card-details" data-details-panel>
-      <div class="details-section-title">🏠 Physical</div>
-      <div class="details-grid">
-        ${_dRow('Rooms', l.rooms != null ? l.rooms + ' room' + (l.rooms !== 1 ? 's' : '') : null, l.rooms == null ? 'muted' : '')}
-        ${_dRow('Bedrooms', l.bedrooms != null ? (l.bedrooms === 0 ? 'Studio' : l.bedrooms + ' bed' + (l.bedrooms !== 1 ? 's' : '')) : null, l.bedrooms == null ? 'muted' : '')}
-        ${(() => { const lbl = _floorLabel(l); const fn = l.floor_n; const cls = fn == null ? 'muted' : fn < 0 ? 'bad' : fn >= 3 ? 'good' : ''; return _dRow('Floor', lbl, cls); })()}
-        ${_dRow('Elevator', l.elevator === true ? 'Yes ✓' : l.elevator === false ? 'No' : null, l.elevator === true ? 'good' : l.elevator == null ? 'muted' : '')}
-        ${_dRow('External', l.is_external === true ? 'Yes ✓' : l.is_external === false ? 'No' : null, l.is_external === true ? 'good' : l.is_external == null ? 'muted' : '')}
-        ${_dRow('Energy', l.energy_class, l.energy_class ? (ENERGY_RANK[l.energy_class] >= 5 ? 'good' : '') : 'muted')}
-        ${_dRow('Year built', l.year_built, l.year_built ? '' : 'muted')}
-        ${_dRow('Bathrooms', l.bathrooms != null ? l.bathrooms : null, l.bathrooms >= 2 ? 'good' : l.bathrooms == null ? 'muted' : '')}
-        ${_dRow('Balcony', l.has_balcony === true ? 'Yes ✓' : l.has_balcony === false ? 'No' : null, l.has_balcony === true ? 'good' : l.has_balcony == null ? 'muted' : '')}
-        ${_dRow('Parking', l.has_parking === true ? 'Yes ✓' : l.has_parking === false ? 'No' : null, l.has_parking === true ? 'good' : l.has_parking == null ? 'muted' : '')}
-        ${_dRow('Condition', l.condition, l.condition ? '' : 'muted')}
-        ${_dRow('Heating', l.heating_type ? (_heat[l.heating_type] ?? l.heating_type) : null, l.heating_type ? '' : 'muted')}
-        ${_dRow('Furnished', _yesNo(l.furnished), l.furnished == null ? 'muted' : '')}
-        ${l.air_conditioning ? _dRow('Air conditioning', 'Yes ✓', 'good') : ''}
-        ${l.contract_type ? _dRow('Contract', l.contract_type) : ''}
-        ${l.availability ? _dRow('Availability', l.availability) : ''}
-        ${l.spese_condominiali ? _dRow('Condo fees', '€' + fmt(l.spese_condominiali) + '/mo') : ''}
-        ${_dRow('Photos', l.photo_count != null ? l.photo_count + ' photos' : null, l.photo_count >= 8 ? 'good' : l.photo_count > 0 ? '' : 'muted')}
-        ${_dRow('Days listed', l.days_on_market != null ? l.days_on_market + 'd' : null, l.days_on_market != null && l.days_on_market > 60 ? 'bad' : l.days_on_market == null ? 'muted' : '')}
-        ${_dRow('First seen', firstSeenLabel(l), l.first_seen_date ? '' : 'muted')}
-      </div>
-      ${(l.twin_filled || []).length ? `<div class="details-note">${escapeHtml(t('card.twin', {
-          site: l.source === 'idealista' ? 'Immobiliare.it' : 'Idealista' }))}</div>` : ''}
-      <div class="details-section-title" style="margin-top:6px">🌍 Geospatial</div>
-      <div class="details-grid">
-        ${_dRow('Metro station', l.metro_nearest_name, l.metro_nearest_name ? '' : 'muted')}
-        ${_dRow('Metro line', l.metro_nearest_line, l.metro_nearest_line ? '' : 'muted')}
-        ${_dRow('Metro dist', l.metro_nearest_dist_m != null ? l.metro_nearest_dist_m + 'm' : null, l.metro_nearest_dist_m != null ? (l.metro_nearest_dist_m <= 500 ? 'good' : l.metro_nearest_dist_m > 1500 ? 'bad' : '') : 'muted')}
-        ${_dRow('Walk time', l.metro_walk_min != null ? l.metro_walk_min + ' min' : null, l.metro_walk_min == null ? 'muted' : '')}
-        ${_dRow('Tram stop', l.tram_nearest_dist_m != null ? l.tram_nearest_dist_m + 'm' : null, l.tram_nearest_dist_m != null ? (l.tram_nearest_dist_m <= 300 ? 'good' : '') : 'muted')}
-        ${_dRow('Supermarket', l.supermarket_nearest_dist_m != null ? l.supermarket_nearest_dist_m + 'm' : null, l.supermarket_nearest_dist_m != null ? (l.supermarket_nearest_dist_m <= 400 ? 'good' : '') : 'muted')}
-        ${_dRow('Park', l.park_nearest_dist_m != null ? l.park_nearest_dist_m + 'm' : null, l.park_nearest_dist_m != null ? (l.park_nearest_dist_m <= 500 ? 'good' : '') : 'muted')}
-        ${_dRow('University', l.university_nearest_dist_m != null ? l.university_nearest_dist_m + 'm' : null, l.university_nearest_dist_m == null ? 'muted' : '')}
-      </div>
-      <div class="details-section-title" style="margin-top:6px">📊 Score breakdown</div>
-      <div class="details-grid">
-        ${_dRow(`Price vs comps ×${wP}`, l.score_price != null ? l.score_price + ' → ' + Math.round(l.score_price * wP) : '50 (neutral)', l.score_price == null ? 'muted' : '')}
-        ${_dRow(`Property ×${wPr}`, l.score_property != null ? l.score_property + ' → ' + Math.round(l.score_property * wPr) : null, l.score_property == null ? 'muted' : '')}
-        ${_dRow(`Location ×${wL}`, l.score_location != null ? l.score_location + ' → ' + Math.round(l.score_location * wL) : (l.geo_score != null ? l.geo_score + ' → ' + Math.round(l.geo_score * wL) : '50 (neutral)'), (l.score_location == null && l.geo_score == null) ? 'muted' : '')}
-        ${_dRow(`Penalty ×${wPn}`, l.score_penalty != null ? l.score_penalty + ' → ' + Math.round(l.score_penalty * wPn) : '100 (no penalty)', l.score_penalty == null ? 'muted' : '')}
-        ${_dRow('Comps median', l.comps_median != null ? '€' + l.comps_median + '/m²/mo (' + (l.comps_n || 0) + ' comps'
-            + (l.comps_p40 != null && l.comps_p60 != null ? `, middle €${Number(l.comps_p40).toFixed(1)}–${Number(l.comps_p60).toFixed(1)}` : '')
-            + ')' : null, l.comps_median == null ? 'muted' : '')}
-        ${_dRow('Comps source', l.comps_source ? (_COMPS_SOURCE_SHORT[l.comps_source] || l.comps_source)
-            + (l.comps_radius_m ? ` · ≤${Math.round(l.comps_radius_m)} m` : '') : null, l.comps_source ? '' : 'muted')}
-        ${l.price_z != null ? _dRow(t('card.z'), t('card.z_val', {
-            z: Math.abs(l.price_z).toFixed(1), gv: Math.abs(scoreSettings.rent_gv_z_max ?? -1.1).toFixed(1) }),
-            l.price_z <= (scoreSettings.rent_gv_z_max ?? -1.1) ? 'good' : '') : ''}
-        ${l.score_cap_reason ? _dRow('Cap', t('card.cap', { reason: l.score_cap_reason }), 'bad') : ''}
-        ${_dRow('Total', l.score_total != null ? l.score_total + ' / 100' : null)}
-      </div>
-      ${(l.comps_n || 0) > 0 ? `<button class="btn-comps-list" data-comps-list>${escapeHtml(t('card.comps_show', { n: l.comps_n }))}</button>
-      <div class="comps-list" data-comps-box hidden></div>` : ''}
-    </div>`;
+  // (The in-card "How Lume scored this" panel moved to the Details view —
+  //  details.js — together with the reasons and the comparable flats.)
 
   // Lume's price alert (only shown when listing is priced above similar flats nearby)
   const compsSugHtml = (() => {
@@ -565,7 +504,7 @@ function renderRentalCard(l) {
     if (diff <= 0) return '';
     return `<div class="suggested-rent-row sug-warn">
       <span class="sug-label">${escapeHtml(t('comps.suggest'))}</span>
-      <span class="sug-val" style="color:var(--yellow);font-weight:700">€${fmt(compsSugRent)}/mo</span>
+      <span class="sug-val" style="color:var(--amber);font-weight:700">€${fmt(compsSugRent)}/mo</span>
       <span class="sug-label">${escapeHtml(t('comps.diff_rent', {diff: fmt(diff), n: l.comps_n || 0}))}</span>
     </div>`;
   })();
@@ -614,14 +553,14 @@ function renderRentalCard(l) {
       </svg>
       <div class="score-ring-text"
            style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-                  font-weight:800;font-size:17px;letter-spacing:-0.3px;color:${ringColor};font-family:var(--font)">0</div>
+                  font-weight:800;font-size: 18px;letter-spacing:-0.3px;color:${ringColor};font-family:var(--font)">0</div>
     </div>`;
 
   // Gem chip on photo (replaces header badge)
   const gemPhotoChip = l.hidden_gem
-    ? `<div class="gem-photo-chip chip-hidden"><span style="font-size:13px">💎</span><span>${escapeHtml(t('badge.hidden_gem').replace(/^✦\s*/, ''))}</span></div>`
+    ? `<div class="gem-photo-chip chip-hidden">${icon('diamond')}<span>${escapeHtml(t('badge.hidden_gem').replace(/^✦\s*/, ''))}</span></div>`
     : l.good_value
-    ? `<div class="gem-photo-chip chip-good"><span style="font-size:13px">💰</span><span>${escapeHtml(t('badge.great_value').replace(/^💰\s*/, ''))}</span></div>`
+    ? `<div class="gem-photo-chip chip-good">${icon('coin')}<span>${escapeHtml(t('badge.great_value').replace(/^💰\s*/, ''))}</span></div>`
     : '';
 
   // Photo section
@@ -630,7 +569,7 @@ function renderRentalCard(l) {
     ? `<div class="card-photo-new-badge">${escapeHtml(t('badge.new'))}</div>`
     : '';
   const photoSection = (l.thumbnail || gemPhotoChip || newOverlayHtml)
-    ? `<div class="card-photo-wrap">${l.thumbnail ? `<img class="card-thumb" src="${_safeUrl(l.thumbnail)}" alt="" loading="lazy">` : ''}${gemPhotoChip}${newOverlayHtml}</div>`
+    ? `<div class="card-photo-wrap" data-open-details="${escapeHtml(String(l.id))}">${l.thumbnail ? `<img class="card-thumb" src="${_safeUrl(l.thumbnail)}" alt="" loading="lazy">` : ''}${gemPhotoChip}${newOverlayHtml}</div>`
     : '';
 
   // Single-line comps row (Fixes 1 + 4)
@@ -683,7 +622,7 @@ function renderRentalCard(l) {
 
   // Condo fees + the all-in monthly cost, when the listing states them.
   const speseNote = l.spese_condominiali
-    ? `<span style="font-size:11px;color:var(--muted)"> + €${fmt(l.spese_condominiali)} fees = €${fmt((Number(l.rent_mo) || 0) + Number(l.spese_condominiali))} all-in</span>`
+    ? `<span style="font-size:11px;color:var(--text-secondary)"> + €${fmt(l.spese_condominiali)} fees = €${fmt((Number(l.rent_mo) || 0) + Number(l.spese_condominiali))} all-in</span>`
     : '';
 
   const sourceBadge = l.source === 'idealista'
@@ -701,7 +640,7 @@ function renderRentalCard(l) {
       ${scoreRingHtml}
       <div class="card-header-text">
         <div class="card-neighbourhood-row">
-          <span class="card-neighbourhood">${escapeHtml(formatAddress(l.neighbourhood) || '–')}</span>
+          <span class="card-neighbourhood" data-open-details="${escapeHtml(String(l.id))}">${escapeHtml(formatAddress(l.neighbourhood) || '–')}</span>
           <span class="id-pill" data-listing-id="${escapeHtml(String(l.id))}"
                 title="Lume listing ID — click to search">${escapeHtml(String(l.id))}</span>
         </div>
@@ -714,19 +653,21 @@ function renderRentalCard(l) {
 
     <div class="price-row-a">
       <span class="price-main-a">${l.rent_mo != null ? '€' + fmt(l.rent_mo) : '–'}</span>
-      <span style="font-size:13px;color:var(--muted);font-weight:500">${l.rent_mo != null ? '/mo' : ''}</span>
+      <span style="font-size:13px;color:var(--text-secondary);font-weight:500">${l.rent_mo != null ? '/mo' : ''}</span>
       ${speseNote}
       ${specsPillHtml(l)}
       ${areaPsqmPillHtml(l, true)}
     </div>
+    ${(() => { const h = priceHistoryText(l); return h ? `<div class="was-price">${icon('trending-down')}${escapeHtml(h)}</div>` : ''; })()}
     ${compsSugHtml}
     ${compsBarHtml}
 
     ${statPillsHtml(l, true)}
 
-    ${whySentence ? `<div class="${whyClass}">${whySentence}${reasonsBulletsHtml(l)}</div>` : ''}
+    ${whySentence ? `<div class="${whyClass}">${whySentence}</div>` : ''}
 
     <div class="card-footer-a">
+      <button type="button" class="btn-details" data-open-details="${escapeHtml(String(l.id))}">${icon('layout-sidebar-right')}<span>${escapeHtml(t('card.details'))}</span></button>
       <button class="btn-bookmark${Collections.isInAnyCollection(l.id) ? ' active' : ''}"
               data-listing-id="${escapeHtml(String(l.id))}"
               style="margin-left:auto"
@@ -734,22 +675,15 @@ function renderRentalCard(l) {
               title="Save to collection" aria-label="Save to collection">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
       </button>
-      <button class="btn-share"
-              data-listing-id="${escapeHtml(String(l.id))}"
-              onclick="shareListing(this.dataset.listingId, event)"
-              title="Share listing" aria-label="Share listing">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg>
-      </button>
       <button class="btn-fav${isRentFav(l.id) ? ' is-fav' : ''}"
               data-rent-id="${escapeHtml(String(l.id))}"
               title="${isRentFav(l.id) ? 'Remove from favourites' : 'Add to favourites'}">
-        ${isRentFav(l.id) ? '♥' : '♡'} Fav
+        ${favBtnInner()}
       </button>
       <a class="link-btn" href="${_safeUrl(l.url)}" target="_blank" rel="noopener"
          data-listing-id="${escapeHtml(String(l.id))}"
          onclick="_promptArchiveListing(this.dataset.listingId, 'rental', this)">${escapeHtml(t('card.view'))}</a>
     </div>
-    ${detailsHtml}
     ${extremeUnderpricingBannerHtml(l)}
     ${staleBannerHtml(l)}
   `;
@@ -757,32 +691,10 @@ function renderRentalCard(l) {
   card.querySelector('[data-rent-id]').addEventListener('click', e => {
     const id  = e.currentTarget.dataset.rentId;
     const now = toggleRentFav(id);
-    e.currentTarget.innerHTML = (now ? '♥' : '♡') + ' Fav';
+    e.currentTarget.innerHTML = favBtnInner();
     e.currentTarget.classList.toggle('is-fav', now);
     e.currentTarget.title = now ? 'Remove from favourites' : 'Add to favourites';
   });
-
-  // Details toggle
-  const _toggleBtn   = card.querySelector('[data-details-toggle]');
-  const _detailPanel = card.querySelector('[data-details-panel]');
-  if (_toggleBtn && _detailPanel) {
-    _toggleBtn.addEventListener('click', () => {
-      const open = _toggleBtn.classList.toggle('open');
-      _detailPanel.classList.toggle('open', open);
-      _toggleBtn.childNodes[0].textContent = (open ? t('card.data_hide') : t('card.how_lume_scored')) + ' ';
-    });
-  }
-  const _compsBtn = card.querySelector('[data-comps-list]');
-  const _compsBox = card.querySelector('[data-comps-box]');
-  if (_compsBtn && _compsBox) {
-    _compsBtn.addEventListener('click', () => {
-      _compsBox.hidden = !_compsBox.hidden;
-      if (!_compsBox.hidden && !_compsBox.dataset.loaded) {
-        _compsBox.dataset.loaded = '1';
-        _loadCompsList(l, _compsBox);
-      }
-    });
-  }
 
   return card;
 }

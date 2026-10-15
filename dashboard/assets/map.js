@@ -53,9 +53,9 @@ function _createMapMarker(l, lat, lng) {
   const isGem    = l.hidden_gem;
   const isGoodV  = l.good_value && !l.hidden_gem;
   const iconHtml = isGem
-    ? `<div style="width:34px;height:34px;background:#15803D;color:#fff;font-size:15px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.35);border:2px solid rgba(255,255,255,0.9);border-radius:4px;transform:rotate(45deg)"><span style="transform:rotate(-45deg)">✦</span></div>`
+    ? `<div style="width:34px;height:34px;background:var(--green-ink);color:#fff;font-size: 14px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.35);border:2px solid rgba(255,255,255,0.9);border-radius:4px;transform:rotate(45deg)"><span style="transform:rotate(-45deg)">✦</span></div>`
     : isGoodV
-    ? `<div style="width:34px;height:34px;background:#0E7490;color:#fff;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.30);border:2px solid rgba(255,255,255,0.9);border-radius:50%">↑</div>`
+    ? `<div style="width:34px;height:34px;background:var(--blue-ink);color:#fff;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.30);border:2px solid rgba(255,255,255,0.9);border-radius:50%">↑</div>`
     : `<div style="width:34px;height:34px;border-radius:50%;background:${color};color:#fff;font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.30);border:2px solid rgba(255,255,255,0.85)">${score}</div>`;
   return L.marker([lat, lng], {
     icon: L.divIcon({
@@ -107,17 +107,17 @@ function _createMapPopup(l, isRentalArg) {
     compsHtml = `<div class="map-popup-comps ${cls}">${escapeHtml(l.vs_omi_label)}</div>`;
   }
   const rows = [];
-  if (l.rooms)                rows.push(`🛏 ${l.rooms} rooms`);
-  if (l.sqm)                  rows.push(`📐 ${fmt(l.sqm)} m²${l.ask_psqm ? ' · €' + l.ask_psqm.toFixed(1) + '/m²' + (isRental ? '/mo' : '') : ''}`);
+  if (l.rooms)                rows.push(['bed', `${l.rooms} rooms`]);
+  if (l.sqm)                  rows.push(['ruler-2', `${fmt(l.sqm)} m²${l.ask_psqm ? ' · €' + l.ask_psqm.toFixed(1) + '/m²' + (isRental ? '/mo' : '') : ''}`]);
   const floorLabel = l.floor === 'T' ? 'Ground' : l.floor === 'R' ? 'Rialzato' : l.floor ? `Floor ${l.floor}` : null;
-  if (floorLabel)             rows.push(`🏢 ${floorLabel}`);
-  if (l.metro_nearest_dist_m) rows.push(`🚇 ${l.metro_nearest_dist_m}m metro`);
-  if (l.condition)            rows.push(`🏠 ${l.condition}`);
-  if (l.energy_class)         rows.push(`⚡ Class ${l.energy_class}`);
-  if (l.elevator === true)    rows.push(`🛗 Elevator`);
-  if (l.has_balcony === true) rows.push(`🌿 Balcony`);
+  if (floorLabel)             rows.push(['building', floorLabel]);
+  if (l.metro_nearest_dist_m) rows.push(['train', `${l.metro_nearest_dist_m}m metro`]);
+  if (l.condition)            rows.push(['home', l.condition]);
+  if (l.energy_class)         rows.push(['bolt', `Class ${l.energy_class}`]);
+  if (l.elevator === true)    rows.push(['elevator', 'Elevator']);
+  if (l.has_balcony === true) rows.push(['plant', 'Balcony']);
   const gridHtml = rows.length
-    ? `<div class="map-popup-grid">${rows.map(r => `<span>${escapeHtml(r)}</span>`).join('')}</div>`
+    ? `<div class="map-popup-grid">${rows.map(([ic, txt]) => `<span>${icon(ic)} ${escapeHtml(txt)}</span>`).join('')}</div>`
     : '';
   // Popup sub-line: prefer the cleaned-up street address. Drop trailing
   // city name + postcode that Immobiliare/Idealista append, since the
@@ -190,7 +190,7 @@ function _renderVisibleMarkers() {
       const found = _mapAllListings.find(x => String(x.id ?? x.url) === marker.listingId);
       return found
         ? _createMapPopup(found)
-        : '<div style="padding:12px;color:#6B6560;font-size:12px">Listing no longer in view</div>';
+        : '<div style="padding:12px;color:var(--text-secondary);font-size:12px">Listing no longer in view</div>';
     }, { maxWidth: 300, minWidth: 260 });
 
     _clusterGroup.addLayer(marker);
@@ -250,7 +250,7 @@ function _mapInit() {
       const count = cluster.getChildCount();
       const size  = count < 10 ? 36 : count < 50 ? 42 : 48;
       return L.divIcon({
-        html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:#2D6A4F;color:white;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,0.25)">${count}</div>`,
+        html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:var(--green-ink);color:white;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,0.25)">${count}</div>`,
         className: '',
         iconSize:   [size, size],
         iconAnchor: [size / 2, size / 2],
@@ -268,8 +268,8 @@ function _mapInit() {
       d.style.cssText = 'background:rgba(255,255,255,0.95);border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:11px;line-height:1.9;pointer-events:none;display:none';
       d.innerHTML = `
         <div style="display:flex;align-items:center;gap:7px"><div style="width:14px;height:14px;border-radius:50%;background:#6B7280"></div> Score</div>
-        <div style="display:flex;align-items:center;gap:7px"><div style="width:14px;height:14px;background:#15803D;transform:rotate(45deg);border-radius:2px;flex-shrink:0"></div> Hidden Gem</div>
-        <div style="display:flex;align-items:center;gap:7px"><div style="width:14px;height:14px;border-radius:50%;background:#0E7490;flex-shrink:0"></div> Great Value</div>`;
+        <div style="display:flex;align-items:center;gap:7px"><div style="width:14px;height:14px;background:var(--green-ink);transform:rotate(45deg);border-radius:2px;flex-shrink:0"></div> Hidden Gem</div>
+        <div style="display:flex;align-items:center;gap:7px"><div style="width:14px;height:14px;border-radius:50%;background:var(--blue-ink);flex-shrink:0"></div> Great Value</div>`;
       return d;
     };
     _legend.addTo(_map);

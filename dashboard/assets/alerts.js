@@ -153,12 +153,12 @@ async function openSaveAlertModal(existing) {
   // Update title + primary button label to reflect mode.
   const titleEl = document.getElementById('saveAlertTitle');
   if (titleEl) titleEl.textContent = isEdit
-    ? (t('alert_modal.title_edit')   || '✏️ Edit alert')
-    : (t('alert_modal.title')        || '🔔 Daily email alert');
+    ? (t('alert_modal.title_edit')   || 'Edit alert')
+    : (t('alert_modal.title')        || 'Daily email alert');
   const submitBtnEl = document.getElementById('amSubmitBtn');
   if (submitBtnEl) submitBtnEl.textContent = isEdit
-    ? (t('alert_modal.save_changes') || '💾 Save changes')
-    : (t('alert_modal.save')         || '💾 Save alert');
+    ? (t('alert_modal.save_changes') || 'Save changes')
+    : (t('alert_modal.save')         || 'Save alert');
 
   const pick = (key, fallback) => {
     const v = seed[key];
@@ -345,8 +345,8 @@ async function submitSaveAlert() {
     if (submitBtn) {
       submitBtn.disabled = false;
       submitBtn.textContent = isEdit
-        ? (t('alert_modal.save_changes') || '💾 Save changes')
-        : (t('alert_modal.save')         || '💾 Save alert');
+        ? (t('alert_modal.save_changes') || 'Save changes')
+        : (t('alert_modal.save')         || 'Save alert');
     }
   }
 }
@@ -490,7 +490,7 @@ function _cityNameForAlert(f) {
 function _digestChipsForAlert(f) {
   const chips = [];
   const cityName = _cityNameForAlert(f);
-  if (cityName) chips.push(`📍 ${cityName}`);
+  if (cityName) chips.push(cityName);
   if (f.max_rent)             chips.push(`Max €${f.max_rent}/mo`);
   if (f.min_sqm)              chips.push(`≥${f.min_sqm} m²`);
   if (f.min_rooms)            chips.push(`≥${f.min_rooms} rooms`);
@@ -502,7 +502,7 @@ function _digestChipsForAlert(f) {
   if (f.fascia?.length)       chips.push(`Fascia ${f.fascia.join('/')}`);
   if (f.omi_zona?.length)     chips.push(`Zone ${f.omi_zona.join('/')}`);
   if (f.gems_filter && f.gems_filter !== 'all') {
-    chips.push(f.gems_filter === 'hidden' ? '✦ Hidden Gems only' : '💰 Great Value+');
+    chips.push(f.gems_filter === 'hidden' ? 'Hidden Gems only' : 'Great Value+');
   }
   if (f.source_filter && f.source_filter !== 'all') chips.push(`Source ${f.source_filter}`);
   return chips;
@@ -515,7 +515,7 @@ async function renderDigestSettingsSection() {
   const user = _alertUser();
   if (!user) {
     return `<div class="settings-section-title">${escapeHtml(t('settings.alerts') || 'Daily alerts')}</div>
-            <p style="font-size:13px;color:var(--muted);margin:0">
+            <p style="font-size:13px;color:var(--text-secondary);margin:0">
               Sign in to save alert filters and receive a daily email of matching listings.
             </p>`;
   }
@@ -535,8 +535,8 @@ async function renderDigestSettingsSection() {
 
   if (!rows.length) {
     return headerHtml + `
-      <p style="font-size:13px;color:var(--muted);margin:0;line-height:1.6">
-        ${escapeHtml(t('settings.alert_none') || 'No alert set up yet. Go to Rentals, set your filters, and click 🔔 Save alert.')}
+      <p style="font-size:13px;color:var(--text-secondary);margin:0;line-height:1.6">
+        ${escapeHtml(t('settings.alert_none') || 'No alert set up yet. Go to Rentals, set your filters, and click Save alert.')}
       </p>`;
   }
 
@@ -553,7 +553,7 @@ async function renderDigestSettingsSection() {
 
   const cardsHtml = rows.map(f => {
     const chips = _digestChipsForAlert(f);
-    const stateColor = f.active ? '#2A7A5A' : 'var(--muted)';
+    const stateColor = f.active ? '#2A7A5A' : 'var(--text-secondary)';
     const stateLabel = f.active
       ? (t('settings.alert_active') || 'Active')
       : (t('settings.alert_paused') || 'Paused');
@@ -588,20 +588,20 @@ async function renderDigestSettingsSection() {
         <div class="digest-alert-chips">
           ${chips.length
             ? chips.map(c => `<span class="digest-alert-chip">${escapeHtml(c)}</span>`).join('')
-            : `<span style="color:var(--muted);font-size:12px">${escapeHtml(summary)}</span>`}
+            : `<span style="color:var(--text-secondary);font-size:12px">${escapeHtml(summary)}</span>`}
         </div>
         <div class="digest-alert-actions"
              data-alert-id="${escapeHtml(f.id)}"
              data-alert-name="${escapeHtml(displayName)}"
              data-alert-active="${f.active ? '1' : '0'}">
           <button type="button"
-                  data-digest-action="edit">${escapeHtml(t('settings.update_filters') || '✏️ Edit')}</button>
+                  data-digest-action="edit">${escapeHtml(t('settings.update_filters') || 'Edit')}</button>
           <button type="button"
                   data-digest-action="toggle">${escapeHtml(f.active
                     ? (t('settings.pause_alert')  || '⏸ Pause')
                     : (t('settings.resume_alert') || '▶ Resume'))}</button>
           <button type="button" class="digest-alert-delete"
-                  data-digest-action="delete">${escapeHtml(t('settings.delete_alert') || '🗑 Delete')}</button>
+                  data-digest-action="delete">${escapeHtml(t('settings.delete_alert') || 'Delete')}</button>
         </div>
       </div>`;
   }).join('');

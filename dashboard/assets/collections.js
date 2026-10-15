@@ -270,16 +270,16 @@ function showUserMenu(ev) {
   menu.innerHTML = `
     <div class="avatar-menu-header">Signed in as <strong>${escapeHtml(userName)}</strong></div>
     <button class="avatar-menu-item" onclick="closeAvatarMenu(); openCollectionsDrawer();">
-      📁 My collections <span class="badge">${collectionsCount}</span>
+      ${icon('bookmark')} My collections <span class="badge">${collectionsCount}</span>
     </button>
     <button class="avatar-menu-item" onclick="closeAvatarMenu(); openAlertsManager();">
-      🔔 ${escapeHtml(t('menu.my_alerts') || 'My alerts')}
+      ${icon('bell')} ${escapeHtml(t('menu.my_alerts') || 'My alerts')}
       ${alertsTotal > 0
         ? `<span class="badge${alertsActive > 0 ? ' badge-alert' : ''}">${alertsTotal}</span>`
         : ''}
     </button>
     <button class="avatar-menu-item" onclick="closeAvatarMenu(); Auth.signOut();">
-      🚪 ${escapeHtml(t('header.sign_out') || 'Sign out')}
+      ${icon('arrow-up-right')} ${escapeHtml(t('header.sign_out') || 'Sign out')}
     </button>`;
   document.body.appendChild(menu);
 
@@ -311,7 +311,7 @@ async function openAlertsManager() {
     back.innerHTML = `
       <div class="save-alert-modal" onclick="event.stopPropagation()" role="dialog" aria-modal="true">
         <div class="save-alert-header">
-          <h2 id="alertsManagerTitle">🔔 ${escapeHtml(t('menu.my_alerts') || 'My alerts')}</h2>
+          <h2 id="alertsManagerTitle">${icon('bell')} ${escapeHtml(t('menu.my_alerts') || 'My alerts')}</h2>
           <button type="button" class="save-alert-close" onclick="closeAlertsManager()" aria-label="Close">×</button>
         </div>
         <div id="alertsManagerBody"></div>
@@ -322,7 +322,7 @@ async function openAlertsManager() {
   // the cached list, and re-opening the modal is the user's natural
   // refresh signal.
   const body = document.getElementById('alertsManagerBody');
-  if (body) body.innerHTML = `<p style="color:var(--muted);font-size:13px;margin:8px 0">${escapeHtml(t('loading.listings') || 'Loading…')}</p>`;
+  if (body) body.innerHTML = `<p style="color:var(--text-secondary);font-size:13px;margin:8px 0">${escapeHtml(t('loading.listings') || 'Loading…')}</p>`;
   back.hidden = false;
   document.addEventListener('keydown', _alertsManagerEscHandler);
 
@@ -425,7 +425,7 @@ function renderCollectionsList() {
   if (!all.length) {
     list.innerHTML = `
       <div class="collections-empty">
-        <div class="empty-icon">📁</div>
+        <div class="empty-icon">${icon('bookmark')}</div>
         <div class="empty-title">No collections yet</div>
         <div class="empty-text">Save listings into collections to organise them and share with friends.</div>
       </div>`;
@@ -552,7 +552,7 @@ function renderSharedCollectionBanner(visibleCount, totalRequested) {
   const banner = document.createElement('div');
   banner.className = 'shared-collection-banner';
   banner.innerHTML = `
-    <div class="banner-icon">📁</div>
+    <div class="banner-icon">${icon('bookmark')}</div>
     <div class="banner-text">
       <div class="banner-title">Shared collection: <strong>${escapeHtml(sc.name)}</strong></div>
       <div class="banner-sub">${visibleCount} listing${visibleCount===1?'':'s'} ${cta}</div>

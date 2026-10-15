@@ -120,7 +120,7 @@ async function loadCacheStats() {
       const d = new Date(s.newest);
       const ts = d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
       newestEl.textContent = '· last updated ' + ts;
-      newestEl.style.color = 'var(--muted)';
+      newestEl.style.color = 'var(--text-secondary)';
     } else if (newestEl) {
       newestEl.textContent = '';
     }
