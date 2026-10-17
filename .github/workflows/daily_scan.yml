@@ -103,9 +103,8 @@ jobs:
 
       # Per-city state files. The seen_ids file is city-specific
       # (seen_ids_{city}.json) so each city's dedup history is isolated.
-      # The enrichment cache currently stays shared (enriched_cache.json) —
-      # listing IDs are globally unique across cities, so a single cache
-      # is fine.
+      # The enrichment cache (enriched_cache.json) is no longer in git
+      # (~48 MB, rewritten by every scan): it stays on the runner's disk.
       - name: Commit and push updated state — ${{ matrix.city }}
         if: ${{ inputs.city == '' || inputs.city == matrix.city }}
         run: |
@@ -115,6 +114,5 @@ jobs:
           # so concurrent commits to different cities don't reject.
           git pull --rebase origin main || true
           git add seen_ids_${{ matrix.city }}.json || true
-          git add enriched_cache.json || true
           git diff --staged --quiet || git commit -m "chore: daily scan ${{ matrix.city }} $(date -u '+%Y-%m-%d %H:%M UTC')"
           git push

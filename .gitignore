@@ -17,6 +17,10 @@ netlify_config.json
 .digest_pending_*
 .discover_state_*.json
 .pushed_*.json
+# Geo enrichment cache: ~48 MB and rewritten by every scan — kept on disk,
+# out of git (the scanners rebuild it if it's lost).
+enriched_cache.json
+enriched_cache.json.tmp
 .drip_status_*.json
 scan_slots_*.jsonl
 scanner.log
@@ -76,9 +80,7 @@ omi_data/*.kml
 # Keep state files tracked (updated by GitHub Actions daily scan).
 # Listing data lives in Supabase now — never commit the JSON snapshots.
 # Per-city naming (migration 007): seen_ids_{city}.json instead of one
-# shared seen_ids.json. enriched_cache stays shared because listing IDs
-# are globally unique across cities.
-!enriched_cache.json
+# shared seen_ids.json. (enriched_cache.json is ignored — see above.)
 !seen_ids_*.json
 seen_ids.json
 rentals_latest.json
