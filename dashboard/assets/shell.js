@@ -282,6 +282,21 @@ function formatAddress(str) {
 const scoreClass = s => s >= 70 ? 'high' : s >= 45 ? 'mid' : 'low';
 const fmt = n => (n == null || n === '' || Number.isNaN(Number(n))) ? '–' : _nf().format(Number(n));
 
+// What a listing really costs a month: rent + condo fees + heating billed
+// apart, as the listing page states them (listing_details.py) — never an
+// estimate. known=false → only the rent is known ("rent only").
+function monthlyCost(l) {
+  const rent     = Number(l.rent_mo ?? l.price) || 0;
+  const included = l.condo_included === true;
+  const condo    = included ? 0 : (Number(l.spese_condominiali) || 0);
+  const heating  = Number(l.heating_mo) || 0;
+  const known    = included || condo > 0 || heating > 0;
+  const total    = rent + condo + heating;
+  return { rent, condo, heating, included, known, total,
+           extraPct: rent ? Math.round((total - rent) / rent * 100) : 0,
+           pageRead: !!l.detail_fetched_at };
+}
+
 // ── Floor display helpers ─────────────────────────────────────────────────────
 function _floorLabel(l) {
   const fn = l.floor_n;

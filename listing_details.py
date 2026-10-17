@@ -36,18 +36,23 @@ DETAIL_KEYS = ("condition", "heating_type", "energy_class", "year_built",
                "bathrooms", "has_balcony", "has_parking", "furnished",
                "is_external", "spese_condominiali", "photo_count",
                "contract_type", "availability", "published_date",
-               "air_conditioning")
+               "air_conditioning", "heating_mo", "condo_included",
+               "deposit_months", "deposit_eur")
 
 # Idealista search cards only ever set these to True (keyword found in the
 # snippet) — never False. A listing page's yes/no answer replaces them.
 CARD_YES_ONLY = ("has_balcony", "has_parking", "furnished")
 
 # ── Drip pacing (per source) ──────────────────────────────────────────────────
-DRIP_PER_DAY      = 150          # listing pages per source per day
-DRIP_HOURS        = (8, 23)      # local hours the drip runs in
-DRIP_BATCH        = 3            # pages per browser session
-DRIP_GAP_MIN      = (12, 24)     # minutes between sessions (random)
-DRIP_PAGE_GAP_SEC = (20, 45)     # seconds between pages in a session
+# 150 a day in 3-page sessions until 2026-10-17: ~40 days to read the
+# visible listings once, while listing pages are where the costs (condo,
+# heating, deposit) and Idealista's gallery are. The spread scan's 30–40
+# page sessions were never blocked; a block still pauses the drip 6 h.
+DRIP_PER_DAY      = 500          # listing pages per source per day
+DRIP_HOURS        = (7, 24)      # local hours the drip runs in
+DRIP_BATCH        = 10           # pages per browser session
+DRIP_GAP_MIN      = (8, 15)      # minutes between sessions (random)
+DRIP_PAGE_GAP_SEC = (8, 15)      # seconds between pages in a session
 PRIORITY_Z        = -0.8         # price_z at or below this → fetched first
 NEW_DAYS          = 3            # first seen within this many days → next
 
@@ -217,6 +222,7 @@ def parse_immobiliare_detail(next_data: dict) -> dict | None:
     gallery = parse_photo_urls(raw, cap=20)
     if len(gallery) > 8:
         fields["photos"] = gallery
+    fields["costs_read"] = 1     # heating / deposit / included parsed since 2026-10-17
     return {k: v for k, v in fields.items() if v is not None}
 
 
@@ -230,9 +236,25 @@ _IDEALISTA_EXTRACT_JS = r"""JSON.stringify({
   features: Array.from(document.querySelectorAll('.details-property_features li')).map(e => e.innerText.trim()),
   energy: (document.querySelector('.details-property_features [class*="icon-energy-"]') || {}).className || '',
   comment: ((document.querySelector('.comment') || {}).innerText || '').slice(0, 4000),
-  photos: Array.from(new Set(Array.from(document.querySelectorAll('.detail-image img, .main-image img, picture img'))
-                   .map(i => i.getAttribute('data-ondemand-img') || i.getAttribute('data-src') || i.src)
-                   .filter(Boolean))).slice(0, 40)
+  // "Spese condominiali: 160 €/mese", "Cauzione di 3 mesi" — on every page.
+  priceBox: Array.from(document.querySelectorAll('.price-features__container .flex-feature'))
+                 .map(e => (e.innerText || '').replace(/\s+/g, ' ').trim()),
+  photos: (() => {
+    // The whole gallery sits in one inline script (multimediaCarrousel /
+    // fullScreenGalleryPics); the DOM holds only the first picture or two.
+    const rx = /https?:\/\/img\d?\.idealista\.it\/[^"'\s<>)]+?image\.master\/[^"'\s<>)]+?\.(?:jpg|webp)/g;
+    const script = Array.from(document.scripts).map(x => (x.textContent || '').replace(/\\\//g, '/'))
+                        .find(t => t.includes('multimediaCarrousel') || t.includes('fullScreenGalleryPics'));
+    const dom = Array.from(document.querySelectorAll('.detail-image img, .main-image img, picture img'))
+                     .map(i => i.getAttribute('data-ondemand-img') || i.getAttribute('data-src') || i.src)
+                     .filter(Boolean);
+    const out = [], seen = new Set();
+    for (const u of ((script && script.match(rx)) || []).concat(dom)) {
+      const k = (u.match(/image\.master\/(.+?)\.(?:jpg|webp)/) || [null, u])[1];
+      if (!seen.has(k)) { seen.add(k); out.push(u); }
+    }
+    return out.slice(0, 40);
+  })()
 })"""
 
 _RENOVATED_ADVERB = re.compile(
@@ -302,18 +324,35 @@ def parse_idealista_detail(page: dict) -> dict:
     if m:
         out["energy_class"] = _IDEALISTA_ENERGY.get(m.group(1), m.group(1).upper())
 
-    fee = _parse_condo_from_description(comment)
+    box = " | ".join(page.get("priceBox") or [])
+    m = re.search(r"spese condominiali:?\s*([\d.]+)\s*€", box, re.I)
+    fee = int(m.group(1).replace(".", "")) if m else _parse_condo_from_description(comment)
     if fee:
         out["spese_condominiali"] = fee
+    from fetch_rentals import condo_included
+    if (re.search(r"spese condominiali:?\s*inclus", box, re.I)
+            or (not fee and condo_included(comment))):
+        out["condo_included"] = True
+    m = re.search(r"cauzione di (\d+) mes", box, re.I)
+    if m:
+        out["deposit_months"] = int(m.group(1))
+    else:
+        m = re.search(r"cauzione:?\s*([\d.]+)\s*€", box, re.I)
+        if m:
+            out["deposit_eur"] = int(m.group(1).replace(".", ""))
     photos = page.get("photos")
     if isinstance(photos, list):
         # The gallery (search cards carry one photo) — photo_eval.py reads it.
         gallery = [u for u in photos if isinstance(u, str) and "image.master" in u]
-        out["photo_count"] = len(photos)
+        out["photo_count"] = len(gallery) or len(photos)
+        # Read from the page script since 2026-10-17; before, only the 1–2
+        # pictures in the DOM — build_queue fetches those listings again.
+        out["gallery_read"] = 1
         if gallery:
             out["photos"] = gallery[:20]
     elif photos:
         out["photo_count"] = int(photos)
+    out["costs_read"] = 1        # price box (condo, deposit) read since 2026-10-17
     return out
 
 
@@ -321,22 +360,36 @@ def parse_idealista_detail(page: dict) -> dict:
 
 def build_queue(source: str, cache: dict | None = None,
                 rentals_path: Path = RENTALS_PATH) -> list:
-    """[(id, url)] still to fetch for `source`, most useful first:
-    possible deals (price_z ≤ PRIORITY_Z, lowest first), then listings first
-    seen in the last NEW_DAYS days, then everything else visible."""
+    """[(id, url)] still to fetch for `source`, most useful first: listings
+    at photo_eval's bar (score ≥ MIN_SCORE, or Hidden Gem) whose page wasn't
+    read since costs are parsed (and, on Idealista, the full gallery), best
+    first — the ones looked at, needing their real monthly cost and photos;
+    then, postponed, possible deals (price_z ≤ PRIORITY_Z, lowest first),
+    listings first seen in the last NEW_DAYS days, everything else visible."""
     cache = load_cache() if cache is None else cache
     try:
         rows = json.loads(rentals_path.read_text())
     except (OSError, ValueError):
         return []
+    try:
+        from photo_eval import MIN_SCORE as top_score
+    except Exception:
+        top_score = 75
     today = date.today()
-    deals, new, rest = [], [], []
+    top, deals, new, rest = [], [], [], []
     for l in rows:
         if (l.get("source") or "immobiliare") != source:
             continue
         if l.get("is_stale") or l.get("excluded") or not l.get("url"):
             continue
-        if str(l.get("id")) in cache or (source == "immobiliare" and l.get("detail_fetched_at")):
+        lid = str(l.get("id"))
+        entry = cache.get(lid) or {}
+        if (((l.get("score_total") or 0) >= top_score or l.get("hidden_gem"))
+                and not entry.get("gone")
+                and not (entry.get("fields") or {}).get("costs_read")):
+            top.append((-(l.get("score_total") or 0), (lid, l["url"])))
+            continue
+        if lid in cache or (source == "immobiliare" and l.get("detail_fetched_at")):
             continue
         z = l.get("price_z")
         try:
@@ -350,8 +403,8 @@ def build_queue(source: str, cache: dict | None = None,
             new.append((age, item))
         else:
             rest.append((z if z is not None else 9, item))
-    return ([i for _, i in sorted(deals)] + [i for _, i in sorted(new)]
-            + [i for _, i in sorted(rest)])
+    return ([i for _, i in sorted(top)] + [i for _, i in sorted(deals)]
+            + [i for _, i in sorted(new)] + [i for _, i in sorted(rest)])
 
 
 # ── Fetching ──────────────────────────────────────────────────────────────────

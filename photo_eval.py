@@ -112,7 +112,7 @@ def fingerprint(urls: list[str]) -> str:
     return hashlib.sha1("\n".join(urls).encode()).hexdigest()[:12]
 
 
-MIN_SCORE = 80      # photos are read for the best listings only (90 until 2026-10-17)
+MIN_SCORE = 75      # photos are read for the best listings only (90, then 80, until 2026-10-17)
 
 
 def is_top(l: dict, min_score: int = MIN_SCORE, gems: bool = False) -> bool:

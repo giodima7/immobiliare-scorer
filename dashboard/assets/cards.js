@@ -259,6 +259,29 @@ function _dealDeltaHtml(l) {
 }
 
 // The photos' verdict on the card: only the clear ones (doubts live in Details).
+// Under the price: what the total is made of (a bar sized by share, the
+// parts, a warning when extras pass 15 % of the rent), "fees included", or —
+// when the listing states no fees — that the number is the rent only.
+function _costLineHtml(c) {
+  if (c.included && !c.heating) {
+    return `<div class="cost-line"><span class="cost-tag tone-ok">${icon('check')}${escapeHtml(t('cost.included'))}</span></div>`;
+  }
+  if (!c.known) {
+    return `<div class="cost-line"><span class="cost-bar is-unknown" aria-hidden="true"></span>
+      <span class="cost-tag tone-muted" title="${escapeHtml(t(c.pageRead ? 'cost.ask_long' : 'cost.pending_long'))}">${escapeHtml(t(c.pageRead ? 'cost.ask' : 'cost.pending'))}</span></div>`;
+  }
+  const pct = v => `${Math.max(1, Math.round(v / c.total * 100))}%`;
+  const parts = [`€${fmt(c.rent)} ${t('cost.rent')}`];
+  if (c.condo) parts.push(`€${fmt(c.condo)} ${t('cost.condo')}`);
+  if (c.heating) parts.push(`€${fmt(c.heating)} ${t('cost.heating')}`);
+  const note = c.included ? t('cost.included') : (!c.condo ? t('cost.condo_unknown') : '');
+  return `<div class="cost-line">
+      <span class="cost-bar" aria-hidden="true"><i class="seg-rent" style="width:${pct(c.rent)}"></i>${c.condo ? `<i class="seg-condo" style="width:${pct(c.condo)}"></i>` : ''}${c.heating ? `<i class="seg-heat" style="width:${pct(c.heating)}"></i>` : ''}</span>
+      <span class="cost-parts">${escapeHtml(parts.join(' + ') + (note ? ' · ' + note : ''))}</span>
+      ${c.extraPct >= 15 ? `<span class="cost-tag tone-warn">${escapeHtml(t('cost.extra_pct', { pct: c.extraPct }))}</span>` : ''}
+    </div>`;
+}
+
 function _photoChipHtml(l) {
   if (l.photo_deal !== 'confirms' && l.photo_deal !== 'contradicts') return '';
   const note = (currentLang === 'it' ? l.photo_note_it : l.photo_note_en) || '';
@@ -325,9 +348,7 @@ function renderRentalCard(l) {
     ? `<button type="button" class="card-photo-wrap" data-open-details="${id}" aria-label="${escapeHtml(t('card.details') + ': ' + nb)}">${l.thumbnail ? `<img class="card-thumb" src="${_safeUrl(l.thumbnail)}" alt="" loading="lazy">` : ''}${gemChip}${newChip}</button>`
     : '';
 
-  const fees = Number(l.spese_condominiali) || 0;
-  const feesLine = fees
-    ? `<span class="price-fees">${escapeHtml(t('card.fees', { fees: fmt(fees), total: fmt((Number(l.rent_mo) || 0) + fees) }))}</span>` : '';
+  const cost = monthlyCost(l);
   const history = priceHistoryText(l);
   const meta = [_metroMeta(l), _freshMeta(l)].filter(Boolean).join('');
   const fav = isRentFav(l.id);
@@ -346,11 +367,11 @@ function renderRentalCard(l) {
         ${scoreRingHtml(l)}
       </div>
       <div class="card-price">
-        <span class="price-main">${l.rent_mo != null ? '€' + fmt(l.rent_mo) : '–'}</span>
-        <span class="price-unit">${escapeHtml(t('card.per_month'))}</span>
+        <span class="price-main">${l.rent_mo != null ? '€' + fmt(cost.total) : '–'}</span>
+        <span class="price-unit">${escapeHtml(t(cost.known ? 'cost.all_in' : 'cost.rent_only'))}</span>
         ${_dealDeltaHtml(l)}
         ${_photoChipHtml(l)}
-        ${feesLine}
+        ${_costLineHtml(cost)}
       </div>
       ${history ? `<div class="was-price lm-history">${icon('trending-down')}${escapeHtml(history)}</div>` : ''}
       <div class="card-specs">${_specsParts(l).map(p => `<span>${escapeHtml(p)}</span>`).join('')}</div>

@@ -78,7 +78,7 @@ function applyRentFilters(data, f) {
     }
     if (f.fascia   && l.omi_fascia !== f.fascia)               return false;
     if (f.omiZone  && l.omi_zona  !== f.omiZone)              return false;
-    if (f.maxRent  && l.rent_mo > f.maxRent)                  return false;
+    if (f.maxRent  && monthlyCost(l).total > f.maxRent)       return false;   // all-in when known
     if (f.minSqm   && l.sqm < f.minSqm)                       return false;
     if (f.minRooms && (l.rooms ?? 0) < f.minRooms)            return false;
     if (f.minScore && (l.score_total ?? 0) < f.minScore)      return false;
@@ -211,7 +211,7 @@ function renderRentals() {
 
   _rentFilteredData = applyRentFilters(ALL_RENT, f);
   const _sortVal = l => {
-    const v = l[rentSortKey];
+    const v = rentSortKey === 'rent_mo' ? (l.rent_mo != null ? monthlyCost(l).total : null) : l[rentSortKey];
     if (v == null) return asc ? Infinity : -Infinity;
     return rentSortKey === 'first_seen_date' ? Date.parse(v) || 0 : v;
   };

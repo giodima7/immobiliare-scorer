@@ -617,6 +617,25 @@ _NEGATIVE_CONTEXT_RX = _re.compile(
     r"da\s+definire|a\s+parte|esclus[aei]|incluse?",
     _re.IGNORECASE,
 )
+def _cost_per_month(raw) -> Optional[int]:
+    """'€ 300/mese' → 300, '€ 2.400/anno' → 200 (Immobiliare's costs block)."""
+    digits = _re.sub(r"[^\d]", "", str(raw or "").split(",")[0])
+    if not digits:
+        return None
+    value = int(digits)
+    return round(value / 12) if "anno" in str(raw).lower() else value
+
+
+_CONDO_INCLUDED_RX = _re.compile(
+    r"(?<!non )\b(?:spese(?:\s+condominiali)?|condominio)\s+(?:sono\s+)?(?:incluse|inclusa|incluso|compres[aeio])\b"
+    r"|\b(?:canone|affitto|prezzo)\s+(?:è\s+)?comprensiv[oa]\s+(?:delle\s+|di\s+)?spese\b", _re.I)
+
+
+def condo_included(text) -> bool:
+    """The listing says the rent already covers the condo fees."""
+    return bool(text) and bool(_CONDO_INCLUDED_RX.search(str(text).replace("\xa0", " ")))
+
+
 def _parse_condo_from_description(desc):
     """
     Extract monthly condo fees from an Italian listing description.
@@ -752,6 +771,21 @@ def parse_rental(item: dict) -> Optional[dict]:
 
     if spese is None:
         spese = _parse_condo_from_description(prop.get("description") or "")
+
+    # The rest of the monthly cost, on listing pages only: heating billed
+    # apart (centralised heating — "€ 2.400/anno" is €200 a month on top),
+    # the deposit, and whether the rent already covers the condo fees.
+    costs = prop.get("costs") or {}
+    heating_mo = _cost_per_month(costs.get("heatingExpenses"))
+    included = (condo_included(costs.get("condominiumExpenses"))
+                or (spese is None and condo_included(prop.get("description"))))
+    deposit_raw = str(((prop.get("rent") or {}).get("deposit")) or "")
+    deposit_months = deposit_eur = None
+    m_dep = _re.search(r"(\d+)\s*(?:mensilit|mes)", deposit_raw, _re.I)
+    if m_dep:
+        deposit_months = int(m_dep.group(1))
+    elif _re.search(r"\d", deposit_raw):
+        deposit_eur = _cost_per_month(deposit_raw.replace("/mese", ""))
 
     # Rooms — try numeric field first, then parse from Italian title.
     # Immobiliare returns string values like '5+' / '3+' for large
@@ -1026,6 +1060,10 @@ def parse_rental(item: dict) -> Optional[dict]:
         "sqm":                sqm,
         "ask_psqm":           ask_psqm,     # €/m²/month
         "spese_condominiali": spese,        # condominium fees €/mo (or None)
+        "heating_mo":         heating_mo,   # heating billed apart, €/mo
+        "condo_included":     included or None,
+        "deposit_months":     deposit_months,
+        "deposit_eur":        deposit_eur,
         "rooms":              rooms,
         "bedrooms":           bedrooms,        # camere da letto (bedrooms only)
         "floor":              floor,
@@ -1338,6 +1376,11 @@ DELIST_AFTER_MISSES   = 2
 # A sweep read to its last page that still brings back under half of the
 # area's visible listings is a bad page set, not a mass de-listing.
 DELIST_MIN_FOUND      = 0.5
+
+# Photos of top listings not read yet are read after every slot of either
+# site (~29 a day, one reading at a time — photo_eval's lock): the score-75
+# backlog (~2.3k) in ~3 days, new ones within ~1 h. ~2k tokens each.
+PHOTOS_PER_SLOT       = 32
 
 # Filled by fetch_rentals() for the caller: complete sweeps, page loads,
 # discover stats.
@@ -2361,6 +2404,18 @@ class _PendingLock:
         self.fh.close()
 
 
+def read_photos_after_slot(log) -> None:
+    """Read the photos of up to PHOTOS_PER_SLOT top listings not read yet
+    (photo_eval.nightly), then rescore if anything was stored. Skipped when
+    another reading runs."""
+    try:
+        from photo_eval import nightly as _read
+        if _read(log=lambda m: print("  " + m, flush=True), limit=PHOTOS_PER_SLOT):
+            rescore_output()
+    except Exception as exc:
+        log(f"[photos] skipped: {exc}")
+
+
 def _queue_digest(ids: list) -> None:
     if not ids:
         return
@@ -2578,6 +2633,7 @@ def _spread_loop(args, log) -> None:
                 + f", {rec.get('hidden', 0)} hidden, {rec.get('missed', 0)} missed once"
                 + ("" if ok else " · area NOT read in full — retried later"))
             mark_scan_done("immobiliare")
+            read_photos_after_slot(log)
             send_pending_digest(args, log)
         except BaseException as e:
             if isinstance(e, KeyboardInterrupt):

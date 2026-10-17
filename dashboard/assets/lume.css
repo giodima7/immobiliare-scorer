@@ -3605,7 +3605,29 @@ body[data-tab="saved"] #rActiveChips, body[data-tab="insights"] #rActiveChips, b
 .deal-delta.tone-at   { background: var(--bg-muted);    color: var(--text-secondary); }
 .deal-delta.tone-bad  { background: var(--coral-light); color: var(--coral-ink); }
 .deal-delta.tone-warn { background: var(--amber-light); color: var(--amber-ink); }
-.price-fees { flex-basis: 100%; font-size: var(--text-xs); color: var(--text-secondary); }
+/* Real monthly cost under the price (cards.js _costLineHtml): a bar sized by
+   rent / condo / heating, the parts, and a tag. */
+.cost-line { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 4px;
+             font-size: var(--text-xs); color: var(--text-secondary); }
+.cost-bar { display: flex; flex: 0 0 64px; height: 6px; border-radius: var(--radius-full); overflow: hidden; background: var(--bg-muted); }
+.cost-bar i { display: block; height: 100%; }
+.cost-bar .seg-rent  { background: var(--border-strong); }
+.cost-bar .seg-condo { background: var(--amber); }
+.cost-bar .seg-heat  { background: var(--coral); }
+.cost-bar.is-unknown { background: none; border: 1px dashed var(--border-strong); }
+.cost-parts { min-width: 0; }
+.cost-tag { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px; border-radius: var(--radius-full);
+            font-size: var(--text-xs); font-weight: 600; white-space: nowrap; }
+.cost-tag .i { width: 12px; height: 12px; }
+.cost-tag.tone-ok    { background: var(--green-light); color: var(--green-ink); }
+.cost-tag.tone-warn  { background: var(--amber-light); color: var(--amber-ink); }
+.cost-tag.tone-muted { background: var(--bg-muted);    color: var(--text-secondary); }
+.lm-costs { flex-basis: 100%; width: 100%; max-width: 420px; border-collapse: collapse; font-size: var(--text-sm); }
+.lm-costs td { padding: 3px 0; color: var(--text-secondary); }
+.lm-costs td + td { text-align: right; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.lm-costs tr.is-muted td + td { color: var(--text-muted); }
+.lm-costs tr.is-total td { padding-top: 7px; border-top: 1px solid var(--border-light); color: var(--text-primary); font-weight: 700; }
+.lm-costs tr.is-entry td { font-size: var(--text-xs); }
 .card-specs { display: flex; flex-wrap: wrap; gap: 2px 0; font-size: var(--text-sm); color: var(--text-primary); }
 .card-specs > span + span::before { content: '·'; margin: 0 6px; color: var(--text-muted); }
 .card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; font-size: var(--text-xs); color: var(--text-secondary); }
