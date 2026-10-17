@@ -1,7 +1,8 @@
 """Read a listing's photos with Claude and record what they show.
 
-Only the top listings (Hidden Gem / Great Value) are read: the point is to
-check whether a deal holds up once you look at the flat — dated kitchen,
+Only the best listings are read (score ≥ 90; --gems adds every Hidden
+Gem): the point is to check whether a top listing holds up once you look
+at the flat — dated kitchen,
 renders instead of photos, a basement — not to describe all 12k listings.
 
 Runs on the Claude subscription, not API tokens: either `claude -p` (the
@@ -16,7 +17,7 @@ session that reads the sheets itself. Efficiency comes from:
     python3 photo_eval.py select --pilot 50     # queue (a seeded sample)
     python3 photo_eval.py select                # all top listings not read yet
     python3 photo_eval.py sheets                # download + build the sheets
-    python3 photo_eval.py run --model haiku     # claude -p, batches of 8
+    python3 photo_eval.py run                   # claude -p (Sonnet, low effort), batches of 8
     python3 photo_eval.py ingest results.json   # store answers from a session
     python3 photo_eval.py report                # agreement with stated condition
 
@@ -111,9 +112,18 @@ def fingerprint(urls: list[str]) -> str:
     return hashlib.sha1("\n".join(urls).encode()).hexdigest()[:12]
 
 
-def is_top(l: dict) -> bool:
-    return bool((l.get("hidden_gem") or l.get("good_value"))
-                and not l.get("is_stale") and not (l.get("excluded") or l.get("_excluded")))
+MIN_SCORE = 90      # photos are read for the best listings only
+
+
+def is_top(l: dict, min_score: int = MIN_SCORE, gems: bool = False) -> bool:
+    """Live, scored ≥ min_score (or a Hidden Gem when gems=True). Idealista
+    rows never seen since its scans started stamping dates are left out —
+    they are almost always gone."""
+    if l.get("is_stale") or l.get("excluded") or l.get("_excluded"):
+        return False
+    if l.get("source") == "idealista" and not l.get("last_seen_date"):
+        return False
+    return (l.get("score_total") or 0) >= min_score or (gems and bool(l.get("hidden_gem")))
 
 
 def context(l: dict) -> dict:
@@ -137,7 +147,7 @@ def context(l: dict) -> dict:
 def cmd_select(args) -> None:
     rows = load_listings()
     done = load_results()
-    tops = [l for l in rows if is_top(l)]
+    tops = [l for l in rows if is_top(l, args.min_score, args.gems)]
     top = [l for l in tops if len(photo_urls(l)) >= MIN_PHOTOS]
     few = [l for l in tops if len(photo_urls(l)) < MIN_PHOTOS]
     print(f"top listings: {len(tops)} · too few photos (< {MIN_PHOTOS}) for now: {len(few)} "
@@ -228,7 +238,54 @@ def _clean_env() -> dict:
     Code session it might be started from."""
     import os
     keep = ("HOME", "PATH", "USER", "LANG", "TMPDIR", "SHELL")
-    return {k: os.environ[k] for k in keep if k in os.environ}
+    env = {k: os.environ[k] for k in keep if k in os.environ}
+    local_bin = str(Path.home() / ".local" / "bin")     # where the CLI installs itself
+    if local_bin not in env.get("PATH", "").split(":"):
+        env["PATH"] = env.get("PATH", "/usr/bin:/bin") + ":" + local_bin
+    return env
+
+
+def _ask_claude(msg: dict, system_prompt: str, model: str, effort: str = "low",
+                timeout: float = 900) -> dict | None:
+    """One user message (text + images) to `claude -p`, no tools, our own
+    system prompt. stdin must stay open until the result arrives — the CLI
+    stops reading as soon as it is closed."""
+    p = subprocess.Popen(
+        ["claude", "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
+         "--model", model, "--effort", effort, "--system-prompt", system_prompt, "--tools", "",
+         # Extended thinking roughly doubles the tokens for a fill-in-the-form
+         # answer; the rubric does the reasoning.
+         "--settings", json.dumps({"disableAllHooks": True, "alwaysThinkingEnabled": False}),
+         "--no-session-persistence"],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        env=_clean_env(), cwd=str(CACHE))
+    result = None
+    deadline = time.time() + timeout
+    try:
+        p.stdin.write(json.dumps(msg) + "\n")
+        p.stdin.flush()
+        for line in p.stdout:
+            try:
+                d = json.loads(line)
+            except ValueError:
+                continue
+            if d.get("type") == "result":
+                result = d
+                break
+            if time.time() > deadline:
+                break
+    finally:
+        try:
+            p.stdin.close()
+        except OSError:
+            pass
+        try:
+            p.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            p.kill()
+    if result is None:
+        result = {"is_error": True, "result": (p.stderr.read() if p.stderr else "")[-500:] or "no result"}
+    return result
 
 
 def parse_answer(text: str) -> list[dict]:
@@ -259,23 +316,10 @@ def cmd_run(args) -> None:
         msg = {"type": "user", "message": {"role": "user", "content": content},
                "parent_tool_use_id": None, "session_id": ""}
         t0 = time.time()
-        p = subprocess.run(
-            ["claude", "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
-             "--model", args.model, "--system-prompt", rubric, "--tools", "",
-             "--settings", json.dumps({"disableAllHooks": True}), "--no-session-persistence"],
-            input=json.dumps(msg) + "\n", capture_output=True, text=True, env=_clean_env(),
-            cwd=str(CACHE), timeout=900)
-        result = None
-        for line in p.stdout.splitlines():
-            try:
-                d = json.loads(line)
-            except ValueError:
-                continue
-            if d.get("type") == "result":
-                result = d
+        result = _ask_claude(msg, rubric, args.model, args.effort)
         if not result or result.get("is_error"):
-            print("claude -p failed:", (result or {}).get("result") or p.stderr[-500:] or p.stdout[-500:])
-            sys.exit(1)
+            print("claude -p failed:", (result or {}).get("result"))
+            raise SystemExit("claude -p failed")
         answers = parse_answer(result.get("result") or "")
         stored = _store(answers, batch, args.model)
         u = result.get("usage") or {}
@@ -362,12 +406,43 @@ def cmd_report(args) -> None:
             print("photos clearly worse than stated:", ", ".join(worse))
 
 
+# ── Nightly ──────────────────────────────────────────────────────────────────
+NIGHTLY_MAX = 40        # listings per night (5 calls; ~2k tokens each)
+
+
+def nightly(log=print) -> int:
+    """After the night's scans: queue score ≥ 90 + Hidden Gems not read yet
+    (or whose photos changed), build their sheets and read up to NIGHTLY_MAX.
+    Returns how many answers were stored. Never raises — a failed login or a
+    network hiccup just skips the night."""
+    import types
+    try:
+        before = len(load_results())
+        cmd_select(types.SimpleNamespace(pilot=None, seed=7, min_score=MIN_SCORE, gems=True))
+        queue = json.loads(QUEUE.read_text())
+        if not queue:
+            return 0
+        cmd_sheets(types.SimpleNamespace(force=False))
+        cmd_run(types.SimpleNamespace(model="sonnet", batch=8, limit=NIGHTLY_MAX, effort="low"))
+        stored = len(load_results()) - before
+        log(f"[photos] read {stored} listing(s)")
+        return max(stored, 0)
+    except SystemExit as exc:          # cmd_run exits on a failed claude -p call
+        log(f"[photos] skipped: {exc}")
+    except Exception as exc:
+        log(f"[photos] skipped: {type(exc).__name__}: {exc}")
+    return 0
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("select"); s.add_argument("--pilot", type=int); s.add_argument("--seed", type=int, default=7)
+    s.add_argument("--min-score", type=int, default=MIN_SCORE); s.add_argument("--gems", action="store_true",
+                   help="also every Hidden Gem below the score bar")
     s = sub.add_parser("sheets"); s.add_argument("--force", action="store_true")
-    s = sub.add_parser("run"); s.add_argument("--model", default="haiku"); s.add_argument("--batch", type=int, default=8)
+    s = sub.add_parser("run"); s.add_argument("--model", default="sonnet"); s.add_argument("--batch", type=int, default=8)
+    s.add_argument("--effort", default="low")
     s.add_argument("--limit", type=int)
     s = sub.add_parser("ingest"); s.add_argument("file"); s.add_argument("--model", default="session")
     sub.add_parser("report")

@@ -3659,6 +3659,9 @@ body.lm-open { overflow: hidden; }
 .lm-verdict.bad  { background: var(--coral-light); color: var(--coral-ink); }
 .lm-verdict-head { font-weight: 700; font-size: var(--text-md); }
 .lm-verdict-sub { font-size: var(--text-sm); margin-top: 2px; }
+.lm-photo-verdict { margin-top: var(--s-2); }
+.lm-photo-verdict .lm-verdict-head { display: flex; align-items: center; gap: 6px; }
+.lm-photo-meta { font-size: var(--text-xs); margin-top: 6px; opacity: .85; }
 .lm-money { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin-top: var(--s-4); font-size: var(--text-sm); }
 .lm-rent { font-size: var(--text-3xl); font-weight: 700; letter-spacing: -0.5px; }
 .lm-muted { color: var(--text-secondary); }

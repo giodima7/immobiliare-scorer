@@ -126,6 +126,22 @@ function _lmVerdict(l) {
   return { cls, head, sub };
 }
 
+// What photo_eval.py saw in the photos (scoring stamps photo_* fields).
+function _lmPhotoVerdict(l) {
+  if (!l.photo_deal) return '';
+  const cls = { confirms: 'good', doubt: 'warn', contradicts: 'bad' }[l.photo_deal] || '';
+  const note = (currentLang === 'it' ? l.photo_note_it : l.photo_note_en) || l.photo_note_it || '';
+  const sc = (k, v) => v != null ? `${t(k)} ${v}/5` : null;
+  const scores = [sc('photo.condition', l.photo_condition), sc('photo.kitchen', l.photo_kitchen),
+                  sc('photo.bathroom', l.photo_bathroom), sc('photo.light', l.photo_light)].filter(Boolean).join(' · ');
+  const flags = (l.photo_flags || []).map(f => t('photo.flag.' + f)).join(', ');
+  return `<div class="lm-verdict lm-photo-verdict ${cls}">
+      <div class="lm-verdict-head">${icon('photo')} ${escapeHtml(t('photo.' + l.photo_deal))}</div>
+      ${note ? `<div class="lm-verdict-sub">${escapeHtml(note)}</div>` : ''}
+      <div class="lm-photo-meta">${escapeHtml([scores, flags].filter(Boolean).join(' · '))}${scores || flags ? '<br>' : ''}${escapeHtml(t('photo.read', { date: _lmDate(l.photo_read_at) || '–', conf: t('photo.conf.' + (l.photo_confidence || 'low')) }))}</div>
+    </div>`;
+}
+
 function listingModalHtml(l) {
   const esc = escapeHtml;
   const yesNo = v => v === true ? t('lm.yes') : v === false ? t('lm.no') : null;
@@ -189,6 +205,7 @@ function listingModalHtml(l) {
       <div class="lm-verdict-head">${esc(v.head)}</div>
       ${v.sub ? `<div class="lm-verdict-sub">${esc(v.sub)}</div>` : ''}
     </div>
+    ${_lmPhotoVerdict(l)}
 
     <div class="lm-money">
       <div><span class="lm-rent">€${fmt(l.rent_mo)}</span><span class="lm-muted">${esc(t('card.per_month'))}</span></div>
