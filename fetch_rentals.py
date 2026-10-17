@@ -2426,6 +2426,29 @@ def read_photos_after_slot(log, limit: int = PHOTOS_PER_SLOT) -> None:
         log(f"[photos] skipped: {exc}")
 
 
+def _old_id_bar(rows: list, days: int = 3) -> dict:
+    """{source: the listing id we already knew `days` ago — 99th percentile
+    of their ids}. Ids grow over time on both sites, so a lower id was
+    published before then. Not the max: a few rows carry an older
+    first_seen_date than their id. Same rule as the dashboard
+    (cards.js _listedEarlier)."""
+    cut = (date.today() - timedelta(days=days)).isoformat()
+    ids: dict = {}
+    for l in rows:
+        m = _re.search(r"\d+", str(l.get("id") or ""))
+        if m and (l.get("first_seen_date") or "9") <= cut:
+            ids.setdefault(l.get("source") or "immobiliare", []).append(int(m.group(0)))
+    return {src: sorted(a)[int(0.99 * (len(a) - 1))] for src, a in ids.items()}
+
+
+def _listed_earlier(l: dict, bar: dict) -> bool:
+    """First seen lately but published before `bar` (see _old_id_bar) — a
+    zone read further or a scan gap, not a new listing."""
+    m = _re.search(r"\d+", str(l.get("id") or ""))
+    b = bar.get(l.get("source") or "immobiliare")
+    return bool(m and b and int(m.group(0)) < b)
+
+
 def _queue_digest(ids: list) -> None:
     if not ids:
         return
@@ -2454,8 +2477,10 @@ def send_pending_digest(args, log) -> None:
             pending = set()
         email_cfg = load_email_config()
         if (email_cfg.get("enabled", False) or args.email) and pending:
-            rows = [l for l in json.loads(OUTPUT_PATH.read_text())
-                    if l.get("id") in pending and not l.get("is_stale")]
+            all_rows = json.loads(OUTPUT_PATH.read_text())
+            bar = _old_id_bar(all_rows)
+            rows = [l for l in all_rows
+                    if l.get("id") in pending and not l.get("is_stale") and not _listed_earlier(l, bar)]
             if rows:
                 log(f"Sending digest for {len(rows)} new listing(s)…")
                 send_digest(rows, email_cfg)

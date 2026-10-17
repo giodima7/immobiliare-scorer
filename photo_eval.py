@@ -158,7 +158,11 @@ def cmd_select(args) -> None:
     if args.pilot:
         rnd = random.Random(args.seed)
         todo = rnd.sample(todo, min(args.pilot, len(todo)))
-    todo.sort(key=lambda l: -(l.get("score_total") or 0))
+    try:
+        from focus_areas import in_focus     # where the user is searching: first
+    except Exception:
+        in_focus = lambda l: False
+    todo.sort(key=lambda l: (not in_focus(l), -(l.get("score_total") or 0)))
     CACHE.mkdir(exist_ok=True)
     QUEUE.write_text(json.dumps([{**context(l), "photos": photo_urls(l)} for l in todo],
                                 ensure_ascii=False, indent=1))

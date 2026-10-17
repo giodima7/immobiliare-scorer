@@ -60,7 +60,39 @@ function isNew(l) {
   if (!l.first_seen_date) return false;
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 3);
-  return new Date(l.first_seen_date) >= cutoff;
+  return new Date(l.first_seen_date) >= cutoff && !_listedEarlier(l);
+}
+
+// Ids grow over time on both sites, so a listing whose id is below what we
+// already knew 3 days ago was published before that: first seen late (a
+// zone read further, a scan gap), not new. 2026-10-17: ~3.5k of ~4.6k "new"
+// listings were these. The bar is the 99th percentile, not the max: a few
+// rows carry an older first_seen_date than their id (same flat on both
+// sites keeps the earliest date) and one of them would lift the max to
+// today's ids. Same rule for the digest: fetch_rentals._old_id_bar.
+let _idBar = null, _idBarFor = null;
+function _idNum(l) { const m = String(l.id ?? '').match(/\d+/); return m ? Number(m[0]) : null; }
+function _listedEarlier(l) {
+  const pool = typeof ALL_RENT !== 'undefined' ? ALL_RENT : null;
+  if (!pool || !pool.length) return false;
+  if (_idBarFor !== pool) {
+    const d = new Date(); d.setDate(d.getDate() - 3);
+    const cut = d.toISOString().slice(0, 10);
+    const ids = {};
+    for (const x of pool) {
+      if (!x.first_seen_date || x.first_seen_date > cut) continue;
+      const n = _idNum(x), src = x.source || 'immobiliare';
+      if (n != null) (ids[src] = ids[src] || []).push(n);
+    }
+    _idBar = {};
+    for (const [src, a] of Object.entries(ids)) {
+      a.sort((p, q) => p - q);
+      _idBar[src] = a[Math.floor(0.99 * (a.length - 1))];
+    }
+    _idBarFor = pool;
+  }
+  const n = _idNum(l), bar = _idBar[l.source || 'immobiliare'];
+  return n != null && bar != null && n < bar;
 }
 
 // Whole days since the scanner first saw the listing (local calendar days).
@@ -300,8 +332,10 @@ function _metroMeta(l) {
 function _freshMeta(l) {
   const days = _daysSinceFirstSeen(l);
   if (days == null) return '';
-  const txt = days <= 0 ? t('card.seen_today') : t('card.seen_days', { n: fmt(days) });
-  return `<span class="${days <= 3 ? 'fresh' : ''}" title="${escapeHtml(fmtDate(l.first_seen_date))}">${icon('clock')}${escapeHtml(txt)}</span>`;
+  const earlier = days <= 3 && _listedEarlier(l);
+  const txt = earlier ? t(days <= 0 ? 'card.found_today_old' : 'card.found_days_old', { n: fmt(days) })
+            : days <= 0 ? t('card.seen_today') : t('card.seen_days', { n: fmt(days) });
+  return `<span class="${days <= 3 && !earlier ? 'fresh' : ''}" title="${escapeHtml(fmtDate(l.first_seen_date))}">${icon('clock')}${escapeHtml(txt)}</span>`;
 }
 
 // Score ring markup. animate=false (re-renders) paints the final state.

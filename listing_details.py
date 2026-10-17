@@ -367,12 +367,13 @@ def parse_idealista_detail(page: dict) -> dict:
 
 def build_queue(source: str, cache: dict | None = None,
                 rentals_path: Path = RENTALS_PATH) -> list:
-    """[(id, url)] still to fetch for `source`, most useful first: listings
-    at photo_eval's bar (score ≥ MIN_SCORE, or Hidden Gem) whose page wasn't
+    """[(id, url)] still to fetch for `source`, most useful first: every
+    listing in a focus area (focus_areas.json — where the user is searching:
+    each needs its real monthly cost), then listings at photo_eval's bar
+    (score ≥ MIN_SCORE, or Hidden Gem); both only while their page wasn't
     read since costs are parsed (and, on Idealista, the full gallery), best
-    first — the ones looked at, needing their real monthly cost and photos;
-    then, postponed, possible deals (price_z ≤ PRIORITY_Z, lowest first),
-    listings first seen in the last NEW_DAYS days, everything else visible."""
+    first. Then, postponed: possible deals (price_z ≤ PRIORITY_Z, lowest
+    first), listings first seen in the last NEW_DAYS days, the rest."""
     cache = load_cache() if cache is None else cache
     try:
         rows = json.loads(rentals_path.read_text())
@@ -382,8 +383,12 @@ def build_queue(source: str, cache: dict | None = None,
         from photo_eval import MIN_SCORE as top_score
     except Exception:
         top_score = 75
+    try:
+        from focus_areas import in_focus
+    except Exception:
+        in_focus = lambda l: False
     today = date.today()
-    top, deals, new, rest = [], [], [], []
+    focus, top, deals, new, rest = [], [], [], [], []
     for l in rows:
         if (l.get("source") or "immobiliare") != source:
             continue
@@ -391,11 +396,13 @@ def build_queue(source: str, cache: dict | None = None,
             continue
         lid = str(l.get("id"))
         entry = cache.get(lid) or {}
-        if (((l.get("score_total") or 0) >= top_score or l.get("hidden_gem"))
-                and not entry.get("gone")
-                and not (entry.get("fields") or {}).get("costs_read")):
-            top.append((-(l.get("score_total") or 0), (lid, l["url"])))
-            continue
+        if not entry.get("gone") and not (entry.get("fields") or {}).get("costs_read"):
+            if in_focus(l):
+                focus.append((-(l.get("score_total") or 0), (lid, l["url"])))
+                continue
+            if (l.get("score_total") or 0) >= top_score or l.get("hidden_gem"):
+                top.append((-(l.get("score_total") or 0), (lid, l["url"])))
+                continue
         if lid in cache or (source == "immobiliare" and l.get("detail_fetched_at")):
             continue
         z = l.get("price_z")
@@ -410,7 +417,7 @@ def build_queue(source: str, cache: dict | None = None,
             new.append((age, item))
         else:
             rest.append((z if z is not None else 9, item))
-    return ([i for _, i in sorted(top)] + [i for _, i in sorted(deals)]
+    return ([i for _, i in sorted(focus)] + [i for _, i in sorted(top)] + [i for _, i in sorted(deals)]
             + [i for _, i in sorted(new)] + [i for _, i in sorted(rest)])
 
 
