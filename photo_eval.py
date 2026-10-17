@@ -112,7 +112,7 @@ def fingerprint(urls: list[str]) -> str:
     return hashlib.sha1("\n".join(urls).encode()).hexdigest()[:12]
 
 
-MIN_SCORE = 90      # photos are read for the best listings only
+MIN_SCORE = 80      # photos are read for the best listings only (90 until 2026-10-17)
 
 
 def is_top(l: dict, min_score: int = MIN_SCORE, gems: bool = False) -> bool:
@@ -132,7 +132,8 @@ def context(l: dict) -> dict:
     floor = l.get("floor_n")
     return {
         "id": str(l["id"]),
-        "label": "Hidden Gem" if l.get("hidden_gem") else "Great Value",
+        "label": ("Hidden Gem" if l.get("hidden_gem") else
+                  "Great Value" if l.get("good_value") else "High score"),
         "area": l.get("neighbourhood"),
         "rent_eur_month": l.get("rent_mo") or l.get("price"),
         "sqm": l.get("sqm"),
@@ -407,23 +408,36 @@ def cmd_report(args) -> None:
 
 
 # ── Nightly ──────────────────────────────────────────────────────────────────
-NIGHTLY_MAX = 40        # listings per night (5 calls; ~2k tokens each)
+NIGHTLY_MAX = 40        # listings per call (5 claude calls; ~2k tokens each)
 
 
-def nightly(log=print) -> int:
-    """After the night's scans: queue score ≥ 90 + Hidden Gems not read yet
-    (or whose photos changed), build their sheets and read up to NIGHTLY_MAX.
-    Returns how many answers were stored. Never raises — a failed login or a
-    network hiccup just skips the night."""
+def nightly(log=print, limit: int = NIGHTLY_MAX) -> int:
+    """Queue score ≥ MIN_SCORE + Hidden Gems not read yet (or whose photos
+    changed), best first, and read up to `limit`. Only those get a sheet:
+    at 80 the queue held ~630 listings (~5.7k photo downloads). Returns how
+    many answers were stored. Never raises — a failed login or a network
+    hiccup just skips this call."""
+    import fcntl
     import types
+    # One reading at a time (the Idealista daemon after each slot, a manual
+    # run): two would pick the same unread listings and pay for both.
+    CACHE.mkdir(exist_ok=True)
+    lock = open(CACHE / ".reading.lock", "w")
+    try:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        log("[photos] another reading is running — skipped")
+        lock.close()
+        return 0
     try:
         before = len(load_results())
         cmd_select(types.SimpleNamespace(pilot=None, seed=7, min_score=MIN_SCORE, gems=True))
         queue = json.loads(QUEUE.read_text())
         if not queue:
             return 0
+        QUEUE.write_text(json.dumps(queue[:limit], ensure_ascii=False, indent=1))
         cmd_sheets(types.SimpleNamespace(force=False))
-        cmd_run(types.SimpleNamespace(model="sonnet", batch=8, limit=NIGHTLY_MAX, effort="low"))
+        cmd_run(types.SimpleNamespace(model="sonnet", batch=8, limit=limit, effort="low"))
         stored = len(load_results()) - before
         log(f"[photos] read {stored} listing(s)")
         return max(stored, 0)
@@ -431,6 +445,8 @@ def nightly(log=print) -> int:
         log(f"[photos] skipped: {exc}")
     except Exception as exc:
         log(f"[photos] skipped: {type(exc).__name__}: {exc}")
+    finally:
+        lock.close()
     return 0
 
 

@@ -429,8 +429,9 @@ def _parse_count_plus(raw) -> Optional[int]:
 
 def build_rental_url(page: int, area_slug: str = None,
                      max_rent: int = 0, min_sqm: int = 0, max_sqm: int = 0,
-                     min_rooms: int = 0) -> str:
-    """Build a fully parameterised Immobiliare.it rental search URL."""
+                     min_rooms: int = 0, newest: bool = False) -> str:
+    """Build a fully parameterised Immobiliare.it rental search URL.
+    newest: most recently published first (the site's "Più recenti")."""
     base = f"https://www.immobiliare.it/affitto-case/{CITY_SLUG}/"
     if area_slug:
         base += f"{area_slug}/"
@@ -439,6 +440,8 @@ def build_rental_url(page: int, area_slug: str = None,
     if min_sqm:   params["superficieMinima"] = min_sqm
     if max_sqm:   params["superficieMassima"]= max_sqm
     if min_rooms: params["localiMinimo"]     = min_rooms
+    if newest:
+        params["criterio"], params["ordine"] = "data", "desc"
     if page > 1:  params["pag"]              = page
     return base + ("?" + urlencode(params) if params else "")
 
@@ -1294,9 +1297,12 @@ async def _fetch_async(pages: int, area_slugs: list, max_rent: int,
 # remaining area's page came back blocked (8 of 10 full scans lost 6–8 of
 # 17 areas), and >99 % of the loads re-read listings we already had. The
 # daily scan stays well under that:
-#   1. discover — city-wide search, default order = most recently modified
-#      first (verified live 2026-10-14: identical to criterio=dataModifica),
-#      until DAILY_STOP_AFTER pages in a row bring nothing new;
+#   1. discover — city-wide search, most recently published first
+#      (criterio=data&ordine=desc), until DAILY_STOP_AFTER pages in a row
+#      bring nothing new. It used the default order, thought to be "most
+#      recently modified" (2026-10-14); on 2026-10-17 its page 1 held the
+#      same 25 old listings (ids 104M–133.4M) at 11:05 and 14:38, while
+#      criterio=data showed 25 from the last hours — 21 unknown to us;
 #   2. sweep    — 1/DAILY_SWEEP_DAYS of the active areas in full, so every
 #      listing's last_seen_date refreshes within STALE_DAYS_THRESHOLD;
 #   3. details  — detail pages (energy class, publication date, condo fees:
@@ -1312,10 +1318,10 @@ DETAIL_URL    = "https://www.immobiliare.it/annunci/{id}/"
 
 # ── Spread scan (pilot from 2026-10-17; replaces the daily scan) ─────────────
 # The daily scan swept each area once every DAILY_SWEEP_DAYS days, and its
-# discover step stopped on agencies' re-published old listings: of the 73
-# newest Immobiliare listings on 2026-10-17, ~60 sat in that day's 4 swept
-# areas — elsewhere new listings waited up to 4 days, dead ones stayed up to
-# 11. Immobiliare blocks at ~200 page loads in one session, yet never
+# discover step read the site's default order, which isn't by date: of the
+# 73 newest Immobiliare listings on 2026-10-17, ~60 sat in that day's 4
+# swept areas — elsewhere new listings waited up to 4 days, dead ones
+# stayed up to 11. Immobiliare blocks at ~200 page loads in one session, yet never
 # blocked the detail drip (3 pages per session, all day). So the spread scan
 # runs one slot every SLOT_GAP_SEC: a fresh browser session sweeps the ONE
 # area swept longest ago (≤ ~40 pages), every area once a day, plus a
@@ -1353,21 +1359,19 @@ def _macro_slug(item: dict) -> str:
 async def _discover_async(active: set, max_rent: int, min_sqm: int, max_sqm: int,
                           min_rooms: int, delay: float, browser, known_ids: set,
                           prev_ids: set | None = None) -> tuple:
-    """City-wide search, most recently modified first. Returns
+    """City-wide search, most recently published first. Returns
     ({id: listing}, stats).
 
     prev_ids None (daily scan): stop after DAILY_STOP_AFTER pages in a row
-    with nothing new. That stopped on agencies' re-published old listings
-    (2026-10-17: 0 new in 2 pages, twice, while 13 areas had fresh ones).
-    prev_ids = the ids the previous discover run read (spread scan): the
-    order is by modification, so once a page holds DISCOVER_OVERLAP_STOP of
-    them everything further down was read last time — stop there."""
+    with nothing new. prev_ids = the ids the previous discover run read
+    (spread scan): once a page holds DISCOVER_OVERLAP_STOP of them,
+    everything further down was read last time — stop there."""
     found: dict = {}
     stats = {"pages": 0, "new": 0, "per_page": [], "caught_up": False, "ids": []}
     quiet_pages = 0
-    print("\n    discover: city-wide, most recently modified first", end="", flush=True)
+    print("\n    discover: city-wide, newest first", end="", flush=True)
     for page in range(1, DAILY_DISCOVER_MAX_PAGES + 1):
-        url = build_rental_url(page, None, max_rent, min_sqm, max_sqm, min_rooms)
+        url = build_rental_url(page, None, max_rent, min_sqm, max_sqm, min_rooms, newest=True)
         data = None
         for attempt in (1, 2):
             try:
@@ -2560,10 +2564,14 @@ def _spread_loop(args, log) -> None:
         area = next_slot_area("immobiliare", areas)
         do_discover = time.time() - (load_discover_state().get("at") or 0) >= DISCOVER_EVERY_SEC
         log(f"Slot: {area}{' + discover' if do_discover else ''}")
-        ok = False
+        ok, blocked = False, True
         try:
             rec = run_marked("immobiliare", run_slot, args, area, do_discover)
             ok = rec["complete"]
+            # Back off only when the site pushed back — skipped / unreadable
+            # pages or nothing at all — not for a sweep that merely can't
+            # prove it reached the end (e.g. Idealista's full last page).
+            blocked = bool(rec["skipped"] or rec["parse_failed"] or not rec["found"])
             d = rec.get("discover")
             log(f"Slot done — {area}: {rec['found']} listing(s), {rec['new']} new"
                 + (f" (discover: {d['new']} new in {d['pages']} page(s))" if d else "")
@@ -2576,8 +2584,7 @@ def _spread_loop(args, log) -> None:
                 log("Interrupted — stopping daemon.")
                 raise
             log(f"✗ Slot error: {e}\n{traceback.format_exc()}")
-        # A slot that couldn't read its area in full (blocked?) → back off.
-        next_slot = time.time() + (_gap() if ok else 2 * _gap())
+        next_slot = time.time() + (2 * _gap() if blocked else _gap())
 
 
 def daemon_loop(args):
