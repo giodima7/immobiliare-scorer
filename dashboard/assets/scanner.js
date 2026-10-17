@@ -57,6 +57,8 @@ async function updateScannerStatus() {
       _lastScannerRun = st.last_run;
     }
 
+    _renderPipeline(st.pipeline);
+
     // Idealista status row (shown only when idealista data is present)
     if (st.idealista) {
       const iRow  = document.getElementById('idealistaStatusRow');
@@ -606,3 +608,54 @@ function _renderCityScanGrid() {
 }
 
 // ── Scanner start/stop buttons ────────────────────────────────────────────────
+
+
+// The four "workers" (Tools → Scanner): zone tour, new-listing search,
+// listing pages, photo reading — what each did last, today and next, and
+// progress on the top listings (api.py _pipeline_status).
+function _renderPipeline(p) {
+  const box = document.getElementById('pipelineBox');
+  if (!box) return;
+  if (!p || p.error || !p.sites) { box.hidden = true; return; }
+  const esc = escapeHtml;
+  const hm = iso => iso ? String(iso).slice(11, 16) : '–';
+  const next = iso => !iso ? '–' : (new Date(iso) <= new Date() ? t('w.soon') : hm(iso));
+  const name = { immobiliare: 'Immobiliare', idealista: 'Idealista' };
+  const area = a => formatAddress(String(a || '').replace(/-/g, ' '));
+  const S = p.sites, srcs = ['immobiliare', 'idealista'];
+  const lines = f => srcs.map(src => `<div class="w-line">${esc(f(src, S[src] || {}))}</div>`).join('');
+  const prog = (label, v) => {
+    const n = p.top.listings || 1, pct = Math.round(v / n * 100);
+    return `<div class="pipe-bar"><span>${esc(label)}</span><span class="pipe-track"><i style="width:${pct}%"></i></span><span>${fmt(v)} / ${fmt(p.top.listings)}</span></div>`;
+  };
+  const card = (ic, title, sub, body) => `<section class="w-card">
+      <div class="w-head">${icon(ic)}<div><div class="w-title">${esc(title)}</div><div class="w-sub">${esc(sub)}</div></div></div>${body}</section>`;
+  const sum = (f) => srcs.reduce((a, s) => a + (f(S[s] || {}) || 0), 0);
+
+  const slots = lines((src, s) => s.slot?.last
+    ? t('w.slot_line', { site: name[src], at: hm(s.slot.last.at), area: area(s.slot.last.area), n: fmt(s.slot.last.new || 0), next: next(s.slot.next) })
+    : t('w.never', { site: name[src] }))
+    + `<div class="w-today">${esc(t('w.today_slots', { n: sum(s => s.slot?.today), k: fmt(sum(s => s.slot?.new_today)) }))}</div>`;
+  const disc = lines((src, s) => s.discover?.last
+    ? t('w.discover_line', { site: name[src], at: hm(s.discover.last.at), n: fmt(s.discover.last.new || 0), next: next(s.discover.next) })
+    : t('w.never', { site: name[src] }))
+    + `<div class="w-today">${esc(t('w.today_discover', { n: fmt(sum(s => s.discover?.new_today)) }))}</div>`;
+  const pages = lines((src, s) => {
+    const d = s.pages || {};
+    if (d.paused_until) return t('w.pages_paused', { site: name[src], until: hm(d.paused_until) });
+    return d.last ? t('w.pages_line', { site: name[src], at: hm(d.last.at), ok: fmt(d.last.ok), h: fmt(d.per_hour) })
+                  : t('w.never', { site: name[src] });
+  }) + `<div class="w-today">${esc(t('w.today_pages', { n: fmt(sum(s => s.pages?.read_today)) }))}</div>`
+    + prog(t('w.prog_pages'), p.top.page_read) + prog(t('w.prog_costs'), p.top.costs_known);
+  const ph = p.photos || {};
+  const photos = `<div class="w-line">${esc(ph.last ? t('w.photos_line', { at: hm(ph.last.at), n: fmt(ph.last.stored) }) : '–')}</div>`
+    + `<div class="w-today">${esc(t('w.today_photos', { n: fmt(ph.today || 0) }))}</div>`
+    + prog(t('w.prog_photos'), p.top.photos_read)
+    + `<div class="w-line">${esc(t('w.waiting', { n: fmt(p.top.photos_waiting || 0) }))}</div>`;
+
+  box.innerHTML = card('map', '1 · ' + t('w.slots'), t('w.slots_sub'), slots)
+    + card('sparkles', '2 · ' + t('w.discover'), t('w.discover_sub'), disc)
+    + card('file-text', '3 · ' + t('w.pages'), t('w.pages_sub', { min: p.min_score }), pages)
+    + card('photo', '4 · ' + t('w.photos'), t('w.photos_sub'), photos);
+  box.hidden = false;
+}

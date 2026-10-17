@@ -77,6 +77,7 @@ from fetch_rentals import (
     # Spread scan helpers
     next_slot_area, DISCOVER_EVERY_SEC, DISCOVER_OVERLAP_STOP, SLOT_GAP_SEC,
     _queue_digest, send_pending_digest, _slot_log_path, read_photos_after_slot,
+    _between_slots,
 )
 
 try:
@@ -2032,6 +2033,8 @@ async def _slot_async(pages: int, zone: str, discover: bool, max_rent: int,
         if dstats["pages"]:
             _discover_state_path().write_text(json.dumps({"at": time.time(), "ids": ids}))
         LAST_FETCH["discover"] = dstats
+    if not zone:                           # discover between slots
+        return list(found.values()), []
     print(f"\n    sweep: {zone}", end="", flush=True)
     swept, skipped = await _fetch_async(pages, [zone], max_rent, min_sqm, min_rooms,
                                         delay, browser, complete=LAST_FETCH["complete"],
@@ -2087,7 +2090,7 @@ def fetch_idealista(pages: int = 3, area_names: list = None, max_rent: int = 0,
         browser = BrowserSession("idealista", background=(mode == "slot"))
         await browser.start()
         try:
-            if mode == "slot" and slot_area:
+            if mode == "slot":
                 return await _slot_async(pages, slot_area, discover, max_rent,
                                          min_sqm, min_rooms, delay, browser)
             if mode == "daily" and area_slugs:
@@ -2320,9 +2323,10 @@ def run_once(args) -> list:
     return new_listings
 
 
-def run_slot(args, zone: str, do_discover: bool) -> dict:
+def run_slot(args, zone: str | None, do_discover: bool) -> dict:
     """One spread-scan slot: discover when due, sweep `zone`, merge,
-    rescore. Appends its numbers to the slot log and returns them."""
+    rescore. zone None: discover only (between slots), written only when it
+    found new listings. Appends its numbers to the slot log and returns them."""
     t0 = time.time()
     area_names = _idealista_area_names(args)
     raw, skipped = fetch_idealista(
@@ -2333,13 +2337,15 @@ def run_slot(args, zone: str, do_discover: bool) -> dict:
     complete = dict(LAST_FETCH.get("complete") or {})
     sweep = LAST_FETCH.get("sweep") or {}
     rec = {"at": datetime.now().isoformat(timespec="seconds"), "source": SOURCE,
-           "area": zone, "complete": zone in complete, "pages": sweep.get("pages", 0),
+           "kind": "slot" if zone else "discover", "area": zone, "complete": zone in complete, "pages": sweep.get("pages", 0),
            "parse_failed": sweep.get("parse_failed", 0),
            "skipped": [s.get("reason") for s in skipped],
            "discover": LAST_FETCH.get("discover"),
            "found": len(raw), "found_sweep": sum(l.get("_via") == "sweep" for l in raw),
            "new": 0}
     seen = load_seen_ids()
+    if not zone and not any(l["id"] not in seen for l in raw):
+        raw = []                           # discover found nothing new: nothing to write
     if raw:
         scored = score_all(raw, comps_pool=raw + _other_source_comps())
         today_str = str(date.today())
@@ -2360,8 +2366,10 @@ def run_slot(args, zone: str, do_discover: bool) -> dict:
                    new_via_sweep=sum(l.get("_via") == "sweep" for l in new),
                    new_ids=[l["id"] for l in new][:200])
         _queue_digest([l["id"] for l in new])
-    record_sweeps("idealista", _zone_slugs(area_names), list(complete), tried_slugs=[zone])
-    write_idealista_status(new_count=rec["new"], skipped_areas=skipped)
+    if zone:
+        record_sweeps("idealista", _zone_slugs(area_names), list(complete), tried_slugs=[zone])
+    if zone or raw:      # a discover with nothing new leaves the dashboard alone
+        write_idealista_status(new_count=rec["new"], skipped_areas=skipped)
     if raw:
         rescore_output()
     rec["seconds"] = round(time.time() - t0)
@@ -2383,7 +2391,7 @@ def _spread_loop(args, log) -> None:
         if time.time() < next_slot:
             log(f"Next slot at {datetime.fromtimestamp(next_slot):%Y-%m-%d %H:%M}")
             try:
-                wait_and_drip("idealista", next_slot, log)
+                _between_slots(args, "idealista", next_slot, log, run_slot, load_discover_state)
             except KeyboardInterrupt:
                 log("Interrupted during sleep — stopping Idealista daemon.")
                 raise

@@ -44,15 +44,22 @@ DETAIL_KEYS = ("condition", "heating_type", "energy_class", "year_built",
 CARD_YES_ONLY = ("has_balcony", "has_parking", "furnished")
 
 # ── Drip pacing (per source) ──────────────────────────────────────────────────
-# 150 a day in 3-page sessions until 2026-10-17: ~40 days to read the
-# visible listings once, while listing pages are where the costs (condo,
-# heating, deposit) and Idealista's gallery are. The spread scan's 30–40
-# page sessions were never blocked; a block still pauses the drip 6 h.
-DRIP_PER_DAY      = 500          # listing pages per source per day
-DRIP_HOURS        = (7, 24)      # local hours the drip runs in
-DRIP_BATCH        = 10           # pages per browser session
-DRIP_GAP_MIN      = (8, 15)      # minutes between sessions (random)
-DRIP_PAGE_GAP_SEC = (8, 15)      # seconds between pages in a session
+# Pace. 150 pages a day until 2026-10-17 (~40 days to read the visible
+# listings once), then a fixed 10 every 8–15 min — a guess, never measured.
+# Now the drip finds its own pace: it starts at DRIP_START_LEVEL, moves up a
+# level after DRIP_STEP_UP_SEC without trouble, steps down when a third of
+# a session fails, and on a block page halves its level and pauses (1 h,
+# 6 h for a second block within 6 h) — just below the sites' limit instead
+# of at it (a block also hits the user's own browsing from this IP).
+DRIP_LEVELS = [          # (pages per browser session, minutes between sessions)
+    (10, (8, 15)), (20, (4, 8)), (30, (3, 5)), (40, (2, 3)), (50, (1, 2)),
+]
+DRIP_START_LEVEL  = 1
+DRIP_STEP_UP_SEC  = 2 * 3600
+DRIP_PER_DAY      = 3000         # safety cap per source per day
+DRIP_HOURS        = (0, 24)      # all day — the window stays minimized
+DRIP_PAGE_GAP_SEC = (5, 10)      # seconds between pages in a session
+DRIP_QUEUE_TTL    = 30 * 60      # rebuild the queue: new top listings jump in
 PRIORITY_Z        = -0.8         # price_z at or below this → fetched first
 NEW_DAYS          = 3            # first seen within this many days → next
 
@@ -495,14 +502,21 @@ async def fetch_batch(source: str, items: list, log=print) -> dict:
 _DRIP_STATE: dict = {}
 
 
-def drip_until(source: str, deadline: float, log=print) -> None:
+def _drip_status_path(source: str) -> Path:
+    return BASE_DIR / f".drip_status_{source}.json"
+
+
+def drip_until(source: str, deadline: float, log=print, after_batch=None) -> None:
     """Drip listing pages for `source` until wall-clock `deadline`, then
-    return (the caller's next scan is due). Sleeps like sleep_until in
-    between, so a laptop that slept through the night catches up on wake."""
-    st = _DRIP_STATE.setdefault(source, {"day": date.today(), "done": 0, "blocked_until": 0.0})
+    return (the caller's next slot is due). Sleeps like sleep_until in
+    between, so a laptop that slept through the night catches up on wake.
+    after_batch(): called after each session (photo reading)."""
+    st = _DRIP_STATE.setdefault(source, {
+        "day": date.today(), "done": 0, "blocked_until": 0.0, "level": DRIP_START_LEVEL,
+        "changed": time.time(), "last_block": 0.0, "last": None})
     queue: list = []
-    built_on = None
-    next_batch = time.time() + random.uniform(60, 300)
+    built_at = 0.0
+    next_batch = time.time() + random.uniform(30, 90)
     while deadline - time.time() > 0:
         now = datetime.now()
         if date.today() != st["day"]:
@@ -510,10 +524,10 @@ def drip_until(source: str, deadline: float, log=print) -> None:
         eligible = (DRIP_HOURS[0] <= now.hour < DRIP_HOURS[1]
                     and st["done"] < DRIP_PER_DAY and time.time() >= st["blocked_until"])
         if eligible and time.time() >= next_batch:
-            if built_on != st["day"] or not queue:
-                queue = build_queue(source)
-                built_on = st["day"]
-            take = queue[:min(DRIP_BATCH, DRIP_PER_DAY - st["done"])]
+            if time.time() - built_at > DRIP_QUEUE_TTL or not queue:
+                queue, built_at = build_queue(source), time.time()
+            size, gap_min = DRIP_LEVELS[st["level"]]
+            take = queue[:min(size, DRIP_PER_DAY - st["done"])]
             queue = queue[len(take):]
             if take:
                 try:
@@ -522,15 +536,51 @@ def drip_until(source: str, deadline: float, log=print) -> None:
                     stats = {"ok": 0, "gone": 0, "error": len(take), "blocked": False}
                     log(f"[details] {source}: batch failed ({type(exc).__name__}: {exc})")
                 st["done"] += len(take)
-                if stats["blocked"]:
-                    st["blocked_until"] = time.time() + 6 * 3600
-                    log(f"[details] {source}: blocked — pausing 6 h")
-                else:
-                    log(f"[details] {source}: {stats['ok']} ok, {stats['gone']} gone, "
-                        f"{stats['error']} failed · {st['done']}/{DRIP_PER_DAY} today · "
-                        f"{len(queue)} queued")
-            next_batch = time.time() + random.uniform(*DRIP_GAP_MIN) * 60
+                _pace(source, st, stats, len(take), log)
+                st["last"] = {"at": now.isoformat(timespec="seconds"), "pages": len(take),
+                              **{k: stats[k] for k in ("ok", "gone", "error", "blocked")}}
+                _write_drip_status(source, st, len(queue))
+                if after_batch and not stats["blocked"]:
+                    try:
+                        after_batch()
+                    except Exception as exc:
+                        log(f"[details] after-batch step failed: {exc}")
+            next_batch = time.time() + random.uniform(*DRIP_LEVELS[st["level"]][1]) * 60
         wait = 60.0
         if eligible:
             wait = min(wait, max(1.0, next_batch - time.time()))
         time.sleep(max(1.0, min(wait, deadline - time.time())))
+
+
+def _pace(source: str, st: dict, stats: dict, n: int, log) -> None:
+    """Move the drip's level after a session (see DRIP_LEVELS)."""
+    now = time.time()
+    if stats["blocked"]:
+        pause = 6 * 3600 if now - st["last_block"] < 6 * 3600 else 3600
+        st["level"], st["changed"], st["last_block"] = st["level"] // 2, now, now
+        st["blocked_until"] = now + pause
+        log(f"[details] {source}: blocked — pausing {pause // 3600} h, level {st['level']}")
+        return
+    if n and stats["error"] >= max(2, n / 3):
+        st["level"], st["changed"] = max(0, st["level"] - 1), now
+        log(f"[details] {source}: {stats['error']}/{n} failed — slowing to level {st['level']}")
+    elif now - st["changed"] >= DRIP_STEP_UP_SEC and st["level"] < len(DRIP_LEVELS) - 1:
+        st["level"], st["changed"] = st["level"] + 1, now
+        log(f"[details] {source}: no trouble for {DRIP_STEP_UP_SEC // 3600} h — up to level {st['level']}")
+    log(f"[details] {source}: {stats['ok']} ok, {stats['gone']} gone, {stats['error']} failed · "
+        f"{st['done']} today · level {st['level']} ({DRIP_LEVELS[st['level']][0]} per session)")
+
+
+def _write_drip_status(source: str, st: dict, queued: int) -> None:
+    """For the dashboard (api.py _pipeline_status)."""
+    size, gap = DRIP_LEVELS[st["level"]]
+    per_hour = round(60 / (sum(gap) / 2 + size * sum(DRIP_PAGE_GAP_SEC) / 2 / 60) * size)
+    try:
+        _drip_status_path(source).write_text(json.dumps({
+            "last": st["last"], "done_today": st["done"], "level": st["level"],
+            "levels": len(DRIP_LEVELS), "per_session": size, "per_hour": per_hour,
+            "paused_until": (datetime.fromtimestamp(st["blocked_until"]).isoformat(timespec="minutes")
+                             if st["blocked_until"] > time.time() else None),
+            "queued": queued}))
+    except OSError:
+        pass
