@@ -13,6 +13,11 @@ netlify_config.json
 .last_scan_*
 .sweep_coverage_*.json
 .digest_sent_date
+# Spread scan state (fetch_rentals) and incremental push state (supabase_sync)
+.digest_pending_*.json
+.discover_state_*.json
+.pushed_*.json
+scan_slots_*.jsonl
 scanner.log
 scanner_idealista.log
 sale_fetch.log
