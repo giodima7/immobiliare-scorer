@@ -74,6 +74,9 @@ from fetch_rentals import (
     _load_scan_prefs,
     # Daily digest helpers
     mark_digest_sent,
+    # Spread scan helpers
+    next_slot_area, DISCOVER_EVERY_SEC, DISCOVER_OVERLAP_STOP, SLOT_GAP_SEC,
+    _queue_digest, send_pending_digest, _slot_log_path,
 )
 
 try:
@@ -1721,12 +1724,23 @@ def write_idealista_status(new_count: int, running: bool = False,
 
 async def _fetch_async(pages: int, area_slugs: list, max_rent: int,
                        min_sqm: int, min_rooms: int,
-                       delay: float, browser) -> tuple:
+                       delay: float, browser,
+                       complete: dict | None = None,
+                       stats: dict | None = None) -> tuple:
     """
     Navigate Idealista rental pages and return (listings, skipped_areas).
     Mirrors fetch_rentals._fetch_async() exactly, replacing __NEXT_DATA__
     extraction with live HTML DOM + optional embedded JSON parsing.
+
+    complete: when given, gets {zone_slug: canonical_slug} for every zone
+    read to its end — the last page has no "next" link AND is short (< a
+    full page of 30). A full last page can be the site's pagination cap,
+    an empty page a render that timed out: neither proves the end.
+    stats: when given, counts page loads ("pages").
     """
+    stats = {} if stats is None else stats
+    stats.setdefault("pages", 0)
+    stats.setdefault("parse_failed", 0)
     all_items: list  = []
     seen_ids:  set   = set()   # global dedup across all areas
     skipped_areas    = []
@@ -1741,6 +1755,7 @@ async def _fetch_async(pages: int, area_slugs: list, max_rent: int,
     first_url = build_idealista_url(1, targets[0], max_rent, min_sqm, min_rooms)
     print(f"\n    [debug] GET {first_url} (initial + CAPTCHA check)", flush=True)
     tab = await browser.get(first_url)
+    stats["pages"] += 1
     await asyncio.sleep(2.0)   # brief navigation settle — _wait_for_render polls the rest
 
     if not await _check_and_handle_captcha(tab):
@@ -1755,11 +1770,13 @@ async def _fetch_async(pages: int, area_slugs: list, max_rent: int,
             area_ids_seen: set = set()
             canonical_slug     = area_slug
             area_got_results   = False
+            finished           = False   # read to the zone's end
 
             for page in range(1, pages + 1):
                 url = build_idealista_url(page, canonical_slug, max_rent, min_sqm, min_rooms)
                 print(f"\n    [debug] GET {url}", flush=True)
                 tab = await browser.get(url)
+                stats["pages"] += 1
                 await asyncio.sleep(2.0)   # brief settle; _wait_for_render (inside extraction) handles the rest
 
                 # Mid-session CAPTCHA check on every page (shorter timeout)
@@ -1797,6 +1814,7 @@ async def _fetch_async(pages: int, area_slugs: list, max_rent: int,
                 raw_listings = await _extract_listings_from_page(tab)
                 if not raw_listings:
                     print(f" (empty, done)", end="", flush=True)
+                    stats["parse_failed"] += page > 1
                     break
 
                 area_got_results = True
@@ -1818,6 +1836,9 @@ async def _fetch_async(pages: int, area_slugs: list, max_rent: int,
                     if lid in seen_ids:
                         continue
                     parsed["_fetched_area"] = canonical_slug or "all"
+                    parsed["_via"] = "sweep"
+                    if canonical_slug:
+                        parsed["scan_area"] = canonical_slug   # kept on disk (de-listing)
                     seen_ids.add(lid)
                     all_items.append(parsed)
                     new_this_page += 1
@@ -1837,8 +1858,11 @@ async def _fetch_async(pages: int, area_slugs: list, max_rent: int,
 
                 print(f" p{page}(+{new_this_page})", end="", flush=True)
                 if not has_next:
+                    finished = len(raw_listings) < 30
                     break
 
+            if finished and area_slug and complete is not None:
+                complete[area_slug] = canonical_slug
             if not area_got_results and area_slug:
                 reason = ("no results — slug may be invalid or "
                           "not found on Idealista.it")
@@ -1917,13 +1941,116 @@ async def _daily_async(pages: int, area_slugs: list, max_rent: int, min_sqm: int
     return list(found.values()), skipped
 
 
+# ── Spread scan (see fetch_rentals SPREAD_SCAN) ──────────────────────────────
+# One zone per slot, the one swept longest ago, every 24 h / (zones + 1)
+# (~2 h 10 min for 10 zones), read to its end in a minimized session, plus a
+# city-wide newest-first discover every DISCOVER_EVERY_SEC. The daily scan
+# swept 2–3 zones a night; Garibaldi–Porta Venezia still had a full 50th
+# page on 2026-10-17, so a slot may read up to IDEALISTA_SLOT_MAX_PAGES.
+# Photos are read once a day (first slot from PHOTO_HOUR), the digest goes
+# with Immobiliare's (fetch_rentals.send_pending_digest).
+SPREAD_SCAN                  = True
+IDEALISTA_SLOT_MAX_PAGES     = 100
+IDEALISTA_DISCOVER_MAX_PAGES = 10
+PHOTO_HOUR                   = 4
+
+# Filled by fetch_idealista() for the caller: complete sweeps, page loads,
+# discover stats.
+LAST_FETCH: dict = {}
+
+
+def _discover_state_path() -> Path:
+    return BASE_DIR / f".discover_state_idealista_{CITY_KEY}.json"
+
+
+def load_discover_state() -> dict:
+    """{"at": epoch of the last discover run, "ids": ids it read}."""
+    try:
+        return json.loads(_discover_state_path().read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+async def _discover_city_async(browser, known_ids: set, prev_ids: set, max_rent: int,
+                               min_sqm: int, min_rooms: int) -> tuple:
+    """City-wide search, newest published first. Stops on a page with
+    nothing new or holding DISCOVER_OVERLAP_STOP of the previous run's ids.
+    Returns ({id: listing}, stats)."""
+    found: dict = {}
+    stats = {"pages": 0, "new": 0, "per_page": [], "caught_up": False, "ids": []}
+    print("\n    discover: city-wide, newest first", end="", flush=True)
+    for page in range(1, IDEALISTA_DISCOVER_MAX_PAGES + 1):
+        url = build_idealista_url(page, None, max_rent, min_sqm, min_rooms)
+        url += ("&" if "?" in url else "?") + IDEALISTA_NEWEST
+        try:
+            tab = await browser.get(url)
+            stats["pages"] += 1
+            await asyncio.sleep(2.0)
+            if not await _check_and_handle_captcha(tab, timeout=60):
+                break
+            raws = await _extract_listings_from_page(tab)
+        except PageTimeout:
+            await browser.restart()
+            break
+        except Exception as exc:
+            print(f"\n    [warn] discover p{page} unreadable ({type(exc).__name__})", flush=True)
+            break
+        new_here = overlap = 0
+        for raw in raws:
+            parsed = parse_idealista_listing(raw)
+            if not parsed:
+                continue
+            stats["ids"].append(parsed["id"])
+            overlap += parsed["id"] in prev_ids
+            parsed["_fetched_area"] = "all"
+            parsed["_via"] = "discover"
+            if parsed["id"] not in known_ids and parsed["id"] not in found:
+                new_here += 1
+            found[parsed["id"]] = parsed
+        stats["new"] += new_here
+        stats["per_page"].append(new_here)
+        print(f" p{page}(+{new_here} new, {overlap} seen last run)", end="", flush=True)
+        if not raws:
+            break
+        if not new_here or overlap >= DISCOVER_OVERLAP_STOP:
+            stats["caught_up"] = True
+            break
+    return found, stats
+
+
+async def _slot_async(pages: int, zone: str, discover: bool, max_rent: int,
+                      min_sqm: int, min_rooms: int, delay: float, browser) -> tuple:
+    """One spread-scan slot: discover (when due), then sweep `zone` to its
+    end. Returns (listings, skipped)."""
+    found: dict = {}
+    if discover:
+        prev = load_discover_state()
+        found, dstats = await _discover_city_async(
+            browser, set(load_seen_ids()), set(prev.get("ids") or []),
+            max_rent, min_sqm, min_rooms)
+        ids = dstats.pop("ids")
+        if dstats["pages"]:
+            _discover_state_path().write_text(json.dumps({"at": time.time(), "ids": ids}))
+        LAST_FETCH["discover"] = dstats
+    print(f"\n    sweep: {zone}", end="", flush=True)
+    swept, skipped = await _fetch_async(pages, [zone], max_rent, min_sqm, min_rooms,
+                                        delay, browser, complete=LAST_FETCH["complete"],
+                                        stats=LAST_FETCH["sweep"])
+    for l in swept:
+        found[l["id"]] = l
+    return list(found.values()), skipped
+
+
 def fetch_idealista(pages: int = 3, area_names: list = None, max_rent: int = 0,
                     min_sqm: int = 0, min_rooms: int = 0,
-                    delay: float = 3.0, mode: str = "full") -> tuple:
+                    delay: float = 3.0, mode: str = "full",
+                    slot_area: str = None, discover: bool = False) -> tuple:
     """
     One-shot fetch of Milano rental listings from Idealista.it via nodriver.
     delay defaults to 3.0s — Idealista applies stricter bot detection.
     Returns (listings, skipped_areas).
+    mode "slot" (spread scan): discover when `discover`, then sweep zone
+    `slot_area` only, in a minimized window; see LAST_FETCH.
     """
     pre_skipped: list = []
     valid_slugs: list = []
@@ -1952,10 +2079,17 @@ def fetch_idealista(pages: int = 3, area_names: list = None, max_rent: int = 0,
     area_slugs = valid_slugs
     print(f"  Fetching Idealista rentals ({desc})…", end="", flush=True)
 
+    LAST_FETCH.clear()
+    LAST_FETCH.update({"complete": {}, "sweep": {}, "discover": None})
+
     async def _run():
-        browser = BrowserSession("idealista")
+        # Slots run all day: keep their window out of sight, like the drip.
+        browser = BrowserSession("idealista", background=(mode == "slot"))
         await browser.start()
         try:
+            if mode == "slot" and slot_area:
+                return await _slot_async(pages, slot_area, discover, max_rent,
+                                         min_sqm, min_rooms, delay, browser)
             if mode == "daily" and area_slugs:
                 items, skipped = await _daily_async(
                     pages, area_slugs, max_rent, min_sqm, min_rooms, delay, browser,
@@ -2070,18 +2204,40 @@ def fetch_idealista(pages: int = 3, area_names: list = None, max_rent: int = 0,
 
 # ── Run cycle ─────────────────────────────────────────────────────────────────
 
+def _idealista_area_names(args) -> list:
+    if args.areas:
+        return [a.strip() for a in args.areas.split(",") if a.strip()]
+    # Default: derive Idealista zones from the active Immobiliare areas
+    # (area_settings.json — single source of truth, no separate Idealista picker).
+    # _load_idealista_areas() maps each active Immobiliare neighbourhood to the
+    # Idealista macro-zone that covers it, then returns the zone names to scan.
+    area_names = _load_idealista_areas()
+    if not area_names:
+        print("  [scan] No Idealista zones matched — scanning all Milano", flush=True)
+    return area_names
+
+
+def _zone_slugs(area_names: list) -> list:
+    return [s for s in (to_url_slug(n) for n in area_names) if s]
+
+
+def _other_source_comps() -> list:
+    """Immobiliare rows as comps for an Idealista batch (most Idealista rows
+    have no coordinates yet when scored)."""
+    try:
+        existing_all = json.loads(OUTPUT_PATH.read_text()) if OUTPUT_PATH.exists() else []
+    except Exception:
+        return []
+    immo_comps = [l for l in existing_all if l.get("source") != SOURCE]
+    if immo_comps:
+        print(f"  [comps]  {len(immo_comps)} Immobiliare listing(s) loaded as comps pool",
+              flush=True)
+    return immo_comps
+
+
 def run_once(args) -> list:
     """Execute one fetch-score-write cycle. Returns newly seen listings."""
-    if args.areas:
-        area_names = [a.strip() for a in args.areas.split(",") if a.strip()]
-    else:
-        # Default: derive Idealista zones from the active Immobiliare areas
-        # (area_settings.json — single source of truth, no separate Idealista picker).
-        # _load_idealista_areas() maps each active Immobiliare neighbourhood to the
-        # Idealista macro-zone that covers it, then returns the zone names to scan.
-        area_names = _load_idealista_areas()
-        if not area_names:
-            print("  [scan] No Idealista zones matched — scanning all Milano", flush=True)
+    area_names = _idealista_area_names(args)
 
     raw, skipped_areas = fetch_idealista(
         pages=args.pages,
@@ -2102,14 +2258,7 @@ def run_once(args) -> list:
     # newly-fetched Idealista batch.  Without this, score_all() would only see
     # the Idealista batch as its comps pool — most of those lack coordinates at
     # this point, so the comps benchmark falls back to "No local comps".
-    try:
-        existing_all = json.loads(OUTPUT_PATH.read_text()) if OUTPUT_PATH.exists() else []
-        immo_comps   = [l for l in existing_all if l.get("source") != SOURCE]
-        if immo_comps:
-            print(f"  [comps]  {len(immo_comps)} Immobiliare listing(s) loaded as comps pool",
-                  flush=True)
-    except Exception:
-        immo_comps = []
+    immo_comps = _other_source_comps()
 
     # Score through the same pipeline as Immobiliare listings.
     # comps_pool = newly-fetched Idealista listings + existing Immobiliare data
@@ -2145,7 +2294,7 @@ def run_once(args) -> list:
     save_seen_ids(seen)
 
     # Coverage for fetch_rentals' stale/trim pass (it judges Idealista rows too).
-    zone_slugs = [s for s in (to_url_slug(n) for n in area_names) if s]
+    zone_slugs = _zone_slugs(area_names)
     attempted  = sweep_slugs_for_today(zone_slugs) if args.scan == "daily" else zone_slugs
     failed     = {s.get("name") for s in skipped_areas}
     record_sweeps("idealista", zone_slugs, [z for z in attempted if z not in failed])
@@ -2171,6 +2320,113 @@ def run_once(args) -> list:
     return new_listings
 
 
+def run_slot(args, zone: str, do_discover: bool) -> dict:
+    """One spread-scan slot: discover when due, sweep `zone`, merge,
+    rescore. Appends its numbers to the slot log and returns them."""
+    t0 = time.time()
+    area_names = _idealista_area_names(args)
+    raw, skipped = fetch_idealista(
+        pages=max(args.pages or 0, IDEALISTA_SLOT_MAX_PAGES), area_names=area_names,
+        max_rent=args.max_rent or 0, min_sqm=args.min_sqm or 0,
+        min_rooms=args.min_rooms or 0, delay=args.delay,
+        mode="slot", slot_area=zone, discover=do_discover)
+    complete = dict(LAST_FETCH.get("complete") or {})
+    sweep = LAST_FETCH.get("sweep") or {}
+    rec = {"at": datetime.now().isoformat(timespec="seconds"), "source": SOURCE,
+           "area": zone, "complete": zone in complete, "pages": sweep.get("pages", 0),
+           "parse_failed": sweep.get("parse_failed", 0),
+           "skipped": [s.get("reason") for s in skipped],
+           "discover": LAST_FETCH.get("discover"),
+           "found": len(raw), "found_sweep": sum(l.get("_via") == "sweep" for l in raw),
+           "new": 0}
+    seen = load_seen_ids()
+    if raw:
+        scored = score_all(raw, comps_pool=raw + _other_source_comps())
+        today_str = str(date.today())
+        for l in scored:
+            lid = l["id"]
+            l["first_seen_date"] = seen[lid]["first_seen_date"] if lid in seen else today_str
+            l["last_seen_date"] = today_str
+            l["is_stale"] = False
+        rec.update(write_output(scored, source=SOURCE,
+                                swept_areas=set(complete.values()) or None))
+        new = [l for l in scored if l["id"] not in seen]
+        for l in scored:
+            seen[l["id"]] = {"first_seen_date": l["first_seen_date"],
+                             "last_seen_date": today_str}
+        save_seen_ids(seen)
+        rec.update(new=len(new),
+                   new_via_discover=sum(l.get("_via") == "discover" for l in new),
+                   new_via_sweep=sum(l.get("_via") == "sweep" for l in new),
+                   new_ids=[l["id"] for l in new][:200])
+        _queue_digest([l["id"] for l in new])
+    record_sweeps("idealista", _zone_slugs(area_names), list(complete), tried_slugs=[zone])
+    write_idealista_status(new_count=rec["new"], skipped_areas=skipped)
+    if raw:
+        rescore_output()
+    rec["seconds"] = round(time.time() - t0)
+    with open(_slot_log_path(), "a") as fh:
+        fh.write(json.dumps(rec) + "\n")
+    return rec
+
+
+def _read_photos_once_a_day(log) -> None:
+    """Photo reading (photo_eval.nightly) on the first slot from PHOTO_HOUR,
+    then a rescore if anything was stored — it ran after the nightly scan."""
+    marker = BASE_DIR / f".photos_read_{CITY_KEY}"
+    today = str(date.today())
+    if datetime.now().hour < PHOTO_HOUR or (marker.exists() and marker.read_text().strip() == today):
+        return
+    marker.write_text(today)
+    try:
+        from photo_eval import nightly as _read_photos
+        if _read_photos(log=lambda m: print("  " + m, flush=True)):
+            rescore_output()
+    except Exception as exc:
+        log(f"[photos] skipped: {exc}")
+
+
+def _spread_loop(args, log) -> None:
+    """Spread scan: a slot every gap, the detail drip in between."""
+    def _gap() -> int:
+        n = len(_zone_slugs(_idealista_area_names(args))) or 1
+        return SLOT_GAP_SEC or int(24 * 3600 / (n + 1))
+
+    log(f"Idealista daemon started — spread scan: one zone every {_gap() // 60} min, "
+        f"discover every {DISCOVER_EVERY_SEC / 3600:g} h, output {OUTPUT_PATH}")
+    next_slot = last_scan_at("idealista") + _gap()
+    while True:
+        if time.time() < next_slot:
+            log(f"Next slot at {datetime.fromtimestamp(next_slot):%Y-%m-%d %H:%M}")
+            try:
+                wait_and_drip("idealista", next_slot, log)
+            except KeyboardInterrupt:
+                log("Interrupted during sleep — stopping Idealista daemon.")
+                raise
+        zone = next_slot_area("idealista", _zone_slugs(_idealista_area_names(args)))
+        do_discover = time.time() - (load_discover_state().get("at") or 0) >= DISCOVER_EVERY_SEC
+        log(f"Slot: {zone}{' + discover' if do_discover else ''}")
+        ok = False
+        try:
+            rec = run_marked("idealista", run_slot, args, zone, do_discover)
+            ok = rec["complete"]
+            d = rec.get("discover")
+            log(f"Slot done — {zone}: {rec['found']} listing(s), {rec['new']} new"
+                + (f" (discover: {d['new']} new in {d['pages']} page(s))" if d else "")
+                + f", {rec.get('hidden', 0)} hidden, {rec.get('missed', 0)} missed once"
+                + ("" if ok else " · zone NOT read to its end — retried later"))
+            mark_scan_done("idealista")
+            _read_photos_once_a_day(log)
+            send_pending_digest(args, log)
+        except BaseException as e:
+            if isinstance(e, KeyboardInterrupt):
+                log("Interrupted — stopping Idealista daemon.")
+                raise
+            log(f"✗ Slot error: {e}\n{traceback.format_exc()}")
+        # A slot that couldn't read its zone to the end (CAPTCHA?) → back off.
+        next_slot = time.time() + (_gap() if ok else 2 * _gap())
+
+
 # ── Daemon ────────────────────────────────────────────────────────────────────
 
 def daemon_loop(args):
@@ -2188,6 +2444,13 @@ def daemon_loop(args):
         line = f"[{ts}] {msg}"
         print(line, flush=True)
         print(line, file=log_fh, flush=True)
+
+    if SPREAD_SCAN and args.scan == "daily" and _zone_slugs(_idealista_area_names(args)):
+        try:
+            _spread_loop(args, log)
+        finally:
+            log_fh.close()
+        return
 
     log(f"Idealista daemon started — one scan every {DAEMON_INTERVAL_SEC // 3600} h, "
         f"output {OUTPUT_PATH}")
