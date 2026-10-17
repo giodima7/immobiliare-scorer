@@ -662,9 +662,12 @@ def _photon_geocode(address: str) -> Optional[tuple[float, float]]:
         url = f"https://photon.komoot.io/api/?{params}"
         req = urllib.request.Request(url,
                                      headers={"User-Agent": "immobiliare-scorer/1.0"})
+        if not _photon_ok():
+            return None
         try:
             with urllib.request.urlopen(req, timeout=8) as resp:
                 data = json.loads(resp.read())
+            _photon_state["fails"] = 0
             features = data.get("features") or []
             # Iterate candidates and return the first in-Milan one (not just
             # the top result — Photon's top hit is sometimes a same-name
@@ -675,7 +678,7 @@ def _photon_geocode(address: str) -> Optional[tuple[float, float]]:
                 if _is_in_milan(lat, lon):
                     return lat, lon
         except Exception as exc:
-            print(f"  [geo] Photon error: {exc}", file=sys.stderr)
+            _photon_failed(exc)
         return None
 
     # Attempt 1: "Via Foo 12, Milano"
@@ -759,15 +762,172 @@ def _nominatim_geocode(address: str) -> Optional[tuple[float, float]]:
     return None
 
 
+# ── Faster geocoding: civici index, address cache, Photon breaker ────────────
+# 1. Milan addresses resolve offline from the Comune's house-number dataset
+#    (geo_index.py) — exact civico for ~99 % of Idealista addresses with a
+#    number, no service and no rate limit.
+# 2. Whatever still needs a service is asked once per address: answers (and
+#    misses, for 30 days) live in geocode_cache_milano.json, so the dozens of
+#    listings that fall back to the same neighbourhood centroid cost one call.
+# 3. Photon going down (connection refused for hours on 2026-10-16) stops
+#    being retried after a few failures in a row.
+GEOCODE_CACHE_PATH = Path(__file__).resolve().parent / "geocode_cache_milano.json"
+_GEOCODE_MISS_DAYS = 30
+_geocode_cache: "dict | None" = None
+_geocode_cache_dirty = 0
+_geocode_lock = threading.Lock()
+_photon_state = {"fails": 0, "until": 0.0}
+_PHOTON_MAX_FAILS = 5            # in a row → skip Photon for …
+_PHOTON_PAUSE_S = 30 * 60        # … half an hour
+
+
+def _photon_ok() -> bool:
+    return time.time() >= _photon_state["until"]
+
+
+def _photon_failed(exc: Exception) -> None:
+    _photon_state["fails"] += 1
+    if _photon_state["fails"] == _PHOTON_MAX_FAILS:
+        _photon_state["until"] = time.time() + _PHOTON_PAUSE_S
+        _photon_state["fails"] = 0
+        print(f"  [geo] Photon unreachable ({exc}) — skipping it for {_PHOTON_PAUSE_S // 60} min",
+              file=sys.stderr)
+
+
+def _cache_key(address: str) -> str:
+    return " ".join(address.lower().replace(",", " ").split())
+
+
+def _cache_get(key: str):
+    """(hit, value) — a miss older than _GEOCODE_MISS_DAYS counts as unknown."""
+    global _geocode_cache
+    with _geocode_lock:
+        if _geocode_cache is None:
+            try:
+                _geocode_cache = json.loads(GEOCODE_CACHE_PATH.read_text())
+            except (OSError, ValueError):
+                _geocode_cache = {}
+        e = _geocode_cache.get(key)
+    if not e:
+        return False, None
+    if e.get("ll"):
+        return True, tuple(e["ll"])
+    if time.time() - e.get("t", 0) < _GEOCODE_MISS_DAYS * 86400:
+        return True, None
+    return False, None
+
+
+def _cache_put(key: str, value) -> None:
+    global _geocode_cache_dirty
+    with _geocode_lock:
+        if _geocode_cache is None:
+            return
+        _geocode_cache[key] = {"ll": list(value) if value else None, "t": int(time.time())}
+        _geocode_cache_dirty += 1
+    if _geocode_cache_dirty >= 25:
+        save_geocode_cache()
+
+
+def save_geocode_cache() -> None:
+    global _geocode_cache_dirty
+    with _geocode_lock:
+        if not _geocode_cache or not _geocode_cache_dirty:
+            return
+        tmp = GEOCODE_CACHE_PATH.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(_geocode_cache, separators=(",", ":")))
+        tmp.replace(GEOCODE_CACHE_PATH)
+        _geocode_cache_dirty = 0
+
+
+def _civici(address: str) -> Optional[tuple[float, float]]:
+    if "milano" not in address.lower():
+        return None
+    try:
+        import geo_index
+        hit = geo_index.lookup(address)
+    except Exception as exc:          # index missing or unreadable → services
+        print(f"  [geo] civici index: {exc}", file=sys.stderr)
+        return None
+    return (hit[0], hit[1]) if hit else None
+
+
 def _geocode(address: str) -> Optional[tuple[float, float]]:
     """
-    Geocode an address.  Tries Photon first (fast, parallel-safe), then
-    falls back to Nominatim (rate-limited to 1 req/sec).
+    Geocode an address: Milan house-number index (offline), then the cache,
+    then Photon (fast, parallel-safe; skipped while it's down), then
+    Nominatim (rate-limited to 1 req/sec). Service answers are cached.
     """
-    result = _photon_geocode(address)
-    if result:
-        return result
-    return _nominatim_geocode(address)
+    hit = _civici(address)
+    if hit:
+        return hit
+    key = _cache_key(address)
+    known, value = _cache_get(key)
+    if known:
+        return value
+    result = _photon_geocode(address) or _nominatim_geocode(address)
+    _cache_put(key, result)
+    return result
+
+
+# Same flat on both sites: an Idealista card has no coordinates, its twin on
+# Immobiliare does (the site's own). Matched on street + rent + m² + rooms.
+_twin_index: dict = {}
+
+
+def _twin_coords_index(city: str) -> dict:
+    path = Path(__file__).resolve().parent / "dashboard" / f"{city}_rentals_latest.json"
+    try:
+        mtime = path.stat().st_mtime_ns
+    except OSError:
+        return {}
+    if _twin_index.get("key") == (str(path), mtime):
+        return _twin_index["idx"]
+    try:
+        import geo_index
+        rows = json.loads(path.read_text())
+    except Exception:
+        return {}
+    idx: dict = {}
+    for r in rows:
+        if r.get("source") != "immobiliare" or r.get("latitude") is None:
+            continue
+        if (r.get("omi_source") or "").startswith("nominatim"):
+            continue
+        street = geo_index.split_address(r.get("address") or "")[0]
+        rent = r.get("rent_mo") or r.get("price")
+        if street and rent and r.get("sqm"):
+            idx[(street, rent, r.get("sqm"), r.get("rooms"))] = (r["latitude"], r["longitude"])
+    _twin_index.update(key=(str(path), mtime), idx=idx)
+    return idx
+
+
+def fill_twin_coords(listings: list) -> int:
+    """Coordinates for listings without them, from the same flat on
+    Immobiliare. Returns how many were filled."""
+    todo = [l for l in listings if l.get("latitude") is None and l.get("lat") is None and l.get("address")]
+    if not todo:
+        return 0
+    try:
+        import geo_index
+    except Exception:
+        return 0
+    n = 0
+    for l in todo:
+        # An exact house number in the civici index beats the twin's
+        # coordinates (Immobiliare sometimes shows an approximate spot).
+        hit = _civici(l.get("address") or "")
+        if hit and geo_index.lookup(l["address"])[2] in ("civico", "near"):
+            continue
+        idx = _twin_coords_index((l.get("city") or "milano").lower())
+        street = geo_index.split_address(l.get("address") or "")[0]
+        ll = idx.get((street, l.get("rent_mo") or l.get("price"), l.get("sqm"), l.get("rooms")))
+        if ll:
+            l["latitude"], l["longitude"] = ll
+            l["coords_from"] = "twin"
+            n += 1
+    if n:
+        print(f"  [geo] {n} listings placed from their Immobiliare twin", file=sys.stderr)
+    return n
 
 
 # ── Public enrichment API ──────────────────────────────────────────────────────
@@ -1074,6 +1234,7 @@ def enrich_batch(listings: list, max_workers: int = 8) -> list:
     """
     if not listings:
         return []
+    fill_twin_coords(listings)
     from concurrent.futures import Future
     futures: list[Future] = []
     # _skip_osrm=True: thread pool handles OMI + haversine only (fast, all in-memory).
@@ -1101,6 +1262,7 @@ def enrich_batch(listings: list, max_workers: int = 8) -> list:
     for src, n in sorted(src_counts.items()):   # catch any unexpected values
         parts.append(f"{n} {src}")
     print(f"  [omi] {' · '.join(parts) or 'no results'}", file=sys.stderr)
+    save_geocode_cache()
 
     return results
 
