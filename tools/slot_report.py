@@ -1,8 +1,8 @@
 """Summarise the spread-scan pilot from scan_slots_<city>.jsonl (written by
 fetch_rentals.run_slot) and the detail drip lines in scanner.log.
 
-    python3 tools/slot_report.py            # last 48 h
-    python3 tools/slot_report.py --hours 24
+    python3 tools/slot_report.py                      # last 48 h, both sites
+    python3 tools/slot_report.py --hours 24 --source idealista
 
 What to look at: incomplete slots (blocks), hours between two complete
 sweeps of an area (should stay ≤ ~24), new listings found by a sweep
@@ -23,6 +23,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--hours", type=float, default=48)
     ap.add_argument("--city", default="milano")
+    ap.add_argument("--source", choices=("immobiliare", "idealista"))
     a = ap.parse_args()
     since = datetime.now() - timedelta(hours=a.hours)
     path = ROOT / f"scan_slots_{a.city}.jsonl"
@@ -33,10 +34,20 @@ def main() -> None:
         except ValueError:
             continue
         r["_at"] = datetime.fromisoformat(r["at"])
-        if r["_at"] >= since:
+        r.setdefault("source", "immobiliare")   # the first slots had no source
+        if r["_at"] >= since and (a.source is None or r["source"] == a.source):
             recs.append(r)
     if not recs:
         raise SystemExit(f"no slots since {since:%Y-%m-%d %H:%M} in {path}")
+    for source in ("immobiliare", "idealista"):
+        rs = [r for r in recs if r["source"] == source]
+        if rs:
+            print(f"\n══ {source} ══")
+            report(rs, since, ROOT / ("scanner.log" if source == "immobiliare"
+                                      else "scanner_idealista.log"), source)
+
+
+def report(recs: list, since: datetime, log: Path, source: str) -> None:
     span_h = max((recs[-1]["_at"] - recs[0]["_at"]).total_seconds() / 3600, 1)
 
     complete = [r for r in recs if r["complete"]]
@@ -50,8 +61,9 @@ def main() -> None:
         if not r["complete"]:
             why = "; ".join(r.get("skipped") or []) or f"{r['parse_failed']} unreadable page(s)"
             print(f"    ✗ {r['_at']:%d/%m %H:%M} {r['area']}: {why[:120]}")
-    print(f"  page loads: {pages} sweep + {dpages} discover = "
-          f"{(pages + dpages) / span_h * 24:.0f} per 24 h · max {max(r['pages'] for r in recs)} in one slot")
+    rate = f" ≈ {(pages + dpages) / span_h * 24:.0f} per 24 h" if span_h >= 12 else ""
+    print(f"  page loads: {pages} sweep + {dpages} discover{rate} · "
+          f"max {max(r['pages'] for r in recs)} in one slot")
     print(f"  slot time: avg {sum(r['seconds'] for r in recs) / len(recs):.0f} s")
 
     by_area = defaultdict(list)
@@ -81,9 +93,8 @@ def main() -> None:
     for area, at in distrusted:
         print(f"  ! {at:%d/%m %H:%M} {area}: sweep too thin, not used to de-list")
 
-    log = ROOT / "scanner.log"
     ok = gone = failed = blocked = 0
-    rx = re.compile(r"^\[(\S+ \S+)\] \[details\] immobiliare: (?:(\d+) ok, (\d+) gone, (\d+) failed|.*blocked)")
+    rx = re.compile(rf"^\[(\S+ \S+)\] \[details\] {source}: (?:(\d+) ok, (\d+) gone, (\d+) failed|.*blocked)")
     seen = set()
     for line in log.read_text(errors="replace").splitlines() if log.exists() else []:
         m = rx.match(line)

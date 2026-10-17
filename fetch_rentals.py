@@ -2305,8 +2305,8 @@ def run_slot(args, area: str, do_discover: bool) -> dict:
         delay=args.delay, mode="slot", slot_area=area, discover=do_discover)
     complete = dict(LAST_FETCH.get("complete") or {})
     sweep = LAST_FETCH.get("sweep") or {}
-    rec = {"at": datetime.now().isoformat(timespec="seconds"), "area": area,
-           "complete": area in complete, "pages": sweep.get("pages", 0),
+    rec = {"at": datetime.now().isoformat(timespec="seconds"), "source": "immobiliare",
+           "area": area, "complete": area in complete, "pages": sweep.get("pages", 0),
            "parse_failed": sweep.get("parse_failed", 0),
            "skipped": [s.get("reason") for s in skipped],
            "discover": LAST_FETCH.get("discover"),
@@ -2345,39 +2345,53 @@ def run_slot(args, area: str, do_discover: bool) -> dict:
     return rec
 
 
+class _PendingLock:
+    """Both daemons (Immobiliare, Idealista) queue into and send from the
+    same pending file."""
+    def __enter__(self):
+        import fcntl
+        self.fh = open(_digest_pending_path().with_suffix(".lock"), "w")
+        fcntl.flock(self.fh.fileno(), fcntl.LOCK_EX)
+
+    def __exit__(self, *exc):
+        self.fh.close()
+
+
 def _queue_digest(ids: list) -> None:
     if not ids:
         return
-    try:
-        pending = json.loads(_digest_pending_path().read_text())
-    except (OSError, ValueError):
-        pending = []
-    have = set(pending)
-    _digest_pending_path().write_text(json.dumps(pending + [i for i in ids if i not in have]))
+    with _PendingLock():
+        try:
+            pending = json.loads(_digest_pending_path().read_text())
+        except (OSError, ValueError):
+            pending = []
+        have = set(pending)
+        _digest_pending_path().write_text(json.dumps(pending + [i for i in ids if i not in have]))
 
 
 def send_pending_digest(args, log) -> None:
     """Spread scan: one digest a day, from DIGEST_HOUR, of every listing
-    first seen since the previous one and still visible."""
+    (either site) first seen since the previous one and still visible."""
     if datetime.now().hour < DIGEST_HOUR:
         return
-    today = str(date.today())
-    if DIGEST_SENT_PATH.exists() and DIGEST_SENT_PATH.read_text().strip() == today:
-        return
-    from email_digest import send_digest, load_config as load_email_config
-    try:
-        pending = set(json.loads(_digest_pending_path().read_text()))
-    except (OSError, ValueError):
-        pending = set()
-    email_cfg = load_email_config()
-    if (email_cfg.get("enabled", False) or args.email) and pending:
-        rows = [l for l in json.loads(OUTPUT_PATH.read_text())
-                if l.get("id") in pending and not l.get("is_stale")]
-        if rows:
-            log(f"Sending digest for {len(rows)} new listing(s)…")
-            send_digest(rows, email_cfg)
-    mark_digest_sent()
-    _digest_pending_path().unlink(missing_ok=True)
+    with _PendingLock():
+        today = str(date.today())
+        if DIGEST_SENT_PATH.exists() and DIGEST_SENT_PATH.read_text().strip() == today:
+            return
+        from email_digest import send_digest, load_config as load_email_config
+        try:
+            pending = set(json.loads(_digest_pending_path().read_text()))
+        except (OSError, ValueError):
+            pending = set()
+        email_cfg = load_email_config()
+        if (email_cfg.get("enabled", False) or args.email) and pending:
+            rows = [l for l in json.loads(OUTPUT_PATH.read_text())
+                    if l.get("id") in pending and not l.get("is_stale")]
+            if rows:
+                log(f"Sending digest for {len(rows)} new listing(s)…")
+                send_digest(rows, email_cfg)
+        mark_digest_sent()
+        _digest_pending_path().unlink(missing_ok=True)
 
 
 # ── Daily digest helpers ───────────────────────────────────────────────────────
