@@ -55,7 +55,7 @@ function _createMapMarker(l, lat, lng) {
     ? `<div class="map-marker mk-good">${icon('coin')}</div>`
     : `<div class="map-marker sc-${scoreClass(score)}">${score}</div>`;
   return L.marker([lat, lng], {
-    title: `${formatAddress(l.neighbourhood || '')} · €${fmt(l.rent_mo)}`,
+    title: `${formatAddress(l.neighbourhood || '')} · €${fmt(monthlyCost(l).total)}`,
     icon: L.divIcon({ className: '', html, iconSize: [32, 32], iconAnchor: [16, 16], popupAnchor: [0, -18] }),
   });
 }
@@ -83,7 +83,7 @@ function _createMapPopup(l) {
           ${sub ? `<div class="map-popup-sub">${escapeHtml(sub)}</div>` : ''}
         </div>
       </div>
-      <div class="map-popup-price">€${fmt(l.rent_mo)}<span class="price-unit"> ${escapeHtml(t('card.per_month'))}</span></div>
+      <div class="map-popup-price">€${fmt(monthlyCost(l).total)}<span class="price-unit"> ${escapeHtml(t(monthlyCost(l).known ? 'cost.all_in' : 'cost.rent_only'))}</span></div>
       ${comps}
       ${specs.length ? `<div class="map-popup-grid">${specs.map(x => `<span>${escapeHtml(x)}</span>`).join('')}</div>` : ''}
       <div class="map-popup-actions">

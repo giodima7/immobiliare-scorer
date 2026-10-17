@@ -76,7 +76,7 @@ from fetch_rentals import (
     mark_digest_sent,
     # Spread scan helpers
     next_slot_area, DISCOVER_EVERY_SEC, DISCOVER_OVERLAP_STOP, SLOT_GAP_SEC,
-    _queue_digest, send_pending_digest, _slot_log_path,
+    _queue_digest, send_pending_digest, _slot_log_path, read_photos_after_slot,
 )
 
 try:
@@ -1947,13 +1947,12 @@ async def _daily_async(pages: int, area_slugs: list, max_rent: int, min_sqm: int
 # city-wide newest-first discover every DISCOVER_EVERY_SEC. The daily scan
 # swept 2–3 zones a night; Garibaldi–Porta Venezia still had a full 50th
 # page on 2026-10-17, so a slot may read up to IDEALISTA_SLOT_MAX_PAGES.
-# After each slot up to PHOTOS_PER_SLOT top listings get their photos read
-# (~11 slots a day: new ones within ~2 h, the score-80 backlog of ~630 in
-# ~4 days); the digest goes with Immobiliare's (fetch_rentals.send_pending_digest).
+# After each slot top listings get their photos read and the digest goes
+# out, both shared with Immobiliare's daemon (fetch_rentals
+# read_photos_after_slot / send_pending_digest).
 SPREAD_SCAN                  = True
 IDEALISTA_SLOT_MAX_PAGES     = 100
 IDEALISTA_DISCOVER_MAX_PAGES = 10
-PHOTOS_PER_SLOT              = 16      # 2 claude calls, ~35k tokens
 
 # Filled by fetch_idealista() for the caller: complete sweeps, page loads,
 # discover stats.
@@ -2371,17 +2370,6 @@ def run_slot(args, zone: str, do_discover: bool) -> dict:
     return rec
 
 
-def _read_photos(log) -> None:
-    """Read the photos of up to PHOTOS_PER_SLOT top listings not read yet
-    (photo_eval.nightly), then rescore if anything was stored."""
-    try:
-        from photo_eval import nightly as _read
-        if _read(log=lambda m: print("  " + m, flush=True), limit=PHOTOS_PER_SLOT):
-            rescore_output()
-    except Exception as exc:
-        log(f"[photos] skipped: {exc}")
-
-
 def _spread_loop(args, log) -> None:
     """Spread scan: a slot every gap, the detail drip in between."""
     def _gap() -> int:
@@ -2416,7 +2404,7 @@ def _spread_loop(args, log) -> None:
                 + f", {rec.get('hidden', 0)} hidden, {rec.get('missed', 0)} missed once"
                 + ("" if ok else " · zone NOT read to its end — retried later"))
             mark_scan_done("idealista")
-            _read_photos(log)
+            read_photos_after_slot(log)
             send_pending_digest(args, log)
         except BaseException as e:
             if isinstance(e, KeyboardInterrupt):

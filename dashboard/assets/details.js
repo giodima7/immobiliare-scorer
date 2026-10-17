@@ -142,6 +142,27 @@ function _lmPhotoVerdict(l) {
     </div>`;
 }
 
+// Rent, condo fees, heating billed apart and their total, as the listing
+// states them; then what moving in takes (deposit + first month, agency
+// fee aside). With no fees stated: says so, no total.
+function _lmCostTable(l) {
+  const esc = escapeHtml, c = monthlyCost(l);
+  const row = (k, v, cls = '') => `<tr class="${cls}"><td>${esc(k)}</td><td>${esc(v)}</td></tr>`;
+  const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+  let rows = row(cap(t('cost.rent')), `€${fmt(c.rent)}`);
+  rows += row(cap(t('cost.condo')), c.included ? t('cost.condo_in_rent') : c.condo ? `€${fmt(c.condo)}` : t('cost.not_stated'),
+              c.condo || c.included ? '' : 'is-muted');
+  if (c.heating) rows += row(`${cap(t('cost.heating'))} ${t('cost.heating_year', { v: fmt(c.heating * 12) })}`, `€${fmt(c.heating)}`);
+  if (c.known) rows += row(t('cost.total'), `€${fmt(c.total)}`, 'is-total');
+  const dep = l.deposit_months ? l.deposit_months * c.rent : (Number(l.deposit_eur) || 0);
+  if (dep) {
+    const label = l.deposit_months ? t('cost.entry', { n: l.deposit_months }) : t('cost.entry_eur');
+    rows += row(`${label} · ${t('cost.no_agency')}`, `€${fmt(dep + c.total)}`, 'is-entry');
+  }
+  const note = !c.known ? `<div class="lm-muted">${esc(t(c.pageRead ? 'cost.ask_long' : 'cost.pending_long'))}</div>` : '';
+  return `<table class="lm-costs">${rows}</table>${note}`;
+}
+
 function listingModalHtml(l) {
   const esc = escapeHtml;
   const yesNo = v => v === true ? t('lm.yes') : v === false ? t('lm.no') : null;
@@ -151,7 +172,6 @@ function listingModalHtml(l) {
     if (!lbl) return null;
     return lbl + (l.elevator === true ? ' · ' + t('lm.lift') : l.elevator === false ? ' · ' + t('lm.no_lift') : '');
   })();
-  const fees = l.spese_condominiali ? Number(l.spese_condominiali) : null;
   const facts = [
     [t('lm.size'), l.sqm ? `${fmt(l.sqm)} m²` : null],
     [t('lm.rooms'), l.rooms != null ? `${l.rooms}${l.bedrooms ? ' · ' + t('lm.bedrooms', { n: l.bedrooms }) : ''}` : null],
@@ -168,7 +188,6 @@ function listingModalHtml(l) {
     [t('lm.contract'), l.contract_type],
     [t('lm.availability'), l.availability],
     [t('lm.ac'), l.air_conditioning ? t('lm.yes') : null],
-    [t('lm.fees_k'), fees ? `€${fmt(fees)}${t('card.per_month')}` : null],
   ];
   const known   = facts.filter(([, v]) => v != null && v !== '');
   const unknown = facts.filter(([, v]) => v == null || v === '').map(([k]) => k);
@@ -208,8 +227,8 @@ function listingModalHtml(l) {
     ${_lmPhotoVerdict(l)}
 
     <div class="lm-money">
-      <div><span class="lm-rent">€${fmt(l.rent_mo)}</span><span class="lm-muted">${esc(t('card.per_month'))}</span></div>
-      ${fees ? `<div class="lm-muted">+ €${fmt(fees)} ${esc(t('lm.fees'))} = <strong>€${fmt((Number(l.rent_mo) || 0) + fees)}</strong> ${esc(t('lm.all_in'))}</div>` : ''}
+      <div><span class="lm-rent">€${fmt(monthlyCost(l).total)}</span><span class="lm-muted">${esc(t(monthlyCost(l).known ? 'cost.all_in' : 'cost.rent_only'))}</span></div>
+      ${_lmCostTable(l)}
       ${l.ask_psqm ? `<div class="lm-muted">€${fmt1(l.ask_psqm)}/m²${l.comps_median ? ' · ' + esc(t('lm.nearby_median', { v: fmt1(l.comps_median) })) : ''}</div>` : ''}
       ${history ? `<div class="lm-history">${icon('trending-down')}${esc(history)}</div>` : ''}
     </div>
