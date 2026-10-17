@@ -205,15 +205,7 @@ def process_file(path: Path, apply: bool) -> int:
         sys.path.insert(0, str(BASE_DIR))
         import enrichment_cache as _ec
         _ec.load()
-        n_purged = 0
-        with _ec._lock:
-            for src, lid in cache_purge_ids:
-                key = f"{src}:{lid}"
-                if key in _ec._cache:
-                    _ec._cache.pop(key)
-                    n_purged += 1
-            if n_purged:
-                _ec._flush()
+        n_purged = _ec.delete(f"{src}:{lid}" for src, lid in cache_purge_ids)
         print(f"    → purged {n_purged} cache entry/ies")
     except Exception as exc:
         print(f"    [warn] could not purge enrichment_cache: {exc}")

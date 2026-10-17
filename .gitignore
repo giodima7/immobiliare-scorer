@@ -10,6 +10,8 @@ netlify_config.json
 
 # Local-only runtime files
 *.json.lock
+enriched_cache.lock
+enriched_cache.tmp
 .last_scan_*
 .sweep_coverage_*.json
 .digest_sent_date
