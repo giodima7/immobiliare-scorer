@@ -15,7 +15,6 @@ netlify_config.json
 .digest_sent_date
 # Spread scan state (fetch_rentals) and incremental push state (supabase_sync)
 .digest_pending_*
-.photos_read_*
 .discover_state_*.json
 .pushed_*.json
 scan_slots_*.jsonl

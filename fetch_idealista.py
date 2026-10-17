@@ -1947,12 +1947,13 @@ async def _daily_async(pages: int, area_slugs: list, max_rent: int, min_sqm: int
 # city-wide newest-first discover every DISCOVER_EVERY_SEC. The daily scan
 # swept 2–3 zones a night; Garibaldi–Porta Venezia still had a full 50th
 # page on 2026-10-17, so a slot may read up to IDEALISTA_SLOT_MAX_PAGES.
-# Photos are read once a day (first slot from PHOTO_HOUR), the digest goes
-# with Immobiliare's (fetch_rentals.send_pending_digest).
+# After each slot up to PHOTOS_PER_SLOT top listings get their photos read
+# (~11 slots a day: new ones within ~2 h, the score-80 backlog of ~630 in
+# ~4 days); the digest goes with Immobiliare's (fetch_rentals.send_pending_digest).
 SPREAD_SCAN                  = True
 IDEALISTA_SLOT_MAX_PAGES     = 100
 IDEALISTA_DISCOVER_MAX_PAGES = 10
-PHOTO_HOUR                   = 4
+PHOTOS_PER_SLOT              = 16      # 2 claude calls, ~35k tokens
 
 # Filled by fetch_idealista() for the caller: complete sweeps, page loads,
 # discover stats.
@@ -2370,17 +2371,12 @@ def run_slot(args, zone: str, do_discover: bool) -> dict:
     return rec
 
 
-def _read_photos_once_a_day(log) -> None:
-    """Photo reading (photo_eval.nightly) on the first slot from PHOTO_HOUR,
-    then a rescore if anything was stored — it ran after the nightly scan."""
-    marker = BASE_DIR / f".photos_read_{CITY_KEY}"
-    today = str(date.today())
-    if datetime.now().hour < PHOTO_HOUR or (marker.exists() and marker.read_text().strip() == today):
-        return
-    marker.write_text(today)
+def _read_photos(log) -> None:
+    """Read the photos of up to PHOTOS_PER_SLOT top listings not read yet
+    (photo_eval.nightly), then rescore if anything was stored."""
     try:
-        from photo_eval import nightly as _read_photos
-        if _read_photos(log=lambda m: print("  " + m, flush=True)):
+        from photo_eval import nightly as _read
+        if _read(log=lambda m: print("  " + m, flush=True), limit=PHOTOS_PER_SLOT):
             rescore_output()
     except Exception as exc:
         log(f"[photos] skipped: {exc}")
@@ -2406,25 +2402,28 @@ def _spread_loop(args, log) -> None:
         zone = next_slot_area("idealista", _zone_slugs(_idealista_area_names(args)))
         do_discover = time.time() - (load_discover_state().get("at") or 0) >= DISCOVER_EVERY_SEC
         log(f"Slot: {zone}{' + discover' if do_discover else ''}")
-        ok = False
+        ok, blocked = False, True
         try:
             rec = run_marked("idealista", run_slot, args, zone, do_discover)
             ok = rec["complete"]
+            # Back off only when the site pushed back — skipped / unreadable
+            # pages or nothing at all — not for a sweep that merely can't
+            # prove it reached the end (e.g. Idealista's full last page).
+            blocked = bool(rec["skipped"] or rec["parse_failed"] or not rec["found"])
             d = rec.get("discover")
             log(f"Slot done — {zone}: {rec['found']} listing(s), {rec['new']} new"
                 + (f" (discover: {d['new']} new in {d['pages']} page(s))" if d else "")
                 + f", {rec.get('hidden', 0)} hidden, {rec.get('missed', 0)} missed once"
                 + ("" if ok else " · zone NOT read to its end — retried later"))
             mark_scan_done("idealista")
-            _read_photos_once_a_day(log)
+            _read_photos(log)
             send_pending_digest(args, log)
         except BaseException as e:
             if isinstance(e, KeyboardInterrupt):
                 log("Interrupted — stopping Idealista daemon.")
                 raise
             log(f"✗ Slot error: {e}\n{traceback.format_exc()}")
-        # A slot that couldn't read its zone to the end (CAPTCHA?) → back off.
-        next_slot = time.time() + (_gap() if ok else 2 * _gap())
+        next_slot = time.time() + (2 * _gap() if blocked else _gap())
 
 
 # ── Daemon ────────────────────────────────────────────────────────────────────
