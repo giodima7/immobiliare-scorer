@@ -26,7 +26,7 @@ import re as _re
 import sys
 import time
 import unicodedata
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urlencode
@@ -1662,6 +1662,30 @@ def coverage_since() -> dict:
     return out
 
 
+# Idealista rental rows carry last_seen_date only since its scans began
+# stamping it. Once every Idealista area has been swept since then, a row
+# that still has no date was not seen in any of those sweeps: it counts as
+# last seen when first seen (hidden), and as last seen the day before the
+# stamping began for deletion (so trimming waits REMOVE_AFTER_DAYS from there
+# and a mistake stays reversible). On 2026-10-17 that was 2,243 rows first
+# seen April–August, visible for ever — 49 of them labelled deals.
+IDEALISTA_DATED_SINCE = date(2026, 10, 14)
+
+
+def _undated_idealista_seen(l: dict, covered: dict, for_trim: bool = False) -> "date | None":
+    if (l.get("source") != "idealista" or covered.get("idealista") is None
+            or covered["idealista"] < IDEALISTA_DATED_SINCE):
+        return None
+    cutoff = IDEALISTA_DATED_SINCE - timedelta(days=1)
+    if for_trim:
+        return cutoff
+    try:
+        first = datetime.fromisoformat(str(l.get("first_seen_date"))[:10]).date()
+    except ValueError:
+        return cutoff
+    return min(first, cutoff)
+
+
 def _judgeable(l: dict, last_seen: date, covered: dict) -> bool:
     """True when every active area of the listing's source has completed a
     sweep since it was last seen — i.e. its absence is real."""
@@ -1689,14 +1713,24 @@ def mark_stale_listings(all_listings: list, today: date = None) -> int:
         except ValueError:
             seen_on = None
         if seen_on is None:
-            # No usable date (e.g. Idealista rows before 2026-10-14): keep the
-            # flag as is — forcing False revived ~9k archived Idealista rows.
+            seen_on = _undated_idealista_seen(l, covered)
+        if seen_on is None:
+            # No usable date and no sweep since dates began: keep the flag
+            # as is — forcing False revived ~9k archived Idealista rows.
             l["days_since_seen"] = None
             l["is_stale"] = bool(l.get("is_stale"))
             stale_count += l["is_stale"]
             continue
         ds = (today - seen_on).days
         l["days_since_seen"] = ds
+        if ((l.get("delisted_date") and (last_seen or "") <= l["delisted_date"])
+                or (l.get("gone_checked") and (last_seen or "") <= l["gone_checked"])):
+            # A scan of its area came back without it (write_output), or its
+            # page says it's gone (listing_details): hidden until a scan sees
+            # it again; deleted by the trim like any other.
+            l["is_stale"] = True
+            stale_count += 1
+            continue
         if ds >= STALE_DAYS_THRESHOLD and not _judgeable(l, seen_on, covered):
             # Its area hasn't been re-swept yet: can't call it gone, but
             # don't revive it either. The rentals dashboard hides listings
@@ -1727,12 +1761,13 @@ def trim_stale_listings(all_listings: list, seen: dict,
     keep, dropped = [], 0
     for l in all_listings:
         last_seen = l.get("last_seen_date")
-        if not last_seen:
-            keep.append(l)
-            continue
         try:
-            seen_on = datetime.fromisoformat(last_seen).date()
+            seen_on = datetime.fromisoformat(last_seen).date() if last_seen else None
         except ValueError:
+            seen_on = None
+        if seen_on is None:
+            seen_on = _undated_idealista_seen(l, covered, for_trim=True)
+        if seen_on is None:
             keep.append(l)
             continue
         if (today - seen_on).days < REMOVE_AFTER_DAYS or not _judgeable(l, seen_on, covered):
@@ -1843,13 +1878,19 @@ def write_output(listings: list, source: str = "immobiliare",
             if l.get("source") in (source, None):
                 if l["id"] in new_ids:
                     continue   # superseded by fresh version
-                if scanned_area_slugs and l.get("_fetched_area") in scanned_area_slugs:
+                if (scanned_area_slugs and l.get("_fetched_area") in scanned_area_slugs
+                        and not l.get("is_stale")):
+                    # De-listed: its area was scanned and it didn't come back.
+                    # Hidden, not deleted — a capped or flaky page can miss a
+                    # live listing; the next scan that sees it revives it, the
+                    # 30-day trim deletes it otherwise.
+                    l["is_stale"] = True
+                    l["delisted_date"] = today_iso
                     stale_removed += 1
-                    continue   # de-listed: was in scanned area but not returned this run
             kept.append(l)
 
         if stale_removed:
-            print(f"  [stale]  Removed {stale_removed} de-listed listing(s) from scanned areas")
+            print(f"  [stale]  Hid {stale_removed} de-listed listing(s) from scanned areas")
 
         merged = kept + listings
 
