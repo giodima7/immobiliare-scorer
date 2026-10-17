@@ -9,11 +9,15 @@ fetches look up the cache instead of calling Overpass again.
 
 Key format : "{source}:{listing_id}"    e.g. "immobiliare:12345678"
 Cache file : BASE_DIR/enriched_cache.json
-Thread-safe: module-level lock protects all reads/writes.
+Thread-safe: module-level lock protects all reads/writes. Process-safe: the
+API and both scanner daemons write the file; each write merges only the
+keys this process added or changed into what's on disk, under a file lock.
 """
 
+import fcntl
 import json
 import threading
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
@@ -21,6 +25,7 @@ BASE_DIR   = Path(__file__).parent
 CACHE_PATH = BASE_DIR / "enriched_cache.json"
 
 _cache: dict = {}
+_dirty: set  = set()     # keys saved in this process since the last flush
 _lock        = threading.Lock()
 
 
@@ -60,6 +65,7 @@ def save(source: str, listing_id: str, data: dict) -> None:
     entry = {"enriched_at": datetime.now().isoformat(timespec="seconds"), **data}
     with _lock:
         _cache[key] = entry
+        _dirty.add(key)
         _flush()
 
 
@@ -72,6 +78,7 @@ def bulk_save(entries) -> None:
     with _lock:
         for source, listing_id, data in entries:
             _cache[f"{source}:{listing_id}"] = {"enriched_at": ts, **data}
+            _dirty.add(f"{source}:{listing_id}")
         _flush()
 
 
@@ -96,19 +103,69 @@ def stats() -> dict:
     }
 
 
-def clear() -> None:
-    """Delete the cache file and reset the in-memory cache."""
-    global _cache
+def delete(keys) -> int:
+    """Remove "{source}:{listing_id}" keys from memory and from the file.
+    Returns how many were present. (Popping _cache and flushing no longer
+    removes anything: a flush only adds this process's own keys.)"""
+    keys = set(keys)
     with _lock:
+        n = sum(1 for k in keys if _cache.pop(k, None) is not None)
+        _dirty.difference_update(keys)
+        _flush(removed=keys)
+    return n
+
+
+def clear() -> None:
+    """Delete the cache file and reset the in-memory cache. Other running
+    processes still hold their copies; their own new keys come back on
+    their next write, nothing else."""
+    global _cache
+    with _lock, _file_lock():
         _cache = {}
-    if CACHE_PATH.exists():
-        CACHE_PATH.unlink()
+        _dirty.clear()
+        if CACHE_PATH.exists():
+            CACHE_PATH.unlink()
 
 
 # ── Internal ──────────────────────────────────────────────────────────────────
 
-def _flush() -> None:
-    """Write _cache to disk atomically (write .tmp → rename). Call under _lock."""
-    tmp = CACHE_PATH.with_suffix(".tmp")
-    tmp.write_text(json.dumps(_cache, ensure_ascii=False, indent=2))
-    tmp.replace(CACHE_PATH)
+@contextmanager
+def _file_lock():
+    """Exclusive lock shared by every process writing the cache."""
+    with open(CACHE_PATH.with_suffix(".lock"), "w") as fh:
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+
+
+def _flush(removed: set = frozenset()) -> None:
+    """Merge this process's new / changed keys (and removals) into the file
+    on disk and write it back atomically (.tmp → rename). Call under _lock.
+
+    Each process used to write its whole in-memory copy, so the last writer
+    dropped whatever the others had added since it loaded — ~7k of 65k
+    entries on 2026-10-17, once the scanners started writing every 20 min.
+    A key both sides changed keeps the newer enriched_at. Afterwards the
+    in-memory copy is the merged file, so this process sees the others'
+    entries too."""
+    global _cache
+    with _file_lock():
+        try:
+            disk = json.loads(CACHE_PATH.read_text()) if CACHE_PATH.exists() else {}
+        except (OSError, ValueError):
+            disk = {}
+        for k in removed:
+            disk.pop(k, None)
+        for k in _dirty:
+            mine = _cache.get(k)
+            theirs = disk.get(k)
+            if mine is not None and (theirs is None or
+                                     (mine.get("enriched_at") or "") >= (theirs.get("enriched_at") or "")):
+                disk[k] = mine
+        tmp = CACHE_PATH.with_suffix(".tmp")
+        tmp.write_text(json.dumps(disk, ensure_ascii=False, separators=(",", ":")))
+        tmp.replace(CACHE_PATH)
+        _cache = disk
+        _dirty.clear()
