@@ -17,6 +17,7 @@ netlify_config.json
 .digest_pending_*
 .discover_state_*.json
 .pushed_*.json
+.drip_status_*.json
 scan_slots_*.jsonl
 scanner.log
 scanner_idealista.log
