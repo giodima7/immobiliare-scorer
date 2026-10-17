@@ -268,12 +268,12 @@ def run_marked(source: str, fn, *args):
         marker.unlink(missing_ok=True)
 
 
-def wait_and_drip(source: str, deadline: float, log=print) -> None:
+def wait_and_drip(source: str, deadline: float, log=print, after_batch=None) -> None:
     """Wait for the next scan, fetching listing pages meanwhile
     (listing_details.drip_until). Falls back to a plain wait on any error."""
     try:
         from listing_details import drip_until
-        drip_until(source, deadline, log)
+        drip_until(source, deadline, log, after_batch=after_batch)
     except KeyboardInterrupt:
         raise
     except Exception as exc:
@@ -1370,7 +1370,7 @@ DETAIL_URL    = "https://www.immobiliare.it/annunci/{id}/"
 # back to the daily scan.
 SPREAD_SCAN           = True
 SLOT_GAP_SEC          = None             # None → 24 h / (active areas + 1)
-DISCOVER_EVERY_SEC    = int(2.5 * 3600)
+DISCOVER_EVERY_SEC    = 20 * 60          # also between slots (was 2.5 h, inside slots only)
 DISCOVER_OVERLAP_STOP = 5                # of a page's 25 listings
 DELIST_AFTER_MISSES   = 2
 # A sweep read to its last page that still brings back under half of the
@@ -1378,9 +1378,11 @@ DELIST_AFTER_MISSES   = 2
 DELIST_MIN_FOUND      = 0.5
 
 # Photos of top listings not read yet are read after every slot of either
-# site (~29 a day, one reading at a time — photo_eval's lock): the score-75
-# backlog (~2.3k) in ~3 days, new ones within ~1 h. ~2k tokens each.
+# site and after every listing-page session (one reading at a time —
+# photo_eval's lock), so they keep up with the galleries those pages bring.
+# ~2k tokens each.
 PHOTOS_PER_SLOT       = 32
+PHOTOS_PER_BATCH      = 8                # one claude call
 
 # Filled by fetch_rentals() for the caller: complete sweeps, page loads,
 # discover stats.
@@ -1499,6 +1501,8 @@ async def _slot_async(pages: int, area_slugs: list, slot_area: str, discover: bo
         if dstats["pages"]:
             _discover_state_path().write_text(json.dumps({"at": time.time(), "ids": ids}))
         LAST_FETCH["discover"] = dstats
+    if not slot_area:                      # discover between slots
+        return list(found.values()), []
     print(f"\n    sweep: {slot_area}", end="", flush=True)
     swept, skipped = await _fetch_async(pages, [slot_area], max_rent, min_sqm,
                                         max_sqm, min_rooms, delay, browser,
@@ -1621,7 +1625,7 @@ def fetch_rentals(pages: int = 8, area_names: list = None, max_rent: int = 0,
         browser = BrowserSession("immobiliare", background=(mode == "slot"))
         await browser.start()
         try:
-            if mode == "slot" and slot_area:
+            if mode == "slot":
                 items, skipped = await _slot_async(
                     pages, area_slugs, slot_area, discover, max_rent, min_sqm,
                     max_sqm, min_rooms, delay, browser)
@@ -2339,10 +2343,11 @@ def _digest_pending_path() -> Path:
     return BASE_DIR / f".digest_pending_{CITY_KEY}.json"
 
 
-def run_slot(args, area: str, do_discover: bool) -> dict:
+def run_slot(args, area: str | None, do_discover: bool) -> dict:
     """One spread-scan slot (see SPREAD_SCAN): discover when due, sweep
-    `area`, merge, stale pass, rescore. Appends its numbers to the slot log
-    and returns them."""
+    `area`, merge, stale pass, rescore. area None: discover only (between
+    slots) — written only when it found new listings. Appends its numbers
+    to the slot log and returns them."""
     t0 = time.time()
     area_names = _area_names(args)
     raw, skipped = fetch_rentals(
@@ -2353,6 +2358,7 @@ def run_slot(args, area: str, do_discover: bool) -> dict:
     complete = dict(LAST_FETCH.get("complete") or {})
     sweep = LAST_FETCH.get("sweep") or {}
     rec = {"at": datetime.now().isoformat(timespec="seconds"), "source": "immobiliare",
+           "kind": "slot" if area else "discover",
            "area": area, "complete": area in complete, "pages": sweep.get("pages", 0),
            "parse_failed": sweep.get("parse_failed", 0),
            "skipped": [s.get("reason") for s in skipped],
@@ -2360,6 +2366,8 @@ def run_slot(args, area: str, do_discover: bool) -> dict:
            "found": len(raw), "found_sweep": sum(l.get("_via") == "sweep" for l in raw),
            "new": 0}
     seen = load_seen_ids()
+    if not area and not any(l["id"] not in seen for l in raw):
+        raw = []                           # discover found nothing new: nothing to write
     if raw:
         _carry_over_detail_fields(raw)
         scored = score_all(raw)
@@ -2379,11 +2387,13 @@ def run_slot(args, area: str, do_discover: bool) -> dict:
                    new_via_sweep=sum(l.get("_via") == "sweep" for l in new),
                    new_ids=[l["id"] for l in new][:200])
         _queue_digest([l["id"] for l in new])
-    record_sweeps("immobiliare", _macro_slugs_for(area_names), list(complete),
-                  tried_slugs=[area])
+    if area:
+        record_sweeps("immobiliare", _macro_slugs_for(area_names), list(complete),
+                      tried_slugs=[area])
     if raw:
         _post_scan_stale_pass(seen, str(date.today()))
-    write_status(rec["new"], len(seen), skipped_areas=skipped)
+    if area or raw:      # a discover with nothing new leaves the dashboard alone
+        write_status(rec["new"], len(seen), skipped_areas=skipped)
     if raw:
         rescore_output()
     rec["seconds"] = round(time.time() - t0)
@@ -2404,13 +2414,13 @@ class _PendingLock:
         self.fh.close()
 
 
-def read_photos_after_slot(log) -> None:
-    """Read the photos of up to PHOTOS_PER_SLOT top listings not read yet
+def read_photos_after_slot(log, limit: int = PHOTOS_PER_SLOT) -> None:
+    """Read the photos of up to `limit` top listings not read yet
     (photo_eval.nightly), then rescore if anything was stored. Skipped when
     another reading runs."""
     try:
         from photo_eval import nightly as _read
-        if _read(log=lambda m: print("  " + m, flush=True), limit=PHOTOS_PER_SLOT):
+        if _read(log=lambda m: print("  " + m, flush=True), limit=limit):
             rescore_output()
     except Exception as exc:
         log(f"[photos] skipped: {exc}")
@@ -2595,6 +2605,24 @@ def _netlify_deploy():
 
 # ── Daemon ─────────────────────────────────────────────────────────────────────
 
+def _between_slots(args, source: str, next_slot: float, log, run_slot_fn, discover_state) -> None:
+    """Until the next slot: discover every DISCOVER_EVERY_SEC (new listings
+    within ~20 min) and read listing pages meanwhile, with a photo reading
+    after each page session."""
+    next_discover = (discover_state().get("at") or 0) + DISCOVER_EVERY_SEC
+    while time.time() < next_slot:
+        if time.time() >= next_discover:
+            try:
+                rec = run_marked(source, run_slot_fn, args, None, True)
+                d = rec.get("discover") or {}
+                log(f"Discover — {d.get('new', 0)} new in {d.get('pages', 0)} page(s)")
+            except Exception as exc:
+                log(f"✗ Discover error: {exc}")
+            next_discover = time.time() + DISCOVER_EVERY_SEC
+        wait_and_drip(source, min(next_slot, next_discover), log,
+                      after_batch=lambda: read_photos_after_slot(log, PHOTOS_PER_BATCH))
+
+
 def _spread_loop(args, log) -> None:
     """Spread scan (see SPREAD_SCAN): a slot every gap, the detail drip in
     between."""
@@ -2611,7 +2639,8 @@ def _spread_loop(args, log) -> None:
         if time.time() < next_slot:
             log(f"Next slot at {datetime.fromtimestamp(next_slot):%Y-%m-%d %H:%M}")
             try:
-                wait_and_drip("immobiliare", next_slot, log)
+                _between_slots(args, "immobiliare", next_slot, log, run_slot,
+                               load_discover_state)
             except KeyboardInterrupt:
                 log("Interrupted during sleep — stopping daemon.")
                 raise

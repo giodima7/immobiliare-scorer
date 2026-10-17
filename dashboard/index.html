@@ -757,7 +757,7 @@
     <div class="settings-card-header">
       <div>
         <h2 class="settings-card-title"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#search"></use></svg> Scanner</h2>
-        <p class="settings-card-subtitle" data-i18n="tools.scanner_sub">One scan of Milan a day, plus listing pages read between scans.</p>
+        <p class="settings-card-subtitle" data-i18n="tools.scanner_sub">One area at a time, all day long; between slots, the best listings get their page, costs and photos read.</p>
       </div>
       <div class="scanner-status-indicator">
         <span class="status-dot status-idle" id="scannerDot"></span>
@@ -819,6 +819,9 @@
       <span class="scanner-meta" id="idealistaLastRun"></span>
       <span class="scanner-new-badge" id="idealistaNewBadge"></span>
     </div>
+
+    <!-- What the scanners are doing between slots (scanner.js _renderPipeline) -->
+    <div class="pipeline-box" id="pipelineBox" hidden></div>
 
     <!-- Cache row (deletes enrichment cache so the next scan re-enriches) -->
     <div id="cacheRow" style="margin-top:12px;display:flex;align-items:center;gap:10px;

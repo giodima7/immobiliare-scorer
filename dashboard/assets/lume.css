@@ -3903,3 +3903,18 @@ body.lm-open { overflow: hidden; }
   .tab-btn span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tab-btn .i { width: 17px; height: 17px; }
 }
+
+/* Tools → Scanner: work between slots (scanner.js _renderPipeline) */
+.pipeline-box { margin-top: 12px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;
+                font-size: var(--text-xs); color: var(--text-secondary); }
+.w-card { padding: 10px 12px; border: 1px solid var(--border-light); border-radius: var(--radius); display: grid; gap: 4px; align-content: start; }
+.w-head { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 4px; }
+.w-head .i { width: 18px; height: 18px; flex: none; margin-top: 1px; color: var(--text-secondary); }
+.w-title { color: var(--text-primary); font-weight: 600; font-size: var(--text-sm); }
+.w-sub { color: var(--text-muted); }
+.w-today { color: var(--text-primary); }
+.pipe-bar { display: grid; grid-template-columns: 90px 1fr 90px; align-items: center; gap: 8px; }
+.pipe-bar > span:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+.pipe-track { height: 6px; border-radius: var(--radius-full); background: var(--bg-muted); overflow: hidden; }
+.pipe-track i { display: block; height: 100%; background: var(--green-ink); }
+@media (max-width: 640px) { .pipeline-box { grid-template-columns: minmax(0, 1fr); } }

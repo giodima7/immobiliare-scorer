@@ -1383,6 +1383,97 @@ def stop_scanner():
     return jsonify({"stopped": False, "reason": "not running"})
 
 
+# Tools → Scanner, one block per "worker": 1 zone slots, 2 new-listing
+# search, 3 listing pages (costs, galleries), 4 photo reading — what each
+# did last, today, and next, plus progress on the listings at photo_eval's
+# bar (or Hidden Gems). Recomputed at most once a minute (parses the file).
+_pipeline_cache: dict = {"at": 0.0, "data": None}
+
+
+def _pipeline_status() -> dict:
+    if _pipeline_cache["data"] is not None and _time.time() - _pipeline_cache["at"] < 60:
+        return _pipeline_cache["data"]
+    import re as _re
+    from datetime import date as _date, datetime as _dt, timedelta as _td
+    out: dict = {}
+    try:
+        import listing_details as _ld
+        import photo_eval as _pe
+        from fetch_rentals import DISCOVER_EVERY_SEC
+        today = _date.today().isoformat()
+        cache = _ld.load_cache()
+        results = _pe.load_results()
+        rows = _json.loads((DASHBOARD_DIR / "milano_rentals_latest.json").read_text())
+        top = {"listings": 0, "page_read": 0, "costs_known": 0, "photos_read": 0, "photos_waiting": 0}
+        for l in rows:
+            if l.get("is_stale") or l.get("excluded") or not ((l.get("score_total") or 0) >= _pe.MIN_SCORE or l.get("hidden_gem")):
+                continue
+            top["listings"] += 1
+            e = cache.get(str(l.get("id"))) or {}
+            top["page_read"] += bool((e.get("fields") or {}).get("costs_read") or e.get("gone"))
+            top["costs_known"] += bool(l.get("spese_condominiali") or l.get("condo_included") or l.get("heating_mo"))
+            urls = _pe.photo_urls(l)
+            r = results.get(str(l.get("id"))) or {}
+            done = bool(r) and r.get("fingerprint") == _pe.fingerprint(urls)
+            top["photos_read"] += done
+            top["photos_waiting"] += (not done and len(urls) >= _pe.MIN_PHOTOS)
+
+        sites: dict = {s: {"slot": {"today": 0, "new_today": 0}, "discover": {"today": 0, "new_today": 0},
+                           "pages": {}} for s in ("immobiliare", "idealista")}
+        log_path = BASE_DIR / "scan_slots_milano.jsonl"
+        if log_path.exists():
+            for line in log_path.read_text().splitlines()[-400:]:
+                try:
+                    r = _json.loads(line)
+                except ValueError:
+                    continue
+                site = sites.get(r.get("source") or "immobiliare")
+                if not site:
+                    continue
+                is_today = str(r.get("at", ""))[:10] == today
+                d = r.get("discover")
+                if d:
+                    site["discover"]["last"] = {"at": r["at"], "pages": d.get("pages"), "new": d.get("new")}
+                    site["discover"]["today"] += is_today
+                    site["discover"]["new_today"] += (d.get("new") or 0) if is_today else 0
+                if r.get("area"):
+                    site["slot"]["last"] = {"at": r["at"], "area": r["area"], "new": r.get("new"),
+                                            "hidden": r.get("hidden", 0), "complete": r.get("complete")}
+                    site["slot"]["today"] += is_today
+                    site["slot"]["new_today"] += (r.get("new_via_sweep") or 0) if is_today else 0
+        for src, log in (("immobiliare", "scanner.log"), ("idealista", "scanner_idealista.log")):
+            try:
+                with open(BASE_DIR / log, "rb") as fh:
+                    fh.seek(max(0, (BASE_DIR / log).stat().st_size - 200_000))
+                    tail = fh.read().decode(errors="replace")
+                m = _re.findall(r"Next slot at (\d{4}-\d\d-\d\d \d\d:\d\d)", tail)
+                if m:
+                    sites[src]["slot"]["next"] = m[-1].replace(" ", "T")
+            except OSError:
+                pass
+            last_d = (sites[src]["discover"].get("last") or {}).get("at")
+            if last_d:
+                sites[src]["discover"]["next"] = (_dt.fromisoformat(last_d) + _td(seconds=DISCOVER_EVERY_SEC)).isoformat(timespec="minutes")
+            try:
+                sites[src]["pages"] = _json.loads(_ld._drip_status_path(src).read_text())
+            except (OSError, ValueError):
+                pass
+            sites[src]["pages"]["read_today"] = sum(1 for v in cache.values()
+                                                    if v.get("fetched_at") == today and v.get("source") == src)
+        photos: dict = {"today": sum(1 for r in results.values() if str(r.get("read_at") or "")[:10] == today)}
+        runs = _pe.CACHE / "runs.jsonl"
+        if runs.exists():
+            last = runs.read_text().strip().splitlines()[-1:]
+            if last:
+                r = _json.loads(last[0])
+                photos["last"] = {"at": r.get("at"), "listings": r.get("listings"), "stored": r.get("stored")}
+        out = {"min_score": _pe.MIN_SCORE, "top": top, "sites": sites, "photos": photos}
+    except Exception as exc:
+        out = {"error": f"{type(exc).__name__}: {exc}"}
+    _pipeline_cache.update(at=_time.time(), data=out)
+    return out
+
+
 @app.route("/scanner-status")
 def scanner_status():
     running_immo      = _scanner_proc   is not None and _scanner_proc.poll()   is None
@@ -1428,6 +1519,7 @@ def scanner_status():
         # _GEO_PENDING_TTL seconds and auto-invalidated whenever a worker
         # finishes (so post-enrichment the row drops to 0).
         "geo_pending": _all_pending(),
+        "pipeline": _pipeline_status(),
     }
     return jsonify(result)
 
