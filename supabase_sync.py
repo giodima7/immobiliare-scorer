@@ -26,9 +26,11 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import hashlib
 import json
 import os
 import sys
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -359,7 +361,22 @@ def upsert_batch(rows: list[dict], idx: int, total: int) -> bool:
     return ok
 
 
-def sync_file(path: Path, listing_type: str, batch_size: int = 200) -> bool:
+# What push_local_json last sent, per row: {"day": date of the last full
+# push, "rows": {id: content hash}}. The spread scan rewrites the file ~18
+# times a day, and a full upsert of ~21k rows took 2–4 min (one batch timed
+# out on 2026-10-17 with two pushes running at once), so pushes send only
+# rows whose content changed. The first push of each day is full, which
+# repairs anything changed online behind our back.
+def _pushed_state_path(path: Path) -> Path:
+    return BASE_DIR / f".pushed_{path.stem}.json"
+
+
+def _row_hash(row: dict) -> str:
+    return hashlib.sha1(json.dumps(row, sort_keys=True, default=str).encode()).hexdigest()[:16]
+
+
+def sync_file(path: Path, listing_type: str, batch_size: int = 200,
+              only_changed: bool = False) -> bool:
     if not path.exists():
         print(f"[supabase_sync] {path.name} not found — skipping")
         return True
@@ -367,15 +384,38 @@ def sync_file(path: Path, listing_type: str, batch_size: int = 200) -> bool:
     with open(path) as fh:
         listings = json.load(fh)
 
-    rows    = [listing_to_row(l, listing_type) for l in listings if l.get("id")]
+    rows = [listing_to_row(l, listing_type) for l in listings if l.get("id")]
+    total = len(rows)
+    state = None
+    if only_changed:
+        today = datetime.date.today().isoformat()
+        try:
+            state = json.loads(_pushed_state_path(path).read_text())
+        except (OSError, ValueError):
+            state = {}
+        if state.get("day") != today:
+            state = {"day": today, "rows": {}}   # first push of the day: full
+        hashes = {str(r["id"]): _row_hash(r) for r in rows}
+        sent = {i: h for i, h in state["rows"].items() if i in hashes}   # drop trimmed ids
+        rows = [r for r in rows if sent.get(str(r["id"])) != hashes[str(r["id"])]]
+        state["rows"] = sent
     batches = [rows[i:i + batch_size] for i in range(0, len(rows), batch_size)]
-    print(f"[supabase_sync] {listing_type}s: {len(rows)} rows in {len(batches)} batches")
+    print(f"[supabase_sync] {listing_type}s: {len(rows)} rows in {len(batches)} batches"
+          + (f" (changed, of {total})" if only_changed else ""))
 
     failed = 0
     for i, b in enumerate(batches, 1):
-        if not upsert_batch(b, i, len(batches)):
+        if upsert_batch(b, i, len(batches)):
+            if state is not None:
+                for r in b:
+                    state["rows"][str(r["id"])] = hashes[str(r["id"])]
+        else:
             failed += 1
         time.sleep(0.1)   # gentle rate limit — Supabase free tier is fine
+    if state is not None:
+        tmp = _pushed_state_path(path).with_suffix(".tmp")
+        tmp.write_text(json.dumps(state, separators=(",", ":")))
+        tmp.replace(_pushed_state_path(path))
     print(f"[supabase_sync] {listing_type}s done: {len(batches) - failed}/{len(batches)} batches succeeded")
     return failed == 0
 
@@ -467,6 +507,9 @@ LEGACY_FILES = {"rentals_latest.json", "sales_latest.json"}
 # path → mtime of the version last pushed (in this process), so api.py's
 # autosync watcher doesn't push again what a rescore/enrichment just pushed.
 PUSHED_MTIME: dict[str, float] = {}
+# One push at a time (api.py pushes from several threads): two at once timed
+# out a batch, and each must diff against what the other just sent.
+_PUSH_LOCK = threading.Lock()
 
 
 def archive_missing_online(path: Path, listing_type: str) -> int:
@@ -545,14 +588,15 @@ def push_local_json(path: Path, listing_type: str) -> bool:
     if not SUPABASE_URL or not SUPABASE_KEY:
         print("[push] SUPABASE_URL / SUPABASE_SERVICE_KEY not set — skipping push")
         return False
-    try:
-        PUSHED_MTIME[str(path)] = path.stat().st_mtime
-        ok = sync_file(path, listing_type)
-        archive_missing_online(path, listing_type)
-        return ok
-    except Exception as exc:
-        print(f"[push] sync_file failed: {exc}")
-        return False
+    with _PUSH_LOCK:
+        try:
+            PUSHED_MTIME[str(path)] = path.stat().st_mtime
+            ok = sync_file(path, listing_type, only_changed=True)
+            archive_missing_online(path, listing_type)
+            return ok
+        except Exception as exc:
+            print(f"[push] sync_file failed: {exc}")
+            return False
 
 
 def _input_path(city: str, listing_type: str) -> Path:

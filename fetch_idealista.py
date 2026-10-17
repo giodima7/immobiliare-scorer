@@ -2131,11 +2131,11 @@ def run_once(args) -> list:
         l["last_seen_date"]  = today_str
         l["is_stale"]        = False
 
-    # Derive canonical area slugs that were actually scanned
-    fetched_slugs = {l.get("_fetched_area") for l in scored if l.get("_fetched_area")}
-
-    # Merge into rentals_latest.json — Immobiliare entries are untouched
-    write_output(scored, source=SOURCE, scanned_area_slugs=fetched_slugs or None)
+    # Merge into rentals_latest.json — Immobiliare entries are untouched.
+    # No de-listing from here yet: write_output de-lists only from areas
+    # read in full, which this scan doesn't report; Idealista moves to that
+    # after the Immobiliare spread-scan pilot.
+    write_output(scored, source=SOURCE)
 
     # Update shared seen_ids.json
     new_listings = [l for l in scored if l["id"] not in seen]

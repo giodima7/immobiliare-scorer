@@ -1057,7 +1057,9 @@ def parse_rental(item: dict) -> Optional[dict]:
 async def _fetch_async(pages: int, area_slugs: list, max_rent: int,
                        min_sqm: int, max_sqm: int, min_rooms: int,
                        delay: float, browser,
-                       area_delay: float = 6.0) -> tuple:
+                       area_delay: float = 6.0,
+                       complete: dict | None = None,
+                       stats: dict | None = None) -> tuple:
     """
     Navigate Immobiliare.it rental pages and return (listings, skipped_areas).
 
@@ -1080,7 +1082,15 @@ async def _fetch_async(pages: int, area_slugs: list, max_rent: int,
       • Option 3 — end-of-scan retry pass on JUST the skipped areas, with
         3× page delay + 2× area delay, so transient Cloudflare blocks get
         a second chance without a full city-wide re-scan.
+
+    complete: when given, gets {area_slug: canonical_slug} for every area
+    read to its last page — only those can tell a listing has gone.
+    stats: when given, counts page loads ("pages") and unreadable pages
+    ("parse_failed").
     """
+    stats = {} if stats is None else stats
+    stats.setdefault("pages", 0)
+    stats.setdefault("parse_failed", 0)
     all_items     = []
     seen_ids      = set()   # global dedup across all areas
     skipped_areas = []      # {"name", "reason"} for areas that failed or returned nothing
@@ -1099,11 +1109,13 @@ async def _fetch_async(pages: int, area_slugs: list, max_rent: int,
             canonical_slug   = area_slug
             area_got_results = False
             area_parse_failed = False
+            finished = False   # read to the last page
 
             for page in range(1, pages + 1):
                 url = build_rental_url(page, canonical_slug, max_rent, min_sqm, max_sqm, min_rooms)
                 print(f"\n    [debug] GET {url}", flush=True)
                 tab = await browser.get(url)
+                stats["pages"] += 1
                 await asyncio.sleep(page_delay)
 
                 # Redirect detection on page 1 — Immobiliare sometimes rewrites
@@ -1162,6 +1174,7 @@ async def _fetch_async(pages: int, area_slugs: list, max_rent: int,
                             continue
                         print(f"\n    [warn] __NEXT_DATA__ parse failed (area={label}, page={page}): {e}")
                         area_parse_failed = True
+                        stats["parse_failed"] += 1
                         break
                 if data is None:
                     break
@@ -1169,6 +1182,7 @@ async def _fetch_async(pages: int, area_slugs: list, max_rent: int,
                 results = data.get("results", [])
                 if not results:
                     print(f" (empty, done)", end="", flush=True)
+                    finished = True
                     break
 
                 area_got_results = True
@@ -1180,6 +1194,7 @@ async def _fetch_async(pages: int, area_slugs: list, max_rent: int,
                 }
                 if page > 1 and page_ids and page_ids.issubset(area_ids_seen):
                     print(f" (repeat page, done)", end="", flush=True)
+                    finished = True
                     break
                 area_ids_seen.update(page_ids)
 
@@ -1189,6 +1204,9 @@ async def _fetch_async(pages: int, area_slugs: list, max_rent: int,
                     if not parsed or parsed["id"] in seen_ids:
                         continue
                     parsed["_fetched_area"] = canonical_slug
+                    parsed["_via"] = "sweep"
+                    if canonical_slug:
+                        parsed["scan_area"] = canonical_slug   # kept on disk (de-listing)
                     seen_ids.add(parsed["id"])
                     all_items.append(parsed)
                     new_this_page += 1
@@ -1197,8 +1215,11 @@ async def _fetch_async(pages: int, area_slugs: list, max_rent: int,
                 max_pg   = min(pages, site_max)
                 print(f" p{page}/{max_pg}(+{new_this_page})", end="", flush=True)
                 if page >= max_pg:
+                    finished = site_max <= pages   # more pages than we read → not all of it
                     break
 
+            if finished and area_slug and complete is not None:
+                complete[area_slug] = canonical_slug
             if not area_got_results and area_slug:
                 if area_parse_failed:
                     reason = ("page parse failed twice (likely Cloudflare "
@@ -1289,6 +1310,33 @@ DAILY_DETAIL_BUDGET      = 0
 DETAIL_FIELDS = ("energy_class", "published_date", "spese_condominiali", "detail_fetched_at")
 DETAIL_URL    = "https://www.immobiliare.it/annunci/{id}/"
 
+# ── Spread scan (pilot from 2026-10-17; replaces the daily scan) ─────────────
+# The daily scan swept each area once every DAILY_SWEEP_DAYS days, and its
+# discover step stopped on agencies' re-published old listings: of the 73
+# newest Immobiliare listings on 2026-10-17, ~60 sat in that day's 4 swept
+# areas — elsewhere new listings waited up to 4 days, dead ones stayed up to
+# 11. Immobiliare blocks at ~200 page loads in one session, yet never
+# blocked the detail drip (3 pages per session, all day). So the spread scan
+# runs one slot every SLOT_GAP_SEC: a fresh browser session sweeps the ONE
+# area swept longest ago (≤ ~40 pages), every area once a day, plus a
+# discover run every DISCOVER_EVERY_SEC that stops where the previous run's
+# listings begin. A listing missing from DELIST_AFTER_MISSES complete sweeps
+# of its area in a row is hidden. Each slot appends a line to
+# scan_slots_<city>.jsonl (tools/slot_report.py). SPREAD_SCAN = False →
+# back to the daily scan.
+SPREAD_SCAN           = True
+SLOT_GAP_SEC          = None             # None → 24 h / (active areas + 1)
+DISCOVER_EVERY_SEC    = int(2.5 * 3600)
+DISCOVER_OVERLAP_STOP = 5                # of a page's 25 listings
+DELIST_AFTER_MISSES   = 2
+# A sweep read to its last page that still brings back under half of the
+# area's visible listings is a bad page set, not a mass de-listing.
+DELIST_MIN_FOUND      = 0.5
+
+# Filled by fetch_rentals() for the caller: complete sweeps, page loads,
+# discover stats.
+LAST_FETCH: dict = {}
+
 
 def sweep_slugs_for_today(area_slugs: list) -> list:
     """Every DAILY_SWEEP_DAYS-th area, rotating daily — each area in full
@@ -1302,33 +1350,51 @@ def _macro_slug(item: dict) -> str:
     return to_url_slug(((props[0] or {}).get("location") or {}).get("macrozone") or "")
 
 
-async def _daily_async(pages: int, area_slugs: list, max_rent: int, min_sqm: int,
-                       max_sqm: int, min_rooms: int, delay: float, browser,
-                       known_ids: set, detailed_ids: set) -> tuple:
-    """Discover → sweep → details (see DAILY_* above). Returns (listings, skipped)."""
-    active = set(area_slugs)
-    found: dict = {}
+async def _discover_async(active: set, max_rent: int, min_sqm: int, max_sqm: int,
+                          min_rooms: int, delay: float, browser, known_ids: set,
+                          prev_ids: set | None = None) -> tuple:
+    """City-wide search, most recently modified first. Returns
+    ({id: listing}, stats).
 
-    # 1. discover
+    prev_ids None (daily scan): stop after DAILY_STOP_AFTER pages in a row
+    with nothing new. That stopped on agencies' re-published old listings
+    (2026-10-17: 0 new in 2 pages, twice, while 13 areas had fresh ones).
+    prev_ids = the ids the previous discover run read (spread scan): the
+    order is by modification, so once a page holds DISCOVER_OVERLAP_STOP of
+    them everything further down was read last time — stop there."""
+    found: dict = {}
+    stats = {"pages": 0, "new": 0, "per_page": [], "caught_up": False, "ids": []}
     quiet_pages = 0
     print("\n    discover: city-wide, most recently modified first", end="", flush=True)
     for page in range(1, DAILY_DISCOVER_MAX_PAGES + 1):
         url = build_rental_url(page, None, max_rent, min_sqm, max_sqm, min_rooms)
-        try:
-            tab = await browser.get(url)
-            await asyncio.sleep(delay)
-            raw = await timed(tab.evaluate("JSON.stringify(window.__NEXT_DATA__)"),
-                              what="read __NEXT_DATA__")
-            data = json.loads(raw)["props"]["pageProps"]["dehydratedState"]["queries"][0]["state"]["data"]
-        except PageTimeout:
-            await browser.restart()
-            break
-        except Exception as exc:
-            print(f"\n    [warn] discover page {page} unreadable ({type(exc).__name__}) — stopping discovery")
+        data = None
+        for attempt in (1, 2):
+            try:
+                tab = await browser.get(url)
+                stats["pages"] += 1
+                await asyncio.sleep(delay if attempt == 1 else delay + 4.0)
+                raw = await timed(tab.evaluate("JSON.stringify(window.__NEXT_DATA__)"),
+                                  what="read __NEXT_DATA__")
+                data = json.loads(raw)["props"]["pageProps"]["dehydratedState"]["queries"][0]["state"]["data"]
+                break
+            except PageTimeout:
+                await browser.restart()
+                break
+            except Exception as exc:
+                # 2026-10-16: page 1 came back unreadable (TypeError) and
+                # the whole discovery was lost — one more try first.
+                if attempt == 2:
+                    print(f"\n    [warn] discover page {page} unreadable ({type(exc).__name__}) — stopping discovery")
+        if data is None:
             break
         results = data.get("results") or []
-        new_here = 0
+        new_here = overlap = 0
         for item in results:
+            rid = str((item.get("realEstate") or {}).get("id") or "")
+            if rid:
+                stats["ids"].append(rid)
+                overlap += rid in (prev_ids or ())
             macro = _macro_slug(item)
             if macro not in active:
                 continue
@@ -1336,21 +1402,85 @@ async def _daily_async(pages: int, area_slugs: list, max_rent: int, min_sqm: int
             if not parsed:
                 continue
             parsed["_fetched_area"] = macro
+            parsed["_via"] = "discover"
             if parsed["id"] not in known_ids and parsed["id"] not in found:
                 new_here += 1
             found[parsed["id"]] = parsed
-        print(f" p{page}(+{new_here} new)", end="", flush=True)
-        quiet_pages = 0 if new_here else quiet_pages + 1
-        if not results or quiet_pages >= DAILY_STOP_AFTER or page >= (data.get("maxPages") or page):
+        stats["new"] += new_here
+        stats["per_page"].append(new_here)
+        print(f" p{page}(+{new_here} new{f', {overlap} seen last run' if prev_ids else ''})",
+              end="", flush=True)
+        if not results or page >= (data.get("maxPages") or page):
+            stats["caught_up"] = True
             break
+        if prev_ids is not None:
+            if overlap >= DISCOVER_OVERLAP_STOP:
+                stats["caught_up"] = True
+                break
+        else:
+            quiet_pages = 0 if new_here else quiet_pages + 1
+            if quiet_pages >= DAILY_STOP_AFTER:
+                break
+    return found, stats
+
+
+def _discover_state_path() -> Path:
+    return BASE_DIR / f".discover_state_immobiliare_{CITY_KEY}.json"
+
+
+def load_discover_state() -> dict:
+    """{"at": epoch of the last discover run, "ids": ids it read}."""
+    try:
+        return json.loads(_discover_state_path().read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+async def _slot_async(pages: int, area_slugs: list, slot_area: str, discover: bool,
+                      max_rent: int, min_sqm: int, max_sqm: int, min_rooms: int,
+                      delay: float, browser) -> tuple:
+    """One spread-scan slot: discover (when due), then sweep `slot_area` in
+    full. Returns (listings, skipped)."""
+    found: dict = {}
+    if discover:
+        known_ids = set(load_seen_ids())
+        prev = load_discover_state()
+        found, dstats = await _discover_async(
+            set(area_slugs), max_rent, min_sqm, max_sqm, min_rooms, delay, browser,
+            known_ids, prev_ids=set(prev.get("ids") or []))
+        ids = dstats.pop("ids")
+        if dstats["pages"]:
+            _discover_state_path().write_text(json.dumps({"at": time.time(), "ids": ids}))
+        LAST_FETCH["discover"] = dstats
+    print(f"\n    sweep: {slot_area}", end="", flush=True)
+    swept, skipped = await _fetch_async(pages, [slot_area], max_rent, min_sqm,
+                                        max_sqm, min_rooms, delay, browser,
+                                        complete=LAST_FETCH["complete"],
+                                        stats=LAST_FETCH["sweep"])
+    for l in swept:
+        found[l["id"]] = l
+    return list(found.values()), skipped
+
+
+async def _daily_async(pages: int, area_slugs: list, max_rent: int, min_sqm: int,
+                       max_sqm: int, min_rooms: int, delay: float, browser,
+                       known_ids: set, detailed_ids: set) -> tuple:
+    """Discover → sweep → details (see DAILY_* above). Returns (listings, skipped)."""
+    active = set(area_slugs)
+
+    # 1. discover
+    found, _ = await _discover_async(active, max_rent, min_sqm, max_sqm, min_rooms,
+                                     delay, browser, known_ids)
 
     # 2. sweep
     sweep = sweep_slugs_for_today(area_slugs)
     print(f"\n    sweep: {', '.join(sweep)}", end="", flush=True)
     swept, skipped = await _fetch_async(pages, sweep, max_rent, min_sqm,
-                                        max_sqm, min_rooms, delay, browser)
+                                        max_sqm, min_rooms, delay, browser,
+                                        complete=LAST_FETCH.get("complete"),
+                                        stats=LAST_FETCH.get("sweep"))
     for l in swept:
-        found.setdefault(l["id"], l)
+        found[l["id"]] = l   # the sweep's copy carries the area it was swept in
 
     # 3. details — new listings first, then older ones never detailed
     todo = ([i for i in found if i not in known_ids]
@@ -1382,13 +1512,17 @@ async def _daily_async(pages: int, area_slugs: list, max_rent: int, min_sqm: int
 
 def fetch_rentals(pages: int = 8, area_names: list = None, max_rent: int = 0,
                   min_sqm: int = 0, max_sqm: int = 0, min_rooms: int = 0,
-                  delay: float = 2.5, mode: str = "full") -> tuple:
+                  delay: float = 2.5, mode: str = "full",
+                  slot_area: str = None, discover: bool = False) -> tuple:
     """
     One-shot fetch of Milano rental listings using Microsoft Edge via nodriver.
     area_names: list of display names, e.g. ["Navigli", "Brera"].
                 Each is converted to a URL slug and fetched as a separate URL series.
     Returns (listings, skipped_areas) — skipped_areas is a list of
     {"name": slug, "reason": str} for any area that was skipped.
+    mode "slot" (spread scan): discover when `discover`, then sweep
+    `slot_area` only, in a minimized window. LAST_FETCH tells the caller
+    which areas were read in full.
     """
     # ── Fix 2: validate area slugs before scanning ─────────────────────────────
     pre_skipped: list = []
@@ -1432,11 +1566,19 @@ def fetch_rentals(pages: int = 8, area_names: list = None, max_rent: int = 0,
 
     print(f"  Fetching rentals ({desc})...", end="", flush=True)
 
+    LAST_FETCH.clear()
+    LAST_FETCH.update({"complete": {}, "sweep": {}, "discover": None})
+
     async def _run():
-        browser = BrowserSession("immobiliare")
+        # Slots run all day: keep their window out of sight, like the drip.
+        browser = BrowserSession("immobiliare", background=(mode == "slot"))
         await browser.start()
         try:
-            if mode == "daily" and area_slugs:
+            if mode == "slot" and slot_area:
+                items, skipped = await _slot_async(
+                    pages, area_slugs, slot_area, discover, max_rent, min_sqm,
+                    max_sqm, min_rooms, delay, browser)
+            elif mode == "daily" and area_slugs:
                 known_ids = set(load_seen_ids())
                 detailed_ids = set()
                 if OUTPUT_PATH.exists():
@@ -1632,8 +1774,10 @@ def _coverage_path() -> Path:
     return BASE_DIR / f".sweep_coverage_{CITY_KEY}.json"
 
 
-def record_sweeps(source: str, active_slugs: list, completed_slugs: list) -> None:
-    """Remember today's fully swept areas and the source's current area list."""
+def record_sweeps(source: str, active_slugs: list, completed_slugs: list,
+                  tried_slugs: list = ()) -> None:
+    """Remember today's fully swept areas and the source's current area list
+    (plus when each was last swept / tried, which orders the spread scan)."""
     path = _coverage_path()
     try:
         cov = json.loads(path.read_text())
@@ -1641,10 +1785,30 @@ def record_sweeps(source: str, active_slugs: list, completed_slugs: list) -> Non
         cov = {}
     entry = cov.setdefault(source, {"areas": [], "swept": {}})
     entry["areas"] = sorted(set(active_slugs))
-    today = str(date.today())
+    today, now = str(date.today()), time.time()
     for slug in completed_slugs:
         entry["swept"][slug] = today
+        entry.setdefault("swept_at", {})[slug] = now
+    for slug in tried_slugs:
+        entry.setdefault("tried_at", {})[slug] = now
     path.write_text(json.dumps(cov, indent=1))
+
+
+def next_slot_area(source: str, area_slugs: list) -> str:
+    """The area swept (or, after a failed try, tried) longest ago."""
+    try:
+        entry = json.loads(_coverage_path().read_text()).get(source) or {}
+    except (OSError, ValueError):
+        entry = {}
+
+    def last(slug: str) -> float:
+        at = entry.get("swept_at", {}).get(slug)
+        if at is None and entry.get("swept", {}).get(slug):
+            # Swept by the daily scan: date only → midday of that date.
+            at = datetime.fromisoformat(entry["swept"][slug]).timestamp() + 12 * 3600
+        return max(at or 0.0, entry.get("tried_at", {}).get(slug) or 0.0)
+
+    return min(sorted(area_slugs), key=last)
 
 
 def coverage_since() -> dict:
@@ -1818,12 +1982,17 @@ def _post_scan_stale_pass(seen: dict, today_str: str) -> None:
 
 
 def write_output(listings: list, source: str = "immobiliare",
-                 scanned_area_slugs: set = None):
+                 swept_areas: set = None) -> dict:
     """Merge listings into rentals_latest.json, preserving entries from other sources.
 
-    scanned_area_slugs: when provided (area-specific scan), any existing listing
-    whose _fetched_area is in this set but whose id is not in the new results is
-    considered de-listed and removed from the DB.
+    swept_areas: areas this scan read to their last page (`scan_area`
+    values). A listing of such an area that didn't come back gets one more
+    `missed_sweeps`; at DELIST_AFTER_MISSES it is hidden (de-listed). Only
+    complete sweeps count: the old rule took every area any listing was
+    fetched from, discover hits included, and only never fired because the
+    area tag (_fetched_area) was stripped on write.
+
+    Returns {"missed", "hidden", "revived", "distrusted"} counts.
 
     The entire read-modify-write block is serialized via fcntl.flock on
     a sidecar lock file. Without this, two scanners running concurrently
@@ -1857,6 +2026,7 @@ def write_output(listings: list, source: str = "immobiliare",
                 pass
 
         new_ids = {l["id"] for l in listings}
+        out = {"missed": 0, "hidden": 0, "revived": 0, "distrusted": []}
         # Price drop on the same listing between scans: keep the old rent
         # (previous_price / price_changed_date — the Supabase columns), and
         # carry an earlier drop forward while the price stays put.
@@ -1866,31 +2036,55 @@ def write_output(listings: list, source: str = "immobiliare",
             old = on_disk.get(l["id"])
             if not old:
                 continue
+            if old.get("missed_sweeps"):
+                out["revived"] += 1   # missed by a sweep, yet still online
+            if not l.get("scan_area") and old.get("scan_area"):
+                l["scan_area"] = old["scan_area"]   # found by discover: keep its area
             was, now = old.get("rent_mo"), l.get("rent_mo")
             if was and now and now < was:
                 l["previous_price"], l["price_changed_date"] = was, today_iso
             elif l.get("previous_price") is None and old.get("previous_price") is not None:
                 l["previous_price"] = old["previous_price"]
                 l["price_changed_date"] = old.get("price_changed_date")
-        stale_removed = 0
+        # Areas whose "complete" sweep still brought back too few listings.
+        trusted = set(swept_areas or ())
+        if trusted:
+            visible: dict = {}
+            back: dict = {}
+            for l in existing:
+                a = l.get("scan_area")
+                if l.get("source") in (source, None) and a in trusted and not l.get("is_stale"):
+                    visible[a] = visible.get(a, 0) + 1
+                    back[a] = back.get(a, 0) + (l["id"] in new_ids)
+            for a, n in visible.items():
+                if n >= 20 and back.get(a, 0) < DELIST_MIN_FOUND * n:
+                    trusted.discard(a)
+                    out["distrusted"].append(a)
+                    print(f"  [stale]  {a}: sweep brought back {back.get(a, 0)}/{n} "
+                          f"visible listings — not used to de-list")
         kept = []
         for l in existing:
             if l.get("source") in (source, None):
                 if l["id"] in new_ids:
                     continue   # superseded by fresh version
-                if (scanned_area_slugs and l.get("_fetched_area") in scanned_area_slugs
-                        and not l.get("is_stale")):
-                    # De-listed: its area was scanned and it didn't come back.
-                    # Hidden, not deleted — a capped or flaky page can miss a
-                    # live listing; the next scan that sees it revives it, the
+                if l.get("scan_area") in trusted and not l.get("is_stale"):
+                    # Its area was read in full and it didn't come back.
+                    # Hidden, not deleted, and only after DELIST_AFTER_MISSES
+                    # sweeps — a listing can slip between pages that shift
+                    # mid-sweep; the next scan that sees it revives it, the
                     # 30-day trim deletes it otherwise.
-                    l["is_stale"] = True
-                    l["delisted_date"] = today_iso
-                    stale_removed += 1
+                    l["missed_sweeps"] = (l.get("missed_sweeps") or 0) + 1
+                    if l["missed_sweeps"] >= DELIST_AFTER_MISSES:
+                        l["is_stale"] = True
+                        l["delisted_date"] = today_iso
+                        out["hidden"] += 1
+                    else:
+                        out["missed"] += 1
             kept.append(l)
 
-        if stale_removed:
-            print(f"  [stale]  Hid {stale_removed} de-listed listing(s) from scanned areas")
+        if out["hidden"] or out["missed"]:
+            print(f"  [stale]  Hid {out['hidden']} de-listed listing(s) "
+                  f"({DELIST_AFTER_MISSES} sweeps without them) · {out['missed']} missed once")
 
         merged = kept + listings
 
@@ -1931,6 +2125,7 @@ def write_output(listings: list, source: str = "immobiliare",
         except Exception:
             pass
         lock_fh.close()
+    return out
 
 
 def rescore_output() -> None:
@@ -1994,13 +2189,22 @@ def _carry_over_detail_fields(raw: list) -> None:
                 pass
 
 
+def _area_names(args) -> list:
+    if args.areas:
+        return [a.strip() for a in args.areas.split(",") if a.strip()]
+    # No --areas flag: read active areas from area_settings.json
+    return _load_active_areas()
+
+
+def _macro_slugs_for(area_names: list) -> list:
+    """Immobiliare macro-area slugs (what a sweep fetches) for area names."""
+    return list(group_by_immobiliare_slug(
+        [s for s in (to_url_slug(n) for n in area_names) if s], CITY_KEY).keys())
+
+
 def run_once(args) -> list:
     """Execute one fetch-score-write cycle. Returns newly seen listings."""
-    if args.areas:
-        area_names = [a.strip() for a in args.areas.split(",") if a.strip()]
-    else:
-        # No --areas flag: read active areas from area_settings.json
-        area_names = _load_active_areas()
+    area_names = _area_names(args)
     raw, skipped_areas = fetch_rentals(
         pages=args.pages,
         area_names=area_names,
@@ -2037,10 +2241,8 @@ def run_once(args) -> list:
                      skipped_areas=skipped_areas)
         return []
 
-    # Derive which area slugs were actually scanned from the listings themselves
-    # (canonical slugs set on each listing during _fetch_async after redirect resolution).
-    # Pass None for full-city scans (area slug = None) to skip stale removal.
-    fetched_slugs = {l.get("_fetched_area") for l in scored if l.get("_fetched_area")}
+    # Only areas read to their last page can show a listing has gone.
+    complete = dict(LAST_FETCH.get("complete") or {})
 
     seen = load_seen_ids()
     today_str = str(date.today())
@@ -2050,7 +2252,7 @@ def run_once(args) -> list:
         # Always stamp last_seen_date — we just saw this listing in *this* scan.
         l["last_seen_date"] = today_str
 
-    write_output(scored, scanned_area_slugs=fetched_slugs or None)
+    write_output(scored, swept_areas=set(complete.values()) or None)
 
     new_listings = [l for l in scored if l["id"] not in seen]
     # Update seen_ids with both first_seen_date (preserved) and last_seen_date
@@ -2066,11 +2268,7 @@ def run_once(args) -> list:
     # Listings that didn't appear in *this* scan keep their old last_seen_date
     # from `seen`. We need to backfill last_seen_date onto every entry of
     # rentals_latest.json (not just `scored`) and then run mark+trim sweeps.
-    macro_slugs = list(group_by_immobiliare_slug(
-        [s for s in (to_url_slug(n) for n in area_names) if s], CITY_KEY).keys())
-    attempted = sweep_slugs_for_today(macro_slugs) if args.scan == "daily" else macro_slugs
-    failed = {s.get("name") for s in skipped_areas}
-    record_sweeps("immobiliare", macro_slugs, [a for a in attempted if a not in failed])
+    record_sweeps("immobiliare", _macro_slugs_for(area_names), list(complete))
     _post_scan_stale_pass(seen, today_str)
 
     write_status(len(new_listings), len(seen), skipped_areas=skipped_areas)
@@ -2082,6 +2280,104 @@ def run_once(args) -> list:
 
     rescore_output()
     return new_listings
+
+
+# ── Spread-scan slot ──────────────────────────────────────────────────────────
+
+def _slot_log_path() -> Path:
+    return BASE_DIR / f"scan_slots_{CITY_KEY}.jsonl"
+
+
+def _digest_pending_path() -> Path:
+    return BASE_DIR / f".digest_pending_{CITY_KEY}.json"
+
+
+def run_slot(args, area: str, do_discover: bool) -> dict:
+    """One spread-scan slot (see SPREAD_SCAN): discover when due, sweep
+    `area`, merge, stale pass, rescore. Appends its numbers to the slot log
+    and returns them."""
+    t0 = time.time()
+    area_names = _area_names(args)
+    raw, skipped = fetch_rentals(
+        pages=args.pages, area_names=area_names,
+        max_rent=args.max_rent or 0, min_sqm=args.min_sqm or 0,
+        max_sqm=args.max_sqm or 0, min_rooms=args.min_rooms or 0,
+        delay=args.delay, mode="slot", slot_area=area, discover=do_discover)
+    complete = dict(LAST_FETCH.get("complete") or {})
+    sweep = LAST_FETCH.get("sweep") or {}
+    rec = {"at": datetime.now().isoformat(timespec="seconds"), "area": area,
+           "complete": area in complete, "pages": sweep.get("pages", 0),
+           "parse_failed": sweep.get("parse_failed", 0),
+           "skipped": [s.get("reason") for s in skipped],
+           "discover": LAST_FETCH.get("discover"),
+           "found": len(raw), "found_sweep": sum(l.get("_via") == "sweep" for l in raw),
+           "new": 0}
+    seen = load_seen_ids()
+    if raw:
+        _carry_over_detail_fields(raw)
+        scored = score_all(raw)
+        today_str = str(date.today())
+        for l in scored:
+            lid = l["id"]
+            l["first_seen_date"] = seen[lid]["first_seen_date"] if lid in seen else today_str
+            l["last_seen_date"] = today_str
+        rec.update(write_output(scored, swept_areas=set(complete.values()) or None))
+        new = [l for l in scored if l["id"] not in seen]
+        for l in scored:
+            seen[l["id"]] = {"first_seen_date": l["first_seen_date"],
+                             "last_seen_date": today_str}
+        save_seen_ids(seen)
+        rec.update(new=len(new),
+                   new_via_discover=sum(l.get("_via") == "discover" for l in new),
+                   new_via_sweep=sum(l.get("_via") == "sweep" for l in new),
+                   new_ids=[l["id"] for l in new][:200])
+        _queue_digest([l["id"] for l in new])
+    record_sweeps("immobiliare", _macro_slugs_for(area_names), list(complete),
+                  tried_slugs=[area])
+    if raw:
+        _post_scan_stale_pass(seen, str(date.today()))
+    write_status(rec["new"], len(seen), skipped_areas=skipped)
+    if raw:
+        rescore_output()
+    rec["seconds"] = round(time.time() - t0)
+    with open(_slot_log_path(), "a") as fh:
+        fh.write(json.dumps(rec) + "\n")
+    return rec
+
+
+def _queue_digest(ids: list) -> None:
+    if not ids:
+        return
+    try:
+        pending = json.loads(_digest_pending_path().read_text())
+    except (OSError, ValueError):
+        pending = []
+    have = set(pending)
+    _digest_pending_path().write_text(json.dumps(pending + [i for i in ids if i not in have]))
+
+
+def send_pending_digest(args, log) -> None:
+    """Spread scan: one digest a day, from DIGEST_HOUR, of every listing
+    first seen since the previous one and still visible."""
+    if datetime.now().hour < DIGEST_HOUR:
+        return
+    today = str(date.today())
+    if DIGEST_SENT_PATH.exists() and DIGEST_SENT_PATH.read_text().strip() == today:
+        return
+    from email_digest import send_digest, load_config as load_email_config
+    try:
+        pending = set(json.loads(_digest_pending_path().read_text()))
+    except (OSError, ValueError):
+        pending = set()
+    email_cfg = load_email_config()
+    if (email_cfg.get("enabled", False) or args.email) and pending:
+        rows = [l for l in json.loads(OUTPUT_PATH.read_text())
+                if l.get("id") in pending and not l.get("is_stale")]
+        if rows:
+            log(f"Sending digest for {len(rows)} new listing(s)…")
+            send_digest(rows, email_cfg)
+    mark_digest_sent()
+    _digest_pending_path().unlink(missing_ok=True)
 
 
 # ── Daily digest helpers ───────────────────────────────────────────────────────
@@ -2226,6 +2522,50 @@ def _netlify_deploy():
 
 # ── Daemon ─────────────────────────────────────────────────────────────────────
 
+def _spread_loop(args, log) -> None:
+    """Spread scan (see SPREAD_SCAN): a slot every gap, the detail drip in
+    between."""
+    import traceback
+
+    def _gap() -> int:
+        n = len(_macro_slugs_for(_area_names(args))) or 1
+        return SLOT_GAP_SEC or int(24 * 3600 / (n + 1))
+
+    log(f"Daemon started — spread scan: one area every {_gap() // 60} min, "
+        f"discover every {DISCOVER_EVERY_SEC / 3600:g} h, output {OUTPUT_PATH}")
+    next_slot = last_scan_at("immobiliare") + _gap()
+    while True:
+        if time.time() < next_slot:
+            log(f"Next slot at {datetime.fromtimestamp(next_slot):%Y-%m-%d %H:%M}")
+            try:
+                wait_and_drip("immobiliare", next_slot, log)
+            except KeyboardInterrupt:
+                log("Interrupted during sleep — stopping daemon.")
+                raise
+        areas = _macro_slugs_for(_area_names(args))
+        area = next_slot_area("immobiliare", areas)
+        do_discover = time.time() - (load_discover_state().get("at") or 0) >= DISCOVER_EVERY_SEC
+        log(f"Slot: {area}{' + discover' if do_discover else ''}")
+        ok = False
+        try:
+            rec = run_marked("immobiliare", run_slot, args, area, do_discover)
+            ok = rec["complete"]
+            d = rec.get("discover")
+            log(f"Slot done — {area}: {rec['found']} listing(s), {rec['new']} new"
+                + (f" (discover: {d['new']} new in {d['pages']} page(s))" if d else "")
+                + f", {rec.get('hidden', 0)} hidden, {rec.get('missed', 0)} missed once"
+                + ("" if ok else " · area NOT read in full — retried later"))
+            mark_scan_done("immobiliare")
+            send_pending_digest(args, log)
+        except BaseException as e:
+            if isinstance(e, KeyboardInterrupt):
+                log("Interrupted — stopping daemon.")
+                raise
+            log(f"✗ Slot error: {e}\n{traceback.format_exc()}")
+        # A slot that couldn't read its area in full (blocked?) → back off.
+        next_slot = time.time() + (_gap() if ok else 2 * _gap())
+
+
 def daemon_loop(args):
     import traceback
     from email_digest import send_digest, load_config as load_email_config
@@ -2238,6 +2578,13 @@ def daemon_loop(args):
         line = f"[{ts}] {msg}"
         print(line, flush=True)
         print(line, file=log_fh, flush=True)
+
+    if SPREAD_SCAN and args.scan == "daily":
+        try:
+            _spread_loop(args, log)
+        finally:
+            log_fh.close()
+        return
 
     log(f"Daemon started — one scan every {DAEMON_INTERVAL_SEC // 3600} h, output {OUTPUT_PATH}")
 

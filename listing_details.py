@@ -436,26 +436,31 @@ async def fetch_batch(source: str, items: list, log=print) -> dict:
     return stats
 
 
+# Per source, across drip_until calls: the spread scan calls it between
+# slots (~18 times a day), and a fresh count each time would lift the
+# DRIP_PER_DAY cap and forget a block.
+_DRIP_STATE: dict = {}
+
+
 def drip_until(source: str, deadline: float, log=print) -> None:
     """Drip listing pages for `source` until wall-clock `deadline`, then
     return (the caller's next scan is due). Sleeps like sleep_until in
     between, so a laptop that slept through the night catches up on wake."""
+    st = _DRIP_STATE.setdefault(source, {"day": date.today(), "done": 0, "blocked_until": 0.0})
     queue: list = []
     built_on = None
-    done_today, day = 0, date.today()
-    blocked_until = 0.0
     next_batch = time.time() + random.uniform(60, 300)
     while deadline - time.time() > 0:
         now = datetime.now()
-        if date.today() != day:
-            day, done_today = date.today(), 0
+        if date.today() != st["day"]:
+            st["day"], st["done"] = date.today(), 0
         eligible = (DRIP_HOURS[0] <= now.hour < DRIP_HOURS[1]
-                    and done_today < DRIP_PER_DAY and time.time() >= blocked_until)
+                    and st["done"] < DRIP_PER_DAY and time.time() >= st["blocked_until"])
         if eligible and time.time() >= next_batch:
-            if built_on != day or not queue:
+            if built_on != st["day"] or not queue:
                 queue = build_queue(source)
-                built_on = day
-            take = queue[:min(DRIP_BATCH, DRIP_PER_DAY - done_today)]
+                built_on = st["day"]
+            take = queue[:min(DRIP_BATCH, DRIP_PER_DAY - st["done"])]
             queue = queue[len(take):]
             if take:
                 try:
@@ -463,13 +468,13 @@ def drip_until(source: str, deadline: float, log=print) -> None:
                 except Exception as exc:
                     stats = {"ok": 0, "gone": 0, "error": len(take), "blocked": False}
                     log(f"[details] {source}: batch failed ({type(exc).__name__}: {exc})")
-                done_today += len(take)
+                st["done"] += len(take)
                 if stats["blocked"]:
-                    blocked_until = time.time() + 6 * 3600
+                    st["blocked_until"] = time.time() + 6 * 3600
                     log(f"[details] {source}: blocked — pausing 6 h")
                 else:
                     log(f"[details] {source}: {stats['ok']} ok, {stats['gone']} gone, "
-                        f"{stats['error']} failed · {done_today}/{DRIP_PER_DAY} today · "
+                        f"{stats['error']} failed · {st['done']}/{DRIP_PER_DAY} today · "
                         f"{len(queue)} queued")
             next_batch = time.time() + random.uniform(*DRIP_GAP_MIN) * 60
         wait = 60.0
