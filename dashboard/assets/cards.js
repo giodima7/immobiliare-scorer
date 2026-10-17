@@ -258,6 +258,14 @@ function _dealDeltaHtml(l) {
   return `<span class="deal-delta tone-${tone}" title="${escapeHtml(tip)}">${escapeHtml(label)}</span>`;
 }
 
+// The photos' verdict on the card: only the clear ones (doubts live in Details).
+function _photoChipHtml(l) {
+  if (l.photo_deal !== 'confirms' && l.photo_deal !== 'contradicts') return '';
+  const note = (currentLang === 'it' ? l.photo_note_it : l.photo_note_en) || '';
+  const ok = l.photo_deal === 'confirms';
+  return `<span class="deal-delta ${ok ? 'tone-good' : 'tone-bad'}" title="${escapeHtml(note)}">${icon('photo')}${escapeHtml(t(ok ? 'card.photo_ok' : 'card.photo_bad'))}</span>`;
+}
+
 function _metroMeta(l) {
   let walk = l.metro_walk_min != null ? l.metro_walk_min : null;
   if (walk == null && l.metro_nearest_dist_m != null) walk = Math.max(1, Math.round(l.metro_nearest_dist_m / 70));
@@ -341,6 +349,7 @@ function renderRentalCard(l) {
         <span class="price-main">${l.rent_mo != null ? '€' + fmt(l.rent_mo) : '–'}</span>
         <span class="price-unit">${escapeHtml(t('card.per_month'))}</span>
         ${_dealDeltaHtml(l)}
+        ${_photoChipHtml(l)}
         ${feesLine}
       </div>
       ${history ? `<div class="was-price lm-history">${icon('trending-down')}${escapeHtml(history)}</div>` : ''}

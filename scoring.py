@@ -383,6 +383,10 @@ _DEFAULT_SETTINGS: dict = {
     # or already-let listings than deals (the labels already skip them):
     # neutral price score and a "verify" flag instead of a top ranking.
     "rent_price_suspect_neutral": True,
+    # photo_eval.py read the photos and they contradict the deal (works
+    # needed, basement, not the flat described) with medium/high confidence:
+    # no Hidden Gem / Great Value label and the score capped here.
+    "photo_contradicts_cap": 69,
     # €-impact adjustment
     "euro_impact_small":  75,   # |monthly diff| < €75 → reduce penalty 30%
     "euro_impact_large": 200,   # |monthly diff| > €200 → full penalty
@@ -2031,6 +2035,49 @@ def _property_feature_means(pool: list, settings: dict, comps_index: dict) -> di
     return {f: sums[f] / counts[f] for f in sums}
 
 
+# ── Photo verdicts (photo_eval.py) ────────────────────────────────────────────
+PHOTO_EVALS_PATH = Path(__file__).resolve().parent / "photo_eval_milano.json"
+PHOTO_FIELDS = ("photo_deal", "photo_confidence", "photo_condition", "photo_kitchen",
+                "photo_bathroom", "photo_light", "photo_flags", "photo_note_it",
+                "photo_note_en", "photo_read_at")
+
+
+def load_photo_evals() -> dict:
+    try:
+        return json.loads(PHOTO_EVALS_PATH.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def apply_photo_verdict(l: dict, evals: dict, cap: int) -> None:
+    """Stamp what the photos showed (photo_* fields) when the answer is for
+    the listing's current photos; a confident "contradicts" strips the deal
+    label and caps the score at `cap` (reason in score_cap_reason)."""
+    for k in PHOTO_FIELDS:
+        l.pop(k, None)
+    r = evals.get(str(l.get("id")))
+    if not r:
+        return
+    from photo_eval import fingerprint, photo_urls
+    if r.get("fingerprint") != fingerprint(photo_urls(l)):
+        return                       # photos changed since: wait for a re-read
+    l.update({
+        "photo_deal": r.get("deal_check"), "photo_confidence": r.get("confidence"),
+        "photo_condition": r.get("condition"), "photo_kitchen": r.get("kitchen"),
+        "photo_bathroom": r.get("bathroom"), "photo_light": r.get("light"),
+        "photo_flags": r.get("red_flags") or [], "photo_note_it": r.get("note_it"),
+        "photo_note_en": r.get("note_en"), "photo_read_at": r.get("read_at"),
+    })
+    if r.get("deal_check") == "contradicts" and r.get("confidence") in ("medium", "high"):
+        l["hidden_gem"] = False
+        l["good_value"] = False
+        if (l.get("score_total") or 0) > cap:
+            l["score_total"] = cap
+            l["score_was_capped"] = True
+            reason = f"photos contradict the deal → max {cap}"
+            l["score_cap_reason"] = "; ".join(x for x in (l.get("score_cap_reason"), reason) if x)
+
+
 def score_all(listings: list, settings: dict | None = None,
               comps_pool: list | None = None) -> list:
     """Score all listings, log null-field coverage, return sorted list.
@@ -2075,6 +2122,7 @@ def score_all(listings: list, settings: dict | None = None,
         fill_from_twins(pool, comps_index)
     if settings.get("property_impute_unknown"):
         settings = {**settings, "_feature_means": _property_feature_means(pool, settings, comps_index)}
+    photo_evals = load_photo_evals() if settings.get("photo_contradicts_cap") else {}
     scored = []
     for l in listings:
         s = score_rental(l, pool, settings, comps_index)
@@ -2083,6 +2131,8 @@ def score_all(listings: list, settings: dict | None = None,
         # comps are equally suspicious — fake listings exist on both
         # sides of the market).
         apply_extreme_underpricing_flag(merged, merged.get("comps_delta_pct"))
+        if photo_evals:
+            apply_photo_verdict(merged, photo_evals, settings["photo_contradicts_cap"])
         scored.append(merged)
 
     scored.sort(key=lambda x: x.get("score_total", 0) or 0, reverse=True)

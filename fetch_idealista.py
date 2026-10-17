@@ -2154,6 +2154,16 @@ def run_once(args) -> list:
     print(f"  ✓ {len(scored)} Idealista listings written · {len(new_listings)} new")
     rescore_output()
 
+    # Last scan of the night: read the photos of new top listings (score
+    # ≥ 90 + Hidden Gems; photo_eval.py) and rescore so a contradicting
+    # verdict caps its score before the morning.
+    try:
+        from photo_eval import nightly as _read_photos
+        if _read_photos(log=lambda m: print("  " + m, flush=True)):
+            rescore_output()
+    except Exception as exc:
+        print(f"  [photos] skipped: {exc}", flush=True)
+
     # (The Netlify deploy that used to follow is gone: the dashboard moved to
     # Cloudflare, every deploy failed with 401/403, and the online data comes
     # from Supabase anyway.)
