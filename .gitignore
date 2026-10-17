@@ -95,3 +95,12 @@ dashboard/*_sales_latest.json
 user_data.json
 detail_cache_*.json
 detail_cache_*.json.lock
+
+# Photo reading (photo_eval.py) — local cache and answers
+photo_eval_cache/
+photo_eval_milano.json
+
+# Geocoding: address cache and the Comune di Milano house-number data (enrich_geo / geo_index)
+geocode_cache_milano.json
+geocode_cache_milano.json.tmp
+data_sources/

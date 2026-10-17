@@ -147,9 +147,13 @@ class BrowserSession:
         session.stop()
     """
 
-    def __init__(self, name: str, lang: str = "it-IT"):
+    def __init__(self, name: str, lang: str = "it-IT", background: bool = False):
         self.name    = name
         self.lang    = lang
+        # background=True: minimized as soon as it's up (daytime jobs —
+        # a window popping up every 15 minutes is in the way). macOS keeps
+        # off-screen windows partly visible, so minimizing is the way out.
+        self.background = background
         self.profile = PROFILE_ROOT / name
         self.browser: uc.Browser | None = None
         self._proc:   subprocess.Popen | None = None
@@ -168,6 +172,11 @@ class BrowserSession:
                             headless=False, lang=self.lang)
             cfg.host, cfg.port = "127.0.0.1", self._port
             args = cfg() + [f"--lang={self.lang}"]
+            if self.background:
+                # A minimized window's pages must not be throttled.
+                args += ["--disable-backgrounding-occluded-windows",
+                         "--disable-renderer-backgrounding",
+                         "--disable-background-timer-throttling"]
             self._proc = subprocess.Popen([exe, *args], stdin=subprocess.DEVNULL,
                                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             deadline = time.monotonic() + LAUNCH_TIMEOUT
@@ -180,8 +189,10 @@ class BrowserSession:
                     self.browser = await timed(uc.start(config=cfg), EVAL_TIMEOUT,
                                                "attach to browser")
                     _ACTIVE.add(self)
+                    if self.background:
+                        await self.minimize()
                     print(f"  [browser] {Path(exe).name} ready ({self.name}, "
-                          f"attempt {attempt})", flush=True)
+                          f"attempt {attempt}{', minimized' if self.background else ''})", flush=True)
                     return self.browser
                 except Exception as exc:
                     last_err = exc

@@ -105,7 +105,8 @@ def apply_details(listings: list, cache: dict | None = None) -> int:
             cur = l.get(k)
             if (cur is None
                     or (k in CARD_YES_ONLY and l.get("source") == "idealista")
-                    or (k == "condition" and _condition_unknown(cur))):
+                    or (k == "condition" and _condition_unknown(cur))
+                    or (k == "photos" and len(v) > len(cur or []))):
                 l[k] = v
         l["detail_fetched_at"] = e.get("fetched_at")
         if l.get("days_on_market") is None and l.get("published_date"):
@@ -210,6 +211,12 @@ def parse_immobiliare_detail(next_data: dict) -> dict | None:
     fields["contract_type"] = _contract_type(re_data.get("contractValue"))
     fields["availability"] = (str(prop.get("availability")).strip().lower()
                               if prop.get("availability") else None)
+    # The full gallery (search results carry 8) — photo_eval.py reads it.
+    from fetch_rentals import parse_photo_urls
+    raw = (prop.get("multimedia") or {}).get("photos") or (re_data.get("multimedia") or {}).get("photos")
+    gallery = parse_photo_urls(raw, cap=20)
+    if len(gallery) > 8:
+        fields["photos"] = gallery
     return {k: v for k, v in fields.items() if v is not None}
 
 
@@ -223,9 +230,9 @@ _IDEALISTA_EXTRACT_JS = r"""JSON.stringify({
   features: Array.from(document.querySelectorAll('.details-property_features li')).map(e => e.innerText.trim()),
   energy: (document.querySelector('.details-property_features [class*="icon-energy-"]') || {}).className || '',
   comment: ((document.querySelector('.comment') || {}).innerText || '').slice(0, 4000),
-  photos: new Set(Array.from(document.querySelectorAll('.detail-image img, .main-image img, picture img'))
+  photos: Array.from(new Set(Array.from(document.querySelectorAll('.detail-image img, .main-image img, picture img'))
                    .map(i => i.getAttribute('data-ondemand-img') || i.getAttribute('data-src') || i.src)
-                   .filter(Boolean)).size
+                   .filter(Boolean))).slice(0, 40)
 })"""
 
 _RENOVATED_ADVERB = re.compile(
@@ -298,8 +305,15 @@ def parse_idealista_detail(page: dict) -> dict:
     fee = _parse_condo_from_description(comment)
     if fee:
         out["spese_condominiali"] = fee
-    if page.get("photos"):
-        out["photo_count"] = int(page["photos"])
+    photos = page.get("photos")
+    if isinstance(photos, list):
+        # The gallery (search cards carry one photo) — photo_eval.py reads it.
+        gallery = [u for u in photos if isinstance(u, str) and "image.master" in u]
+        out["photo_count"] = len(photos)
+        if gallery:
+            out["photos"] = gallery[:20]
+    elif photos:
+        out["photo_count"] = int(photos)
     return out
 
 
@@ -387,7 +401,7 @@ async def fetch_batch(source: str, items: list, log=print) -> dict:
     stats = {"ok": 0, "gone": 0, "error": 0, "blocked": False}
     if not items:
         return stats
-    browser = BrowserSession(source)
+    browser = BrowserSession(source, background=True)   # runs all day: keep it out of sight
     await browser.start()
     entries: dict = {}
     try:

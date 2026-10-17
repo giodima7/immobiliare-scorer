@@ -7,3 +7,6 @@ shapely
 # Local dev server
 flask
 
+
+# Photo sheets (photo_eval.py)
+pillow
