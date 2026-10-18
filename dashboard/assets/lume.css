@@ -3672,6 +3672,7 @@ body.lm-open { overflow: hidden; }
            padding: var(--s-4) var(--s-5) var(--s-3); border-bottom: 1px solid var(--border-light); flex: none; }
 .lm-title h2 { font-size: var(--text-xl); font-weight: 600; line-height: var(--lh-tight); margin: 0; }
 .lm-sub { font-size: var(--text-sm); color: var(--text-secondary); margin-top: 4px; }
+.lm-sub a { color: var(--green-ink); text-decoration: underline; text-underline-offset: 2px; }
 .lm-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: var(--s-4) var(--s-5) var(--s-5); overscroll-behavior: contain; }
 .lm-photos { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: thin; }
 .lm-photo { flex: none; width: 168px; height: 112px; border-radius: var(--radius-control); overflow: hidden; background: var(--bg-muted);
@@ -3687,6 +3688,15 @@ body.lm-open { overflow: hidden; }
 .lm-verdict-sub { font-size: var(--text-sm); margin-top: 2px; }
 .lm-photo-verdict { margin-top: var(--s-2); }
 .lm-photo-verdict .lm-verdict-head { display: flex; align-items: center; gap: 6px; }
+/* Details: the user's verdict on the photos (_lmPhotoFeedbackHtml) */
+.pfb { display: grid; gap: 8px; margin-top: 8px; padding: 10px 12px; border: 1px dashed var(--border-strong); border-radius: var(--radius-control); }
+.pfb-q { font-size: var(--text-sm); font-weight: 600; }
+.pfb-seg { justify-self: start; flex-wrap: wrap; }
+.pfb-note { width: 100%; min-height: 56px; resize: vertical; font-size: var(--text-sm); }
+.pfb-grade { display: inline-flex; align-items: center; gap: 8px; font-size: var(--text-sm); }
+.pfb-grade .input { width: auto; min-width: 72px; }
+.pfb-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pfb-status { font-size: var(--text-xs); color: var(--text-secondary); }
 .lm-photo-meta { font-size: var(--text-xs); margin-top: 6px; opacity: .85; }
 .lm-money { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin-top: var(--s-4); font-size: var(--text-sm); }
 .lm-rent { font-size: var(--text-3xl); font-weight: 700; letter-spacing: -0.5px; }

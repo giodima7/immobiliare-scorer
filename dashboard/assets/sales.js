@@ -297,7 +297,7 @@ function saleCardHtml(l, f) {
       <div class="card-head">
         <div class="card-title-wrap">
           <h2 class="card-title"><button type="button" class="card-title-btn" data-open-sale="${id}">${esc(title)}</button></h2>
-          <div class="card-sub">${esc([street && street.toLowerCase() !== title.toLowerCase() ? street : '', site].filter(Boolean).join(' · '))}</div>
+          <div class="card-sub">${esc([street && street.toLowerCase() !== title.toLowerCase() ? street : '', site, alsoOnSites(l) ? t('card.also_on', { sites: alsoOnSites(l) }) : ''].filter(Boolean).join(' · '))}</div>
         </div>
         ${scoreRingHtml(l)}
       </div>
@@ -440,7 +440,7 @@ function saleModalHtml(l) {
   <div class="lm-head">
     <div class="lm-title">
       <h2 id="lmTitle">${esc([formatAddress(l.neighbourhood), l.address ? formatAddress(l.address) : ''].filter(Boolean).join(' · ') || _saleTitle(l))}</h2>
-      <div class="lm-sub">${esc(site)} · ID ${id}${l.first_seen_date ? ' · ' + esc(t('lm.first_seen', { date: _lmDate(l.first_seen_date) })) : ''}</div>
+      <div class="lm-sub">${esc(site)}${typeof _lmAlsoOn === 'function' ? _lmAlsoOn(l) : ''} · ID ${id}${l.first_seen_date ? ' · ' + esc(t('lm.first_seen', { date: _lmDate(l.first_seen_date) })) : ''}</div>
     </div>
     <button type="button" class="btn btn-secondary btn-icon lm-close" aria-label="${esc(t('lm.close'))}">${icon('x')}</button>
   </div>
@@ -450,7 +450,7 @@ function saleModalHtml(l) {
       <div class="lm-verdict-head">${esc(v.head)}</div>
       ${v.sub ? `<div class="lm-verdict-sub">${esc(v.sub)}</div>` : ''}
     </div>
-    ${typeof _lmPhotoVerdict === 'function' ? _lmPhotoVerdict(l) : ''}
+    ${typeof _lmPhotoVerdict === 'function' ? _lmPhotoVerdict(l) + _lmPhotoFeedbackHtml(l) : ''}
 
     <div class="lm-money">
       <span class="lm-rent">€${fmt(l.price)}</span>

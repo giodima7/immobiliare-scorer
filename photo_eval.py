@@ -47,6 +47,13 @@ SHEETS = CACHE / "sheets"
 QUEUE = CACHE / "queue.json"
 RESULTS = BASE / "photo_eval_milano.json"
 PROMPT = BASE / "photo_eval_prompt.md"
+# The user's own verdicts on photos Sonnet read (Details → "Tu cosa ne
+# pensi?", api.py /api/photo-feedback). They override Sonnet's for that
+# listing (scoring.load_photo_evals) and teach the next readings
+# (calibration_text, appended to the rubric). Tracked in git: it's the
+# user's labelled data, not a cache.
+FEEDBACK = BASE / "photo_feedback_milano.json"
+CALIBRATION_MAX = 15
 
 TILE_W, TILE_H = 512, 384
 MAX_PHOTOS = 9
@@ -93,6 +100,66 @@ def save_results(res: dict) -> None:
     tmp = RESULTS.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(res, ensure_ascii=False, indent=1))
     tmp.replace(RESULTS)
+
+
+# ── The user's verdicts ──────────────────────────────────────────────────────
+DEALS = ("confirms", "doubt", "contradicts")
+
+
+def load_feedback() -> dict:
+    try:
+        return json.loads(FEEDBACK.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def save_feedback(listing: dict, deal: str | None, note: str = "", grade=None) -> dict | None:
+    """Store (or, with no deal and no note, remove) the user's verdict on a
+    listing's photos, next to what Sonnet said about the same photos."""
+    lid = str(listing["id"])
+    fb = load_feedback()
+    note = (note or "").strip()[:500]
+    if deal not in DEALS and not note:
+        fb.pop(lid, None)
+        entry = None
+    else:
+        r = load_results().get(lid) or {}
+        try:
+            grade = min(10.0, max(1.0, round(float(grade) * 2) / 2)) if grade not in (None, "") else None
+        except (TypeError, ValueError):
+            grade = None
+        entry = {"at": datetime.now().isoformat(timespec="seconds"),
+                 "deal": deal if deal in DEALS else None, "note": note, "grade": grade,
+                 "fingerprint": fingerprint(photo_urls(listing)),
+                 "sonnet": {k: r.get(k) for k in ("deal_check", "confidence", "grade", "note_it", "red_flags")},
+                 "context": context(listing)}
+        fb[lid] = entry
+    tmp = FEEDBACK.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(fb, ensure_ascii=False, indent=1))
+    tmp.replace(FEEDBACK)
+    return entry
+
+
+def calibration_text(limit: int = CALIBRATION_MAX) -> str:
+    """The user's corrections, for the rubric: disagreements first, then
+    agreements that say why, newest first."""
+    fb = [e for e in load_feedback().values() if (e.get("sonnet") or {}).get("deal_check")]
+    if not fb:
+        return ""
+    fb.sort(key=lambda e: e.get("at") or "", reverse=True)
+    fb.sort(key=lambda e: e.get("deal") == e["sonnet"].get("deal_check"))   # stable: newest first within
+    lines = []
+    for e in fb[:limit]:
+        c, s = e.get("context") or {}, e["sonnet"]
+        what = ", ".join(f"{k} {v}" for k, v in c.items() if k in ("rent_eur_month", "for_sale_price_eur", "sqm", "rooms", "area") and v)
+        said = (f'you said "{s.get("deal_check")}" ({s.get("confidence")})'
+                + (f', grade {s["grade"]}' if s.get("grade") is not None else "") + f': {s.get("note_it") or ""}').strip()
+        theirs = (f'they said "{e.get("deal") or s.get("deal_check")}"'
+                  + (f', grade {e["grade"]}' if e.get("grade") is not None else "")
+                  + (f': {e["note"]}' if e.get("note") else ""))
+        lines.append(f"- {what} — {said} → {theirs}")
+    return ("\n\nCalibration — verdicts of the person these readings are for, who looked at the same "
+            "photos (newest first, disagreements first). Judge the way they do:\n" + "\n".join(lines))
 
 
 def photo_urls(l: dict) -> list[str]:
@@ -179,10 +246,18 @@ def cmd_select(args) -> None:
     except Exception:
         in_focus = lambda l: False
     todo.sort(key=lambda l: (not in_focus(l), -(l.get("score_total") or 0)))
+    # Then readings of an older rubric — only where the user searches and the
+    # labelled deals (a full re-read of ~1.3k listings is ~2.5M tokens).
+    seen_ids = {str(l["id"]) for l in todo}
+    again = [l for l in top if str(l["id"]) not in seen_ids
+             and (done.get(str(l["id"])) or {}).get("rubric", 1) < RUBRIC_VERSION
+             and (in_focus(l) or l.get("good_value") or l.get("hidden_gem"))]
+    again.sort(key=lambda l: (not in_focus(l), -(l.get("score_total") or 0)))
+    todo += again
     CACHE.mkdir(exist_ok=True)
     QUEUE.write_text(json.dumps([{**context(l), "photos": photo_urls(l)} for l in todo],
                                 ensure_ascii=False, indent=1))
-    print(f"readable: {len(top)} · to read: {len(todo)} → {QUEUE}")
+    print(f"readable: {len(top)} · to read: {len(todo)} ({len(again)} again, older rubric) → {QUEUE}")
 
 
 # ── sheets ───────────────────────────────────────────────────────────────────
@@ -321,10 +396,11 @@ def cmd_run(args) -> None:
     queue = json.loads(QUEUE.read_text())
     queue = [it for it in queue if (SHEETS / f"{it['id']}.jpg").exists()]
     res = load_results()
-    queue = [it for it in queue if res.get(it["id"], {}).get("fingerprint") != fingerprint(it["photos"])]
+    queue = [it for it in queue if res.get(it["id"], {}).get("fingerprint") != fingerprint(it["photos"])
+             or (res.get(it["id"]) or {}).get("rubric", 1) < RUBRIC_VERSION]
     if args.limit:
         queue = queue[: args.limit]
-    rubric = PROMPT.read_text()
+    rubric = PROMPT.read_text() + calibration_text()
     log = CACHE / "runs.jsonl"
     for b in range(0, len(queue), args.batch):
         batch = queue[b: b + args.batch]
@@ -358,8 +434,13 @@ def cmd_run(args) -> None:
 
 # ── ingest / store ───────────────────────────────────────────────────────────
 FIELDS = ("photos_usable", "rooms_seen", "condition", "kitchen", "bathroom", "renovation_era",
-          "furnishing", "furniture_quality", "light", "space", "red_flags", "deal_check",
+          "furnishing", "furniture_quality", "light", "space", "grade", "red_flags", "deal_check",
           "confidence", "note_it", "note_en")
+# The rubric's version: 2 (2026-10-18) added the 1–10 grade and the attic /
+# no-bedroom / tiny-kitchen / rooms-not-shown flags, after the user's
+# examples. Readings of an older version are re-read (focus areas and
+# labelled listings first, after the unread ones — cmd_select).
+RUBRIC_VERSION = 2
 
 
 def _store(answers: list[dict], batch: list[dict], model: str) -> int:
@@ -372,7 +453,7 @@ def _store(answers: list[dict], batch: list[dict], model: str) -> int:
         if not it:
             continue
         res[lid] = {**{k: a.get(k) for k in FIELDS}, "fingerprint": fingerprint(it["photos"]),
-                    "n_photos": it.get("n_photos"), "model": model,
+                    "n_photos": it.get("n_photos"), "model": model, "rubric": RUBRIC_VERSION,
                     "read_at": datetime.now().isoformat(timespec="seconds")}
         n += 1
     save_results(res)

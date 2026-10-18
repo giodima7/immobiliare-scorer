@@ -1,0 +1,87 @@
+{
+ "id_37131214": {
+  "at": "2026-10-18T15:30:29",
+  "deal": "contradicts",
+  "note": "Praticamente un sottotetto: soffitti inclinati e finestre all altezza del pavimento; il cucinino è nuovo ma piccolissimo.",
+  "grade": null,
+  "fingerprint": "6c342cf35745",
+  "sonnet": {
+   "deal_check": "doubt",
+   "confidence": "medium",
+   "grade": null,
+   "note_it": "Ambienti molto piccoli con arredi datati e disomogenei; buona luce ma spazi compressi per 45 mq.",
+   "red_flags": [
+    "tiny_rooms",
+    "dated"
+   ]
+  },
+  "context": {
+   "id": "id_37131214",
+   "label": "Great Value",
+   "area": "Corso Genova",
+   "rent_eur_month": 1000,
+   "sqm": 45,
+   "rooms": 2,
+   "floor": 5,
+   "lift": true,
+   "discount_vs_nearby_pct": -18.5
+  }
+ },
+ "id_37090762": {
+  "at": "2026-10-18T15:30:30",
+  "deal": "contradicts",
+  "note": "Finto bilocale: soggiorno e camera da letto sono la stessa stanza, il letto è su un soppalco a vista nel soggiorno.",
+  "grade": null,
+  "fingerprint": "7a3f06cb194d",
+  "sonnet": {
+   "deal_check": "doubt",
+   "confidence": "high",
+   "grade": null,
+   "note_it": "Soppalco letto, cucina datata e bagno azzurro anni '90: layout creativo ma spazi ridotti e finiture vecchie.",
+   "red_flags": [
+    "dated",
+    "student_layout",
+    "tiny_rooms"
+   ]
+  },
+  "context": {
+   "id": "id_37090762",
+   "label": "High score",
+   "area": "Quadronno - Crocetta",
+   "rent_eur_month": 1050,
+   "sqm": 45,
+   "rooms": 2,
+   "floor": 3,
+   "lift": true,
+   "discount_vs_nearby_pct": -12.2
+  }
+ },
+ "id_37091530": {
+  "at": "2026-10-18T15:30:32",
+  "deal": "doubt",
+  "note": "Soggiorno curato e luminoso con parquet, angolo cottura semi-aperto; camera e bagno non mostrati. Voto 6-7.",
+  "grade": 6.5,
+  "fingerprint": "22e14e05bb37",
+  "sonnet": {
+   "deal_check": "confirms",
+   "confidence": "low",
+   "grade": null,
+   "note_it": "Parquet caldo e buona metratura per il prezzo, ma bagno e camera non mostrati; arredamento datato.",
+   "red_flags": [
+    "dated",
+    "few_photos"
+   ]
+  },
+  "context": {
+   "id": "id_37091530",
+   "label": "High score",
+   "area": "Porta Romana - Medaglie d'Oro",
+   "rent_eur_month": 1000,
+   "sqm": 45,
+   "rooms": 2,
+   "floor": 4,
+   "lift": true,
+   "discount_vs_nearby_pct": -11.9
+  }
+ }
+}

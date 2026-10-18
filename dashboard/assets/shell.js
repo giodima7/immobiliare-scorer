@@ -290,6 +290,13 @@ function siteName(source) {
   return 'Immobiliare.it';
 }
 
+// The other sites / agencies the same flat is listed on (widgets.js
+// _dedupListings → also_on), as "Idealista, Subito.it".
+function alsoOnSites(l) {
+  const names = [...new Set((l.also_on || []).map(a => siteName(a.source)))];
+  return names.filter(n => n !== siteName(l.source)).join(', ');
+}
+
 // What a listing really costs a month: rent + condo fees + heating billed
 // apart, as the listing page states them (listing_details.py) — never an
 // estimate. known=false → only the rent is known ("rent only").

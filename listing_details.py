@@ -198,6 +198,27 @@ def stamp_relistings(listings: list, pool: list, comps_index: dict) -> int:
     return n
 
 
+def stamp_dup_groups(listings: list, pool: list, comps_index: dict) -> int:
+    """dup_group: the same flat listed more than once — on two sites, or by
+    two agencies (comps_engine duplicate groups: same rent, m², rooms and
+    floor within DUP_MAX_M). The dashboard shows one card per group (2026-10-18:
+    1,484 Immobiliare–Idealista pairs were two cards). The key is the lowest
+    listing id of the group, so it stays put across runs. Returns how many
+    of `listings` are in a group."""
+    group_of = comps_index.get("group_of") or {}
+    members: dict = {}
+    for l in pool:
+        g = group_of.get(id(l))
+        if g is not None:
+            members.setdefault(g, []).append(str(l.get("id")))
+    n = 0
+    for l in listings:
+        g = group_of.get(id(l))
+        l["dup_group"] = min(members[g]) if g is not None and len(members.get(g, ())) > 1 else None
+        n += l["dup_group"] is not None
+    return n
+
+
 # ── Parsing listing pages ─────────────────────────────────────────────────────
 
 def _contract_type(value) -> str | None:

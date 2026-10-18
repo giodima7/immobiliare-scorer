@@ -1265,6 +1265,63 @@ def digest_filters_proxy():
         return Response(e.read(), status=e.code, mimetype="application/json")
 
 
+_photo_fb_timer = None
+
+
+def _rescore_after_feedback() -> None:
+    """A verdict can lift a cap too (contradicts → confirms): rescore the
+    rentals a minute after the last one, once for a run of verdicts."""
+    global _photo_fb_timer
+    if _photo_fb_timer is not None:
+        _photo_fb_timer.cancel()
+
+    def _run():
+        try:
+            from fetch_rentals import rescore_output
+            rescore_output()
+        except Exception as exc:
+            print(f"  [photo-feedback] rescore failed: {exc}")
+    _photo_fb_timer = threading.Timer(60, _run)
+    _photo_fb_timer.daemon = True
+    _photo_fb_timer.start()
+
+
+@app.route("/api/photo-feedback", methods=["GET", "POST"])
+def api_photo_feedback():
+    """The user's verdicts on listings' photos (Details → "Tu cosa ne
+    pensi?"). POST {"id", "deal": confirms|doubt|contradicts|null, "note"}:
+    stored in photo_feedback_milano.json (photo_eval.save_feedback), applied
+    to that listing's row at once (scoring.apply_photo_verdict — theirs wins
+    over Sonnet's) and taught to the next readings (photo_eval.calibration_text)."""
+    import fcntl
+    import photo_eval as _pe
+    if request.method == "GET":
+        return jsonify(_pe.load_feedback())
+    body = request.get_json(silent=True) or {}
+    lid = str(body.get("id") or "")
+    for path in (DASHBOARD_DIR / "milano_rentals_latest.json", DASHBOARD_DIR / "milano_sales_latest.json"):
+        with open(path.with_suffix(path.suffix + ".lock"), "w") as lock_fh:
+            fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX)
+            try:
+                rows = _json.loads(path.read_text())
+            except (OSError, ValueError):
+                continue
+            row = next((l for l in rows if str(l.get("id")) == lid), None)
+            if row is None:
+                continue
+            entry = _pe.save_feedback(row, body.get("deal"), body.get("note") or "", body.get("grade"))
+            import scoring as _sc
+            cap = _sc._load_settings().get("photo_contradicts_cap", 69)
+            _sc.apply_photo_verdict(row, _sc.load_photo_evals(), cap)
+            from dashboard_io import write_snapshot
+            write_snapshot(path, rows)
+        if "rentals" in path.name:
+            _rescore_after_feedback()
+        fields = {k: row.get(k) for k in _sc.PHOTO_FIELDS + ("score_total", "good_value", "hidden_gem", "score_cap_reason")}
+        return jsonify({"feedback": entry, "listing": fields})
+    return jsonify({"error": "listing not found"}), 404
+
+
 @app.route("/api/sale-areas", methods=["GET", "POST"])
 def api_sale_areas():
     """The areas (and price / rooms filters) the scanners read for sales —
