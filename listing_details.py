@@ -41,6 +41,22 @@ DETAIL_KEYS = ("condition", "heating_type", "energy_class", "year_built",
                "air_conditioning", "heating_mo", "condo_included",
                "deposit_months", "deposit_eur")
 
+# Not a flat to buy: bare ownership / usufruct / a right of residence, or an
+# auction. Search results rarely say so (Immobiliare 133654382, Via Maestri
+# Campionesi: "Appartamento …" in the title, nuda proprietà only on its
+# page). Applied to sale rows only (apply_details) — sales_scan / the
+# dashboard leave them out.
+_NUDA_RX = re.compile(r"nuda\s+propriet|nuda\s+prop\b|usufrutt|diritto\s+di\s+abitazione|"
+                      r"diritto\s+d['’]?\s*uso", re.I)
+_AUCTION_RX = re.compile(r"\b(?:all['’]\s*)?asta\b|vendita\s+giudiziari|procedura\s+esecutiva", re.I)
+SALE_ONLY_FLAGS = ("is_nuda_proprieta", "is_auction")
+
+
+def _not_a_flat_to_buy(text: str) -> dict:
+    return {"is_nuda_proprieta": bool(_NUDA_RX.search(text or "")),
+            "is_auction": bool(_AUCTION_RX.search(text or "")), "nuda_checked": 1}
+
+
 # Idealista search cards only ever set these to True (keyword found in the
 # snippet) — never False. A listing page's yes/no answer replaces them.
 CARD_YES_ONLY = ("has_balcony", "has_parking", "furnished")
@@ -115,6 +131,10 @@ def apply_details(listings: list, cache: dict | None = None) -> int:
             continue
         for k, v in (e.get("fields") or {}).items():
             if v is None:
+                continue
+            if k in SALE_ONLY_FLAGS:
+                if v and l.get("source") in ("sale", "idealista_sale"):
+                    l[k] = True          # the page says so, whatever the search card said
                 continue
             cur = l.get(k)
             if (cur is None
@@ -253,6 +273,11 @@ def parse_immobiliare_detail(next_data: dict) -> dict | None:
     if len(gallery) > 8:
         fields["photos"] = gallery
     fields["costs_read"] = 1     # heating / deposit / included parsed since 2026-10-17
+    typology = prop.get("typology") or re_data.get("typology") or {}
+    fields.update(_not_a_flat_to_buy(" | ".join(str(x or "") for x in (
+        re_data.get("title"), re_data.get("contractValue"), re_data.get("contract"),
+        typology.get("name") if isinstance(typology, dict) else typology,
+        prop.get("description") or re_data.get("description")))))
     return {k: v for k, v in fields.items() if v is not None}
 
 
@@ -383,6 +408,7 @@ def parse_idealista_detail(page: dict) -> dict:
     elif photos:
         out["photo_count"] = int(photos)
     out["costs_read"] = 1        # price box (condo, deposit) read since 2026-10-17
+    out.update(_not_a_flat_to_buy(" | ".join([page.get("title") or "", text, comment])))
     return out
 
 
@@ -451,7 +477,9 @@ def build_queue(source: str, cache: dict | None = None,
         if l.get("source") != SALE_SOURCE.get(source) or l.get("is_stale") or l.get("excluded") or not l.get("url"):
             continue
         entry = cache.get(str(l.get("id"))) or {}
-        if not entry.get("gone") and not (entry.get("fields") or {}).get("costs_read"):
+        f = entry.get("fields") or {}
+        # Read again when read before the nuda proprietà / auction check.
+        if not entry.get("gone") and not (f.get("costs_read") and f.get("nuda_checked")):
             sales.append((-(l.get("score_total") or 0), (str(l["id"]), l["url"])))
     return ([i for _, i in sorted(focus)] + [i for _, i in sorted(sales)]
             + [i for _, i in sorted(top)] + [i for _, i in sorted(deals)]

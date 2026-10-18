@@ -333,6 +333,31 @@ def estimate_rents(sales: list) -> int:
 
 # ── Run ──────────────────────────────────────────────────────────────────────
 
+def rescore_sales(log=print) -> dict:
+    """The steps after a sweep, on the sales file as it is: listing pages,
+    scoring, photo verdicts, rent estimates — no sweep (a page read since,
+    e.g. a nuda proprietà found on it)."""
+    import scoring
+    from listing_details import apply_details
+    from dashboard_io import write_snapshot
+    with _locked():
+        rows = json.loads(SALES_PATH.read_text())
+        applied = apply_details(rows)
+        with contextlib.redirect_stderr(open("/dev/null", "w")):
+            scored = scoring.score_all_sales(rows)
+        evals = scoring.load_photo_evals()
+        cap = scoring._load_settings().get("photo_contradicts_cap", 69)
+        for l in scored:
+            scoring.apply_photo_verdict(l, evals, cap)
+        estimate_rents(scored)
+        write_snapshot(SALES_PATH, [{k: v for k, v in l.items() if k != "omi"} for l in scored])
+    rec = {"pages_applied": applied, "excluded": sum(1 for l in scored if l.get("excluded")),
+           "nuda": sum(1 for l in scored if l.get("is_nuda_proprieta")),
+           "visible": sum(1 for l in scored if not l.get("is_stale") and not l.get("excluded"))}
+    log(f"Sales rescored — {rec}")
+    return rec
+
+
 def run_sales(source: str, log=print) -> dict:
     """Sweep `source`'s sale areas, merge, enrich, score, estimate rents,
     write. Returns the numbers (also appended to LOG_PATH)."""
