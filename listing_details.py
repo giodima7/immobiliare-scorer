@@ -424,8 +424,11 @@ def build_queue(source: str, cache: dict | None = None,
 # ── Fetching ──────────────────────────────────────────────────────────────────
 
 _GONE_RX = re.compile(r"non è più (disponibile|pubblicato)|non è presente sul nostro sito", re.I)
+# Idealista's bot check says "Verifica del dispositivo…" (2026-10-17/18:
+# not matched, so ~240 blocked pages counted as plain failures overnight).
 _BLOCK_RX = re.compile(r"captcha|datadome|accesso .{0,20}limitat|temporaneamente (bloccat|limitat|restrict)"
-                       r"|access is temporarily restricted|verifica di essere", re.I)
+                       r"|access is temporarily restricted|verifica di essere|verifica del dispositivo"
+                       r"|verifying (your )?device|device verification|sei un robot|are you a robot", re.I)
 
 _PAGE_STATE_JS = r"""JSON.stringify({
   title: document.title || '',
@@ -562,7 +565,11 @@ def drip_until(source: str, deadline: float, log=print, after_batch=None) -> Non
 def _pace(source: str, st: dict, stats: dict, n: int, log) -> None:
     """Move the drip's level after a session (see DRIP_LEVELS)."""
     now = time.time()
-    if stats["blocked"]:
+    # A whole session failing is a block whatever the page said: overnight
+    # on 2026-10-18 Idealista failed 10/10 sessions for ~5 h and the drip
+    # kept retrying every 5–20 min at its lowest level.
+    if stats["blocked"] or (n >= 3 and stats["error"] >= n):
+        stats["blocked"] = True
         pause = 6 * 3600 if now - st["last_block"] < 6 * 3600 else 3600
         st["level"], st["changed"], st["last_block"] = st["level"] // 2, now, now
         st["blocked_until"] = now + pause

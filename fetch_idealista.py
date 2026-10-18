@@ -375,6 +375,8 @@ async def _check_and_handle_captcha(tab, timeout: int = 120) -> bool:
     captcha_signals = [
         "captcha"  in lpt,
         "datadome" in lpt,
+        "verifica del dispositivo" in lpt,   # Idealista's bot check (2026-10-18)
+        "verifying your device" in lpt,
     ]
 
     if not any(captcha_signals):
@@ -390,7 +392,7 @@ async def _check_and_handle_captcha(tab, timeout: int = 120) -> bool:
             pt = await timed(tab.evaluate("document.body?.innerText || ''"),
                              what="read page text")
             lpt2 = (pt or "").lower()
-            if not any(["captcha" in lpt2, "datadome" in lpt2]):
+            if not any(s in lpt2 for s in ("captcha", "datadome", "verifica del dispositivo", "verifying your device")):
                 print("  [idealista] ✓ CAPTCHA solved — continuing scan")
                 return True
         except PageTimeout:
