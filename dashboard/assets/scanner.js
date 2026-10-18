@@ -613,6 +613,18 @@ function _renderCityScanGrid() {
 // The four "workers" (Tools → Scanner): zone tour, new-listing search,
 // listing pages, photo reading — what each did last, today and next, and
 // progress on the top listings (api.py _pipeline_status).
+// Subito.it (fetch_subito): the whole city in one pass every few hours.
+function _subitoLine(s, hm, next) {
+  if (!s) return '';
+  const l = s.last;
+  const txt = s.paused ? t('w.subito_paused', { until: hm(s.next) })
+    : l ? t('w.subito_line', { at: hm(l.at), pages: fmt(l.pages || 0), total: fmt(l.total_pages || 0),
+                               n: fmt(l.new || 0), next: next(s.next) })
+    : t('w.never', { site: 'Subito' });
+  return `<div class="w-line">${escapeHtml(txt)}</div>`
+    + `<div class="w-today">${escapeHtml(t('w.subito_today', { n: fmt(s.today_new || 0) }))}</div>`;
+}
+
 function _renderPipeline(p) {
   const box = document.getElementById('pipelineBox');
   if (!box) return;
@@ -635,7 +647,8 @@ function _renderPipeline(p) {
   const slots = lines((src, s) => s.slot?.last
     ? t('w.slot_line', { site: name[src], at: hm(s.slot.last.at), area: area(s.slot.last.area), n: fmt(s.slot.last.new || 0), next: next(s.slot.next) })
     : t('w.never', { site: name[src] }))
-    + `<div class="w-today">${esc(t('w.today_slots', { n: sum(s => s.slot?.today), k: fmt(sum(s => s.slot?.new_today)) }))}</div>`;
+    + `<div class="w-today">${esc(t('w.today_slots', { n: sum(s => s.slot?.today), k: fmt(sum(s => s.slot?.new_today)) }))}</div>`
+    + _subitoLine(p.subito, hm, next);
   const disc = lines((src, s) => s.discover?.last
     ? t('w.discover_line', { site: name[src], at: hm(s.discover.last.at), n: fmt(s.discover.last.new || 0), next: next(s.discover.next) })
     : t('w.never', { site: name[src] }))

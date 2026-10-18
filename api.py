@@ -211,6 +211,8 @@ def _has_geocodable_data(l: dict) -> bool:
 
     if l.get("latitude") and l.get("longitude"):
         return True
+    if l.get("source") == "subito":
+        return False   # fetch_subito already read its text for a place, or found none
     addr = (l.get("address") or "").strip()
     if addr and not _RE_POSIZIONE_APPROSSIMATIVA.search(addr):
         return True
@@ -247,8 +249,42 @@ def _geo_is_current(entry: dict | None, pois_version: str | None) -> bool:
     return not pois_version or entry.get("geo_pois_version") == pois_version
 
 
+# A listing enrichment couldn't place (no coordinates, an address no
+# geocoder knows — "Bande Nere - Gambara, Milano") stayed pending for ever:
+# with a dashboard open the auto-enrichment retried it every ~70 s, each
+# time rescoring the whole city (~20 s) and pushing (2026-10-18: 61 runs
+# for the same 4 Idealista rows in an hour). The failed attempt is cached
+# and the row waits GEO_RETRY_DAYS — or until what it's placed by changes.
+GEO_RETRY_DAYS = 7
+
+
+def _geo_input_key(l: dict) -> str:
+    """What enrich() places a listing by: coordinates, address,
+    neighbourhood, title (enrich_geo.enrich, priorities 1–4)."""
+    import hashlib
+    raw = "|".join(str(l.get(k) or "") for k in ("latitude", "longitude", "address", "neighbourhood", "title"))
+    return hashlib.sha1(raw.encode()).hexdigest()[:12]
+
+
+def _geo_unplaced(geo: dict) -> bool:
+    return geo.get("geo_score") is None and geo.get("omi_source") == "no_coordinates"
+
+
+def _geo_failed_entry(l: dict) -> dict:
+    """The cache entry for a listing enrichment couldn't place."""
+    return {"geo_failed_at": round(_time.time()), "geo_failed_for": _geo_input_key(l)}
+
+
+def _geo_recently_failed(l: dict, cached: dict | None) -> bool:
+    at = (cached or {}).get("geo_failed_at")
+    return bool(at and cached.get("geo_failed_for") == _geo_input_key(l)
+                and _time.time() - float(at) < GEO_RETRY_DAYS * 86400)
+
+
 def _geo_needs_enrich(l: dict, cached: dict | None, pois_version: str | None) -> bool:
     if _geo_is_current(l, pois_version):
+        return False
+    if _geo_recently_failed(l, cached):
         return False
     return not (_geo_is_current(cached, pois_version) and not _geo_contaminated(l))
 
@@ -585,6 +621,7 @@ def _geo_enrich_worker(city: str = "milano"):
         CHUNK_SIZE      = 24 if n_needs_geocoding > 50 else 500
         MAX_NULL_STREAK = 10   # stop if a whole chunk returns no geo data
         done_count      = 0
+        placed_count    = 0     # rows that got geo data (a run placing none changes nothing)
         null_streak     = 0
 
         # Chunks: all OMI polygon lookups and haversine POI distances run
@@ -607,22 +644,31 @@ def _geo_enrich_worker(city: str = "milano"):
 
             cache_entries = []
             chunk_nulls   = 0
+            chunk_placed  = 0
             for idx, geo in zip(chunk_idxs, geo_results):
-                data[idx].update(geo)
                 src = data[idx].get("source", "immobiliare")
+                if _geo_unplaced(geo):
+                    # Remember the attempt, not the nulls (see GEO_RETRY_DAYS).
+                    cache_entries.append((src, data[idx]["id"], _geo_failed_entry(data[idx])))
+                    chunk_nulls += 1
+                    continue
+                data[idx].update(geo)
                 cache_entries.append((src, data[idx]["id"], geo))
+                chunk_placed += 1
                 if geo.get("geo_score") is None:
                     chunk_nulls += 1
 
             _ecache.bulk_save(cache_entries)
-            done_count  += len(chunk_idxs)
+            done_count   += len(chunk_idxs)
+            placed_count += chunk_placed
             null_streak  = null_streak + chunk_nulls if chunk_nulls == len(chunk_idxs) else 0
             _mark_progress(n_omi + done_count, slot["total"])
 
             # Flush after every chunk so the dashboard reflects progress in real time.
             # Cross-process flock + merge-by-id: protects against the
             # scanner-vs-enrich race AND the scanner-vs-scanner race.
-            _atomic_merge_write(data, rent_path)
+            if chunk_placed:
+                _atomic_merge_write(data, rent_path)
             print(f"  [geo][{city}] {done_count}/{len(need_idx)} done")
 
         # Stopped mid-run: skip the final rescore + push. Enriched chunks are
@@ -634,14 +680,14 @@ def _geo_enrich_worker(city: str = "milano"):
         # Final flush — mark total complete so UI shows 100 %.
         _mark_progress(slot["total"], slot["total"])
         # Skip the rescore + supabase push when nothing actually changed
-        # (n_omi was 0 AND no overpass batches ran). Otherwise we spend
+        # (n_omi was 0 AND the chunks placed nothing). Otherwise we spend
         # minutes rescoring a city whose data is byte-identical to disk.
-        if n_omi == 0 and done_count == 0:
-            print(f"  [geo][{city}] nothing to enrich — skipping rescore")
+        if n_omi == 0 and placed_count == 0:
+            print(f"  [geo][{city}] nothing placed ({done_count} tried) — skipping rescore")
             return
         # The OMI pass already rescored + flushed; only rescore again if
         # the chunk loop added geo data on top of it.
-        if done_count > 0:
+        if placed_count > 0:
             _geo_set_phase(slot, "rescoring")
             _flush_geo(data, rent_path, _scoring)
         # Push the enriched rows back to Supabase so the deployed
@@ -898,6 +944,7 @@ def _geo_enrich_sales_worker(city: str = "milano"):
         )
         CHUNK_SIZE = 24 if n_needs_geocoding_sale > 50 else 500
         done_count = 0
+        placed_count = 0
 
         for chunk_start in range(0, len(need_idx), CHUNK_SIZE):
             if _geo_stop_requested(_geo_sale_stop):
@@ -910,28 +957,35 @@ def _geo_enrich_sales_worker(city: str = "milano"):
             geo_results = _enrich_batch(chunk_listings, max_workers=WORKERS)
 
             cache_entries = []
+            chunk_placed = 0
             for idx, geo in zip(chunk_idxs, geo_results):
+                if _geo_unplaced(geo):
+                    cache_entries.append(("sale", data[idx]["id"], _geo_failed_entry(data[idx])))
+                    continue
                 data[idx].update(geo)
                 cache_entries.append(("sale", data[idx]["id"], geo))
+                chunk_placed += 1
 
             _ecache.bulk_save(cache_entries)
             done_count += len(chunk_idxs)
+            placed_count += chunk_placed
             _mark_progress(n_omi + done_count, slot["total"])
 
             # Cross-process flock + merge-by-id.
-            _atomic_merge_write(data, sale_path)
+            if chunk_placed:
+                _atomic_merge_write(data, sale_path)
             print(f"  [geo-sale][{city}] {done_count}/{len(need_idx)} done")
 
         if _geo_stop_requested(_geo_sale_stop):
             return
 
         _mark_progress(slot["total"], slot["total"])
-        if n_omi == 0 and n_backfill == 0 and done_count == 0:
-            print(f"  [geo-sale][{city}] nothing to enrich — skipping rescore")
+        if n_omi == 0 and n_backfill == 0 and placed_count == 0:
+            print(f"  [geo-sale][{city}] nothing placed ({done_count} tried) — skipping rescore")
             return
         # OMI/backfill pass already rescored + flushed; only rescore again
         # if the chunk loop added geo data on top of it.
-        if done_count > 0:
+        if placed_count > 0:
             _geo_set_phase(slot, "rescoring")
             _flush_sale_geo(data, sale_path)
         _geo_set_phase(slot, "pushing")
@@ -1211,6 +1265,23 @@ def digest_filters_proxy():
         return Response(e.read(), status=e.code, mimetype="application/json")
 
 
+@app.route("/api/sale-areas", methods=["GET", "POST"])
+def api_sale_areas():
+    """The areas (and price / rooms filters) the scanners read for sales —
+    sales_scan.py, saved in focus_areas.json. POST {"immobiliare": [macro
+    slugs], "max_price"?, "min_rooms"?}; the Idealista zones follow."""
+    import sales_scan
+    if request.method == "POST":
+        body = request.get_json(silent=True) or {}
+        cfg = sales_scan.set_sale_areas(body.get("immobiliare") or [],
+                                        body.get("max_price"), body.get("min_rooms"))
+    else:
+        cfg = sales_scan.config()
+    return jsonify({"selected": cfg.get("immobiliare") or [], "idealista": cfg.get("idealista") or [],
+                    "max_price": cfg.get("max_price"), "min_rooms": cfg.get("min_rooms"),
+                    "areas": sales_scan.available_areas()})
+
+
 @app.route("/sales")
 def sales():
     """Per-city sales JSON. Same resolution rules as /rentals."""
@@ -1390,6 +1461,27 @@ def stop_scanner():
 _pipeline_cache: dict = {"at": 0.0, "data": None}
 
 
+def _subito_status(today: str) -> dict:
+    """The Subito.it pass (fetch_subito): last run, new today, next."""
+    import fetch_subito as _fs
+    from datetime import datetime as _dt
+    out: dict = {"today_new": 0}
+    if _fs.LOG_PATH.exists():
+        for line in _fs.LOG_PATH.read_text().splitlines()[-50:]:
+            try:
+                r = _json.loads(line)
+            except ValueError:
+                continue
+            out["last"] = {k: r.get(k) for k in ("at", "pages", "total_pages", "kept", "new", "complete", "blocked")}
+            out["today_new"] += (r.get("new") or 0) if str(r.get("at", ""))[:10] == today else 0
+    st = _fs._state()
+    nxt = max((st.get("at") or 0) + _fs.SUBITO_EVERY_SEC, st.get("pause_until") or 0)
+    if nxt:
+        out["next"] = _dt.fromtimestamp(nxt).isoformat(timespec="minutes")
+    out["paused"] = (st.get("pause_until") or 0) > _time.time()
+    return out
+
+
 def _pipeline_status() -> dict:
     if _pipeline_cache["data"] is not None and _time.time() - _pipeline_cache["at"] < 60:
         return _pipeline_cache["data"]
@@ -1467,7 +1559,8 @@ def _pipeline_status() -> dict:
             if last:
                 r = _json.loads(last[0])
                 photos["last"] = {"at": r.get("at"), "listings": r.get("listings"), "stored": r.get("stored")}
-        out = {"min_score": _pe.MIN_SCORE, "top": top, "sites": sites, "photos": photos}
+        out = {"min_score": _pe.MIN_SCORE, "top": top, "sites": sites, "photos": photos,
+               "subito": _subito_status(today)}
     except Exception as exc:
         out = {"error": f"{type(exc).__name__}: {exc}"}
     _pipeline_cache.update(at=_time.time(), data=out)
@@ -3688,6 +3781,7 @@ def _supabase_autosync_watcher() -> None:
     # the nightly scans never reached Supabase on their own.
     paths = [
         (DASHBOARD_DIR / "milano_rentals_latest.json", "rental"),
+        (DASHBOARD_DIR / "milano_sales_latest.json", "sale"),     # sales_scan.py
     ]
     # Prime baselines from current mtime so we don't re-push on startup.
     last_mtime: dict[str, float] = {

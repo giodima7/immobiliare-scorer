@@ -1308,10 +1308,14 @@ def parse_idealista_sale_listing(raw: dict) -> Optional[dict]:
 
 async def _fetch_sale_async(pages: int, area_slugs: list, max_price: int,
                             min_sqm: int, min_rooms: int,
-                            delay: float, browser) -> tuple:
+                            delay: float, browser,
+                            complete: dict | None = None) -> tuple:
     """
     Navigate Idealista vendita-case pages and return (listings, skipped_areas).
     Mirrors _fetch_async() but uses sale URL bases and sale listing parser.
+    Zones may be subzones ("porta-vittoria/porta-romana"). complete: gets
+    {zone: zone} for every zone read to its end (no "next" link on a short
+    last page), as in _fetch_async.
     """
     all_items: list  = []
     seen_ids:  set   = set()
@@ -1335,6 +1339,7 @@ async def _fetch_sale_async(pages: int, area_slugs: list, max_price: int,
             area_ids_seen: set = set()
             canonical_slug     = area_slug
             area_got_results   = False
+            finished           = False
 
             for page in range(1, pages + 1):
                 url = build_idealista_url(page, canonical_slug, max_price, min_sqm, min_rooms,
@@ -1388,6 +1393,8 @@ async def _fetch_sale_async(pages: int, area_slugs: list, max_price: int,
                     if lid in seen_ids:
                         continue
                     parsed["_fetched_area"] = canonical_slug or "all"
+                    if area_slug:
+                        parsed["scan_area"] = area_slug   # de-listing (sales_scan)
                     seen_ids.add(lid)
                     all_items.append(parsed)
                     new_this_page += 1
@@ -1406,8 +1413,11 @@ async def _fetch_sale_async(pages: int, area_slugs: list, max_price: int,
 
                 print(f" p{page}(+{new_this_page})", end="", flush=True)
                 if not has_next:
+                    finished = len(raw_listings) < 30
                     break
 
+            if finished and area_slug and complete is not None:
+                complete[area_slug] = area_slug
             if not area_got_results and area_slug:
                 reason = "no results — slug may be invalid or not found on Idealista.it"
                 skipped_areas.append({"name": area_slug, "reason": reason})
@@ -1515,7 +1525,7 @@ def fetch_idealista_sales(pages: int = 3, area_names: list = None, max_price: in
         for listing in items:
             cached = _ecache.get(SOURCE_SALE, listing["id"])
             if cached:
-                listing.update({k: v for k, v in cached.items() if k != "enriched_at"})
+                listing.update({k: v for k, v in cached.items() if k not in _ecache.META_KEYS})
 
         try:
             import omi_lookup as _omi_lookup
@@ -2154,7 +2164,7 @@ def fetch_idealista(pages: int = 3, area_names: list = None, max_rent: int = 0,
         for listing in items:
             cached = _ecache.get(SOURCE, listing["id"])
             if cached:
-                listing.update({k: v for k, v in cached.items() if k != "enriched_at"})
+                listing.update({k: v for k, v in cached.items() if k not in _ecache.META_KEYS})
 
         # OMI polygon fields for listings still missing them (fast, in-memory)
         try:

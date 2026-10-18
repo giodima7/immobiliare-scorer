@@ -3506,6 +3506,7 @@ header { gap: 10px; padding: 10px 24px; z-index: var(--z-sticky); }
 
 /* Views only some tabs show */
 body[data-tab="saved"] #filterBar, body[data-tab="insights"] #filterBar, body[data-tab="settings"] #filterBar,
+body[data-tab="sales"] #filterBar, body[data-tab="sales"] #rActiveChips,
 body[data-tab="saved"] #rActiveChips, body[data-tab="insights"] #rActiveChips, body[data-tab="settings"] #rActiveChips { display: none; }
 
 /* ── Filter bar: one sticky row; panels open as popovers below it ── */
@@ -3891,6 +3892,10 @@ body.lm-open { overflow: hidden; }
 @media (max-width: 639px) {
   #filterBar { display: none !important; }
   .mobile-filter-btn { display: inline-flex !important; }
+  /* Sales keep their bar inline on a phone (no drawer): it scrolls away
+     instead of taking half the screen, and the Rentals drawer button goes. */
+  #saleFilterBar { position: static; margin: var(--s-3) var(--s-3) 0; }
+  body[data-tab="sales"] .mobile-filter-btn { display: none !important; }
   .fchips { margin: var(--s-3) var(--s-3) 0; }
   .grid { padding: var(--s-3); gap: var(--s-3); }
   .page { padding: var(--s-4) var(--s-3) 64px; }
@@ -3918,3 +3923,40 @@ body.lm-open { overflow: hidden; }
 .pipe-track { height: 6px; border-radius: var(--radius-full); background: var(--bg-muted); overflow: hidden; }
 .pipe-track i { display: block; height: 100%; background: var(--green-ink); }
 @media (max-width: 640px) { .pipeline-box { grid-template-columns: minmax(0, 1fr); } }
+
+/* Sales (sales.js): the bar, chips and cards reuse the Rentals classes. */
+.sale-figs { display: flex; flex-wrap: wrap; gap: 2px 12px; margin-top: 6px; font-size: var(--text-xs); color: var(--text-secondary); }
+.sale-figs > span { display: inline-flex; align-items: center; gap: 4px; }
+.sale-figs .i { width: 14px; height: 14px; flex: none; }
+/* Details: where the asking €/m² sits — nearby sales and the OMI range */
+.sale-scale { margin-top: var(--s-4); }
+.sale-scale-track { position: relative; height: 12px; border-radius: var(--radius-full); background: var(--bg-muted); }
+.sale-scale-omi { position: absolute; top: 0; bottom: 0; background: var(--blue-light); border-radius: var(--radius-full); }
+.sale-scale-median { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--text-primary); border-radius: 1px; }
+.sale-scale-this { position: absolute; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%;
+                   background: var(--text-primary); border: 3px solid var(--bg-card); box-shadow: 0 0 0 1px var(--border-strong); }
+.sale-scale-this.tone-good, .k-this.tone-good { background: var(--green-deep); }
+.sale-scale-this.tone-bad, .k-this.tone-bad { background: var(--coral); }
+.sale-scale-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 10px; font-size: var(--text-xs); color: var(--text-secondary); }
+.sale-scale-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+.sale-scale-legend i { display: inline-block; flex: none; }
+.k-this { width: 10px; height: 10px; border-radius: 50%; background: var(--text-primary); }
+.k-median { width: 2px; height: 12px; background: var(--text-primary); }
+.k-omi { width: 16px; height: 8px; border-radius: var(--radius-full); background: var(--blue-light); }
+/* Details: the numbers that matter for buying */
+.sale-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); gap: 8px; }
+.sale-tile { background: var(--bg-muted); border-radius: var(--radius-control); padding: 10px 12px; min-width: 0; }
+.sale-tile-k { font-size: var(--text-xs); color: var(--text-secondary); }
+.sale-tile-v { font-size: var(--text-xl); font-weight: 700; letter-spacing: -0.3px; margin-top: 2px; }
+.sale-tile-v span { font-size: var(--text-sm); font-weight: 500; color: var(--text-secondary); }
+.sale-tile-s { font-size: var(--text-xs); color: var(--text-secondary); margin-top: 2px; }
+.sale-tile.is-good { background: var(--green-light); }
+.sale-tile.is-good .sale-tile-v, .sale-tile.is-good .sale-tile-k, .sale-tile.is-good .sale-tile-s { color: var(--green-ink); }
+.sale-tile.is-muted .sale-tile-v { font-size: var(--text-md); color: var(--text-secondary); }
+.sale-compare { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 8px 12px; border: 1px solid var(--border);
+                border-radius: var(--radius-control); font-size: var(--text-sm); }
+.sale-compare .i { width: 16px; height: 16px; flex: none; color: var(--text-secondary); }
+.btn-link { background: none; border: 0; padding: 0; font: inherit; color: var(--green-ink); text-decoration: underline; cursor: pointer; }
+/* Tools → Areas for sale */
+.sale-limits { display: flex; flex-wrap: wrap; gap: 12px; margin: 14px 0 6px; }
+.sale-limits .field { width: 160px; }

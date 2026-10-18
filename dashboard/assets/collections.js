@@ -105,11 +105,7 @@ async function shareListing(listingId, ev) {
   const url = sourceUrl
     || `${location.origin}${location.pathname}?l=${encodeURIComponent(listingId)}`;
 
-  const sourceLbl = listing
-    ? (listing.source && String(listing.source).startsWith('idealista')
-       ? 'Idealista'
-       : 'Immobiliare.it')
-    : '';
+  const sourceLbl = listing ? siteName(listing.source) : '';
   const title = listing
     ? `${listing.neighbourhood || 'Milan listing'} — Lume score ${listing.score_total ?? '?'}`
     : 'Lume listing';

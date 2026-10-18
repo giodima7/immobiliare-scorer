@@ -123,19 +123,28 @@ def available() -> bool:
     return bool(_load()["streets"])
 
 
+def street_key(address: str) -> str | None:
+    """The index's key for the street of `address` ("via ettore ponti"), or
+    None when it isn't known."""
+    key = split_address(address)[0]
+    if not key:
+        return None
+    if key.split(" ", 1)[0] not in _TYPES:
+        key = "via " + key
+    streets = _load()["streets"]
+    for k in (key, _load()["alias"].get(key, "")):
+        if k in streets:
+            return k
+    return _fuzzy(key)
+
+
 def lookup(address: str) -> tuple[float, float, str] | None:
     """(lat, lon, precision) — precision "civico" (exact house number),
     "near" (nearest number on the same side) or "street" (centroid of a
     short street). None when the street isn't known or too long to guess."""
     idx = _load()
-    key, number = split_address(address)
-    if not key:
-        return None
-    if key.split(" ", 1)[0] not in _TYPES:
-        key = "via " + key
-    st = idx["streets"].get(key) or idx["streets"].get(idx["alias"].get(key, ""))
-    if not st:
-        st = idx["streets"].get(_fuzzy(key) or "")
+    number = split_address(address)[1]
+    st = idx["streets"].get(street_key(address) or "")
     if not st:
         return None
     nums = st["n"]
