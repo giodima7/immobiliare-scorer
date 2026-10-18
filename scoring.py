@@ -440,6 +440,10 @@ _DEFAULT_SETTINGS: dict = {
     "rent_gem_penalty_min":      75,
     "rent_gem_metro_max_m":      700,
     "rent_gem_min_sqm_per_room": 22,
+    # A Subito listing placed at the metro stop its text names
+    # (geo_precision "metro", ~330 m off) passes the metro bar by
+    # construction: no Hidden Gem for it (Great Value still can).
+    "rent_gem_exact_place":      True,
     # Great Value badge thresholds
     "gv_total_min":       70,
     "gv_ldi_min":         50,
@@ -884,6 +888,7 @@ def rental_labels(listing: dict, price_z: float | None, delta_label_pct: float |
            and prop_s >= st["rent_gem_property_min"] and loc_s >= st["rent_gem_location_min"]
            and pen_s >= st["rent_gem_penalty_min"]
            and metro is not None and metro <= st["rent_gem_metro_max_m"]
+           and not (st.get("rent_gem_exact_place", True) and listing.get("geo_precision") == "metro")
            and not (sqm and rooms and sqm / rooms < st["rent_gem_min_sqm_per_room"]))
     return good and not gem, gem
 

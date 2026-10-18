@@ -74,7 +74,9 @@ function applyRentFilters(data, f) {
       // Bidirectional substring match so both sources work:
       //   • nb.includes(al): "navigli - darsena" matches filter "navigli" ✓
       //   • al.includes(nb): "porta romana" matches filter "porta romana - medaglie d'oro" ✓
-      if (!f.areas.some(a => { const al = a.toLowerCase(); return nb.includes(al) || al.includes(nb); })) return false;
+      // No name, no match: "".includes is always true, so a listing without
+      // a neighbourhood used to pass every area filter.
+      if (!nb || !f.areas.some(a => { const al = a.toLowerCase(); return nb.includes(al) || al.includes(nb); })) return false;
     }
     if (f.fascia   && l.omi_fascia !== f.fascia)               return false;
     if (f.omiZone  && l.omi_zona  !== f.omiZone)              return false;

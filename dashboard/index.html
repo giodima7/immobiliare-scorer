@@ -173,7 +173,7 @@
     <div class="onboard-slide slide2">
       <div class="onboard-big-number ob-animate" id="ob2Number">0%</div>
       <h2 class="ob-animate ob-delay-1" data-i18n="ob.s2_title">of Milan rentals ask more than similar flats nearby. Lume tells you which ones.</h2>
-      <p class="ob-animate ob-delay-2" data-i18n="ob.s2_text">Every listing is compared with the nearest similar flats, read daily from Immobiliare.it and Idealista.</p>
+      <p class="ob-animate ob-delay-2" data-i18n="ob.s2_text">Every listing is compared with the nearest similar flats, read daily from Immobiliare.it, Idealista and Subito.it.</p>
     </div>
 
     <!-- Slide 3: How it works -->
@@ -423,6 +423,7 @@
 <!-- ── Tab bar ── -->
 <nav class="tab-bar" role="tablist" aria-label="Sections">
   <button type="button" class="tab-btn active" id="tabRentals" data-tab="rentals" role="tab" aria-selected="true"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#home"></use></svg><span data-i18n="tab.rentals">Rentals</span></button>
+  <button type="button" class="tab-btn" id="tabSales" data-tab="sales" role="tab" aria-selected="false"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#key"></use></svg><span data-i18n="tab.sales">For sale</span></button>
   <button type="button" class="tab-btn" id="tabMap" data-tab="map" role="tab" aria-selected="false"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#map"></use></svg><span data-i18n="tab.map">Map</span></button>
   <button type="button" class="tab-btn" id="tabSaved" data-tab="saved" role="tab" aria-selected="false"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#heart"></use></svg><span data-i18n="tab.saved">Saved</span></button>
   <button type="button" class="tab-btn" id="tabInsights" data-tab="insights" role="tab" aria-selected="false"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#chart-bar"></use></svg><span data-i18n="tab.stats">Stats</span></button>
@@ -584,6 +585,7 @@
           <button type="button" class="seg-btn sort-tab active" data-rsource="" aria-pressed="true" data-i18n="filter.all">All</button>
           <button type="button" class="seg-btn sort-tab" data-rsource="immobiliare" aria-pressed="false">Immobiliare</button>
           <button type="button" class="seg-btn sort-tab" data-rsource="idealista" aria-pressed="false">Idealista</button>
+          <button type="button" class="seg-btn sort-tab" data-rsource="subito" aria-pressed="false">Subito</button>
         </div>
       </div>
       <div class="field">
@@ -627,6 +629,118 @@
   <div class="grid" id="rentGrid"></div>
   <div class="scroll-status" id="rentScrollStatus"></div>
 </div><!-- /rentalsView -->
+
+<!-- ══════════════════════════════════════════════════════════════
+     SALES VIEW — listings for sale in the focus areas (sales.js)
+═══════════════════════════════════════════════════════════════ -->
+<div id="salesView" hidden>
+  <!-- Same bar as Rentals (#filterBar): areas, max price, rooms, m², deals,
+       sort, "More filters" (mortgage inputs, condition, listed, source). -->
+  <div class="filters fbar" id="saleFilterBar">
+    <div class="fb-row">
+      <div class="msd-wrap fb-area" id="saleAreaWrap">
+        <button type="button" class="msd-trigger" id="saleAreaTrigger">All areas</button>
+        <div class="msd-panel" id="saleAreaPanel">
+          <input class="msd-search-input" id="saleAreaSearch" placeholder="Search areas…" data-i18n-placeholder="fb.search_areas" type="text" autocomplete="off">
+          <div class="msd-list" id="saleAreaList"></div>
+          <div class="msd-footer">
+            <button type="button" class="btn btn-ghost btn-sm msd-footer-clear" id="saleAreaClear" data-i18n="fb.clear">Clear</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="saleAreaDone" data-i18n="fb.done">Done</button>
+          </div>
+        </div>
+      </div>
+      <label class="fb-field fb-field-rent" data-i18n-title="sale.max_price_long" title="Max price">
+        <span class="fb-prefix">€</span>
+        <input type="number" id="sMaxPrice" class="filter-num" placeholder="Max price"
+               data-i18n-placeholder="sale.max_price_long" min="0" step="10000" inputmode="numeric" data-i18n-aria="sale.max_price_long" aria-label="Max price">
+      </label>
+      <label class="fb-field fb-field-narrow" data-i18n-title="fb.rooms_min" title="Min rooms">
+        <input type="number" id="sMinRooms" class="filter-num" placeholder="Rooms"
+               data-i18n-placeholder="fb.rooms" min="1" max="10" step="1" inputmode="numeric" data-i18n-aria="fb.rooms_min" aria-label="Min rooms">
+        <span class="fb-suffix">+</span>
+      </label>
+      <label class="fb-field fb-field-narrow" data-i18n-title="fb.sqm_min" title="Min m²">
+        <input type="number" id="sMinSqm" class="filter-num" placeholder="m²"
+               min="0" step="5" inputmode="numeric" data-i18n-aria="fb.sqm_min" aria-label="Min m²">
+        <span class="fb-suffix">+</span>
+      </label>
+      <div class="seg" id="sDealFilter" role="group" data-i18n-aria="fb.deal_type" aria-label="Deals">
+        <button type="button" class="seg-btn active" data-sdeal="" aria-pressed="true" data-i18n="gem.all">All</button>
+        <button type="button" class="seg-btn" data-sdeal="below" aria-pressed="false" data-i18n="sale.deal_below">10%+ below nearby</button>
+        <button type="button" class="seg-btn" data-sdeal="yield" aria-pressed="false" data-i18n="sale.deal_yield">Yield 5%+</button>
+      </div>
+      <label class="fb-field fb-sort">
+        <svg class="i" aria-hidden="true"><use href="assets/icons.svg#arrows-sort"></use></svg>
+        <select id="sSortSelect" data-i18n-aria="filter.sort" aria-label="Sort">
+          <option value="score" data-i18n="sale.sort_score">Best score</option>
+          <option value="delta" data-i18n="sale.sort_delta">Most below nearby</option>
+          <option value="yield" data-i18n="sale.sort_yield">Highest rental yield</option>
+          <option value="price" data-i18n="sale.sort_price">Cheapest</option>
+          <option value="psqm" data-i18n="sale.sort_psqm">Cheapest per m²</option>
+          <option value="newest" data-i18n="sort.newest">Newest</option>
+        </select>
+      </label>
+      <button type="button" class="btn btn-secondary fb-btn" id="sMoreBtn" data-i18n-title="fb.more" title="More filters" aria-expanded="false" aria-controls="sMorePanel">
+        <svg class="i" aria-hidden="true"><use href="assets/icons.svg#filter"></use></svg>
+        <span data-i18n="fb.more">More filters</span>
+        <span class="fb-badge" id="sMoreBadge" hidden></span>
+      </button>
+    </div>
+
+    <div class="fb-panel" id="sMorePanel" hidden>
+      <div class="fb-more-grid">
+        <div class="field">
+          <label class="field-label" for="sDown" data-i18n="sale.down_pct">Down payment (%)</label>
+          <input type="number" id="sDown" class="input" min="0" max="100" step="5" inputmode="decimal">
+        </div>
+        <div class="field">
+          <label class="field-label" for="sRate" data-i18n="sale.rate_pct">Mortgage rate (%)</label>
+          <input type="number" id="sRate" class="input" min="0" max="15" step="0.1" inputmode="decimal">
+        </div>
+        <div class="field">
+          <label class="field-label" for="sYears" data-i18n="sale.years_long">Mortgage years</label>
+          <input type="number" id="sYears" class="input" min="5" max="40" step="1" inputmode="numeric">
+        </div>
+        <div class="field">
+          <label class="field-label" for="sCondition" data-i18n="fb.condition">Condition</label>
+          <select id="sCondition" class="input">
+            <option value="" data-i18n="filter.any">Any</option>
+            <option value="premium" data-i18n="cond.premium">Renovated or new</option>
+            <option value="not_needs_work" data-i18n="cond.not_needs_work">Not to renovate</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="field-label" for="sListed" data-i18n="filter.listed">Listed</label>
+          <select id="sListed" class="input">
+            <option value="" data-i18n="filter.any">Any</option>
+            <option value="7" data-i18n="listed.7">Last 7 days</option>
+            <option value="14" data-i18n="listed.14">Last 14 days</option>
+            <option value="30" data-i18n="listed.30">Last 30 days</option>
+          </select>
+        </div>
+        <div class="field">
+          <span class="field-label" data-i18n="filter.source">Source</span>
+          <div class="seg seg-full" id="sSourceFilter" role="group">
+            <button type="button" class="seg-btn active" data-ssource="" aria-pressed="true" data-i18n="filter.all">All</button>
+            <button type="button" class="seg-btn" data-ssource="sale" aria-pressed="false">Immobiliare</button>
+            <button type="button" class="seg-btn" data-ssource="idealista_sale" aria-pressed="false">Idealista</button>
+          </div>
+        </div>
+      </div>
+      <p class="fb-hint" data-i18n="sale.estimate_hint">Payments, rents and yields are estimates to get your bearings, not financial advice.</p>
+      <div class="fb-panel-foot">
+        <button type="button" class="btn btn-ghost" id="sBtnReset" data-i18n="filter.clear_filters">Clear filters</button>
+        <button type="button" class="btn btn-primary" id="sMoreDone" data-i18n="fb.done">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="fchips" id="sActiveChips" aria-live="polite"></div>
+
+  <h1 class="sr-only" data-i18n="tab.sales">For sale</h1>
+  <div class="grid" id="saleGrid"></div>
+  <div class="scroll-status" id="saleScrollStatus"></div>
+</div>
 
 <!-- ══════════════════════════════════════════════════════════════
      MAP VIEW — uses the same filters as the list
@@ -908,6 +1022,38 @@
     </div>
   </div>
 
+  <!-- ── Sale areas (sales_scan.py) ─────────────────────────────────
+       Which macro-areas the scanners read for sale, and the price / rooms
+       limits. sales.js loadSaleAreasCard → /api/sale-areas. -->
+  <div class="settings-card" id="saleAreasCard" hidden>
+    <div class="settings-card-header">
+      <div>
+        <h2 class="settings-card-title"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#key"></use></svg> <span data-i18n="sale.areas_title">Areas for sale</span></h2>
+        <p class="settings-card-subtitle" data-i18n="sale.areas_sub">Where Lume reads listings for sale, on Immobiliare and Idealista, every 4 hours. A change is read within ~20 minutes.</p>
+      </div>
+    </div>
+    <div class="sale-limits">
+      <div class="field">
+        <label class="field-label" for="saleCfgPrice" data-i18n="sale.max_price_long">Max price</label>
+        <input type="number" id="saleCfgPrice" class="input" min="50000" step="10000" inputmode="numeric">
+      </div>
+      <div class="field">
+        <label class="field-label" for="saleCfgRooms" data-i18n="fb.rooms_min">Min rooms</label>
+        <input type="number" id="saleCfgRooms" class="input" min="1" max="6" step="1" inputmode="numeric">
+      </div>
+    </div>
+    <div class="scan-areas-actions">
+      <button type="button" class="btn btn-secondary btn-sm" id="btnSaleAreasAll" data-i18n="settings.select_all">Select all</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="btnSaleAreasNone" data-i18n="settings.clear_all">Clear all</button>
+      <span class="scan-areas-count" id="saleAreasCount"></span>
+    </div>
+    <div class="scan-areas-grid" id="saleAreasGrid"></div>
+    <div style="display:flex;align-items:center;gap:12px;margin-top:18px">
+      <button type="button" class="btn btn-primary" id="btnSaleAreasSave"><span data-i18n="sale.areas_save">Save and read</span></button>
+      <span class="settings-status" id="saleAreasStatus"></span>
+    </div>
+  </div>
+
   <!-- ── Daily email alert (Supabase digest_filters) ─────────────────
        Populated by renderDigestSettingsSection() the first time the
        Settings tab is shown after sign-in. Hidden when signed out (the
@@ -1074,6 +1220,7 @@
         <option value="all">All sources</option>
         <option value="immobiliare">Immobiliare</option>
         <option value="idealista">Idealista</option>
+        <option value="subito">Subito</option>
       </select>
       <button type="button" class="btn btn-ghost btn-sm btn-danger-text" id="btnDqReenrichF">Re-enrich all F-grade</button>
       <button type="button" class="btn btn-secondary btn-sm" id="btnDqExport">Export CSV</button>
@@ -1141,6 +1288,7 @@
 <script src="assets/collections.js"></script>
 <script src="assets/cards.js"></script>
 <script src="assets/rentals.js"></script>
+<script src="assets/sales.js"></script>
 <script src="assets/scanner.js"></script>
 <script src="assets/controls.js"></script>
 <script src="assets/map.js"></script>
@@ -1263,6 +1411,7 @@
               <option value="all" data-i18n="filter.all">All</option>
               <option value="immobiliare">Immobiliare</option>
               <option value="idealista">Idealista</option>
+              <option value="subito">Subito</option>
             </select>
           </label>
 

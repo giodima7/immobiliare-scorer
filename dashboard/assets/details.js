@@ -203,8 +203,13 @@ function listingModalHtml(l) {
   const dist = m => m != null ? `${fmt(Math.round(m))} m` : null;
   const metroLine = l.metro_nearest_name
     ? `${l.metro_nearest_name}${l.metro_nearest_line ? ' ' + l.metro_nearest_line : ''}` : t('lm.metro');
-  const site = l.source === 'idealista' ? 'Idealista' : 'Immobiliare.it';
-  const provenance = l.detail_fetched_at ? t('lm.page_read', { date: _lmDate(l.detail_fetched_at) }) : t('lm.page_not_read');
+  const site = siteName(l.source);
+  const subito = l.source === 'subito';
+  const provenance = subito ? t('lm.subito_read')
+    : l.detail_fetched_at ? t('lm.page_read', { date: _lmDate(l.detail_fetched_at) }) : t('lm.page_not_read');
+  // Subito listings without the site's own pin are placed from their text.
+  const approx = { street: 'lm.geo_street', metro: 'lm.geo_metro' }[l.geo_precision];
+  const unplaced = subito && l.latitude == null;
   const fav = isRentFav(l.id);
   const id = esc(String(l.id));
   const method = compsMethodTip(l);
@@ -212,8 +217,9 @@ function listingModalHtml(l) {
   return `
   <div class="lm-head">
     <div class="lm-title">
-      <h2 id="lmTitle">${esc(formatAddress(l.neighbourhood) || '–')}${l.address ? ' · ' + esc(formatAddress(l.address)) : ''}</h2>
-      <div class="lm-sub">${esc(site)} · ID ${id}${l.first_seen_date ? ' · ' + esc(t('lm.first_seen', { date: _lmDate(l.first_seen_date) })) : ''}</div>
+      <h2 id="lmTitle">${esc([formatAddress(l.neighbourhood), l.address ? formatAddress(l.address) : ''].filter(Boolean).join(' · ')
+                              || (l.title || '').trim() || '–')}</h2>
+      <div class="lm-sub">${esc(site)}${subito ? ' · ' + esc(t('card.private')) : ''} · ID ${id}${l.first_seen_date ? ' · ' + esc(t('lm.first_seen', { date: _lmDate(l.first_seen_date) })) : ''}</div>
     </div>
     <button type="button" class="btn btn-secondary btn-icon lm-close" aria-label="${esc(t('lm.close'))}">${icon('x')}</button>
   </div>
@@ -239,14 +245,15 @@ function listingModalHtml(l) {
       ${known.map(([k, val]) => `<div class="lm-fact"><div class="lm-fact-k">${esc(k)}</div><div class="lm-fact-v">${esc(String(val))}</div></div>`).join('')}
     </div>
     ${unknown.length ? `<div class="lm-unknown-line">${esc(t('lm.not_known_list', { list: unknown.join(', ') }))}</div>` : ''}
-    <div class="lm-note">${icon(l.detail_fetched_at ? 'check' : 'clock')}${esc(provenance)}${(l.twin_filled || []).length
+    <div class="lm-note">${icon(l.detail_fetched_at || subito ? 'check' : 'clock')}${esc(provenance)}${(l.twin_filled || []).length
         ? ' · ' + esc(t('card.twin', { site: l.source === 'idealista' ? 'Immobiliare.it' : 'Idealista' })) : ''}</div>
 
     <div class="lm-two">
       <section>
         <h3 class="lm-section-title">${esc(t('lm.location'))}</h3>
+        ${approx || unplaced ? `<div class="lm-muted">${esc(t(unplaced ? 'lm.geo_none' : approx))}</div>` : ''}
         <ul class="lm-near">
-          ${near('train', metroLine, l.metro_walk_min != null ? t('lm.walk', { n: l.metro_walk_min }) : dist(l.metro_nearest_dist_m))}
+          ${near('train', metroLine, l.geo_precision === 'metro' ? t('lm.metro_named') : l.metro_walk_min != null ? t('lm.walk', { n: l.metro_walk_min }) : dist(l.metro_nearest_dist_m))}
           ${near('bus', t('lm.tram'), dist(l.tram_nearest_dist_m))}
           ${near('shopping-cart', t('lm.supermarket'), dist(l.supermarket_nearest_dist_m))}
           ${near('trees', t('lm.park'), dist(l.park_nearest_dist_m))}

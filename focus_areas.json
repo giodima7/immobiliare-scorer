@@ -1,8 +1,47 @@
 {
   "_doc": "Areas whose listings get their listing page (costs) and photos read first. label: regex on the neighbourhood name; center/radius_m: also any listing within that distance.",
   "areas": [
-    {"name": "Porta Romana", "label": "porta romana", "center": [45.4519, 9.2031], "radius_m": 800},
-    {"name": "Corso Genova", "label": "corso genova|genova, ticinese", "center": [45.4566, 9.1767], "radius_m": 600},
-    {"name": "Crocetta", "label": "crocetta", "center": [45.4535, 9.1955], "radius_m": 500}
-  ]
+    {
+      "name": "Porta Romana",
+      "label": "porta romana",
+      "center": [
+        45.4519,
+        9.2031
+      ],
+      "radius_m": 800
+    },
+    {
+      "name": "Corso Genova",
+      "label": "corso genova|genova, ticinese",
+      "center": [
+        45.4566,
+        9.1767
+      ],
+      "radius_m": 600
+    },
+    {
+      "name": "Crocetta",
+      "label": "crocetta",
+      "center": [
+        45.4535,
+        9.1955
+      ],
+      "radius_m": 500
+    }
+  ],
+  "sales": {
+    "_doc": "Sales (compravendita) scanned in these areas only: Immobiliare macro-areas and Idealista (sub)zones covering the focus areas, filtered by max price and min rooms.",
+    "max_price": 800000,
+    "min_rooms": 2,
+    "immobiliare": [
+      "porta-romana-cadore-montenero",
+      "genova-ticinese",
+      "quadronno-palestro-guastalla"
+    ],
+    "idealista": [
+      "porta-vittoria/porta-romana",
+      "navigli-bocconi/corso-genova",
+      "navigli-bocconi/mercalli-quadronno"
+    ]
+  }
 }

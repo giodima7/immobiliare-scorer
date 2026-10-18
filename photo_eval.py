@@ -62,13 +62,24 @@ CONDITION_FROM_LISTING = {   # stated condition → the 1–5 scale of the promp
 
 
 # ── Data ─────────────────────────────────────────────────────────────────────
+SALES = BASE / "dashboard" / "milano_sales_latest.json"     # sales_scan.py
+
+
 def load_listings() -> list[dict]:
+    """Rentals and, since 2026-10-18, the sales of the chosen sale areas."""
     for _ in range(5):          # the scanners may be rewriting the file
         try:
-            return json.loads(DATA.read_text())
+            rows = json.loads(DATA.read_text())
+            break
         except json.JSONDecodeError:
             time.sleep(2)
-    raise SystemExit("could not read " + str(DATA))
+    else:
+        raise SystemExit("could not read " + str(DATA))
+    try:
+        rows += json.loads(SALES.read_text())
+    except (OSError, ValueError):
+        pass
+    return rows
 
 
 def load_results() -> dict:
@@ -135,13 +146,18 @@ def context(l: dict) -> dict:
         "label": ("Hidden Gem" if l.get("hidden_gem") else
                   "Great Value" if l.get("good_value") else "High score"),
         "area": l.get("neighbourhood"),
-        "rent_eur_month": l.get("rent_mo") or l.get("price"),
+        **({"for_sale_price_eur": l.get("price")} if _is_sale(l)
+           else {"rent_eur_month": l.get("rent_mo") or l.get("price")}),
         "sqm": l.get("sqm"),
         "rooms": l.get("rooms"),
         "floor": floor,
         "lift": l.get("elevator"),
-        "discount_vs_nearby_pct": l.get("comps_delta_pct"),
+        "discount_vs_nearby_pct": l.get("comps_sale_delta_pct") if _is_sale(l) else l.get("comps_delta_pct"),
     }
+
+
+def _is_sale(l: dict) -> bool:
+    return l.get("source") in ("sale", "idealista_sale")
 
 
 # ── select ───────────────────────────────────────────────────────────────────
@@ -174,7 +190,8 @@ def _fetch(url: str) -> bytes | None:
     # Some Immobiliare photos lack the 640 px variant: fall back to larger ones.
     tries = [url] + ([url.replace("/xs-c.jpg", v) for v in ("/s-c.jpg", "/m-c.jpg")]
                      if url.endswith("/xs-c.jpg") else [])
-    referer = "https://www.idealista.it/" if "idealista" in url else "https://www.immobiliare.it/"
+    referer = ("https://www.idealista.it/" if "idealista" in url else
+               "https://www.subito.it/" if "sbito.it" in url else "https://www.immobiliare.it/")
     for u in tries:
         req = urllib.request.Request(u, headers={"User-Agent": UA, "Referer": referer})
         try:

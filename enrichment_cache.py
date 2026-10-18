@@ -23,6 +23,10 @@ from pathlib import Path
 
 BASE_DIR   = Path(__file__).parent
 CACHE_PATH = BASE_DIR / "enriched_cache.json"
+# Bookkeeping keys in an entry, not listing fields: when it was written and
+# a failed placement (api.py GEO_RETRY_DAYS). Left out when an entry is
+# merged into a listing.
+META_KEYS = frozenset({"enriched_at", "geo_failed_at", "geo_failed_for"})
 
 _cache: dict = {}
 _dirty: set  = set()     # keys saved in this process since the last flush

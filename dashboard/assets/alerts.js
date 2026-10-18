@@ -25,7 +25,7 @@ function _readActiveFilterState() {
   const fasciaVal = str('rFascia');
   const omiVal    = str('rOmiZone');
   const gemRaw    = activeBtn('#rGemFilter', 'gem');           // '' | 'hidden' | 'good'
-  const srcRaw    = activeBtn('#rSourceFilter', 'rsource');    // '' | 'immobiliare' | 'idealista'
+  const srcRaw    = activeBtn('#rSourceFilter', 'rsource');    // '' | 'immobiliare' | 'idealista' | 'subito'
 
   return {
     max_rent:        num('rMaxRent')   || null,

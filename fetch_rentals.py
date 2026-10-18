@@ -1697,7 +1697,7 @@ def fetch_rentals(pages: int = 8, area_names: list = None, max_rent: int = 0,
         for listing in items:
             cached = _ecache.get("immobiliare", listing["id"])
             if cached:
-                listing.update({k: v for k, v in cached.items() if k != "enriched_at"})
+                listing.update({k: v for k, v in cached.items() if k not in _ecache.META_KEYS})
 
         # Apply OMI polygon fields to any listing still missing them.
         # This is pure in-memory (no network) and takes < 1 s for 1 000+ listings.
@@ -2443,7 +2443,10 @@ def _old_id_bar(rows: list, days: int = 3) -> dict:
 
 def _listed_earlier(l: dict, bar: dict) -> bool:
     """First seen lately but published before `bar` (see _old_id_bar) — a
-    zone read further or a scan gap, not a new listing."""
+    zone read further or a scan gap, not a new listing. Subito says when
+    the ad went up: that date instead."""
+    if l.get("source") == "subito" and l.get("published_date"):
+        return str(l["published_date"])[:10] < (date.today() - timedelta(days=3)).isoformat()
     m = _re.search(r"\d+", str(l.get("id") or ""))
     b = bar.get(l.get("source") or "immobiliare")
     return bool(m and b and int(m.group(0)) < b)
@@ -2631,11 +2634,24 @@ def _netlify_deploy():
 # ── Daemon ─────────────────────────────────────────────────────────────────────
 
 def _between_slots(args, source: str, next_slot: float, log, run_slot_fn, discover_state) -> None:
-    """Until the next slot: discover every DISCOVER_EVERY_SEC (new listings
-    within ~20 min) and read listing pages meanwhile, with a photo reading
-    after each page session."""
+    """Until the next slot: the site's sales sweep when due (sales_scan),
+    the Subito.it pass when due (fetch_subito), discover every
+    DISCOVER_EVERY_SEC (new listings within ~20 min), and listing pages
+    meanwhile, with a photo reading after each page session."""
     next_discover = (discover_state().get("at") or 0) + DISCOVER_EVERY_SEC
     while time.time() < next_slot:
+        try:                                   # sales in the focus areas (sales_scan)
+            from sales_scan import sales_due, run_sales
+            if sales_due(source):
+                run_marked(source, run_sales, source, log)
+        except Exception as exc:
+            log(f"✗ Sales error: {type(exc).__name__}: {exc}")
+        try:                                   # Subito.it private landlords (fetch_subito)
+            from fetch_subito import subito_due, run_subito
+            if subito_due():                   # either daemon; a lock keeps it to one
+                run_marked("subito", run_subito, args, log)
+        except Exception as exc:
+            log(f"✗ Subito error: {type(exc).__name__}: {exc}")
         if time.time() >= next_discover:
             try:
                 rec = run_marked(source, run_slot_fn, args, None, True)

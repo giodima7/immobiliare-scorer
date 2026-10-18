@@ -282,6 +282,14 @@ function formatAddress(str) {
 const scoreClass = s => s >= 70 ? 'high' : s >= 45 ? 'mid' : 'low';
 const fmt = n => (n == null || n === '' || Number.isNaN(Number(n))) ? '–' : _nf().format(Number(n));
 
+// The site a listing comes from ("Open on …", source chips, sharing).
+function siteName(source) {
+  const s = String(source || '');
+  if (s.startsWith('idealista')) return 'Idealista';
+  if (s === 'subito') return 'Subito.it';
+  return 'Immobiliare.it';
+}
+
 // What a listing really costs a month: rent + condo fees + heating billed
 // apart, as the listing page states them (listing_details.py) — never an
 // estimate. known=false → only the rent is known ("rent only").
@@ -299,7 +307,8 @@ function monthlyCost(l) {
   const total    = rent + condo + heating;
   return { rent, condo, heating, included, known, total, suspect, statedCondo: stated,
            extraPct: rent ? Math.round((total - rent) / rent * 100) : 0,
-           pageRead: !!l.detail_fetched_at };
+           // Subito's search result is the whole listing: nothing left to read.
+           pageRead: !!l.detail_fetched_at || l.source === 'subito' };
 }
 
 // ── Floor display helpers ─────────────────────────────────────────────────────
@@ -581,7 +590,7 @@ function switchTab(tab, opts) {
   const persist = !opts || opts.persist !== false;
   activeTab = tab;
   document.body.dataset.tab = tab;
-  ['rentalsView','mapView','savedView','insightsView','settingsView'].forEach(id => {
+  ['rentalsView','salesView','mapView','savedView','insightsView','settingsView'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.hidden = id !== tab + 'View';
@@ -605,6 +614,9 @@ function switchTab(tab, opts) {
   if (tab === 'rentals') {
     startScannerPoll();
     if (!ALL_RENT.length) loadRentals();
+  } else if (tab === 'sales') {
+    stopScannerPoll();
+    if (!ALL_SALE.length) loadSales(); else renderSales();
   } else if (tab === 'map') {
     stopScannerPoll();
     ensureLeaflet().then(() => {
@@ -628,6 +640,7 @@ function switchTab(tab, opts) {
     // useful for the (less-frequently-touched) scan log.
     startScannerPoll();
     _settingsLoad();
+    if (typeof loadSaleAreasCard === 'function') loadSaleAreasCard();
     _loadScoreSettings();
     ensureChart().catch(() => {}).finally(() => _dqLoad());
     if (typeof initCollapsibleCards === 'function') initCollapsibleCards();
@@ -661,7 +674,7 @@ function restoreActiveTab() {
     const params = new URLSearchParams(location.search);
     if (params.get('c'))                  return;
 
-    const validTabs = ['rentals', 'map', 'saved', 'insights', 'settings'];
+    const validTabs = ['rentals', 'sales', 'map', 'saved', 'insights', 'settings'];
     // ?tab=saved — the old /favourites page redirects here.
     const asked = params.get('tab');
     if (asked && validTabs.includes(asked)) {

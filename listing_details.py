@@ -29,6 +29,8 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
 DETAIL_CACHE_PATH = BASE_DIR / "detail_cache_milano.json"
 RENTALS_PATH = BASE_DIR / "dashboard" / "milano_rentals_latest.json"
+SALES_PATH = BASE_DIR / "dashboard" / "milano_sales_latest.json"     # sales_scan.py
+SALE_SOURCE = {"immobiliare": "sale", "idealista": "idealista_sale"}
 
 # Fields a listing page can supply. apply_details() only fills gaps, with
 # two exceptions below — fresh search data wins otherwise.
@@ -372,8 +374,10 @@ def build_queue(source: str, cache: dict | None = None,
     each needs its real monthly cost), then listings at photo_eval's bar
     (score ≥ MIN_SCORE, or Hidden Gem); both only while their page wasn't
     read since costs are parsed (and, on Idealista, the full gallery), best
-    first. Then, postponed: possible deals (price_z ≤ PRIORITY_Z, lowest
-    first), listings first seen in the last NEW_DAYS days, the rest."""
+    first — with the sales of the chosen sale areas (sales_scan.py: condo
+    fees, gallery) right after the focus areas. Then, postponed: possible
+    deals (price_z ≤ PRIORITY_Z, lowest first), listings first seen in the
+    last NEW_DAYS days, the rest."""
     cache = load_cache() if cache is None else cache
     try:
         rows = json.loads(rentals_path.read_text())
@@ -417,7 +421,19 @@ def build_queue(source: str, cache: dict | None = None,
             new.append((age, item))
         else:
             rest.append((z if z is not None else 9, item))
-    return ([i for _, i in sorted(focus)] + [i for _, i in sorted(top)] + [i for _, i in sorted(deals)]
+    sales = []
+    try:
+        sale_rows = json.loads(SALES_PATH.read_text())
+    except (OSError, ValueError):
+        sale_rows = []
+    for l in sale_rows:
+        if l.get("source") != SALE_SOURCE.get(source) or l.get("is_stale") or l.get("excluded") or not l.get("url"):
+            continue
+        entry = cache.get(str(l.get("id"))) or {}
+        if not entry.get("gone") and not (entry.get("fields") or {}).get("costs_read"):
+            sales.append((-(l.get("score_total") or 0), (str(l["id"]), l["url"])))
+    return ([i for _, i in sorted(focus)] + [i for _, i in sorted(sales)]
+            + [i for _, i in sorted(top)] + [i for _, i in sorted(deals)]
             + [i for _, i in sorted(new)] + [i for _, i in sorted(rest)])
 
 

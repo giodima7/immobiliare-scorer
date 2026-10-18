@@ -73,6 +73,11 @@ function isNew(l) {
 let _idBar = null, _idBarFor = null;
 function _idNum(l) { const m = String(l.id ?? '').match(/\d+/); return m ? Number(m[0]) : null; }
 function _listedEarlier(l) {
+  // Subito says when the ad went up: trust that over the id.
+  if (l.source === 'subito' && l.published_date) {
+    const d = new Date(); d.setDate(d.getDate() - 3);
+    return String(l.published_date).slice(0, 10) < d.toISOString().slice(0, 10);
+  }
   const pool = typeof ALL_RENT !== 'undefined' ? ALL_RENT : null;
   if (!pool || !pool.length) return false;
   if (_idBarFor !== pool) {
@@ -330,6 +335,9 @@ function _metroMeta(l) {
   if (walk == null && l.metro_nearest_dist_m != null) walk = Math.max(1, Math.round(l.metro_nearest_dist_m / 70));
   if (walk == null) return '';
   const name = l.metro_nearest_name ? `${l.metro_nearest_name}${l.metro_nearest_line ? ' ' + l.metro_nearest_line : ''} · ` : '';
+  // Placed at the stop the listing names: the walk is unknown, not 0 min.
+  if (l.geo_precision === 'metro' && l.metro_nearest_name)
+    return `<span>${icon('train')}${escapeHtml(t('card.metro_named', { name: name.replace(/ · $/, '') }))}</span>`;
   return `<span class="${walk <= 5 ? 'near' : ''}">${icon('train')}${escapeHtml(name + t('card.walk_min', { n: walk }))}</span>`;
 }
 
@@ -372,9 +380,11 @@ function scoreRingHtml(l, size = 44) {
 
 function renderRentalCard(l) {
   const id   = escapeHtml(String(l.id));
-  const nb   = formatAddress(l.neighbourhood) || '–';
-  const site = l.source === 'idealista' ? 'Idealista' : 'Immobiliare.it';
+  const site = siteName(l.source);
   const street = l.address ? formatAddress(String(l.address).replace(/,?\s*milano\s*$/i, '')) : '';
+  // A listing without a neighbourhood (Subito, placed from its text or not
+  // at all) is titled by its street, else by its own title.
+  const nb   = formatAddress(l.neighbourhood) || street || (l.title || '').trim() || '–';
 
   const gemChip = l.hidden_gem
     ? `<span class="gem-photo-chip chip-hidden">${icon('diamond')}<span>${escapeHtml(t('gem.hidden'))}</span></span>`
@@ -400,7 +410,7 @@ function renderRentalCard(l) {
       <div class="card-head">
         <div class="card-title-wrap">
           <h2 class="card-title"><button type="button" class="card-title-btn" data-open-details="${id}">${escapeHtml(nb)}</button></h2>
-          <div class="card-sub">${escapeHtml([street && street.toLowerCase() !== nb.toLowerCase() ? street : '', site].filter(Boolean).join(' · '))}</div>
+          <div class="card-sub">${escapeHtml([street && street.toLowerCase() !== nb.toLowerCase() ? street : '', site, l.source === 'subito' ? t('card.private') : ''].filter(Boolean).join(' · '))}</div>
         </div>
         ${scoreRingHtml(l)}
       </div>

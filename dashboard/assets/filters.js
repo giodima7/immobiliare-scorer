@@ -127,7 +127,7 @@ function rentActiveFilterChips(f) {
   if (f.fascia)      add('fascia', t('fascia.' + f.fascia));
   if (f.maxMetro)    add('maxMetro', t('chip.max_metro', { n: fmt(f.maxMetro) }));
   if (f.minFloor > -999) add('minFloor', t('chip.min_floor', { n: f.minFloor }));
-  if (f.source)      add('source', f.source === 'idealista' ? 'Idealista' : 'Immobiliare.it');
+  if (f.source)      add('source', siteName(f.source));
   if (f.minEnergy)   add('minEnergy', t('chip.min_energy', { v: f.minEnergy }));
   if (f.minScore)    add('minScore', t('chip.min_score', { n: f.minScore }));
   if (f.fListed)     add('fListed', f.fListed === 'today' ? t('chip.listed_today') : t('chip.listed_days', { n: f.fListed }));
