@@ -299,6 +299,10 @@ function _costLineHtml(c) {
     return `<div class="cost-line"><span class="cost-tag tone-ok">${icon('check')}${escapeHtml(t('cost.included'))}</span></div>`;
   }
   if (!c.known) {
+    if (c.suspect) {
+      return `<div class="cost-line"><span class="cost-bar is-unknown" aria-hidden="true"></span>
+        <span class="cost-tag tone-warn" title="${escapeHtml(t('cost.suspect_long', { v: fmt(c.statedCondo) }))}">${escapeHtml(t('cost.suspect'))}</span></div>`;
+    }
     return `<div class="cost-line"><span class="cost-bar is-unknown" aria-hidden="true"></span>
       <span class="cost-tag tone-muted" title="${escapeHtml(t(c.pageRead ? 'cost.ask_long' : 'cost.pending_long'))}">${escapeHtml(t(c.pageRead ? 'cost.ask' : 'cost.pending'))}</span></div>`;
   }

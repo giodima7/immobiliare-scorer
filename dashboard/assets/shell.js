@@ -285,14 +285,19 @@ const fmt = n => (n == null || n === '' || Number.isNaN(Number(n))) ? '–' : _n
 // What a listing really costs a month: rent + condo fees + heating billed
 // apart, as the listing page states them (listing_details.py) — never an
 // estimate. known=false → only the rent is known ("rent only").
+// Condo fees above half the rent are almost always a yearly figure typed
+// as monthly (€1.200 on a €1.200 rent, 2026-10-18): left out of the total,
+// shown as "to check".
 function monthlyCost(l) {
   const rent     = Number(l.rent_mo ?? l.price) || 0;
   const included = l.condo_included === true;
-  const condo    = included ? 0 : (Number(l.spese_condominiali) || 0);
+  const stated   = included ? 0 : (Number(l.spese_condominiali) || 0);
+  const suspect  = stated > 0 && rent > 0 && stated > rent * 0.5;
+  const condo    = suspect ? 0 : stated;
   const heating  = Number(l.heating_mo) || 0;
   const known    = included || condo > 0 || heating > 0;
   const total    = rent + condo + heating;
-  return { rent, condo, heating, included, known, total,
+  return { rent, condo, heating, included, known, total, suspect, statedCondo: stated,
            extraPct: rent ? Math.round((total - rent) / rent * 100) : 0,
            pageRead: !!l.detail_fetched_at };
 }

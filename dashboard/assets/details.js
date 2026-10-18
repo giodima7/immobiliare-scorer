@@ -150,7 +150,8 @@ function _lmCostTable(l) {
   const row = (k, v, cls = '') => `<tr class="${cls}"><td>${esc(k)}</td><td>${esc(v)}</td></tr>`;
   const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
   let rows = row(cap(t('cost.rent')), `€${fmt(c.rent)}`);
-  rows += row(cap(t('cost.condo')), c.included ? t('cost.condo_in_rent') : c.condo ? `€${fmt(c.condo)}` : t('cost.not_stated'),
+  rows += row(cap(t('cost.condo')), c.included ? t('cost.condo_in_rent') : c.condo ? `€${fmt(c.condo)}`
+              : c.suspect ? t('cost.suspect_row', { v: fmt(c.statedCondo) }) : t('cost.not_stated'),
               c.condo || c.included ? '' : 'is-muted');
   if (c.heating) rows += row(`${cap(t('cost.heating'))} ${t('cost.heating_year', { v: fmt(c.heating * 12) })}`, `€${fmt(c.heating)}`);
   if (c.known) rows += row(t('cost.total'), `€${fmt(c.total)}`, 'is-total');
@@ -159,7 +160,7 @@ function _lmCostTable(l) {
     const label = l.deposit_months ? t('cost.entry', { n: l.deposit_months }) : t('cost.entry_eur');
     rows += row(`${label} · ${t('cost.no_agency')}`, `€${fmt(dep + c.total)}`, 'is-entry');
   }
-  const note = !c.known ? `<div class="lm-muted">${esc(t(c.pageRead ? 'cost.ask_long' : 'cost.pending_long'))}</div>` : '';
+  const note = !c.known ? `<div class="lm-muted">${esc(c.suspect ? t('cost.suspect_long', { v: fmt(c.statedCondo) }) : t(c.pageRead ? 'cost.ask_long' : 'cost.pending_long'))}</div>` : '';
   return `<table class="lm-costs">${rows}</table>${note}`;
 }
 
