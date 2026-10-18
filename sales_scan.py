@@ -263,8 +263,12 @@ def enrich_rows(rows: list) -> int:
     import enrichment_cache as ec
     from enrich_geo import enrich_batch
     ec.load()
-    todo = [l for l in rows if not l.get("is_stale") and (l.get("metro_nearest_dist_m") is None)
-            and ec.get(l["source"], l["id"]) is None]
+    def _due(l):
+        cached = ec.get(l["source"], l["id"])
+        # Never enriched, or enriched while it had no place and has one now
+        # (fetch_subito places some rows later, by the zone their text names).
+        return cached is None or (cached.get("geo_score") is None and l.get("latitude") is not None)
+    todo = [l for l in rows if not l.get("is_stale") and (l.get("metro_nearest_dist_m") is None) and _due(l)]
     if todo:
         results = enrich_batch(todo)
         ec.bulk_save([(l["source"], l["id"], g) for l, g in zip(todo, results)])

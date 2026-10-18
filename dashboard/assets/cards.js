@@ -323,11 +323,15 @@ function _costLineHtml(c) {
     </div>`;
 }
 
+// What the photos showed (photo_eval): a chip for every verdict, "doubt"
+// included — it is the most common one (694 of 1,269 on 2026-10-18), and
+// without a chip a read listing looked unread.
 function _photoChipHtml(l) {
-  if (l.photo_deal !== 'confirms' && l.photo_deal !== 'contradicts') return '';
+  const v = { confirms: ['tone-good', 'card.photo_ok'], contradicts: ['tone-bad', 'card.photo_bad'],
+              doubt: ['tone-at', 'card.photo_doubt'] }[l.photo_deal];
+  if (!v) return '';
   const note = (currentLang === 'it' ? l.photo_note_it : l.photo_note_en) || '';
-  const ok = l.photo_deal === 'confirms';
-  return `<span class="deal-delta ${ok ? 'tone-good' : 'tone-bad'}" title="${escapeHtml(note)}">${icon('photo')}${escapeHtml(t(ok ? 'card.photo_ok' : 'card.photo_bad'))}</span>`;
+  return `<span class="deal-delta ${v[0]}" title="${escapeHtml(note)}">${icon('photo')}${escapeHtml(t(v[1]))}</span>`;
 }
 
 function _metroMeta(l) {
@@ -335,6 +339,8 @@ function _metroMeta(l) {
   if (walk == null && l.metro_nearest_dist_m != null) walk = Math.max(1, Math.round(l.metro_nearest_dist_m / 70));
   if (walk == null) return '';
   const name = l.metro_nearest_name ? `${l.metro_nearest_name}${l.metro_nearest_line ? ' ' + l.metro_nearest_line : ''} · ` : '';
+  // Placed at the centre of the zone its text names: no walk to show.
+  if (l.geo_precision === 'zone') return '';
   // Placed at the stop the listing names: the walk is unknown, not 0 min.
   if (l.geo_precision === 'metro' && l.metro_nearest_name)
     return `<span>${icon('train')}${escapeHtml(t('card.metro_named', { name: name.replace(/ · $/, '') }))}</span>`;

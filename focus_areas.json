@@ -27,6 +27,15 @@
         9.1955
       ],
       "radius_m": 500
+    },
+    {
+      "name": "Guastalla",
+      "label": "guastalla",
+      "center": [
+        45.4585,
+        9.196
+      ],
+      "radius_m": 500
     }
   ],
   "sales": {
