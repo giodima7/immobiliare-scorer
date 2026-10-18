@@ -208,7 +208,7 @@ function listingModalHtml(l) {
   const provenance = subito ? t('lm.subito_read')
     : l.detail_fetched_at ? t('lm.page_read', { date: _lmDate(l.detail_fetched_at) }) : t('lm.page_not_read');
   // Subito listings without the site's own pin are placed from their text.
-  const approx = { street: 'lm.geo_street', metro: 'lm.geo_metro' }[l.geo_precision];
+  const approx = { street: 'lm.geo_street', metro: 'lm.geo_metro', zone: 'lm.geo_zone' }[l.geo_precision];
   const unplaced = subito && l.latitude == null;
   const fav = isRentFav(l.id);
   const id = esc(String(l.id));
@@ -253,7 +253,7 @@ function listingModalHtml(l) {
         <h3 class="lm-section-title">${esc(t('lm.location'))}</h3>
         ${approx || unplaced ? `<div class="lm-muted">${esc(t(unplaced ? 'lm.geo_none' : approx))}</div>` : ''}
         <ul class="lm-near">
-          ${near('train', metroLine, l.geo_precision === 'metro' ? t('lm.metro_named') : l.metro_walk_min != null ? t('lm.walk', { n: l.metro_walk_min }) : dist(l.metro_nearest_dist_m))}
+          ${near('train', metroLine, l.geo_precision === 'zone' ? t('lm.from_zone_centre') : l.geo_precision === 'metro' ? t('lm.metro_named') : l.metro_walk_min != null ? t('lm.walk', { n: l.metro_walk_min }) : dist(l.metro_nearest_dist_m))}
           ${near('bus', t('lm.tram'), dist(l.tram_nearest_dist_m))}
           ${near('shopping-cart', t('lm.supermarket'), dist(l.supermarket_nearest_dist_m))}
           ${near('trees', t('lm.park'), dist(l.park_nearest_dist_m))}

@@ -524,7 +524,11 @@ async def fetch_batch(source: str, items: list, log=print) -> dict:
 
 # Per source, across drip_until calls: the spread scan calls it between
 # slots (~18 times a day), and a fresh count each time would lift the
-# DRIP_PER_DAY cap and forget a block.
+# DRIP_PER_DAY cap and forget a block. Kept on disk too (the status file's
+# "state"): a daemon restart used to reset the day's count, drop the level
+# to the start and forget a block pause — on 2026-10-18 Idealista blocked at
+# 13:37 (pause 1 h), the 13:44 restart sent it straight back and 17 of 20
+# pages failed at 13:49.
 _DRIP_STATE: dict = {}
 
 
@@ -532,14 +536,43 @@ def _drip_status_path(source: str) -> Path:
     return BASE_DIR / f".drip_status_{source}.json"
 
 
+def _load_drip_state(source: str) -> dict:
+    """The drip state a previous process left in the status file."""
+    st = {"day": date.today(), "done": 0, "blocked_until": 0.0, "level": DRIP_START_LEVEL,
+          "changed": time.time(), "last_block": 0.0, "last": None}
+    path = _drip_status_path(source)
+    try:
+        saved = json.loads(path.read_text())
+        written = date.fromtimestamp(path.stat().st_mtime)
+    except (OSError, ValueError):
+        return st
+    s = saved.get("state") or {}
+    level = s.get("level", saved.get("level"))
+    if isinstance(level, int) and 0 <= level < len(DRIP_LEVELS):
+        st["level"] = level
+    st["changed"] = float(s.get("changed") or st["changed"])
+    st["last_block"] = float(s.get("last_block") or 0)
+    st["last"] = saved.get("last")
+    if s.get("blocked_until"):
+        st["blocked_until"] = float(s["blocked_until"])
+    elif saved.get("paused_until"):          # a status file from before "state"
+        try:
+            st["blocked_until"] = datetime.fromisoformat(saved["paused_until"]).timestamp()
+        except ValueError:
+            pass
+    if (s.get("day") or written.isoformat()) == date.today().isoformat():
+        st["done"] = int(s.get("done", saved.get("done_today")) or 0)
+    return st
+
+
 def drip_until(source: str, deadline: float, log=print, after_batch=None) -> None:
     """Drip listing pages for `source` until wall-clock `deadline`, then
     return (the caller's next slot is due). Sleeps like sleep_until in
     between, so a laptop that slept through the night catches up on wake.
     after_batch(): called after each session (photo reading)."""
-    st = _DRIP_STATE.setdefault(source, {
-        "day": date.today(), "done": 0, "blocked_until": 0.0, "level": DRIP_START_LEVEL,
-        "changed": time.time(), "last_block": 0.0, "last": None})
+    if source not in _DRIP_STATE:
+        _DRIP_STATE[source] = _load_drip_state(source)
+    st = _DRIP_STATE[source]
     queue: list = []
     built_at = 0.0
     next_batch = time.time() + random.uniform(30, 90)
@@ -611,6 +644,9 @@ def _write_drip_status(source: str, st: dict, queued: int) -> None:
             "levels": len(DRIP_LEVELS), "per_session": size, "per_hour": per_hour,
             "paused_until": (datetime.fromtimestamp(st["blocked_until"]).isoformat(timespec="minutes")
                              if st["blocked_until"] > time.time() else None),
-            "queued": queued}))
+            "queued": queued,
+            "state": {"day": st["day"].isoformat(), "done": st["done"], "level": st["level"],
+                      "changed": st["changed"], "last_block": st["last_block"],
+                      "blocked_until": st["blocked_until"]}}))
     except OSError:
         pass

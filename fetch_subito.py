@@ -8,7 +8,7 @@ Roomless bulk uploads), so only private advertisers are read (`advt=0`).
 
 The search pages carry everything — full description, features, photos —
 in __NEXT_DATA__, so no listing page is opened. One pass reads every page
-(~29) every SUBITO_EVERY_SEC, run from either scanner daemon's pause between
+(~29) once a day (SUBITO_EVERY_SEC), run from either scanner daemon's pause between
 slots (fetch_rentals._between_slots), in its own minimized Chrome profile.
 
 Location: ~40 % of private listings carry the map address and coordinates.
@@ -42,7 +42,7 @@ SOURCE     = "subito"
 SEARCH_URL = "https://www.subito.it/annunci-lombardia/affitto/appartamenti/milano/milano/?advt=0"
 SCAN_AREA  = "subito-milano"          # one "area": the whole city, read in full
 
-SUBITO_EVERY_SEC = 4 * 3600
+SUBITO_EVERY_SEC = 24 * 3600         # one pass a day (the user, 2026-10-18): ~20 new a day
 BLOCK_PAUSE_SEC  = 6 * 3600
 MAX_PAGES        = 60                 # 29 on 2026-10-18
 PAGE_DELAY_S     = (3.0, 6.0)
@@ -477,6 +477,78 @@ def _dist_m(a: tuple, b: tuple) -> float:
     return 6371000 * math.hypot(x, (b[0] - a[0]) * r)
 
 
+# Zone from the text, for a listing that names neither a street nor a stop
+# ("Bilocale zona Bocconi"): the centre of the listings the other sites put
+# in that neighbourhood. Checked on the 214 listings with Subito's pin
+# (2026-10-18): 101 name a zone; the zone centre is 727 m from the real pin
+# (median), p80 1.2 km, 11 beyond 1.5 km — good for the area filter, not for
+# a deal label (scoring: rent_label_exact_place).
+_ZONE_CUE = (r"(?:zona|quartiere|nel cuore d\w*|in pieno|adiacenz\w*|nei pressi d\w*|a due passi da\w*|"
+             r"a pochi passi da\w*|vicin\w* a\w*|ad?\s+angolo|in)\s+(?:di\s+|del\s+|della\s+|dei\s+|dell'|alla\s+|al\s+)?")
+_ZONE_GENERIC = {"centro", "centrale", "milano", "zona", "citta"}
+
+
+def _zone_index(pool: list) -> dict:
+    """{alias: (lat, lon, neighbourhood)} from the other sites' listings:
+    every neighbourhood name and its parts ("porta romana - medaglie d'oro"
+    → also "porta romana"), with at least 8 listings."""
+    import statistics
+    pts: dict = {}
+    for l in pool:
+        if l.get("source") == SOURCE or not l.get("neighbourhood") or l.get("latitude") is None or l.get("is_stale"):
+            continue
+        name = l["neighbourhood"]
+        n = _fold(name)
+        for a in {n, *[p.strip() for p in re.split(r"\s+-\s+|,|/", n)]}:
+            if len(a) >= 4 and a not in _ZONE_GENERIC:
+                pts.setdefault(a, []).append((l["latitude"], l["longitude"], name))
+    out = {}
+    for a, p in pts.items():
+        if len(p) >= 8:
+            names = [x[2] for x in p]
+            out[a] = (statistics.median(x[0] for x in p), statistics.median(x[1] for x in p),
+                      max(set(names), key=names.count))
+    return out
+
+
+def zone_from_text(title: str, body: str, index: dict) -> Optional[str]:
+    """The neighbourhood a listing names: anywhere in the title, else after
+    a cue ("zona", "nei pressi di"…) in the text; destinations ("10 minuti
+    dal …") don't count."""
+    aliases = sorted(index, key=len, reverse=True)
+    t = _fold(title)
+    for a in aliases:
+        m = re.search(r"\b" + re.escape(a) + r"\b", t)
+        if m and not _TRAVEL_BEFORE_RX.search(t[max(0, m.start() - 40):m.start()]):
+            return a
+    b, best = _fold(body), None
+    for a in aliases:
+        for m in re.finditer(_ZONE_CUE + r"\b" + re.escape(a) + r"\b", b):
+            if _TRAVEL_BEFORE_RX.search(b[max(0, m.start() - 40):m.start()]):
+                continue
+            if best is None or m.start() < best[0]:
+                best = (m.start(), a)
+            break
+    return best[1] if best else None
+
+
+def place_by_zone(rows: list, pool: list) -> int:
+    """Rows still without a place: the zone their text names (geo_precision
+    "zone", neighbourhood from the other sites). Before enrichment."""
+    todo = [r for r in rows if r.get("latitude") is None and not r.get("is_outside_city")]
+    if not todo:
+        return 0
+    index, n = _zone_index(pool), 0
+    for r in todo:
+        a = zone_from_text(r.get("title") or "", r.get("description") or "", index)
+        if a:
+            lat, lon, name = index[a]
+            r.update(latitude=lat, longitude=lon, geo_precision="zone", neighbourhood=name,
+                     address=r.get("address") or f"Zona {name}, Milano")
+            n += 1
+    return n
+
+
 def settle_places(rows: list, pool: list) -> dict:
     """After enrichment: a pin outside the Comune di Milano marks the
     listing outside the city (scored out, like Idealista's); a placed row
@@ -574,6 +646,8 @@ def _run(args, log) -> dict:
             pool = []
         from sales_scan import enrich_rows
         with contextlib.redirect_stderr(open("/dev/null", "w")):
+            rec["zoned"] = place_by_zone(rows, pool)
+            rec["unplaced"] -= rec["zoned"]
             rec["geocoded"] = enrich_rows(rows)
             rec.update(settle_places(rows, pool))
             scored = score_all(rows, comps_pool=rows + [l for l in pool if l.get("source") != SOURCE])

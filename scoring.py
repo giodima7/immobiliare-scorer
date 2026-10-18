@@ -444,6 +444,8 @@ _DEFAULT_SETTINGS: dict = {
     # (geo_precision "metro", ~330 m off) passes the metro bar by
     # construction: no Hidden Gem for it (Great Value still can).
     "rent_gem_exact_place":      True,
+    # Placed by the zone its text names (geo_precision "zone"): no label.
+    "rent_label_exact_place":    True,
     # Great Value badge thresholds
     "gv_total_min":       70,
     "gv_ldi_min":         50,
@@ -865,6 +867,10 @@ def rental_labels(listing: dict, price_z: float | None, delta_label_pct: float |
     metro within walking distance and an uncramped layout.
     """
     st = settings
+    # Placed only by the zone its text names (fetch_subito, ~730 m off):
+    # the comparison with nearby flats is too loose for a deal label.
+    if st.get("rent_label_exact_place", True) and listing.get("geo_precision") == "zone":
+        return False, False
     if (price_z is None or delta_label_pct is None
             or listing.get("_absolute_value_gate_applied") or listing.get("_is_corporate_rental")
             or SHORTLET_PLATFORMS.search(listing.get("agency_name") or "")

@@ -255,6 +255,7 @@ const STRINGS = {
     'card.twin':'Some details come from the same flat\'s listing on {site}.',
     'card.private':'Private landlord',
     'card.metro_named':'Near {name} (per the listing)','lm.metro_named':'named in the listing',
+    'lm.geo_zone':'Approximate position: the centre of the area the listing names (often ~700 m off) — compared with the area, no deal label.','lm.from_zone_centre':'from the area centre',
     'lm.subito_read':'Everything from the listing on Subito.it (a private landlord: no agency fee).',
     'lm.geo_street':'Approximate position: the street named in the listing (no house number).',
     'lm.geo_metro':'Approximate position: the metro stop named in the listing — distances can be a few hundred metres off.',
@@ -513,6 +514,7 @@ const STRINGS = {
     'photo.flag.dated':'dated kitchen or bathroom',
     'card.photo_ok':'Photos OK',
     'card.photo_bad':'Photos: no',
+    'card.photo_doubt':'Photos: Sonnet unsure',
   },
   it: {
     // Tabs
@@ -769,6 +771,7 @@ const STRINGS = {
     'card.twin':'Alcuni dettagli vengono dall\'annuncio dello stesso appartamento su {site}.',
     'card.private':'Privato',
     'card.metro_named':'Vicino a {name} (dall\'annuncio)','lm.metro_named':'citata nell\'annuncio',
+    'lm.geo_zone':'Posizione approssimativa: il centro della zona citata nell\'annuncio (spesso ~700 m di scarto) — confronto con la zona, nessuna etichetta.','lm.from_zone_centre':'dal centro della zona',
     'lm.subito_read':'Tutto dall\'annuncio su Subito.it (un privato: niente provvigione d\'agenzia).',
     'lm.geo_street':'Posizione approssimativa: la via citata nell\'annuncio (senza numero civico).',
     'lm.geo_metro':'Posizione approssimativa: la fermata della metro citata nell\'annuncio — le distanze possono variare di qualche centinaio di metri.',
@@ -1022,6 +1025,7 @@ const STRINGS = {
     'photo.flag.dated':'cucina o bagno datati',
     'card.photo_ok':'Foto ok',
     'card.photo_bad':'Foto: non convince',
+    'card.photo_doubt':'Foto: Sonnet ha dubbi',
   },
 };
 
