@@ -372,10 +372,17 @@ _DEFAULT_SETTINGS: dict = {
     # page (listing_details.py) or the same flat on Immobiliare answers.
     "property_ignore_card_flags": True,
     # Rentals: what the price comparison is made on. "asking" = rent alone
-    # on both sides (condo fees are judged in the property score); "known"
-    # = rent + fees wherever stated — only ~2 % state them, so exactly those
-    # looked 10–20 % dearer than neighbours whose fees were unknown.
-    "rent_condo_basis":  "asking",
+    # on both sides (condo fees judged apart, in the property and penalty
+    # scores); "known" = rent + fees wherever stated — only ~2 % stated them,
+    # so exactly those looked 10–20 % dearer than neighbours with no data;
+    # "total" (since 2026-10-18, fees known for ~26 % in Milan, ~70 % of the
+    # 75+ / focus-area listings) = what you pay each month: rent + condo +
+    # heating billed apart, with the OMI zone's median condo €/m² standing in
+    # where a listing states none (internal — never shown). A cheap rent with
+    # big fees stops being a deal: of the labelled listings with fees ≥ 25 %
+    # of the rent, 26 of 35 lost the label in the measurement; labels overall
+    # 402 → 372. The separate fee penalties are off under "total".
+    "rent_condo_basis":  "total",
     # Treat the same flat listed at another price as the same flat (comps,
     # twins, "relisted from €X") — price-blind, strict on place.
     "comps_relist_twins": True,
@@ -740,9 +747,10 @@ def property_parts(listing: dict, settings: dict | None = None) -> dict:
         elif dom > 30:  parts['dom'] -= 0.03
 
     # ── Condominium fees (cost penalty — not a property coefficient) ─────────
+    # Off when the price comparison already uses the total (rent_condo_basis).
     rent_mo = listing.get('rent_mo') or listing.get('price') or 0
     spese   = listing.get('spese_condominiali') or listing.get('condominium_fees') or 0
-    if rent_mo and spese and rent_mo > 0:
+    if rent_mo and spese and rent_mo > 0 and settings.get("rent_condo_basis") != "total":
         parts['condo'] = 0.0
         if   spese > rent_mo * 0.20:  parts['condo'] -= 0.10
         elif spese > rent_mo * 0.12:  parts['condo'] -= 0.04
@@ -1009,7 +1017,8 @@ def penalty_score(listing: dict, settings: dict) -> int:
         score -= 10
 
     # ── Condominium fees eating > 25% of rent ───────────────────────────────
-    if rent_mo > 0 and spese > rent_mo * 0.25:
+    # (Off under rent_condo_basis "total": the price comparison has them.)
+    if rent_mo > 0 and spese > rent_mo * 0.25 and settings.get("rent_condo_basis") != "total":
         score -= 15
 
     return max(0, score)
@@ -1389,6 +1398,55 @@ def compute_effective_psqm(listing: dict) -> float:
         condo = 0
     condo_capped = min(condo, rent * 0.20)
     return round((rent + condo_capped) / sqm, 2)
+
+
+def _stated_condo(listing: dict) -> float:
+    """Condo fees as stated, unless above half the rent — almost always a
+    yearly figure typed as monthly (the dashboard flags those too)."""
+    try:
+        rent = float(listing.get("rent_mo") or listing.get("price") or 0) or 0
+        condo = float(listing.get("spese_condominiali") or listing.get("condominium_fees") or 0) or 0
+    except (TypeError, ValueError):
+        return 0.0
+    return condo if (rent and 0 < condo <= rent * 0.5) else 0.0
+
+
+def zone_condo_psqm(pool: list) -> tuple[dict, float]:
+    """({omi_zona: median stated condo €/m²}, city median) from the listings
+    that state their fees; zones with fewer than 15 fall back to the city."""
+    import statistics
+    per_zone: dict = {}
+    for l in pool:
+        c, sqm = _stated_condo(l), l.get("sqm") or 0
+        if c and sqm:
+            per_zone.setdefault(l.get("omi_zona"), []).append(c / float(sqm))
+    every = [v for vs in per_zone.values() for v in vs]
+    city = statistics.median(every) if every else 2.8
+    return {z: statistics.median(v) for z, v in per_zone.items() if len(v) >= 15}, city
+
+
+def compute_total_psqm(listing: dict, zone_med: dict, city_med: float) -> float:
+    """€/m²/month the renter actually pays: rent + condo + heating billed
+    apart. No stated condo → the zone's median (the comparison only)."""
+    try:
+        rent = float(listing.get("rent_mo") or listing.get("price") or 0) or 0
+        sqm = float(listing.get("sqm") or 0) or 0
+    except (TypeError, ValueError):
+        rent = sqm = 0
+    if not rent or not sqm:
+        try:
+            return float(listing.get("ask_psqm") or 0) or 0
+        except (TypeError, ValueError):
+            return 0
+    if listing.get("condo_included") is True:
+        condo = 0.0
+    else:
+        condo = _stated_condo(listing) or zone_med.get(listing.get("omi_zona"), city_med) * sqm
+    try:
+        heating = float(listing.get("heating_mo") or 0)
+    except (TypeError, ValueError):
+        heating = 0.0
+    return round((rent + condo + heating) / sqm, 2)
 
 
 def get_condo_fee_flag(listing: dict) -> str | None:
@@ -2106,9 +2164,14 @@ def score_all(listings: list, settings: dict | None = None,
     # Pre-pass: stamp ask_psqm_effective + condo_fee_flag on every listing in
     # the comps pool BEFORE scoring runs, so the comps engine reads one
     # consistent €/m² across the whole pool (rent_condo_basis).
+    basis = settings.get("rent_condo_basis", "known")
+    if basis == "total":
+        zone_med, city_med = zone_condo_psqm(pool)
     for l in pool:
-        if settings.get("rent_condo_basis", "known") == "asking":
+        if basis == "asking":
             l["ask_psqm_effective"] = l.get("ask_psqm") or compute_effective_psqm(l)
+        elif basis == "total":
+            l["ask_psqm_effective"] = compute_total_psqm(l, zone_med, city_med)
         else:
             l["ask_psqm_effective"] = compute_effective_psqm(l)
         l["condo_fee_flag"]     = get_condo_fee_flag(l)
