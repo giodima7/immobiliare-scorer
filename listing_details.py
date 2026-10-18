@@ -585,6 +585,14 @@ def _drip_status_path(source: str) -> Path:
     return BASE_DIR / f".drip_status_{source}.json"
 
 
+def _any_sale(items: list) -> bool:
+    try:
+        ids = {str(l.get("id")) for l in json.loads(SALES_PATH.read_text())}
+    except (OSError, ValueError):
+        return False
+    return any(str(lid) in ids for lid, _ in items)
+
+
 def _load_drip_state(source: str) -> dict:
     """The drip state a previous process left in the status file."""
     st = {"day": date.today(), "done": 0, "blocked_until": 0.0, "level": DRIP_START_LEVEL,
@@ -645,6 +653,14 @@ def drip_until(source: str, deadline: float, log=print, after_batch=None) -> Non
                     log(f"[details] {source}: batch failed ({type(exc).__name__}: {exc})")
                 st["done"] += len(take)
                 _pace(source, st, stats, len(take), log)
+                # Sale pages read: apply them now (condo fees, nuda proprietà,
+                # auctions) instead of at the next sales sweep, up to 4 h later.
+                if stats["ok"] and _any_sale(take):
+                    try:
+                        from sales_scan import rescore_sales
+                        rescore_sales(log)
+                    except Exception as exc:
+                        log(f"[details] sales rescore failed: {exc}")
                 st["last"] = {"at": now.isoformat(timespec="seconds"), "pages": len(take),
                               **{k: stats[k] for k in ("ok", "gone", "error", "blocked")}}
                 _write_drip_status(source, st, len(queue))

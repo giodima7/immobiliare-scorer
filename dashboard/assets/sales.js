@@ -16,7 +16,8 @@ const _SALE_AREA_ITEMS = [];       // neighbourhoods of the loaded sales, most l
 const SALE_SINCE = '2026-10-18';   // first sales sweep: nothing is "new" that day
 
 const SALE_DEFAULTS = { areas: [], maxPrice: 0, minRooms: 0, minSqm: 0, deal: '', sort: 'score',
-                        down: 20, rate: 3.5, years: 25, condition: '', listed: '', source: '' };
+                        down: 20, rate: 3.5, years: 25, condition: '', listed: '', source: '',
+                        minFloor: '', maxMetro: '', minEnergy: '' };
 
 function saleFilters() {
   const f = Object.assign({}, SALE_DEFAULTS, Storage.get('saleFilters', {}) || {});
@@ -87,6 +88,9 @@ function _initSaleBar() {
   el('sSortSelect')?.addEventListener('change', e => _setSaleFilters({ sort: e.target.value }));
   el('sCondition')?.addEventListener('change', e => _setSaleFilters({ condition: e.target.value }));
   el('sListed')?.addEventListener('change', e => _setSaleFilters({ listed: e.target.value }));
+  el('sMinFloor')?.addEventListener('change', e => _setSaleFilters({ minFloor: e.target.value }));
+  el('sMaxMetro')?.addEventListener('change', e => _setSaleFilters({ maxMetro: e.target.value }));
+  el('sMinEnergy')?.addEventListener('change', e => _setSaleFilters({ minEnergy: e.target.value }));
   document.querySelectorAll('#sDealFilter [data-sdeal]').forEach(b =>
     b.addEventListener('click', () => _setSaleFilters({ deal: b.dataset.sdeal })));
   document.querySelectorAll('#sSourceFilter [data-ssource]').forEach(b =>
@@ -118,6 +122,7 @@ function _syncSaleBar(f) {
   set('sMaxPrice', f.maxPrice || ''); set('sMinRooms', f.minRooms || ''); set('sMinSqm', f.minSqm || '');
   set('sDown', f.down); set('sRate', f.rate); set('sYears', f.years);
   set('sSortSelect', f.sort); set('sCondition', f.condition); set('sListed', f.listed);
+  set('sMinFloor', f.minFloor); set('sMaxMetro', f.maxMetro); set('sMinEnergy', f.minEnergy);
   const seg = (sel, attr, cur) => document.querySelectorAll(sel).forEach(b => {
     const on = (b.dataset[attr] || '') === (cur || '');
     b.classList.toggle('active', on);
@@ -126,7 +131,7 @@ function _syncSaleBar(f) {
   seg('#sDealFilter [data-sdeal]', 'sdeal', f.deal);
   seg('#sSourceFilter [data-ssource]', 'ssource', f.source);
   if (_saleAreaMsd) _saleAreaMsd.setSelected(f.areas);
-  const nMore = _saleChips(f).filter(c => ['condition', 'listed', 'source'].includes(c.key)).length;
+  const nMore = _saleChips(f).filter(c => ['condition', 'listed', 'source', 'minFloor', 'maxMetro', 'minEnergy'].includes(c.key)).length;
   const badge = document.getElementById('sMoreBadge');
   if (badge) { badge.textContent = nMore || ''; badge.hidden = !nMore; }
   document.getElementById('sMoreBtn')?.classList.toggle('on', nMore > 0);
@@ -141,6 +146,9 @@ function _saleChips(f) {
   if (f.deal)      add('deal', t(f.deal === 'below' ? 'sale.deal_below' : 'sale.deal_yield'));
   if (f.condition) add('condition', t('cond.' + f.condition));
   if (f.listed)    add('listed', t('chip.listed_days', { n: f.listed }));
+  if (f.minFloor !== '') add('minFloor', t('chip.min_floor', { n: f.minFloor }));
+  if (f.maxMetro)  add('maxMetro', t('chip.max_metro', { n: fmt(Number(f.maxMetro)) }));
+  if (f.minEnergy) add('minEnergy', t('chip.min_energy', { v: f.minEnergy }));
   if (f.source)    add('source', siteName(f.source));
   return c;
 }
@@ -186,6 +194,11 @@ function _saleMatches(l, f) {
     if (!l.first_seen_date || l.first_seen_date < d.toISOString().slice(0, 10)) return false;
   }
   if (f.source && (l.source || 'sale') !== f.source) return false;
+  // As Rentals: an unknown floor or metro distance doesn't pass; an unknown
+  // energy class does (partial data).
+  if (f.minFloor !== '' && (l.floor_n ?? -999) < Number(f.minFloor)) return false;
+  if (f.maxMetro && (l.metro_nearest_dist_m == null || l.metro_nearest_dist_m > Number(f.maxMetro))) return false;
+  if (f.minEnergy && l.energy_class && (ENERGY_RANK[l.energy_class] || 0) < (ENERGY_MIN_RANK[f.minEnergy] || 0)) return false;
   return true;
 }
 
