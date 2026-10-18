@@ -135,11 +135,78 @@ function _lmPhotoVerdict(l) {
   const scores = [sc('photo.condition', l.photo_condition), sc('photo.kitchen', l.photo_kitchen),
                   sc('photo.bathroom', l.photo_bathroom), sc('photo.light', l.photo_light)].filter(Boolean).join(' · ');
   const flags = (l.photo_flags || []).map(f => t('photo.flag.' + f)).join(', ');
+  // The user's own verdict (photo_feedback) wins; Sonnet's stays below it.
+  const grade = l.photo_grade != null ? ' · ' + t('photo.grade', { v: fmtNum(l.photo_grade, l.photo_grade % 1 ? 1 : 0) }) : '';
+  const head = (l.photo_by_user ? `${t('pfb.yours')}: ${t('pfb.' + l.photo_deal)}` : `Sonnet: ${t('photo.' + l.photo_deal)}`) + grade;
+  const sub = l.photo_by_user ? (l.photo_user_note || '') : note;
+  const sonnet = l.photo_by_user && l.photo_sonnet_deal
+    ? t('pfb.sonnet_said', { v: t('photo.' + l.photo_sonnet_deal) }) + (note ? ' — ' + note : '') : '';
   return `<div class="lm-verdict lm-photo-verdict ${cls}">
-      <div class="lm-verdict-head">${icon('photo')} ${escapeHtml(t('photo.' + l.photo_deal))}</div>
-      ${note ? `<div class="lm-verdict-sub">${escapeHtml(note)}</div>` : ''}
-      <div class="lm-photo-meta">${escapeHtml([scores, flags].filter(Boolean).join(' · '))}${scores || flags ? '<br>' : ''}${escapeHtml(t('photo.read', { date: _lmDate(l.photo_read_at) || '–', conf: t('photo.conf.' + (l.photo_confidence || 'low')) }))}</div>
+      <div class="lm-verdict-head">${icon('photo')} ${escapeHtml(head)}</div>
+      ${sub ? `<div class="lm-verdict-sub">${escapeHtml(sub)}</div>` : ''}
+      <div class="lm-photo-meta">${sonnet ? escapeHtml(sonnet) + '<br>' : ''}${escapeHtml([scores, flags].filter(Boolean).join(' · '))}${scores || flags ? '<br>' : ''}${escapeHtml(t('photo.read', { date: _lmDate(l.photo_read_at) || '–', conf: t('photo.conf.' + (l.photo_confidence || 'low')) }))}</div>
     </div>`;
+}
+
+// "What do you think of the photos?" — the user's verdict on what Sonnet
+// read (api.py /api/photo-feedback): it applies to this listing at once
+// and teaches the next readings. Local dashboard only.
+const _PFB_DEALS = ['confirms', 'doubt', 'contradicts'];
+function _lmPhotoFeedbackHtml(l) {
+  if (!l.photo_deal || typeof IS_LIVE === 'undefined' || !IS_LIVE) return '';
+  const esc = escapeHtml, cur = l.photo_by_user ? l.photo_deal : null;
+  const btn = d => `<button type="button" class="seg-btn${cur === d ? ' active' : ''}" aria-pressed="${cur === d}" data-pfb="${d}" onclick="_pfbPick(this)">${esc(t('pfb.' + d))}</button>`;
+  return `<div class="pfb" data-pfb-id="${esc(String(l.id))}">
+      <div class="pfb-q">${esc(t('pfb.q'))}</div>
+      <div class="seg pfb-seg" role="group" aria-label="${esc(t('pfb.q'))}">${_PFB_DEALS.map(btn).join('')}</div>
+      <label class="pfb-grade">${esc(t('pfb.grade'))}
+        <select class="input pfb-grade-sel">
+          <option value="">${esc(t('pfb.grade_none'))}</option>
+          ${Array.from({ length: 19 }, (_, i) => 1 + i / 2).map(g => `<option value="${g}"${l.photo_by_user && l.photo_grade === g ? ' selected' : ''}>${fmtNum(g, g % 1 ? 1 : 0)}</option>`).join('')}
+        </select> / 10</label>
+      <textarea class="input pfb-note" rows="2" maxlength="500" placeholder="${esc(t('pfb.note_ph'))}">${esc(l.photo_user_note || '')}</textarea>
+      <div class="pfb-row">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="_pfbSave(this)">${esc(t('pfb.save'))}</button>
+        ${cur ? `<button type="button" class="btn btn-ghost btn-sm" onclick="_pfbSave(this, true)">${esc(t('pfb.clear'))}</button>` : ''}
+        <span class="pfb-status" aria-live="polite"></span>
+      </div>
+    </div>`;
+}
+
+function _pfbPick(b) {
+  b.closest('.pfb').querySelectorAll('[data-pfb]').forEach(x => {
+    const on = x === b && !x.classList.contains('active');
+    x.classList.toggle('active', on);
+    x.setAttribute('aria-pressed', String(on));
+  });
+}
+
+async function _pfbSave(b, clear = false) {
+  const box = b.closest('.pfb'), id = box.dataset.pfbId, status = box.querySelector('.pfb-status');
+  const deal = clear ? null : (box.querySelector('[data-pfb].active')?.dataset.pfb || null);
+  const note = clear ? '' : box.querySelector('.pfb-note').value.trim();
+  const grade = clear ? null : (box.querySelector('.pfb-grade-sel')?.value || null);
+  if (!clear && !deal) { status.textContent = t('pfb.pick'); return; }
+  status.textContent = '…';
+  try {
+    const r = await fetch('/api/photo-feedback', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                                   body: JSON.stringify({ id, deal, note, grade }) }).then(x => x.json());
+    if (!r || r.error) throw new Error(r && r.error);
+    const l = [typeof _lmListing !== 'undefined' ? _lmListing : null,
+               ...(typeof ALL_RENT !== 'undefined' ? ALL_RENT : []),
+               ...(typeof ALL_SALE !== 'undefined' ? ALL_SALE : [])].find(x => x && String(x.id) === id);
+    if (l) {
+      Object.assign(l, r.listing);
+      const v = box.parentElement.querySelector('.lm-photo-verdict');
+      if (v) v.outerHTML = _lmPhotoVerdict(l);
+      const card = document.querySelector(`#rentGrid .card[data-listing-id="${CSS.escape(id)}"]`);
+      if (card && typeof renderRentalCard === 'function') card.replaceWith(renderRentalCard(l));
+    }
+    if (clear) { box.querySelectorAll('[data-pfb]').forEach(x => { x.classList.remove('active'); x.setAttribute('aria-pressed', 'false'); }); box.querySelector('.pfb-note').value = ''; }
+    status.textContent = t(clear ? 'pfb.cleared' : 'pfb.saved');
+  } catch {
+    status.textContent = t('pfb.error');
+  }
 }
 
 // Rent, condo fees, heating billed apart and their total, as the listing
@@ -162,6 +229,14 @@ function _lmCostTable(l) {
   }
   const note = !c.known ? `<div class="lm-muted">${esc(c.suspect ? t('cost.suspect_long', { v: fmt(c.statedCondo) }) : t(c.pageRead ? 'cost.ask_long' : 'cost.pending_long'))}</div>` : '';
   return `<table class="lm-costs">${rows}</table>${note}`;
+}
+
+// Links to the other copies of the same flat (_dedupListings → also_on).
+function _lmAlsoOn(l) {
+  const seen = new Set();
+  const links = (l.also_on || []).filter(a => a.url && !seen.has(a.url) && seen.add(a.url)).map(a =>
+    `<a href="${_safeUrl(a.url)}" target="_blank" rel="noopener">${escapeHtml(siteName(a.source))}${a.price && a.price !== (l.rent_mo ?? l.price) ? ' €' + fmt(a.price) : ''}</a>`);
+  return links.length ? ' · ' + escapeHtml(t('lm.also_on')) + ' ' + links.join(', ') : '';
 }
 
 function listingModalHtml(l) {
@@ -219,7 +294,7 @@ function listingModalHtml(l) {
     <div class="lm-title">
       <h2 id="lmTitle">${esc([formatAddress(l.neighbourhood), l.address ? formatAddress(l.address) : ''].filter(Boolean).join(' · ')
                               || (l.title || '').trim() || '–')}</h2>
-      <div class="lm-sub">${esc(site)}${subito ? ' · ' + esc(t('card.private')) : ''} · ID ${id}${l.first_seen_date ? ' · ' + esc(t('lm.first_seen', { date: _lmDate(l.first_seen_date) })) : ''}</div>
+      <div class="lm-sub">${esc(site)}${subito ? ' · ' + esc(t('card.private')) : ''}${_lmAlsoOn(l)} · ID ${id}${l.first_seen_date ? ' · ' + esc(t('lm.first_seen', { date: _lmDate(l.first_seen_date) })) : ''}</div>
     </div>
     <button type="button" class="btn btn-secondary btn-icon lm-close" aria-label="${esc(t('lm.close'))}">${icon('x')}</button>
   </div>
@@ -232,6 +307,7 @@ function listingModalHtml(l) {
       ${v.sub ? `<div class="lm-verdict-sub">${esc(v.sub)}</div>` : ''}
     </div>
     ${_lmPhotoVerdict(l)}
+    ${_lmPhotoFeedbackHtml(l)}
 
     <div class="lm-money">
       <div><span class="lm-rent">€${fmt(monthlyCost(l).total)}</span><span class="lm-muted">${esc(t(monthlyCost(l).known ? 'cost.all_in' : 'cost.rent_only'))}</span></div>

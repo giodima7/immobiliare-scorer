@@ -47,7 +47,7 @@ from pathlib import Path
 from re import compile as re_compile
 
 from comps_engine import get_comps_benchmark, build_comps_index, SHORTLET_PLATFORMS
-from listing_details import apply_details, fill_from_twins, stamp_relistings
+from listing_details import apply_details, fill_from_twins, stamp_dup_groups, stamp_relistings
 import omi_lookup
 
 
@@ -2053,6 +2053,7 @@ def score_all_sales(listings: list, settings: dict | None = None) -> list:
         settings = _load_settings()
 
     comps_index = build_comps_index(listings)
+    stamp_dup_groups(listings, listings, comps_index)
     scored = []
     for l in listings:
         s = score_sale_listing(l, listings, settings, comps_index)
@@ -2108,14 +2109,33 @@ def _property_feature_means(pool: list, settings: dict, comps_index: dict) -> di
 PHOTO_EVALS_PATH = Path(__file__).resolve().parent / "photo_eval_milano.json"
 PHOTO_FIELDS = ("photo_deal", "photo_confidence", "photo_condition", "photo_kitchen",
                 "photo_bathroom", "photo_light", "photo_flags", "photo_note_it",
-                "photo_note_en", "photo_read_at")
+                "photo_note_en", "photo_read_at", "photo_by_user", "photo_user_note",
+                "photo_sonnet_deal", "photo_grade")
 
 
 def load_photo_evals() -> dict:
+    """Sonnet's readings (photo_eval_milano.json), with the user's own
+    verdicts on top (photo_feedback_milano.json): theirs wins for that
+    listing, as a confident one."""
     try:
-        return json.loads(PHOTO_EVALS_PATH.read_text())
+        evals = json.loads(PHOTO_EVALS_PATH.read_text())
     except (OSError, ValueError):
-        return {}
+        evals = {}
+    try:
+        from photo_eval import load_feedback
+        feedback = load_feedback()
+    except Exception:
+        feedback = {}
+    for lid, fb in feedback.items():
+        if not fb.get("deal"):
+            continue
+        base = evals.get(lid) or {}
+        evals[lid] = {**base, "deal_check": fb["deal"], "confidence": "high",
+                      "grade": fb.get("grade") if fb.get("grade") is not None else base.get("grade"),
+                      "fingerprint": fb.get("fingerprint") or base.get("fingerprint"),
+                      "by_user": True, "user_note": fb.get("note") or None,
+                      "sonnet_deal": base.get("deal_check")}
+    return evals
 
 
 def apply_photo_verdict(l: dict, evals: dict, cap: int) -> None:
@@ -2136,6 +2156,9 @@ def apply_photo_verdict(l: dict, evals: dict, cap: int) -> None:
         "photo_bathroom": r.get("bathroom"), "photo_light": r.get("light"),
         "photo_flags": r.get("red_flags") or [], "photo_note_it": r.get("note_it"),
         "photo_note_en": r.get("note_en"), "photo_read_at": r.get("read_at"),
+        "photo_by_user": r.get("by_user") or None, "photo_user_note": r.get("user_note"),
+        "photo_sonnet_deal": r.get("sonnet_deal") if r.get("by_user") else None,
+        "photo_grade": r.get("grade"),
     })
     if r.get("deal_check") == "contradicts" and r.get("confidence") in ("medium", "high"):
         l["hidden_gem"] = False
@@ -2143,7 +2166,8 @@ def apply_photo_verdict(l: dict, evals: dict, cap: int) -> None:
         if (l.get("score_total") or 0) > cap:
             l["score_total"] = cap
             l["score_was_capped"] = True
-            reason = f"photos contradict the deal → max {cap}"
+            reason = (f"you judged the photos not convincing → max {cap}" if r.get("by_user")
+                      else f"photos contradict the deal → max {cap}")
             l["score_cap_reason"] = "; ".join(x for x in (l.get("score_cap_reason"), reason) if x)
 
 
@@ -2191,6 +2215,7 @@ def score_all(listings: list, settings: dict | None = None,
     # copies, so it is never its own comparable (comps_engine._same_flat).
     comps_index = build_comps_index(pool, relist=settings.get("comps_relist_twins", True))
     stamp_relistings(listings, pool, comps_index)
+    stamp_dup_groups(listings, pool, comps_index)
     # Same flat on both sites: each copy gets what the other knows.
     if settings.get("fill_from_twins", True):
         fill_from_twins(pool, comps_index)

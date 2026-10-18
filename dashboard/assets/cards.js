@@ -331,7 +331,14 @@ function _photoChipHtml(l) {
               doubt: ['tone-at', 'card.photo_doubt'] }[l.photo_deal];
   if (!v) return '';
   const note = (currentLang === 'it' ? l.photo_note_it : l.photo_note_en) || '';
-  return `<span class="deal-delta ${v[0]}" title="${escapeHtml(note)}">${icon('photo')}${escapeHtml(t(v[1]))}</span>`;
+  const yours = l.photo_by_user ? ' · ' + t('card.photo_you') : '';
+  // The 1–10 grade (rubric v2) says more than the verdict; older readings
+  // have only the verdict.
+  const g = l.photo_grade;
+  const tone = g == null ? v[0] : g >= 7 ? 'tone-good' : g <= 4.5 ? 'tone-bad' : 'tone-at';
+  const text = g != null ? t('card.photo_grade', { v: fmtNum(g, g % 1 ? 1 : 0) })
+             : t(l.photo_by_user ? 'pfb.' + l.photo_deal : v[1]);
+  return `<span class="deal-delta ${tone}" title="${escapeHtml(l.photo_by_user ? (l.photo_user_note || '') : note)}">${icon('photo')}${escapeHtml(text + yours)}</span>`;
 }
 
 function _metroMeta(l) {
@@ -416,7 +423,7 @@ function renderRentalCard(l) {
       <div class="card-head">
         <div class="card-title-wrap">
           <h2 class="card-title"><button type="button" class="card-title-btn" data-open-details="${id}">${escapeHtml(nb)}</button></h2>
-          <div class="card-sub">${escapeHtml([street && street.toLowerCase() !== nb.toLowerCase() ? street : '', site, l.source === 'subito' ? t('card.private') : ''].filter(Boolean).join(' · '))}</div>
+          <div class="card-sub">${escapeHtml([street && street.toLowerCase() !== nb.toLowerCase() ? street : '', site, l.source === 'subito' ? t('card.private') : '', alsoOnSites(l) ? t('card.also_on', { sites: alsoOnSites(l) }) : ''].filter(Boolean).join(' · '))}</div>
         </div>
         ${scoreRingHtml(l)}
       </div>

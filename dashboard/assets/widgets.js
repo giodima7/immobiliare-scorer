@@ -440,6 +440,8 @@ function _dedupListings(list, isRental) {
     return s;
   }
 
+  // A copy with a deal label wins (a deal must not hide behind its twin).
+  const label = l => (l.is_stale ? -1 : l.hidden_gem ? 2 : l.good_value ? 1 : 0);
   function collapse(items, keyFn) {
     const groups = new Map();
     for (const l of items) {
@@ -452,19 +454,37 @@ function _dedupListings(list, isRental) {
     const out = [];
     for (const grp of groups.values()) {
       if (grp.length === 1) { out.push(grp[0]); continue; }
-      grp.sort((a, b) => score(b) - score(a));
+      grp.sort((a, b) => (label(b) - label(a)) || (score(b) - score(a)));
       const winner = grp[0];
       // Preserve earliest first_seen_date so the New badge logic is honest.
       const dates = grp.map(x => x.first_seen_date).filter(Boolean).sort();
       if (dates.length) winner.first_seen_date = dates[0];
+      // The other copies stay reachable: "also on Idealista / Subito".
+      const also = [...(winner.also_on || [])];
+      for (const x of grp.slice(1)) {
+        for (const c of [x, ...(x.also_on || [])]) {
+          if (c.url && c.url !== winner.url && !also.some(a => a.url === c.url)) {
+            also.push({ id: c.id, source: c.source, url: c.url, price: c[priceField] ?? c.price });
+          }
+        }
+      }
+      winner.also_on = also;
       out.push(winner);
       collapsed += grp.length - 1;
     }
     return { out, collapsed };
   }
 
+  // Pass 0 — the same flat listed more than once, on two sites or by two
+  // agencies: scoring's dup_group (comps_engine duplicate groups — same
+  // rent, m², rooms and floor within 300 m). On 2026-10-18 it merged ~1,100
+  // cards the two passes below missed (Idealista coordinates are geocoded,
+  // its addresses written differently).
+  const r0 = collapse(list.filter(l => !l.is_stale || !l.dup_group), l => l.dup_group || null);
+  r0.out.push(...list.filter(l => l.is_stale && l.dup_group));
+
   // Pass 1 — geo + sqm + rooms + price (catches exact-coord duplicates)
-  const r1 = collapse(list, l => {
+  const r1 = collapse(r0.out, l => {
     if (l.latitude == null || l.longitude == null) return null;
     return [
       Math.round(l.latitude  * 1e4) / 1e4,
@@ -483,11 +503,11 @@ function _dedupListings(list, isRental) {
     return [norm, l.sqm ?? '?', l.rooms ?? '?', l[priceField] ?? '?'].join('|');
   });
 
-  const totalCollapsed = r1.collapsed + r2.collapsed;
+  const totalCollapsed = r0.collapsed + r1.collapsed + r2.collapsed;
   if (totalCollapsed > 0) {
     console.log(
-      `[dedup] collapsed ${totalCollapsed} cross-source duplicate(s) ` +
-      `(geo: ${r1.collapsed}, address: ${r2.collapsed}) — ` +
+      `[dedup] collapsed ${totalCollapsed} duplicate(s) ` +
+      `(same flat: ${r0.collapsed}, geo: ${r1.collapsed}, address: ${r2.collapsed}) — ` +
       `${r2.out.length} unique of ${list.length} input`
     );
   }
