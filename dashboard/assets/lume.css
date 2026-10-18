@@ -3545,6 +3545,9 @@ body[data-tab="saved"] #rActiveChips, body[data-tab="insights"] #rActiveChips, b
 .fb-check-box { height: var(--control-h); }
 .fb-hint { font-size: var(--text-xs); color: var(--text-secondary); margin-top: var(--s-2); }
 .fb-more-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: var(--s-3) var(--s-4); }
+/* The source buttons (four sites since Subito) don't fit one 190 px column. */
+.fb-more-grid .field-span2 { grid-column: span 2; }
+.fb-more-grid .field-span2 .seg-full { max-width: 420px; }
 .score-filter { display: flex; align-items: center; gap: var(--s-2); height: var(--control-h); }
 .score-filter .score-slider { flex: 1; min-width: 60px; }
 .score-filter .score-number-input { width: 64px; flex: none; text-align: center; }
