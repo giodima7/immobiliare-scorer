@@ -123,6 +123,7 @@ const STRINGS = {
     'reason.price.far_above':'{pct}% above similar flats nearby',
     'reason.price.gate':'€{psqm}/m² is poor absolute value — score capped at {ceiling}',
     'reason.price.high_condo':'€{fee}/mo condo fees push the effective cost up',
+    'reason.price.small_dear':'For the same money a normal flat here is {sqm} m²',
     'reason.price.corporate':'Corporate / short-term rental — priced for furnished flexible lets',
     'reason.price.strong_entry':'{pct}% below similar flats — strong entry point',
     // Score reasons — Location
@@ -650,6 +651,7 @@ const STRINGS = {
     'reason.price.far_above':'{pct}% sopra annunci simili nella zona',
     'reason.price.gate':'€{psqm}/m² ha scarso valore assoluto — score limitato a {ceiling}',
     'reason.price.high_condo':'Spese condominiali €{fee}/me aumentano il costo effettivo',
+    'reason.price.small_dear':'Con gli stessi soldi qui prendi un appartamento normale di {sqm} m²',
     'reason.price.corporate':'Affitto corporate/breve termine — prezzo per contratti flessibili arredati',
     'reason.price.strong_entry':'{pct}% sotto annunci simili — ottimo punto di ingresso',
     // Score reasons — Location

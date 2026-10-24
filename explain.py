@@ -278,6 +278,12 @@ def score_reasons(listing: dict) -> list[dict]:
             f"{ask_str} is poor absolute value — {cap_str}",
             "reason.price.gate", {"psqm": ask_n if ask_n is not None else "?", "ceiling": cap if cap is not None else "?"})
 
+    if listing.get("_small_dear_same_sqm"):
+        same = listing["_small_dear_same_sqm"]
+        add("Price", "negative", 10,
+            f"For the same money a normal flat here is {same} m²",
+            "reason.price.small_dear", {"sqm": same})
+
     if listing.get("_corporate_ceiling_applied"):
         add("Price", "negative", 8,
             "Corporate ceiling — score capped at 75",
