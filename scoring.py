@@ -396,6 +396,12 @@ _DEFAULT_SETTINGS: dict = {
     "photo_contradicts_cap": 69,
     # A photo grade of this or less caps like a "contradicts" (rubric v2).
     "photo_grade_cap_max":   4,
+    # A flat under small_brake_max_sqm whose all-in €/m² is more than
+    # small_brake_ratio × what a normal-size flat asks in its zone: no label,
+    # score capped (apply_small_flat_brake).
+    "small_brake_max_sqm": 40,
+    "small_brake_ratio":   1.25,
+    "small_brake_cap":     69,
     # €-impact adjustment
     "euro_impact_small":  75,   # |monthly diff| < €75 → reduce penalty 30%
     "euro_impact_large": 200,   # |monthly diff| > €200 → full penalty
@@ -773,7 +779,9 @@ def property_parts(listing: dict, settings: dict | None = None) -> dict:
             if   _eff < 10:
                 parts['layout'] -= 0.20
                 listing['_room_efficiency_flag'] = 'severe'
-            elif _eff < 14:
+            elif _eff < 16:
+                # 16, not 14 (2026-10-24): a 28 m² "bilocale" (14 m²/room)
+                # passed clean and scored 77.
                 parts['layout'] -= 0.10
                 listing['_room_efficiency_flag'] = 'tight'
             else:
@@ -2199,6 +2207,48 @@ def apply_photo_verdict(l: dict, evals: dict, cap: int, grade_max: float = 4) ->
             l["score_cap_reason"] = "; ".join(x for x in (l.get("score_cap_reason"), reason) if x)
 
 
+def zone_normal_psqm(pool: list, lo: float = 50, hi: float = 90, min_n: int = 8) -> dict:
+    """All-in €/m² (ask_psqm_effective) a normal-size flat — lo–hi m² — asks
+    in each neighbourhood, live rows only; key "" holds the city median."""
+    import statistics
+    per_zone, every = {}, []
+    for l in pool:
+        p, sqm = l.get("ask_psqm_effective"), l.get("sqm") or 0
+        if l.get("is_stale") or not p or not lo <= sqm <= hi:
+            continue
+        every.append(p)
+        if l.get("neighbourhood"):
+            per_zone.setdefault(l["neighbourhood"], []).append(p)
+    ref = {z: statistics.median(v) for z, v in per_zone.items() if len(v) >= min_n}
+    if every:
+        ref[""] = statistics.median(every)
+    return ref
+
+
+def apply_small_flat_brake(l: dict, ref: dict, max_sqm: float, ratio: float, cap: int) -> None:
+    """A small flat priced well above a normal flat in its zone.
+
+    Comps compare a 28 m² flat with other tiny flats, and those always ask
+    more per m² (×1.67 under 35 m², ×1.32 at 35–45 m² vs a 50–90 m² flat in
+    the same zone), so a dear one read "in line" — 2026-10-24, a 28 m² studio
+    at €1,100 all-in scored 78. Judged here against the normal flats of the
+    zone instead, so central zones where everything is dear are spared.
+    Stamps _small_dear_same_sqm: the m² the same money rents there."""
+    l.pop("_small_dear_same_sqm", None)
+    sqm, p = l.get("sqm") or 0, l.get("ask_psqm_effective")
+    norm = ref.get(l.get("neighbourhood") or "") or ref.get("")
+    if not (0 < sqm < max_sqm and p and norm) or p <= norm * ratio:
+        return
+    l["_small_dear_same_sqm"] = round(p * sqm / norm)
+    l["hidden_gem"] = False
+    l["good_value"] = False
+    if (l.get("score_total") or 0) > cap:
+        l["score_total"] = cap
+        l["score_was_capped"] = True
+        reason = f"small flat dearer than a normal flat here (same money ≈ {l['_small_dear_same_sqm']} m²) → max {cap}"
+        l["score_cap_reason"] = "; ".join(x for x in (l.get("score_cap_reason"), reason) if x)
+
+
 def score_all(listings: list, settings: dict | None = None,
               comps_pool: list | None = None) -> list:
     """Score all listings, log null-field coverage, return sorted list.
@@ -2250,6 +2300,7 @@ def score_all(listings: list, settings: dict | None = None,
     if settings.get("property_impute_unknown"):
         settings = {**settings, "_feature_means": _property_feature_means(pool, settings, comps_index)}
     photo_evals = load_photo_evals() if settings.get("photo_contradicts_cap") else {}
+    small_ref = zone_normal_psqm(pool) if settings.get("small_brake_max_sqm") else {}
     scored = []
     for l in listings:
         s = score_rental(l, pool, settings, comps_index)
@@ -2261,6 +2312,10 @@ def score_all(listings: list, settings: dict | None = None,
         if photo_evals:
             apply_photo_verdict(merged, photo_evals, settings["photo_contradicts_cap"],
                                 settings.get("photo_grade_cap_max", 4))
+        if small_ref:
+            apply_small_flat_brake(merged, small_ref, settings["small_brake_max_sqm"],
+                                   settings.get("small_brake_ratio", 1.25),
+                                   settings.get("small_brake_cap", 69))
         scored.append(merged)
 
     scored.sort(key=lambda x: x.get("score_total", 0) or 0, reverse=True)

@@ -195,6 +195,24 @@ _DEPOSIT_RX = re.compile(
     r"(?:deposito|cauzione)[^.\d€]{0,40}?(\d{1,2}|una|due|tre|quattro|sei)\s*(?:mensilit|mesi|mensili)", re.I)
 _NUM_WORDS = {"una": 1, "due": 2, "tre": 3, "quattro": 4, "sei": 6}
 _ROOM_WORDS = (("monolocale", 1), ("bilocale", 2), ("trilocale", 3), ("quadrilocale", 4), ("pentalocale", 5))
+# The text over the form when they disagree (2026-10-24: "Monolocale 28 mq"
+# filed as 2 rooms, scored 78; 22 such rows): a "monolocale" with no other
+# room word is a studio.
+_STUDIO_RX = re.compile(r"\bmonolocal[ei]\b", re.I)
+_MULTI_RX = re.compile(r"\b(?:bi|tri|quadri|penta)local[ei]\b", re.I)
+# An all-in price in the text above the form's rent ("si affitta a 1100 €
+# tutto compreso (spese condominiali, bollette…)" with €900 filed): the
+# difference is the monthly extras.
+_ALL_IN_RX = re.compile(r"(\d[\d.]{2,5})\s*(?:€|euro|eur)\s*(?:al\s+mese\s*|mensili\s*|/\s*mese\s*)?"
+                        r"(?:tutto\s+compreso|tutto\s+incluso|comprensiv\w+|spese\s+incluse)", re.I)
+
+
+def _all_in_extra(text: str, rent: int) -> Optional[int]:
+    for m in _ALL_IN_RX.finditer(text or ""):
+        v = _int(m.group(1).replace(".", ""))
+        if v and rent < v <= rent * 1.6:
+            return v - rent
+    return None
 _MONTHS = r"gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre"
 # Holiday and event lets the "Affitto breve" flag misses ("per 11 giorni",
 # "periodo Olimpiadi", "solo giugno, luglio e agosto"), and people looking
@@ -263,6 +281,8 @@ def parse_item(it: dict, max_rent: int = 0, min_rooms: int = 0) -> tuple[Optiona
     rent, sqm, rooms = _int(_feat(it, "/price")), _int(_feat(it, "/size")), _int(_feat(it, "/room"))
     if rooms is None:
         rooms = next((n for w, n in _ROOM_WORDS if w in text.lower()), None)
+    elif rooms > 1 and _STUDIO_RX.search(text) and not _MULTI_RX.search(text):
+        rooms = 1
     if not m or not rent or rent < 200:
         return None, "no_price"
     if not sqm or sqm < 10:
@@ -291,7 +311,7 @@ def parse_item(it: dict, max_rent: int = 0, min_rooms: int = 0) -> tuple[Optiona
     dep = _DEPOSIT_RX.search(text)
     deposit = (_NUM_WORDS.get(dep.group(1).lower()) or _int(dep.group(1))) if dep else None
     images = [i.get("cdnBaseUrl") for i in it.get("images") or [] if i.get("cdnBaseUrl")]
-    spese = _parse_condo_from_description(body)
+    spese = _parse_condo_from_description(body) or _all_in_extra(text, rent)
     return {
         "id":                 f"sb_{m.group(1)}",
         "source":             SOURCE,
