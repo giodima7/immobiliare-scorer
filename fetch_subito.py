@@ -257,6 +257,11 @@ def _is_fake(title: str, body: str) -> bool:
     return any(re.search(rf"\b{re.escape(k)}\b", text) for k in (*_FAKE_FOREIGN_KEYWORDS, *_SEA_VIEW_KEYWORDS))
 
 
+def _room_let(text: str) -> bool:
+    from listing_details import is_room_let
+    return is_room_let(text)
+
+
 def _bedrooms(text: str, rooms) -> Optional[int]:
     from listing_details import bedrooms_from_text
     return bedrooms_from_text(text, rooms)
@@ -361,6 +366,7 @@ def parse_item(it: dict, max_rent: int = 0, min_rooms: int = 0) -> tuple[Optiona
         "agency_type":        "user",        # Immobiliare's word for a private advertiser
         "agency_url":         "",
         "is_fake":            bool(town) or _is_fake(title, body),
+        "is_room_let":        _room_let(text),       # a room in a shared flat
         "is_outside_city":    bool(town) or None,
         "misrep_reason":      f"Title names {town}, not Milan" if town else None,
         "scan_area":          SCAN_AREA,

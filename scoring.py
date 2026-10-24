@@ -1165,6 +1165,8 @@ def _apply_exclusion_gates(listing: dict) -> bool:
         exclude_reasons.append("Auction listing (asta giudiziaria)")
     if listing.get("is_nuda_proprieta"):
         exclude_reasons.append("Nuda proprietà — usufruct retained by seller")
+    if listing.get("is_room_let"):
+        exclude_reasons.append("A room in a shared flat, not a whole flat")
 
     if not exclude_reasons:
         return False

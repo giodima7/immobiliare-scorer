@@ -51,6 +51,35 @@ _NUDA_RX = re.compile(r"nuda\s+propriet|nuda\s+prop\b|usufrutt|diritto\s+di\s+ab
 _AUCTION_RX = re.compile(r"\b(?:all['’]\s*)?asta\b|vendita\s+giudiziari|procedura\s+esecutiva", re.I)
 SALE_ONLY_FLAGS = ("is_nuda_proprieta", "is_auction")
 
+# A room in a shared flat, not a whole flat (2026-10-24: Immobiliare
+# 132737368, "Trilocale viale Col di Lana" at €800, −46 % vs nearby — the
+# description says so). Applied to rental rows only; scoring leaves them
+# out. Whole flats say "4 posti letto" or "ideale per due coinquilini", so
+# only the room-let wordings count, and "no / non …" just before cancels.
+_ROOM_LET_RX = re.compile(
+    r"\bposto\s+letto\b"
+    r"|\b(?:affitt(?:o|asi|iamo|ano)|si\s+affitta(?:no)?|offresi|offro|subaffitt\w*|cedo)\s+"
+    r"(?:una\s+|la\s+|nostra\s+|mia\s+)?(?:bellissim\w+\s+|ampi\w+\s+|luminos\w+\s+|grande\s+)?"
+    r"(?:stanz[ae]|camer[ae])\b(?!\s+da\s+letto)"
+    r"|\b(?:stanza|camera)\s+(?:singola|doppia|matrimoniale)?\s*(?:in|all['’]interno\s+di)\s+"
+    r"(?:un\s+|una\s+|ampio\s+|grande\s+|bellissimo\s+)?(?:appartamento|casa|trilocale|quadrilocale|bilocale)"
+    r"\s+(?:condivis\w+|con\s+(?:altr\w+|\d|due|tre)\s)"
+    r"|\b(?:appartamento|casa|alloggio|loft)\s+(?:condivis\w+|in\s+condivisione)\b"
+    r"|\bcerc(?:o|hiamo|asi|ano)\s+(?:un[ao]?\s+|\d\s+|due\s+)?(?:coinquilin\w+|ragazz[ae]|studentess\w+|student[ei])\b"
+    r"|\b(?:stanza|camera)\s+in\s+affitto\b|\baffitto\s+(?:di\s+)?(?:stanz[ae]|camer[ae])\b", re.I)
+_NEGATED_RX = re.compile(r"\b(?:no|non|niente|vietat\w+)\b[^.\n]{0,30}$", re.I)
+RENT_ONLY_FLAGS = ("is_room_let",)
+
+
+def is_room_let(text: str) -> bool:
+    text = text or ""
+    return any(not _NEGATED_RX.search(text[max(0, m.start() - 40):m.start()])
+               for m in _ROOM_LET_RX.finditer(text))
+
+
+def _room_check(text: str) -> dict:
+    return {"is_room_let": is_room_let(text), "room_checked": 1}
+
 
 # Bedrooms from a listing's words ("2 camere da letto", "camera
 # matrimoniale" in a bilocale): Idealista pages and Subito texts don't give
@@ -155,6 +184,10 @@ def apply_details(listings: list, cache: dict | None = None) -> int:
             if k in SALE_ONLY_FLAGS:
                 if v and l.get("source") in ("sale", "idealista_sale"):
                     l[k] = True          # the page says so, whatever the search card said
+                continue
+            if k in RENT_ONLY_FLAGS:
+                if l.get("source") in ("immobiliare", "idealista"):
+                    l[k] = bool(v)
                 continue
             cur = l.get(k)
             if (cur is None
@@ -298,6 +331,8 @@ def parse_immobiliare_detail(next_data: dict) -> dict | None:
         re_data.get("title"), re_data.get("contractValue"), re_data.get("contract"),
         typology.get("name") if isinstance(typology, dict) else typology,
         prop.get("description") or re_data.get("description")))))
+    fields.update(_room_check(" | ".join(str(x or "") for x in (
+        re_data.get("title"), prop.get("description") or re_data.get("description")))))
     return {k: v for k, v in fields.items() if v is not None}
 
 
@@ -429,6 +464,7 @@ def parse_idealista_detail(page: dict) -> dict:
         out["photo_count"] = int(photos)
     out["costs_read"] = 1        # price box (condo, deposit) read since 2026-10-17
     out.update(_not_a_flat_to_buy(" | ".join([page.get("title") or "", text, comment])))
+    out.update(_room_check(" | ".join([page.get("title") or "", comment])))
     beds = bedrooms_from_text(text + " | " + comment)
     if beds:
         out["bedrooms"] = beds
@@ -462,7 +498,7 @@ def build_queue(source: str, cache: dict | None = None,
     except Exception:
         in_focus = lambda l: False
     today = date.today()
-    focus, top, deals, new, rest = [], [], [], [], []
+    focus, suspect, top, deals, new, rest = [], [], [], [], [], []
     for l in rows:
         if (l.get("source") or "immobiliare") != source:
             continue
@@ -470,7 +506,13 @@ def build_queue(source: str, cache: dict | None = None,
             continue
         lid = str(l.get("id"))
         entry = cache.get(lid) or {}
-        if not entry.get("gone") and not (entry.get("fields") or {}).get("costs_read"):
+        f = entry.get("fields") or {}
+        # A suspect price read before the room-let check: most likely a room
+        # in a shared flat — read again first (~160 pages).
+        if entry and not entry.get("gone") and l.get("price_suspect") and not f.get("room_checked"):
+            suspect.append((l.get("price_z") or 0, (lid, l["url"])))
+            continue
+        if not entry.get("gone") and not (f.get("costs_read") and f.get("room_checked")):
             if in_focus(l):
                 focus.append((-(l.get("score_total") or 0), (lid, l["url"])))
                 continue
@@ -504,7 +546,7 @@ def build_queue(source: str, cache: dict | None = None,
         # Read again when read before the nuda proprietà / auction check.
         if not entry.get("gone") and not (f.get("costs_read") and f.get("nuda_checked")):
             sales.append((-(l.get("score_total") or 0), (str(l["id"]), l["url"])))
-    return ([i for _, i in sorted(focus)] + [i for _, i in sorted(sales)]
+    return ([i for _, i in sorted(suspect)] + [i for _, i in sorted(focus)] + [i for _, i in sorted(sales)]
             + [i for _, i in sorted(top)] + [i for _, i in sorted(deals)]
             + [i for _, i in sorted(new)] + [i for _, i in sorted(rest)])
 
