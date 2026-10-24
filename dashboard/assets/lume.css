@@ -3841,7 +3841,6 @@ body.lm-open { overflow: hidden; }
 .map-cluster { border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--text-inverse);
                background: var(--green-deep); font-size: var(--text-sm); font-weight: 700; box-shadow: 0 2px 8px rgba(0,0,0,.25);
                border: 2px solid var(--bg-card); }
-.map-dark .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.9) contrast(.88); }   /* OSM fallback only */
 .leaflet-container { font-family: var(--font); background: var(--bg-muted); }
 .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--bg-card); color: var(--text-primary); }
 .leaflet-container a.map-popup-link { color: var(--text-inverse); }

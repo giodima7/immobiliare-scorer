@@ -158,17 +158,19 @@ function _sizeMapView() {
   if (_map) _map.invalidateSize();
 }
 
-// OpenFreeMap's quiet vector basemaps (free, no key; CARTO's raster ones
-// answer "API key required"): Positron in the light theme, Dark in the dark
-// one. Until 2026-10-24 OpenStreetMap's standard tiles, colour-inverted in
-// the dark theme — busy and garish; still the fallback when MapLibre fails.
-let _tileLayer = null;
-const _mapStyle = () => `https://tiles.openfreemap.org/styles/${isDarkTheme() ? 'dark' : 'positron'}`;
+// Esri's grey canvas basemap (raster, no key): Light Gray in the light theme,
+// Dark Gray in the dark one, street names on a second layer above. Until
+// 2026-10-24 OpenStreetMap's standard tiles, colour-inverted in the dark
+// theme — busy and garish. Not CARTO (answers "API key required") nor
+// OpenFreeMap's vector tiles (MapLibre froze the whole page).
+let _tileLayer = null, _labelLayer = null;
+const _ESRI = (name, kind) =>
+  `https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_${name}_Gray_${kind}/MapServer/tile/{z}/{y}/{x}`;
 
 function _mapApplyTheme() {
-  const gl = _tileLayer?.getMaplibreMap?.();
-  if (gl) gl.setStyle(_mapStyle());
-  document.getElementById('mapContainer')?.classList.toggle('map-dark', isDarkTheme() && !gl);
+  const name = isDarkTheme() ? 'Dark' : 'Light';
+  _tileLayer?.setUrl(_ESRI(name, 'Base'));
+  _labelLayer?.setUrl(_ESRI(name, 'Reference'));
   if (_map && _isMobile) _mapRender();
 }
 
@@ -181,20 +183,18 @@ function _mapInit() {
     ? getMapDefaultView() : [45.4642, 9.1900, 12];
   _map = L.map('mapContainer').setView([_mapLat0, _mapLng0], _mapZ0);
 
-  const osm = '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
-  if (L.maplibreGL && window.maplibregl) {
-    _tileLayer = L.maplibreGL({
-      style: _mapStyle(),
-      attribution: `<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> ${osm}`,
-    }).addTo(_map);
-  } else {
-    // Lighter options on mobile: load only when panning stops, minimal buffer.
-    _tileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: osm, maxZoom: 19,
-      ..._isMobile ? { updateWhenIdle: true, keepBuffer: 1 } : {},
-    }).addTo(_map);
-  }
-  _mapApplyTheme();
+  // Lighter options on mobile: load only when panning stops, minimal buffer.
+  // The canvas tiles stop at zoom 16; Leaflet scales them up beyond.
+  const tileOpts = {
+    maxNativeZoom: 16, maxZoom: 19,
+    ..._isMobile ? { updateWhenIdle: true, keepBuffer: 1 } : {},
+  };
+  const name = isDarkTheme() ? 'Dark' : 'Light';
+  _tileLayer = L.tileLayer(_ESRI(name, 'Base'), {
+    ...tileOpts,
+    attribution: 'Tiles © <a href="https://www.esri.com">Esri</a> — Esri, HERE, Garmin, © OpenStreetMap contributors',
+  }).addTo(_map);
+  _labelLayer = L.tileLayer(_ESRI(name, 'Reference'), tileOpts).addTo(_map);
 
   // Cluster group replaces L.layerGroup — collapses dense areas into single DOM nodes
   _clusterGroup = L.markerClusterGroup({
