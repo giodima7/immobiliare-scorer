@@ -422,8 +422,15 @@ function renderRentalCard(l) {
   // What the photos showed sits on the photo (2026-10-19 card redesign: the
   // price row carried three chips); without a photo it stays in the row.
   const photoChip = _photoChipHtml(l);
+  // Arrows (and a swipe) page through the photos on the card itself
+  // (details.js, cardPhotoStep); a click on the photo opens Details.
+  const nav = l.thumbnail && (l.photo_count || 0) !== 1
+    ? `<button type="button" class="card-photo-nav prev" data-photo-step="-1" aria-label="${escapeHtml(t('pv.prev'))}" tabindex="-1">${icon('chevron-left')}</button>
+       <button type="button" class="card-photo-nav next" data-photo-step="1" aria-label="${escapeHtml(t('pv.next'))}" tabindex="-1">${icon('chevron-right')}</button>
+       <span class="card-photo-count" hidden></span>`
+    : '';
   const photo = (l.thumbnail || gemChip || newChip)
-    ? `<button type="button" class="card-photo-wrap" data-open-details="${id}" aria-label="${escapeHtml(t('card.details') + ': ' + nb)}">${l.thumbnail ? `<img class="card-thumb" src="${_safeUrl(l.thumbnail)}" alt="" loading="lazy">` : ''}${gemChip}${newChip}${l.thumbnail && photoChip ? `<span class="card-photo-grade">${photoChip}</span>` : ''}</button>`
+    ? `<div class="card-photo" data-photo-id="${id}"><button type="button" class="card-photo-wrap" data-open-details="${id}" aria-label="${escapeHtml(t('card.details') + ': ' + nb)}">${l.thumbnail ? `<img class="card-thumb" src="${_safeUrl(l.thumbnail)}" alt="" loading="lazy">` : ''}${gemChip}${newChip}${l.thumbnail && photoChip ? `<span class="card-photo-grade">${photoChip}</span>` : ''}</button>${nav}</div>`
     : '';
   // The site is the Open button's label; "+1" when the flat is on another site too.
   const others = alsoOnSites(l) ? alsoOnSites(l).split(', ').length : 0;

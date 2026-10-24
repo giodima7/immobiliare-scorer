@@ -69,25 +69,147 @@ async function _lmEnsureFull(l) {
   l._full = true;
 }
 
-// Online rows are loaded without the photo list (it's a sixth of the
-// payload); fetch it for this one listing.
-async function _lmLoadPhotos(l) {
+// Rows are loaded without the photo list (online it's a sixth of the
+// payload, locally a slim load drops it): fetch it for one listing, once.
+async function listingPhotos(l) {
+  if (l._photos) return l._photos;
   let photos = Array.isArray(l.photos) ? l.photos : null;
-  if (!photos && !IS_LIVE && SupabaseClient.configured) {
-    const r = await SupabaseClient.fetchByIds([l.id], 'id,photos');
-    photos = (r[0] && r[0].photos) || [];
-  }
+  try {
+    if (!photos && IS_LIVE) {
+      const r = await fetch(`/rentals/extras?ids=${encodeURIComponent(String(l.id))}`);
+      if (r.ok) photos = ((await r.json())[0] || {}).photos || null;
+    } else if (!photos && SupabaseClient.configured) {
+      const r = await SupabaseClient.fetchByIds([l.id], 'id,photos');
+      photos = (r[0] && r[0].photos) || null;
+    }
+  } catch { /* fall back to the thumbnail */ }
   photos = (photos || []).filter(Boolean);
   if (!photos.length && l.thumbnail) photos = [l.thumbnail];
+  l._photos = photos;
+  return photos;
+}
+
+async function _lmLoadPhotos(l) {
+  const photos = await listingPhotos(l);
   const box = document.getElementById('lmPhotos');
   if (!box || !box.isConnected) return;
-  // Photos are a mouse convenience; keyboard users get the "+N" link.
+  // A click opens the viewer at that photo; "+N" leads to the rest on the site.
   box.innerHTML = photos.length
-    ? photos.slice(0, 8).map(u => `<a href="${_safeUrl(u)}" target="_blank" rel="noopener" class="lm-photo" tabindex="-1">
-        <img src="${_safeUrl(u)}" alt="" loading="lazy"></a>`).join('')
-      + (l.photo_count > photos.length ? `<a class="lm-photo lm-photo-more" href="${_safeUrl(l.url)}" target="_blank" rel="noopener">${escapeHtml(t('lm.more_photos', { n: l.photo_count - Math.min(8, photos.length) }))}</a>` : '')
+    ? photos.map((u, i) => `<button type="button" class="lm-photo" data-pv-open="${i}" aria-label="${escapeHtml(t('pv.open', { i: i + 1, n: photos.length }))}">
+        <img src="${_safeUrl(u)}" alt="" loading="lazy"></button>`).join('')
+      + (l.photo_count > photos.length ? `<a class="lm-photo lm-photo-more" href="${_safeUrl(l.url)}" target="_blank" rel="noopener">${escapeHtml(t('lm.more_photos', { n: l.photo_count - photos.length }))}</a>` : '')
     : `<div class="lm-photo lm-photo-empty">${icon('photo')}</div>`;
 }
+
+// ── Photos: paging on the card, full-screen viewer from Details ──────────────
+// The user, 2026-10-25: "can I scroll through the pictures… right now I can
+// just click on one and see that one only in a new page".
+async function cardPhotoStep(box, step) {
+  const id = box.dataset.photoId;
+  const l = ALL_RENT.find(x => String(x.id) === id)
+         || (typeof _savedRows !== 'undefined' && _savedRows.find(x => String(x.id) === id));
+  if (!l) return;
+  const photos = await listingPhotos(l);
+  if (photos.length < 2 || !box.isConnected) return;
+  const i = ((Number(box.dataset.photoIndex) || 0) + step + photos.length) % photos.length;
+  box.dataset.photoIndex = i;
+  const img = box.querySelector('.card-thumb');
+  if (img) img.src = photos[i];
+  const count = box.querySelector('.card-photo-count');
+  if (count) { count.textContent = `${i + 1}/${photos.length}`; count.hidden = false; }
+}
+
+let _pv = null;          // { el, photos, i, lastFocus }
+
+function openPhotoViewer(photos, start = 0) {
+  if (!photos.length) return;
+  let el = document.getElementById('photoViewer');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'photoViewer';
+    el.className = 'pv';
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-modal', 'true');
+    el.innerHTML = `
+      <button type="button" class="pv-btn pv-close" data-pv-close aria-label="${escapeHtml(t('pv.close'))}">${icon('x')}</button>
+      <button type="button" class="pv-btn pv-prev" data-pv-step="-1" aria-label="${escapeHtml(t('pv.prev'))}">${icon('chevron-left')}</button>
+      <img class="pv-img" alt="">
+      <button type="button" class="pv-btn pv-next" data-pv-step="1" aria-label="${escapeHtml(t('pv.next'))}">${icon('chevron-right')}</button>
+      <div class="pv-count" aria-live="polite"></div>`;
+    document.body.appendChild(el);
+  }
+  _pv = { el, photos, i: start, lastFocus: document.activeElement };
+  el.hidden = false;
+  document.body.classList.add('pv-open');
+  _pvShow(0);
+  el.querySelector('.pv-close').focus();
+}
+
+function _pvShow(step) {
+  if (!_pv) return;
+  const n = _pv.photos.length;
+  _pv.i = (_pv.i + step + n) % n;
+  _pv.el.querySelector('.pv-img').src = _pv.photos[_pv.i];
+  _pv.el.querySelector('.pv-count').textContent = `${_pv.i + 1} / ${n}`;
+  _pv.el.querySelectorAll('.pv-prev, .pv-next').forEach(b => { b.hidden = n < 2; });
+  // The next one is likely wanted: start loading it.
+  if (n > 1) new Image().src = _pv.photos[(_pv.i + 1) % n];
+}
+
+function closePhotoViewer() {
+  if (!_pv) return;
+  _pv.el.hidden = true;
+  document.body.classList.remove('pv-open');
+  _pv.lastFocus?.focus?.();
+  _pv = null;
+}
+
+document.addEventListener('click', e => {
+  const t0 = e.target.closest?.('[data-photo-step], [data-pv-open], [data-pv-step], [data-pv-close], .pv');
+  if (!t0) return;
+  if (t0.dataset.photoStep) {
+    e.preventDefault();
+    cardPhotoStep(t0.closest('.card-photo'), Number(t0.dataset.photoStep));
+  } else if (t0.dataset.pvOpen != null && _lmListing) {
+    listingPhotos(_lmListing).then(p => openPhotoViewer(p, Number(t0.dataset.pvOpen)));
+  } else if (t0.dataset.pvStep) {
+    _pvShow(Number(t0.dataset.pvStep));
+  } else if (t0.hasAttribute('data-pv-close') || e.target === t0) {
+    closePhotoViewer();          // the close button, or the dark area around the photo
+  }
+});
+
+// Keys while the viewer is open: arrows page, Escape closes it (not Details
+// underneath), Tab stays inside. Capture phase, ahead of Details' handler.
+window.addEventListener('keydown', e => {
+  if (!_pv) return;
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') _pvShow(e.key === 'ArrowLeft' ? -1 : 1);
+  else if (e.key === 'Escape') closePhotoViewer();
+  else if (e.key === 'Tab') {
+    const btns = [..._pv.el.querySelectorAll('.pv-btn:not([hidden])')];
+    const at = btns.indexOf(document.activeElement);
+    btns[(at + (e.shiftKey ? -1 : 1) + btns.length) % btns.length]?.focus();
+  } else return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+}, true);
+
+// A horizontal swipe pages: on a card's photo and in the viewer.
+let _swipe = null;
+document.addEventListener('touchstart', e => {
+  const box = e.target.closest?.('.card-photo, .pv');
+  if (box && e.touches.length === 1) _swipe = { box, x: e.touches[0].clientX, y: e.touches[0].clientY };
+}, { passive: true });
+document.addEventListener('touchend', e => {
+  if (!_swipe) return;
+  const { box, x, y } = _swipe;
+  _swipe = null;
+  const dx = e.changedTouches[0].clientX - x, dy = e.changedTouches[0].clientY - y;
+  if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+  const step = dx < 0 ? 1 : -1;
+  if (box.classList.contains('pv')) _pvShow(step);
+  else cardPhotoStep(box, step);
+}, { passive: true });
 
 function _lmDate(iso) {
   if (!iso) return null;
