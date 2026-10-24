@@ -565,6 +565,15 @@ def _geo_enrich_worker(city: str = "milano"):
         data = _json.loads(rent_path.read_text())
         _ecache.load()   # warm up in-memory cache
 
+        # ── Pass 0: pins far from their neighbourhood (geo_index.repin_far) ──
+        # Re-placed and their cached geo dropped, so the passes below
+        # recompute OMI and POI distances from the new pin.
+        import geo_index as _gi
+        _repinned = _gi.repin_far(data)
+        if _repinned:
+            _ecache.delete(_repinned)
+            print(f"  [geo][{city}] {len(_repinned)} pins far from their neighbourhood re-placed", flush=True)
+
         # ── Pass 1: fast in-memory OMI polygon application ───────────────────
         # Fixes all listings that have coordinates but were cached before
         # omi_lookup existed (no Overpass call needed).
