@@ -169,3 +169,73 @@ def lookup(address: str) -> tuple[float, float, str] | None:
     if st.get("ext", 1e9) <= MAX_STREET_EXTENT_M:
         return (*st["c"], "street")
     return None
+
+
+# ── Pins far from their neighbourhood ────────────────────────────────────────
+# 2026-10-24: 178 portal listings sat over 2 km from the other listings of
+# the neighbourhood the site names (Bovisa in Cordusio, Sulmona 15 km out of
+# town) — coordinates a geocoder guessed before this index existed, kept in
+# enriched_cache. The portals' neighbourhood names are reliable; Subito's
+# come from the pin itself, so Subito rows are left alone.
+FAR_PIN_KM = 2.0
+# With no street-index answer, a pin only this far off moves to the centre:
+# at 2–3 km it may be right in a wide neighbourhood (Via Lodovico il Moro).
+FAR_PIN_CENTRE_KM = 3.0
+GEO_DERIVED = (
+    "metro_nearest_name", "metro_nearest_line", "metro_nearest_dist_m", "metro_walk_min",
+    "metro_walk_routed", "metro_walk_grade", "omi_zona", "omi_fascia", "omi_descr",
+    "omi_loc_mid", "omi_loc_min", "omi_loc_max", "omi_compr_mid", "omi_compr_min",
+    "omi_compr_max", "omi_source", "omi_fallback", "geo_score", "park_nearest_dist_m",
+    "supermarket_nearest_dist_m", "university_nearest_dist_m", "tram_nearest_dist_m",
+)
+
+
+def _km(a: tuple, b: tuple) -> float:
+    import math
+    return math.hypot((a[0] - b[0]) * 111.2, (a[1] - b[1]) * 78.0)
+
+
+def zone_centres(rows: list, min_n: int = 5) -> dict:
+    """Median pin of each neighbourhood's live portal listings."""
+    import statistics
+    pts: dict = {}
+    for r in rows:
+        if r.get("is_stale") or r.get("source") == "subito" or r.get("latitude") is None:
+            continue
+        if r.get("neighbourhood"):
+            pts.setdefault(r["neighbourhood"], []).append((r["latitude"], r["longitude"]))
+    return {z: (statistics.median(p[0] for p in v), statistics.median(p[1] for p in v))
+            for z, v in pts.items() if len(v) >= min_n}
+
+
+def repin_far(rows: list, max_km: float = FAR_PIN_KM, centre_km: float = FAR_PIN_CENTRE_KM) -> list:
+    """Re-place portal listings pinned more than max_km from their
+    neighbourhood's centre: the street index when it lands within max_km of
+    that centre (geo_precision None for a house number, "street" otherwise),
+    else, beyond centre_km, the centre itself (geo_precision "zone" — no
+    label, like Subito's).
+    Clears the fields derived from the old pin so enrichment recomputes
+    them; returns the "source:id" keys to drop from enriched_cache."""
+    centres = zone_centres(rows)
+    keys = []
+    for r in rows:
+        if r.get("source") == "subito" or r.get("latitude") is None:
+            continue
+        c = centres.get(r.get("neighbourhood") or "")
+        off = _km((r["latitude"], r["longitude"]), c) if c else 0
+        if off <= max_km:
+            continue
+        hit = lookup(r.get("address") or "") if available() else None
+        if hit and _km(hit[:2], c) <= max_km:
+            r["latitude"], r["longitude"] = hit[0], hit[1]
+            r["geo_precision"] = None if hit[2] in ("civico", "near") else "street"
+        elif off > centre_km:
+            r["latitude"], r["longitude"] = c
+            r["geo_precision"] = "zone"
+        else:
+            continue
+        r["coords_from"] = "repinned"
+        for k in GEO_DERIVED:
+            r[k] = None
+        keys.append(f"{r.get('source', 'immobiliare')}:{r['id']}")
+    return keys

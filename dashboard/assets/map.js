@@ -66,9 +66,9 @@ function _createMapPopup(l) {
   const nb    = formatAddress(l.neighbourhood || l.address || '–');
   const thumb = l.thumbnail ? l.thumbnail.replace('/xxs-c.', '/xs-c.') : null;
   const img   = thumb ? `<img class="map-popup-img" src="${_safeUrl(thumb)}" onerror="this.style.display='none'" alt="">` : '';
-  const dp    = l.comps_delta_pct;
-  const comps = dp != null
-    ? `<div class="map-popup-comps ${dp <= -5 ? 'below' : dp >= 5 ? 'above' : 'at'}">${escapeHtml(t('card.vs_nearby', { pct: fmtPct(dp) }))}</div>` : '';
+  // The card's line: a suspect price reads "verify", never a green discount.
+  const delta = _dealDeltaHtml(l);
+  const comps = delta ? `<div class="map-popup-comps">${delta}</div>` : '';
   const specs = _specsParts(l);
   const rawAddr = String(l.address || '').trim()
     .replace(/,?\s*milano\s*$/i, '').replace(/,?\s*\d{5}\s*$/i, '').trim();
@@ -158,9 +158,17 @@ function _sizeMapView() {
   if (_map) _map.invalidateSize();
 }
 
-// Dark theme: invert the light map tiles (no second tile set needed).
+// OpenFreeMap's quiet vector basemaps (free, no key; CARTO's raster ones
+// answer "API key required"): Positron in the light theme, Dark in the dark
+// one. Until 2026-10-24 OpenStreetMap's standard tiles, colour-inverted in
+// the dark theme — busy and garish; still the fallback when MapLibre fails.
+let _tileLayer = null;
+const _mapStyle = () => `https://tiles.openfreemap.org/styles/${isDarkTheme() ? 'dark' : 'positron'}`;
+
 function _mapApplyTheme() {
-  document.getElementById('mapContainer')?.classList.toggle('map-dark', isDarkTheme());
+  const gl = _tileLayer?.getMaplibreMap?.();
+  if (gl) gl.setStyle(_mapStyle());
+  document.getElementById('mapContainer')?.classList.toggle('map-dark', isDarkTheme() && !gl);
   if (_map && _isMobile) _mapRender();
 }
 
@@ -173,14 +181,19 @@ function _mapInit() {
     ? getMapDefaultView() : [45.4642, 9.1900, 12];
   _map = L.map('mapContainer').setView([_mapLat0, _mapLng0], _mapZ0);
 
-  // OpenStreetMap's standard tiles (CARTO's basemaps now need an API key).
-  // Lighter options on mobile: load only when panning stops, minimal buffer.
-  const tileOpts = {
-    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    maxZoom: 19,
-    ..._isMobile ? { updateWhenIdle: true, keepBuffer: 1 } : {},
-  };
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', tileOpts).addTo(_map);
+  const osm = '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+  if (L.maplibreGL && window.maplibregl) {
+    _tileLayer = L.maplibreGL({
+      style: _mapStyle(),
+      attribution: `<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> ${osm}`,
+    }).addTo(_map);
+  } else {
+    // Lighter options on mobile: load only when panning stops, minimal buffer.
+    _tileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: osm, maxZoom: 19,
+      ..._isMobile ? { updateWhenIdle: true, keepBuffer: 1 } : {},
+    }).addTo(_map);
+  }
   _mapApplyTheme();
 
   // Cluster group replaces L.layerGroup — collapses dense areas into single DOM nodes
