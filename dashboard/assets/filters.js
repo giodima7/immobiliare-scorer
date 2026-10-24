@@ -129,6 +129,7 @@ function rentActiveFilterChips(f) {
   if (f.minFloor > -999) add('minFloor', t('chip.min_floor', { n: f.minFloor }));
   if (f.source)      add('source', siteName(f.source));
   if (f.minEnergy)   add('minEnergy', t('chip.min_energy', { v: f.minEnergy }));
+  if (f.minPhoto)    add('minPhoto', t('chip.min_photo', { n: f.minPhoto }));
   if (f.minScore)    add('minScore', t('chip.min_score', { n: f.minScore }));
   if (f.fListed)     add('fListed', f.fListed === 'today' ? t('chip.listed_today') : t('chip.listed_days', { n: f.fListed }));
   if (f.idQuery)     add('idQuery', 'ID ' + f.idQuery);
@@ -152,7 +153,7 @@ function renderRentFilterExtras(f, shown) {
 
   const chips = rentActiveFilterChips(f);
   const moreKeys = ['condition', 'minDiscount', 'contract', 'fascia', 'maxMetro', 'minFloor', 'source',
-                    'minEnergy', 'minScore', 'fListed', 'idQuery', 'showStale'];
+                    'minEnergy', 'minPhoto', 'minScore', 'fListed', 'idQuery', 'showStale'];
   const nMore = chips.filter(c => moreKeys.includes(c.key)).length;
   const moreBadge = document.getElementById('rMoreBadge');
   if (moreBadge) { moreBadge.textContent = nMore || ''; moreBadge.hidden = !nMore; }
@@ -209,6 +210,7 @@ function clearRentFilter(key) {
       document.querySelectorAll('#rSourceFilter .sort-tab').forEach(b => b.classList.toggle('active', (b.dataset.rsource || '') === ''));
       break;
     case 'minEnergy':   el('rMinEnergy').value = ''; break;
+    case 'minPhoto':    el('rMinPhoto').value = ''; break;
     case 'minScore':    syncScoreFromSlider(0); el('rScore').value = 0; break;
     case 'fListed':     el('rListed').value = ''; break;
     case 'idQuery':     el('rIdSearch').value = ''; break;

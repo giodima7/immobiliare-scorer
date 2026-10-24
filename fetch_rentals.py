@@ -777,6 +777,8 @@ def parse_rental(item: dict) -> Optional[dict]:
     # the deposit, and whether the rent already covers the condo fees.
     costs = prop.get("costs") or {}
     heating_mo = _cost_per_month(costs.get("heatingExpenses"))
+    if heating_mo is not None and not (0 < heating_mo <= max(rent * 0.5, 1)):
+        heating_mo = None          # a placeholder (e.g. 2,147,483,647 a year), not a cost
     included = (condo_included(costs.get("condominiumExpenses"))
                 or (spese is None and condo_included(prop.get("description"))))
     deposit_raw = str(((prop.get("rent") or {}).get("deposit")) or "")
@@ -1380,9 +1382,10 @@ DELIST_MIN_FOUND      = 0.5
 # Photos of top listings not read yet are read after every slot of either
 # site and after every listing-page session (one reading at a time —
 # photo_eval's lock), so they keep up with the galleries those pages bring.
-# ~2k tokens each.
-PHOTOS_PER_SLOT       = 32
-PHOTOS_PER_BATCH      = 8                # one claude call
+# ~2k tokens each. Doubled on 2026-10-19 (the user: read more): ~1,160
+# listings a day at 32 / 8.
+PHOTOS_PER_SLOT       = 48
+PHOTOS_PER_BATCH      = 16               # two claude calls (8 a call)
 
 # Filled by fetch_rentals() for the caller: complete sweeps, page loads,
 # discover stats.
@@ -2633,13 +2636,38 @@ def _netlify_deploy():
 
 # ── Daemon ─────────────────────────────────────────────────────────────────────
 
+def _sleep_outside_window(args, source: str, log) -> None:
+    """Outside the scan window (scan_window.py): no page is opened. Every
+    15 min: the daily digest when due and, from one daemon, a photo reading
+    (photo_eval opens nothing). Returns when the window opens, keeping the
+    Mac awake until it closes."""
+    import scan_window
+    if scan_window.in_window():
+        return
+    log(f"Outside the scan window ({scan_window.describe()}) — no pages until "
+        f"{scan_window.next_open():%Y-%m-%d %H:%M}")
+    while not scan_window.in_window():
+        try:
+            send_pending_digest(args, log)
+        except Exception as exc:
+            log(f"✗ Digest error: {exc}")
+        if source == "immobiliare":
+            read_photos_after_slot(log, PHOTOS_PER_BATCH)
+        sleep_until(min(time.time() + 15 * 60, scan_window.next_open().timestamp()))
+    log(f"Scan window open until {scan_window.closes_at():%H:%M}")
+    scan_window.keep_awake(log)
+
+
 def _between_slots(args, source: str, next_slot: float, log, run_slot_fn, discover_state) -> None:
     """Until the next slot: the site's sales sweep when due (sales_scan),
     the Subito.it pass when due (fetch_subito), discover every
     DISCOVER_EVERY_SEC (new listings within ~20 min), and listing pages
     meanwhile, with a photo reading after each page session."""
+    import scan_window
     next_discover = (discover_state().get("at") or 0) + DISCOVER_EVERY_SEC
     while time.time() < next_slot:
+        if not scan_window.in_window():
+            return                             # the window closed: the loop sleeps
         try:                                   # sales in the focus areas (sales_scan)
             from sales_scan import sales_due, run_sales
             if sales_due(source):
@@ -2660,7 +2688,7 @@ def _between_slots(args, source: str, next_slot: float, log, run_slot_fn, discov
             except Exception as exc:
                 log(f"✗ Discover error: {exc}")
             next_discover = time.time() + DISCOVER_EVERY_SEC
-        wait_and_drip(source, min(next_slot, next_discover), log,
+        wait_and_drip(source, min(next_slot, next_discover, scan_window.closes_at().timestamp()), log,
                       after_batch=lambda: read_photos_after_slot(log, PHOTOS_PER_BATCH))
 
 
@@ -2669,14 +2697,20 @@ def _spread_loop(args, log) -> None:
     between."""
     import traceback
 
-    def _gap() -> int:
-        n = len(_macro_slugs_for(_area_names(args))) or 1
-        return SLOT_GAP_SEC or int(24 * 3600 / (n + 1))
+    import scan_window
 
-    log(f"Daemon started — spread scan: one area every {_gap() // 60} min, "
-        f"discover every {DISCOVER_EVERY_SEC / 3600:g} h, output {OUTPUT_PATH}")
+    def _gap() -> int:
+        # Every area once a night: the window's hours over the areas.
+        n = len(_macro_slugs_for(_area_names(args))) or 1
+        return SLOT_GAP_SEC or int(scan_window.hours() * 3600 / (n + 1))
+
+    log(f"Daemon started — spread scan at night ({scan_window.describe()}): one area every "
+        f"{_gap() // 60} min, discover every {DISCOVER_EVERY_SEC / 60:g} min, output {OUTPUT_PATH}")
     next_slot = last_scan_at("immobiliare") + _gap()
     while True:
+        if not scan_window.in_window():
+            _sleep_outside_window(args, "immobiliare", log)
+            next_slot = time.time()          # first slot as the window opens
         if time.time() < next_slot:
             log(f"Next slot at {datetime.fromtimestamp(next_slot):%Y-%m-%d %H:%M}")
             try:
@@ -2685,6 +2719,8 @@ def _spread_loop(args, log) -> None:
             except KeyboardInterrupt:
                 log("Interrupted during sleep — stopping daemon.")
                 raise
+            if not scan_window.in_window():
+                continue
         areas = _macro_slugs_for(_area_names(args))
         area = next_slot_area("immobiliare", areas)
         do_discover = time.time() - (load_discover_state().get("at") or 0) >= DISCOVER_EVERY_SEC

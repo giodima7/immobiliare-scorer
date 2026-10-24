@@ -336,7 +336,7 @@ document.getElementById('btnStopScanner').addEventListener('click', async () => 
 });
 
 // ── from controls.js · Rentals filter event listeners ──
-['rFascia','rMaxMetro','rMinFloor','rMinEnergy','rListed'].forEach(id =>
+['rFascia','rMaxMetro','rMinFloor','rMinEnergy','rMinPhoto','rListed'].forEach(id =>
   document.getElementById(id).addEventListener('change', () => { renderRentals(); saveFilters(); }));
 ['rMaxRent','rMinSqm','rMinRooms'].forEach(id =>
   document.getElementById(id).addEventListener('input', _renderRentalsDebounced));
@@ -394,6 +394,7 @@ document.getElementById('rBtnReset').addEventListener('click', () => {
   document.getElementById('rElevator').checked = false;
   const rst = document.getElementById('rShowStale'); if (rst) rst.checked = false;
   document.getElementById('rMinEnergy').value = '';
+  document.getElementById('rMinPhoto').value  = '';
   document.getElementById('rListed').value    = '';
   // filters.js state: must-haves, not-yet-known, condition / discount / contract
   rentMust.clear();

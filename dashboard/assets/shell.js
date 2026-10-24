@@ -309,7 +309,10 @@ function monthlyCost(l) {
   const stated   = included ? 0 : (Number(l.spese_condominiali) || 0);
   const suspect  = stated > 0 && rent > 0 && stated > rent * 0.5;
   const condo    = suspect ? 0 : stated;
-  const heating  = Number(l.heating_mo) || 0;
+  // Heating above half the rent is a placeholder, not a cost (an agency
+  // typed €2,147,483,647 a year): left out like an implausible condo fee.
+  const heatRaw  = Number(l.heating_mo) || 0;
+  const heating  = heatRaw > 0 && rent > 0 && heatRaw <= rent * 0.5 ? heatRaw : 0;
   const known    = included || condo > 0 || heating > 0;
   const total    = rent + condo + heating;
   return { rent, condo, heating, included, known, total, suspect, statedCondo: stated,

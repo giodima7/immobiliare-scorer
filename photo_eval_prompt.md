@@ -20,8 +20,10 @@ Judge it as the person who would live there. What they mind most:
   is a studio, whatever the listing says;
 - a tiny kitchen: a kitchenette in a corner or a cupboard, too small to cook
   in, even when new;
-- rooms the photos don't show (no bedroom or bathroom photo): say so, and
-  don't assume they are fine.
+- rooms the photos don't show (no bedroom or bathroom photo): flag
+  "rooms_not_shown" and lower your confidence, but grade only what you can
+  see. An unseen room is missing information, not a defect: it never lowers
+  the grade and is never, on its own, a "contradicts" — at most a "doubt".
 
 Scales (integers; null when the photos don't show it):
 - condition — 1 needs renovation (damaged floors/walls, very old fixtures),
@@ -35,8 +37,7 @@ Scales (integers; null when the photos don't show it):
 - grade — the whole flat, 1–10, as somewhere to live (half points allowed):
   9–10 excellent — renovated, bright, real rooms, nothing to fix;
   7–8 good — liveable as it is, small compromises;
-  5–6 OK with clear compromises (dated kitchen or bathroom, small rooms,
-  unseen rooms);
+  5–6 OK with clear compromises (dated kitchen or bathroom, small rooms);
   3–4 serious problems — attic, no real bedroom, tiny kitchen, works needed;
   1–2 avoid. null only when there are no interior photos.
 
@@ -68,7 +69,9 @@ Fields, one object per listing, in the order given:
      "attic"           (sloping ceilings, low / floor-level windows: a sottotetto),
      "no_bedroom"      (bed in the living room or on a loft in it — a studio),
      "tiny_kitchen"    (kitchenette in a corner or cupboard, too small to cook),
-     "rooms_not_shown" (no photo of the bedroom or of the bathroom) ],
+     "rooms_not_shown" (no photo of the bedroom or of the bathroom),
+     "rented_stamp"    (a photo stamped AFFITTATO / VENDUTO / RENTED / TOO LATE /
+                        "già affittato": the flat is gone) ],
   "deal_check": "confirms" | "doubt" | "contradicts",
   "confidence": "high" | "medium" | "low",
   "note_it": "<one Italian sentence, ≤ 25 words, the most useful thing to know>",

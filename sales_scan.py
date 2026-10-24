@@ -36,7 +36,7 @@ SEEN_PATH       = BASE_DIR / "seen_ids_sales_milano.json"
 LOG_PATH        = BASE_DIR / "sales_scans_milano.jsonl"
 CONFIG_PATH     = BASE_DIR / "focus_areas.json"
 
-SALES_EVERY_SEC     = 4 * 3600
+SALES_EVERY_SEC     = 12 * 3600       # once a night per site (scan_window; every 4 h until 2026-10-24)
 DELIST_AFTER_MISSES = 2
 STALE_DAYS          = 7
 REMOVE_AFTER_DAYS   = 30

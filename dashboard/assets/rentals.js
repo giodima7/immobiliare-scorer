@@ -30,6 +30,7 @@ function getRentFilters() {
     minFloor:  parseInt(document.getElementById('rMinFloor').value)  || -999,
     elevator:  document.getElementById('rElevator').checked,
     minEnergy: document.getElementById('rMinEnergy').value,
+    minPhoto:  parseFloat(document.getElementById('rMinPhoto')?.value) || 0,
     gemFilter: document.querySelector('#rGemFilter .gem-tab.active')?.dataset.gem || '',
     fListed:   document.getElementById('rListed')?.value || '',
     // filters.js: must-haves (lift = elevator above), condition, discount, contract
@@ -112,6 +113,9 @@ function applyRentFilters(data, f) {
         if (new Date(l.first_seen_date) < cutoff) return false;
       }
     }
+    // Photo grade (photo_eval, or the user's own): a listing not graded yet
+    // passes only with "include not yet known" (Must-haves panel).
+    if (f.minPhoto && !(l.photo_grade != null ? l.photo_grade >= f.minPhoto : f.includeUnknown)) return false;
     if (f.minEnergy) {
       const rank    = ENERGY_RANK[l.energy_class] || 0;
       const minRank = ENERGY_MIN_RANK[f.minEnergy] || 0;
@@ -197,7 +201,7 @@ function renderRentals() {
   if (typeof _refreshAgencyBanners === 'function') _refreshAgencyBanners();
   const f   = getRentFilters();
   // Saved filters may still hold the removed "vs OMI" sort.
-  if (!['score_total', 'comps_delta_pct', 'first_seen_date', 'rent_mo'].includes(rentSortKey)) {
+  if (!['score_total', 'comps_delta_pct', 'first_seen_date', 'rent_mo', 'photo_grade'].includes(rentSortKey)) {
     rentSortKey = 'score_total';
   }
   const asc = (rentSortKey === 'rent_mo' || rentSortKey === 'comps_delta_pct');
