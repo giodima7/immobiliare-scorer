@@ -3611,8 +3611,17 @@ body[data-tab="saved"] #rActiveChips, body[data-tab="insights"] #rActiveChips, b
 .deal-delta.tone-warn { background: var(--amber-light); color: var(--amber-ink); }
 /* Real monthly cost under the price (cards.js _costLineHtml): a bar sized by
    rent / condo / heating, the parts, and a tag. */
-.cost-line { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 4px;
+.cost-line { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 2px;
              font-size: var(--text-xs); color: var(--text-secondary); }
+.cost-line.is-ok   { color: var(--green-ink); }
+.cost-line.is-warn { color: var(--amber-ink); }
+.cost-line.is-heavy { color: var(--amber-ink); }        /* fees ≥ 25 % of the rent */
+/* The photo verdict on the photo, bottom left (cards.js renderRentalCard) */
+.card-photo-grade { position: absolute; left: 10px; bottom: 10px; }
+.spec-lift { display: inline-flex; vertical-align: -2px; margin-left: 3px; color: var(--text-secondary); }
+.spec-lift .i { width: 14px; height: 14px; }
+.card-photo-grade .deal-delta { height: 22px; font-size: var(--text-xs); box-shadow: 0 2px 6px rgba(0,0,0,.18); }
+.card-photo-grade .deal-delta.tone-at { background: var(--bg-card); }
 .cost-bar { display: flex; flex: 0 0 64px; height: 6px; border-radius: var(--radius-full); overflow: hidden; background: var(--bg-muted); }
 .cost-bar i { display: block; height: 100%; }
 .cost-bar .seg-rent  { background: var(--border-strong); }

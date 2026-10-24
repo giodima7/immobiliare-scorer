@@ -190,7 +190,7 @@ def fingerprint(urls: list[str]) -> str:
     return hashlib.sha1("\n".join(urls).encode()).hexdigest()[:12]
 
 
-MIN_SCORE = 75      # photos are read for the best listings only (90, then 80, until 2026-10-17)
+MIN_SCORE = 70      # photos are read for the best listings only (90, 80, 75 until 2026-10-19; the user: read more)
 
 
 def is_top(l: dict, min_score: int = MIN_SCORE, gems: bool = False) -> bool:
@@ -246,13 +246,16 @@ def cmd_select(args) -> None:
     except Exception:
         in_focus = lambda l: False
     todo.sort(key=lambda l: (not in_focus(l), -(l.get("score_total") or 0)))
-    # Then readings of an older rubric — only where the user searches and the
-    # labelled deals (a full re-read of ~1.3k listings is ~2.5M tokens).
+    # Then readings of an older rubric: every one since 2026-10-19 (the user
+    # wants the grade everywhere; ~776 then, ~1.5M tokens) — where the user
+    # searches and the labelled deals first.
     seen_ids = {str(l["id"]) for l in todo}
-    again = [l for l in top if str(l["id"]) not in seen_ids
-             and (done.get(str(l["id"])) or {}).get("rubric", 1) < RUBRIC_VERSION
-             and (in_focus(l) or l.get("good_value") or l.get("hidden_gem"))]
-    again.sort(key=lambda l: (not in_focus(l), -(l.get("score_total") or 0)))
+    again = [l for l in top if str(l["id"]) not in seen_ids and outdated(done.get(str(l["id"])))]
+    # Where the user searches, then labelled deals and the ones a photo
+    # verdict capped (they may get their label back), then the rest.
+    again.sort(key=lambda l: (not in_focus(l),
+                              not (l.get("good_value") or l.get("hidden_gem") or l.get("photo_deal") == "contradicts"),
+                              -(l.get("score_total") or 0)))
     todo += again
     CACHE.mkdir(exist_ok=True)
     QUEUE.write_text(json.dumps([{**context(l), "photos": photo_urls(l)} for l in todo],
@@ -397,7 +400,7 @@ def cmd_run(args) -> None:
     queue = [it for it in queue if (SHEETS / f"{it['id']}.jpg").exists()]
     res = load_results()
     queue = [it for it in queue if res.get(it["id"], {}).get("fingerprint") != fingerprint(it["photos"])
-             or (res.get(it["id"]) or {}).get("rubric", 1) < RUBRIC_VERSION]
+             or outdated(res.get(it["id"]))]
     if args.limit:
         queue = queue[: args.limit]
     rubric = PROMPT.read_text() + calibration_text()
@@ -440,7 +443,21 @@ FIELDS = ("photos_usable", "rooms_seen", "condition", "kitchen", "bathroom", "re
 # no-bedroom / tiny-kitchen / rooms-not-shown flags, after the user's
 # examples. Readings of an older version are re-read (focus areas and
 # labelled listings first, after the unread ones — cmd_select).
-RUBRIC_VERSION = 2
+RUBRIC_VERSION = 3
+# 3 (2026-10-19): unseen rooms lower the confidence, not the grade (the user:
+# "not shown is missing information, why penalise it"). Only v2 readings
+# that flagged rooms_not_shown / few_photos are read again (1,374 of 1,803).
+INFO_FLAGS = {"rooms_not_shown", "few_photos"}
+
+
+def outdated(r: dict | None) -> bool:
+    """A reading the current rubric would answer differently."""
+    if not r:
+        return False
+    v = r.get("rubric", 1)
+    if v < 2:
+        return True
+    return v < RUBRIC_VERSION and bool(set(r.get("red_flags") or []) & INFO_FLAGS)
 
 
 def _store(answers: list[dict], batch: list[dict], model: str) -> int:

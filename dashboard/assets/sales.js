@@ -17,7 +17,7 @@ const SALE_SINCE = '2026-10-18';   // first sales sweep: nothing is "new" that d
 
 const SALE_DEFAULTS = { areas: [], maxPrice: 0, minRooms: 0, minSqm: 0, deal: '', sort: 'score',
                         down: 20, rate: 3.5, years: 25, condition: '', listed: '', source: '',
-                        minFloor: '', maxMetro: '', minEnergy: '' };
+                        minFloor: '', maxMetro: '', minEnergy: '', minPhoto: '' };
 
 function saleFilters() {
   const f = Object.assign({}, SALE_DEFAULTS, Storage.get('saleFilters', {}) || {});
@@ -91,6 +91,7 @@ function _initSaleBar() {
   el('sMinFloor')?.addEventListener('change', e => _setSaleFilters({ minFloor: e.target.value }));
   el('sMaxMetro')?.addEventListener('change', e => _setSaleFilters({ maxMetro: e.target.value }));
   el('sMinEnergy')?.addEventListener('change', e => _setSaleFilters({ minEnergy: e.target.value }));
+  el('sMinPhoto')?.addEventListener('change', e => _setSaleFilters({ minPhoto: e.target.value }));
   document.querySelectorAll('#sDealFilter [data-sdeal]').forEach(b =>
     b.addEventListener('click', () => _setSaleFilters({ deal: b.dataset.sdeal })));
   document.querySelectorAll('#sSourceFilter [data-ssource]').forEach(b =>
@@ -122,7 +123,7 @@ function _syncSaleBar(f) {
   set('sMaxPrice', f.maxPrice || ''); set('sMinRooms', f.minRooms || ''); set('sMinSqm', f.minSqm || '');
   set('sDown', f.down); set('sRate', f.rate); set('sYears', f.years);
   set('sSortSelect', f.sort); set('sCondition', f.condition); set('sListed', f.listed);
-  set('sMinFloor', f.minFloor); set('sMaxMetro', f.maxMetro); set('sMinEnergy', f.minEnergy);
+  set('sMinFloor', f.minFloor); set('sMaxMetro', f.maxMetro); set('sMinEnergy', f.minEnergy); set('sMinPhoto', f.minPhoto);
   const seg = (sel, attr, cur) => document.querySelectorAll(sel).forEach(b => {
     const on = (b.dataset[attr] || '') === (cur || '');
     b.classList.toggle('active', on);
@@ -131,7 +132,7 @@ function _syncSaleBar(f) {
   seg('#sDealFilter [data-sdeal]', 'sdeal', f.deal);
   seg('#sSourceFilter [data-ssource]', 'ssource', f.source);
   if (_saleAreaMsd) _saleAreaMsd.setSelected(f.areas);
-  const nMore = _saleChips(f).filter(c => ['condition', 'listed', 'source', 'minFloor', 'maxMetro', 'minEnergy'].includes(c.key)).length;
+  const nMore = _saleChips(f).filter(c => ['condition', 'listed', 'source', 'minFloor', 'maxMetro', 'minEnergy', 'minPhoto'].includes(c.key)).length;
   const badge = document.getElementById('sMoreBadge');
   if (badge) { badge.textContent = nMore || ''; badge.hidden = !nMore; }
   document.getElementById('sMoreBtn')?.classList.toggle('on', nMore > 0);
@@ -149,6 +150,7 @@ function _saleChips(f) {
   if (f.minFloor !== '') add('minFloor', t('chip.min_floor', { n: f.minFloor }));
   if (f.maxMetro)  add('maxMetro', t('chip.max_metro', { n: fmt(Number(f.maxMetro)) }));
   if (f.minEnergy) add('minEnergy', t('chip.min_energy', { v: f.minEnergy }));
+  if (f.minPhoto)  add('minPhoto', t('chip.min_photo', { n: f.minPhoto }));
   if (f.source)    add('source', siteName(f.source));
   return c;
 }
@@ -199,6 +201,7 @@ function _saleMatches(l, f) {
   if (f.minFloor !== '' && (l.floor_n ?? -999) < Number(f.minFloor)) return false;
   if (f.maxMetro && (l.metro_nearest_dist_m == null || l.metro_nearest_dist_m > Number(f.maxMetro))) return false;
   if (f.minEnergy && l.energy_class && (ENERGY_RANK[l.energy_class] || 0) < (ENERGY_MIN_RANK[f.minEnergy] || 0)) return false;
+  if (f.minPhoto && !(l.photo_grade != null && l.photo_grade >= Number(f.minPhoto))) return false;   // not graded yet: out
   return true;
 }
 
@@ -210,6 +213,7 @@ function _saleSorted(rows, f) {
     yield: l => -(l.estimated_yield_pct ?? -Infinity),
     delta: l => l.comps_sale_delta_pct ?? Infinity,
     newest: l => -new Date(l.first_seen_date || 0).getTime(),
+    photo: l => -(l.photo_grade ?? -1),
   }[f.sort] || (l => -(l.score_total ?? 0));
   return rows.slice().sort((a, b) => key(a) - key(b));
 }
@@ -320,7 +324,7 @@ function saleCardHtml(l, f) {
         ${_saleDeltaHtml(l)}
       </div>
       ${figs ? `<div class="sale-figs">${figs}</div>` : ''}
-      <div class="card-specs">${_specsParts(l).map(p => `<span>${esc(p)}</span>`).join('')}</div>
+      <div class="card-specs">${_specsHtml(l)}</div>
       ${meta ? `<div class="card-meta">${meta}</div>` : ''}
     </div>
     <div class="card-footer">

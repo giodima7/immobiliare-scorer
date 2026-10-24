@@ -394,6 +394,8 @@ _DEFAULT_SETTINGS: dict = {
     # needed, basement, not the flat described) with medium/high confidence:
     # no Hidden Gem / Great Value label and the score capped here.
     "photo_contradicts_cap": 69,
+    # A photo grade of this or less caps like a "contradicts" (rubric v2).
+    "photo_grade_cap_max":   4,
     # €-impact adjustment
     "euro_impact_small":  75,   # |monthly diff| < €75 → reduce penalty 30%
     "euro_impact_large": 200,   # |monthly diff| > €200 → full penalty
@@ -1422,6 +1424,19 @@ def _stated_condo(listing: dict) -> float:
     return condo if (rent and 0 < condo <= rent * 0.5) else 0.0
 
 
+def _stated_heating(listing: dict) -> float:
+    """Heating billed apart, unless above half the rent: agencies type
+    placeholders there (Immobiliare 132531046: €178,956,971 a month — the
+    site's maximum, 2,147,483,647 a year), which overflowed the comparison
+    and failed whole Supabase batches (2026-10-22/24)."""
+    try:
+        rent = float(listing.get("rent_mo") or listing.get("price") or 0) or 0
+        heating = float(listing.get("heating_mo") or 0) or 0
+    except (TypeError, ValueError):
+        return 0.0
+    return heating if (rent and 0 < heating <= rent * 0.5) else 0.0
+
+
 def zone_condo_psqm(pool: list) -> tuple[dict, float]:
     """({omi_zona: median stated condo €/m²}, city median) from the listings
     that state their fees; zones with fewer than 15 fall back to the city."""
@@ -1453,10 +1468,7 @@ def compute_total_psqm(listing: dict, zone_med: dict, city_med: float) -> float:
         condo = 0.0
     else:
         condo = _stated_condo(listing) or zone_med.get(listing.get("omi_zona"), city_med) * sqm
-    try:
-        heating = float(listing.get("heating_mo") or 0)
-    except (TypeError, ValueError):
-        heating = 0.0
+    heating = _stated_heating(listing)
     return round((rent + condo + heating) / sqm, 2)
 
 
@@ -2138,7 +2150,7 @@ def load_photo_evals() -> dict:
     return evals
 
 
-def apply_photo_verdict(l: dict, evals: dict, cap: int) -> None:
+def apply_photo_verdict(l: dict, evals: dict, cap: int, grade_max: float = 4) -> None:
     """Stamp what the photos showed (photo_* fields) when the answer is for
     the listing's current photos; a confident "contradicts" strips the deal
     label and caps the score at `cap` (reason in score_cap_reason)."""
@@ -2160,13 +2172,29 @@ def apply_photo_verdict(l: dict, evals: dict, cap: int) -> None:
         "photo_sonnet_deal": r.get("sonnet_deal") if r.get("by_user") else None,
         "photo_grade": r.get("grade"),
     })
-    if r.get("deal_check") == "contradicts" and r.get("confidence") in ("medium", "high"):
+    # A photo stamped AFFITTATO / TOO LATE: the flat is gone (2026-10-19,
+    # Idealista 34735598 "CASASI TOO LATE!" still listed, graded 8/10).
+    if "rented_stamp" in (r.get("red_flags") or []):
+        l["is_stale"] = True
+        l["gone_checked"] = l.get("gone_checked") or str(r.get("read_at") or "")[:10] or None
+    # A grade of grade_max or less is a "contradicts" whatever the verdict
+    # says (the rubric's own rule; 5 labelled listings on 2026-10-19 were
+    # "doubt" with a grade of 4).
+    low_grade = r.get("grade") is not None and r["grade"] <= grade_max
+    # Missing information (a room not shown, few photos) is no defect: a
+    # verdict resting on that alone never caps (the user, 2026-10-19; 7 of
+    # 611 caps). Rubric v3 tells the reader the same.
+    flags = set(r.get("red_flags") or [])
+    info_only = bool(flags) and flags <= {"rooms_not_shown", "few_photos"} and not r.get("by_user")
+    if not info_only and ((r.get("deal_check") == "contradicts" and r.get("confidence") in ("medium", "high"))
+                          or low_grade):
         l["hidden_gem"] = False
         l["good_value"] = False
         if (l.get("score_total") or 0) > cap:
             l["score_total"] = cap
             l["score_was_capped"] = True
             reason = (f"you judged the photos not convincing → max {cap}" if r.get("by_user")
+                      else f"photos graded {r['grade']}/10 → max {cap}" if low_grade and r.get("deal_check") != "contradicts"
                       else f"photos contradict the deal → max {cap}")
             l["score_cap_reason"] = "; ".join(x for x in (l.get("score_cap_reason"), reason) if x)
 
@@ -2231,7 +2259,8 @@ def score_all(listings: list, settings: dict | None = None,
         # sides of the market).
         apply_extreme_underpricing_flag(merged, merged.get("comps_delta_pct"))
         if photo_evals:
-            apply_photo_verdict(merged, photo_evals, settings["photo_contradicts_cap"])
+            apply_photo_verdict(merged, photo_evals, settings["photo_contradicts_cap"],
+                                settings.get("photo_grade_cap_max", 4))
         scored.append(merged)
 
     scored.sort(key=lambda x: x.get("score_total", 0) or 0, reverse=True)

@@ -275,12 +275,29 @@ function favBtnInner() {
 function _specsParts(l) {
   const parts = [];
   if (l.rooms != null) parts.push(l.rooms === 1 ? t('card.studio') : t('card.rooms', { n: l.rooms }));
+  // Bedrooms when the listing says (Immobiliare 99 %, Idealista from its page).
+  if (l.bedrooms != null && l.rooms !== 1) parts.push(t(l.bedrooms === 1 ? 'card.bedroom' : 'card.bedrooms', { n: l.bedrooms }));
   if (l.sqm) parts.push(`${fmt(l.sqm)} m²`);
   const fl = _floorLabel(l);
   if (fl) parts.push(fl + (l.elevator === true ? ' · ' + t('lm.lift') : l.elevator === false && (l.floor_n ?? 0) > 1 ? ' · ' + t('lm.no_lift') : ''));
   else if (l.elevator === true) parts.push(t('lm.lift'));
   if (l.bathrooms >= 2) parts.push(t('card.baths', { n: l.bathrooms }));
   return parts;
+}
+
+// The specs line of a card, short enough for one line: the lift is an icon.
+function _specsHtml(l) {
+  const esc = escapeHtml, parts = [];
+  if (l.rooms != null) parts.push(esc(l.rooms === 1 ? t('card.studio') : t('card.rooms', { n: l.rooms })));
+  if (l.bedrooms != null && l.rooms !== 1) parts.push(esc(t(l.bedrooms === 1 ? 'card.bedroom' : 'card.bedrooms', { n: l.bedrooms })));
+  if (l.sqm) parts.push(`${fmt(l.sqm)} m²`);
+  const fl = _floorLabel(l);
+  const lift = l.elevator === true ? `<span class="spec-lift" title="${esc(t('lm.lift'))}" aria-label="${esc(t('lm.lift'))}">${icon('elevator')}</span>`
+             : l.elevator === false && (l.floor_n ?? 0) > 1 ? ' ' + esc(t('lm.no_lift')) : '';
+  if (fl) parts.push(esc(fl) + lift);
+  else if (l.elevator === true) parts.push(lift);
+  if (l.bathrooms >= 2) parts.push(esc(t('card.baths', { n: l.bathrooms })));
+  return parts.map(p => `<span>${p}</span>`).join('');
 }
 
 function _dealDeltaHtml(l) {
@@ -299,28 +316,23 @@ function _dealDeltaHtml(l) {
 // Under the price: what the total is made of (a bar sized by share, the
 // parts, a warning when extras pass 15 % of the rent), "fees included", or —
 // when the listing states no fees — that the number is the rent only.
+// One quiet line under the price: what the all-in total is made of, or why
+// it's rent only. The bar and the "+x% on the rent" tag live in Details
+// (2026-10-19 card redesign: the card had grown to 13 items in 6 rows).
 function _costLineHtml(c) {
-  if (c.included && !c.heating) {
-    return `<div class="cost-line"><span class="cost-tag tone-ok">${icon('check')}${escapeHtml(t('cost.included'))}</span></div>`;
-  }
+  const line = (txt, cls = '', title = '') =>
+    `<div class="cost-line${cls ? ' ' + cls : ''}"${title ? ` title="${escapeHtml(title)}"` : ''}>${escapeHtml(txt)}</div>`;
+  if (c.included && !c.heating) return line(t('cost.included'), 'is-ok');
   if (!c.known) {
-    if (c.suspect) {
-      return `<div class="cost-line"><span class="cost-bar is-unknown" aria-hidden="true"></span>
-        <span class="cost-tag tone-warn" title="${escapeHtml(t('cost.suspect_long', { v: fmt(c.statedCondo) }))}">${escapeHtml(t('cost.suspect'))}</span></div>`;
-    }
-    return `<div class="cost-line"><span class="cost-bar is-unknown" aria-hidden="true"></span>
-      <span class="cost-tag tone-muted" title="${escapeHtml(t(c.pageRead ? 'cost.ask_long' : 'cost.pending_long'))}">${escapeHtml(t(c.pageRead ? 'cost.ask' : 'cost.pending'))}</span></div>`;
+    if (c.suspect) return line(t('cost.suspect'), 'is-warn', t('cost.suspect_long', { v: fmt(c.statedCondo) }));
+    return line(t(c.pageRead ? 'cost.ask' : 'cost.pending'), '', t(c.pageRead ? 'cost.ask_long' : 'cost.pending_long'));
   }
-  const pct = v => `${Math.max(1, Math.round(v / c.total * 100))}%`;
-  const parts = [`€${fmt(c.rent)} ${t('cost.rent')}`];
-  if (c.condo) parts.push(`€${fmt(c.condo)} ${t('cost.condo')}`);
-  if (c.heating) parts.push(`€${fmt(c.heating)} ${t('cost.heating')}`);
+  const parts = [`${t('cost.rent')} €${fmt(c.rent)}`];
+  if (c.condo) parts.push(`${t('cost.condo')} €${fmt(c.condo)}`);
+  if (c.heating) parts.push(`${t('cost.heating')} €${fmt(c.heating)}`);
   const note = c.included ? t('cost.included') : (!c.condo ? t('cost.condo_unknown') : '');
-  return `<div class="cost-line">
-      <span class="cost-bar" aria-hidden="true"><i class="seg-rent" style="width:${pct(c.rent)}"></i>${c.condo ? `<i class="seg-condo" style="width:${pct(c.condo)}"></i>` : ''}${c.heating ? `<i class="seg-heat" style="width:${pct(c.heating)}"></i>` : ''}</span>
-      <span class="cost-parts">${escapeHtml(parts.join(' + ') + (note ? ' · ' + note : ''))}</span>
-      ${c.extraPct >= 15 ? `<span class="cost-tag tone-warn">${escapeHtml(t('cost.extra_pct', { pct: c.extraPct }))}</span>` : ''}
-    </div>`;
+  return line(parts.join(' + ') + (note ? ' · ' + note : ''), c.extraPct >= 25 ? 'is-heavy' : '',
+              c.extraPct >= 15 ? t('cost.extra_pct', { pct: c.extraPct }) : '');
 }
 
 // What the photos showed (photo_eval): a chip for every verdict, "doubt"
@@ -351,7 +363,9 @@ function _metroMeta(l) {
   // Placed at the stop the listing names: the walk is unknown, not 0 min.
   if (l.geo_precision === 'metro' && l.metro_nearest_name)
     return `<span>${icon('train')}${escapeHtml(t('card.metro_named', { name: name.replace(/ · $/, '') }))}</span>`;
-  return `<span class="${walk <= 5 ? 'near' : ''}">${icon('train')}${escapeHtml(name + t('card.walk_min', { n: walk }))}</span>`;
+  // Neutral: a green "≤ 5 min" and a blue "new" read as random colours
+  // without a legend (the user, 2026-10-19); the photo carries "New".
+  return `<span>${icon('train')}${escapeHtml(name + t('card.walk_min', { n: walk }))}</span>`;
 }
 
 function _freshMeta(l) {
@@ -360,7 +374,7 @@ function _freshMeta(l) {
   const earlier = days <= 3 && _listedEarlier(l);
   const txt = earlier ? t(days <= 0 ? 'card.found_today_old' : 'card.found_days_old', { n: fmt(days) })
             : days <= 0 ? t('card.seen_today') : t('card.seen_days', { n: fmt(days) });
-  return `<span class="${days <= 3 && !earlier ? 'fresh' : ''}" title="${escapeHtml(fmtDate(l.first_seen_date))}">${icon('clock')}${escapeHtml(txt)}</span>`;
+  return `<span title="${escapeHtml(fmtDate(l.first_seen_date))}">${icon('clock')}${escapeHtml(txt)}</span>`;
 }
 
 // Score ring markup. animate=false (re-renders) paints the final state.
@@ -405,9 +419,15 @@ function renderRentalCard(l) {
     ? `<span class="gem-photo-chip chip-good">${icon('coin')}<span>${escapeHtml(t('gem.good'))}</span></span>`
     : '';
   const newChip = isNew(l) ? `<span class="card-photo-new-badge">${escapeHtml(t('badge.new'))}</span>` : '';
+  // What the photos showed sits on the photo (2026-10-19 card redesign: the
+  // price row carried three chips); without a photo it stays in the row.
+  const photoChip = _photoChipHtml(l);
   const photo = (l.thumbnail || gemChip || newChip)
-    ? `<button type="button" class="card-photo-wrap" data-open-details="${id}" aria-label="${escapeHtml(t('card.details') + ': ' + nb)}">${l.thumbnail ? `<img class="card-thumb" src="${_safeUrl(l.thumbnail)}" alt="" loading="lazy">` : ''}${gemChip}${newChip}</button>`
+    ? `<button type="button" class="card-photo-wrap" data-open-details="${id}" aria-label="${escapeHtml(t('card.details') + ': ' + nb)}">${l.thumbnail ? `<img class="card-thumb" src="${_safeUrl(l.thumbnail)}" alt="" loading="lazy">` : ''}${gemChip}${newChip}${l.thumbnail && photoChip ? `<span class="card-photo-grade">${photoChip}</span>` : ''}</button>`
     : '';
+  // The site is the Open button's label; "+1" when the flat is on another site too.
+  const others = alsoOnSites(l) ? alsoOnSites(l).split(', ').length : 0;
+  const openLabel = site.replace('.it', '') + (others ? ` +${others}` : '');
 
   const cost = monthlyCost(l);
   const history = priceHistoryText(l);
@@ -423,7 +443,7 @@ function renderRentalCard(l) {
       <div class="card-head">
         <div class="card-title-wrap">
           <h2 class="card-title"><button type="button" class="card-title-btn" data-open-details="${id}">${escapeHtml(nb)}</button></h2>
-          <div class="card-sub">${escapeHtml([street && street.toLowerCase() !== nb.toLowerCase() ? street : '', site, l.source === 'subito' ? t('card.private') : '', alsoOnSites(l) ? t('card.also_on', { sites: alsoOnSites(l) }) : ''].filter(Boolean).join(' · '))}</div>
+          <div class="card-sub">${escapeHtml([street && street.toLowerCase() !== nb.toLowerCase() ? street : '', l.source === 'subito' ? t('card.private') : ''].filter(Boolean).join(' · '))}</div>
         </div>
         ${scoreRingHtml(l)}
       </div>
@@ -431,11 +451,11 @@ function renderRentalCard(l) {
         <span class="price-main">${l.rent_mo != null ? '€' + fmt(cost.total) : '–'}</span>
         <span class="price-unit">${escapeHtml(t(cost.known ? 'cost.all_in' : 'cost.rent_only'))}</span>
         ${_dealDeltaHtml(l)}
-        ${_photoChipHtml(l)}
+        ${l.thumbnail ? '' : photoChip}
         ${_costLineHtml(cost)}
       </div>
       ${history ? `<div class="was-price lm-history">${icon('trending-down')}${escapeHtml(history)}</div>` : ''}
-      <div class="card-specs">${_specsParts(l).map(p => `<span>${escapeHtml(p)}</span>`).join('')}</div>
+      <div class="card-specs">${_specsHtml(l)}</div>
       ${meta ? `<div class="card-meta">${meta}</div>` : ''}
     </div>
     <div class="card-footer">
@@ -443,7 +463,8 @@ function renderRentalCard(l) {
       <button type="button" class="btn btn-secondary btn-icon btn-fav${fav ? ' is-fav' : ''}" data-rent-id="${id}"
               aria-pressed="${fav}" aria-label="${escapeHtml(t(fav ? 'card.unsave' : 'card.save'))}" title="${escapeHtml(t(fav ? 'card.unsave' : 'card.save'))}">${favBtnInner()}</button>
       <a class="btn btn-primary btn-open" href="${_safeUrl(l.url)}" target="_blank" rel="noopener"
-         data-listing-id="${id}" onclick="_promptArchiveListing(this.dataset.listingId, 'rental', this)">${escapeHtml(t('card.open'))}${icon('external-link')}</a>
+         data-listing-id="${id}" title="${escapeHtml(t('lm.open_on', { site }) + (others ? ' · ' + t('card.also_on', { sites: alsoOnSites(l) }) : ''))}"
+         onclick="_promptArchiveListing(this.dataset.listingId, 'rental', this)">${escapeHtml(openLabel)}${icon('external-link')}</a>
     </div>
     ${extremeUnderpricingBannerHtml(l)}
     ${staleBannerHtml(l)}

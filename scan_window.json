@@ -1,0 +1,5 @@
+{
+  "_doc": "When the scanners may open browser pages (scan_window.py). Outside it they sleep. Read on every check.",
+  "start": "23:30",
+  "end": "07:30"
+}

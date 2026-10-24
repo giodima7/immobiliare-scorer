@@ -42,7 +42,7 @@ SOURCE     = "subito"
 SEARCH_URL = "https://www.subito.it/annunci-lombardia/affitto/appartamenti/milano/milano/?advt=0"
 SCAN_AREA  = "subito-milano"          # one "area": the whole city, read in full
 
-SUBITO_EVERY_SEC = 24 * 3600         # one pass a day (the user, 2026-10-18): ~20 new a day
+SUBITO_EVERY_SEC = 20 * 3600         # one pass a night (scan_window); 20 h so it doesn't drift past the window
 BLOCK_PAUSE_SEC  = 6 * 3600
 MAX_PAGES        = 60                 # 29 on 2026-10-18
 PAGE_DELAY_S     = (3.0, 6.0)
@@ -239,6 +239,11 @@ def _is_fake(title: str, body: str) -> bool:
     return any(re.search(rf"\b{re.escape(k)}\b", text) for k in (*_FAKE_FOREIGN_KEYWORDS, *_SEA_VIEW_KEYWORDS))
 
 
+def _bedrooms(text: str, rooms) -> Optional[int]:
+    from listing_details import bedrooms_from_text
+    return bedrooms_from_text(text, rooms)
+
+
 def parse_item(it: dict, max_rent: int = 0, min_rooms: int = 0) -> tuple[Optional[dict], str]:
     """A Subito search item → (rentals row, "") or (None, why skipped)."""
     from fetch_rentals import _parse_condo_from_description, condo_included
@@ -313,6 +318,7 @@ def parse_item(it: dict, max_rent: int = 0, min_rooms: int = 0) -> tuple[Optiona
         # The search item is the whole listing: no listing page to wait for.
         "costs_read":         True,
         "rooms":              rooms,
+        "bedrooms":           _bedrooms(text, rooms),
         "bathrooms":          _int(_feat(it, "/bathrooms")),
         "floor":              floor,
         "floor_n":            floor_n,

@@ -52,6 +52,26 @@ _AUCTION_RX = re.compile(r"\b(?:all['’]\s*)?asta\b|vendita\s+giudiziari|proced
 SALE_ONLY_FLAGS = ("is_nuda_proprieta", "is_auction")
 
 
+# Bedrooms from a listing's words ("2 camere da letto", "camera
+# matrimoniale" in a bilocale): Idealista pages and Subito texts don't give
+# the number as a field. On Subito's private listings: found in 328 of 620.
+_NUM_WORDS = {"una": 1, "un": 1, "due": 2, "tre": 3, "quattro": 4, "cinque": 5}
+_BEDROOMS_RX = re.compile(r"\b(\d|una|due|tre|quattro|cinque)\s+(?:ampie\s+|grandi\s+|spaziose\s+)?camer[ae]\b"
+                          r"(?!\s+(?:d'|di)\s*(?:albergo|hotel))", re.I)
+_ONE_BEDROOM_RX = re.compile(r"\bcamera\s+(?:da\s+letto|matrimoniale)\b", re.I)
+
+
+def bedrooms_from_text(text: str, rooms: int | None = None) -> int | None:
+    m = _BEDROOMS_RX.search(text or "")
+    if m:
+        n = _NUM_WORDS.get(m.group(1).lower()) or int(m.group(1))
+        if 1 <= n <= (rooms or 9):
+            return n
+    if rooms == 2 and _ONE_BEDROOM_RX.search(text or ""):
+        return 1
+    return None
+
+
 def _not_a_flat_to_buy(text: str) -> dict:
     return {"is_nuda_proprieta": bool(_NUDA_RX.search(text or "")),
             "is_auction": bool(_AUCTION_RX.search(text or "")), "nuda_checked": 1}
@@ -75,7 +95,7 @@ DRIP_LEVELS = [          # (pages per browser session, minutes between sessions)
 DRIP_START_LEVEL  = 1
 DRIP_STEP_UP_SEC  = 2 * 3600
 DRIP_PER_DAY      = 3000         # safety cap per source per day
-DRIP_HOURS        = (0, 24)      # all day — the window stays minimized
+DRIP_HOURS        = (0, 24)      # superseded by scan_window (night only, 2026-10-24)
 DRIP_PAGE_GAP_SEC = (5, 10)      # seconds between pages in a session
 DRIP_QUEUE_TTL    = 30 * 60      # rebuild the queue: new top listings jump in
 PRIORITY_Z        = -0.8         # price_z at or below this → fetched first
@@ -409,6 +429,9 @@ def parse_idealista_detail(page: dict) -> dict:
         out["photo_count"] = int(photos)
     out["costs_read"] = 1        # price box (condo, deposit) read since 2026-10-17
     out.update(_not_a_flat_to_buy(" | ".join([page.get("title") or "", text, comment])))
+    beds = bedrooms_from_text(text + " | " + comment)
+    if beds:
+        out["bedrooms"] = beds
     return out
 
 
@@ -637,7 +660,8 @@ def drip_until(source: str, deadline: float, log=print, after_batch=None) -> Non
         now = datetime.now()
         if date.today() != st["day"]:
             st["day"], st["done"] = date.today(), 0
-        eligible = (DRIP_HOURS[0] <= now.hour < DRIP_HOURS[1]
+        import scan_window
+        eligible = (scan_window.in_window(now)
                     and st["done"] < DRIP_PER_DAY and time.time() >= st["blocked_until"])
         if eligible and time.time() >= next_batch:
             if time.time() - built_at > DRIP_QUEUE_TTL or not queue:

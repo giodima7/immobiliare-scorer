@@ -2392,14 +2392,21 @@ def run_slot(args, zone: str | None, do_discover: bool) -> dict:
 
 def _spread_loop(args, log) -> None:
     """Spread scan: a slot every gap, the detail drip in between."""
-    def _gap() -> int:
-        n = len(_zone_slugs(_idealista_area_names(args))) or 1
-        return SLOT_GAP_SEC or int(24 * 3600 / (n + 1))
+    import scan_window
+    from fetch_rentals import _sleep_outside_window
 
-    log(f"Idealista daemon started — spread scan: one zone every {_gap() // 60} min, "
-        f"discover every {DISCOVER_EVERY_SEC / 3600:g} h, output {OUTPUT_PATH}")
+    def _gap() -> int:
+        # Every zone once a night: the window's hours over the zones.
+        n = len(_zone_slugs(_idealista_area_names(args))) or 1
+        return SLOT_GAP_SEC or int(scan_window.hours() * 3600 / (n + 1))
+
+    log(f"Idealista daemon started — spread scan at night ({scan_window.describe()}): one zone every "
+        f"{_gap() // 60} min, discover every {DISCOVER_EVERY_SEC / 60:g} min, output {OUTPUT_PATH}")
     next_slot = last_scan_at("idealista") + _gap()
     while True:
+        if not scan_window.in_window():
+            _sleep_outside_window(args, "idealista", log)
+            next_slot = time.time() + 120     # the Immobiliare daemon starts first
         if time.time() < next_slot:
             log(f"Next slot at {datetime.fromtimestamp(next_slot):%Y-%m-%d %H:%M}")
             try:
@@ -2407,6 +2414,8 @@ def _spread_loop(args, log) -> None:
             except KeyboardInterrupt:
                 log("Interrupted during sleep — stopping Idealista daemon.")
                 raise
+            if not scan_window.in_window():
+                continue
         zone = next_slot_area("idealista", _zone_slugs(_idealista_area_names(args)))
         do_discover = time.time() - (load_discover_state().get("at") or 0) >= DISCOVER_EVERY_SEC
         log(f"Slot: {zone}{' + discover' if do_discover else ''}")

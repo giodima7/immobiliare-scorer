@@ -486,6 +486,7 @@ function restoreFilters() {
   setVal('rMaxMetro',  r.maxMetro);
   setVal('rMinFloor',  r.minFloor);
   setVal('rMinEnergy', r.minEnergy);
+  setVal('rMinPhoto',  r.minPhoto);
   setVal('rListed',    r.fListed);
   if (r.minScore != null && r.minScore !== '') {
     setVal('rScore',    r.minScore);
@@ -563,6 +564,7 @@ function saveFilters() {
       maxMetro:  get('rMaxMetro')?.value,
       minFloor:  get('rMinFloor')?.value,
       minEnergy: get('rMinEnergy')?.value,
+      minPhoto:  get('rMinPhoto')?.value,
       fListed:   get('rListed')?.value,
       minScore:  get('rScore')?.value,
       elevator:  get('rElevator')?.checked,

@@ -303,6 +303,7 @@
           <option value="comps_delta_pct" data-i18n="sort.discount">Discount</option>
           <option value="first_seen_date" data-i18n="sort.newest">Newest</option>
           <option value="rent_mo" data-i18n="sort.rent_asc">Rent ↑</option>
+          <option value="photo_grade" data-i18n="sort.photo">Photo grade</option>
         </select>
       </div>
       <div class="drawer-field">
@@ -481,6 +482,7 @@
         <option value="comps_delta_pct" data-i18n="sort.discount">Discount</option>
         <option value="first_seen_date" data-i18n="sort.newest">Newest</option>
         <option value="rent_mo" data-i18n="sort.rent_asc">Rent ↑</option>
+        <option value="photo_grade" data-i18n="sort.photo">Photo grade</option>
       </select>
     </label>
     <button type="button" class="btn btn-secondary fb-btn" id="rMoreBtn" data-i18n-title="fb.more" title="More filters" aria-expanded="false" aria-controls="rMorePanel">
@@ -577,6 +579,16 @@
           <option value="C">C+</option>
           <option value="B">B+</option>
           <option value="A">A</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="field-label" for="rMinPhoto" data-i18n="fb.min_photo">Photo grade (Sonnet or yours)</label>
+        <select id="rMinPhoto" class="input">
+          <option value="" data-i18n="filter.any">Any</option>
+          <option value="5">5+</option>
+          <option value="6">6+</option>
+          <option value="7">7+</option>
+          <option value="8">8+</option>
         </select>
       </div>
       <div class="field field-span2">
@@ -678,6 +690,7 @@
           <option value="price" data-i18n="sale.sort_price">Cheapest</option>
           <option value="psqm" data-i18n="sale.sort_psqm">Cheapest per m²</option>
           <option value="newest" data-i18n="sort.newest">Newest</option>
+          <option value="photo" data-i18n="sort.photo">Photo grade</option>
         </select>
       </label>
       <button type="button" class="btn btn-secondary fb-btn" id="sMoreBtn" data-i18n-title="fb.more" title="More filters" aria-expanded="false" aria-controls="sMorePanel">
@@ -744,6 +757,16 @@
             <option value="7" data-i18n="listed.7">Last 7 days</option>
             <option value="14" data-i18n="listed.14">Last 14 days</option>
             <option value="30" data-i18n="listed.30">Last 30 days</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="field-label" for="sMinPhoto" data-i18n="fb.min_photo">Photo grade (Sonnet or yours)</label>
+          <select id="sMinPhoto" class="input">
+            <option value="" data-i18n="filter.any">Any</option>
+            <option value="5">5+</option>
+            <option value="6">6+</option>
+            <option value="7">7+</option>
+            <option value="8">8+</option>
           </select>
         </div>
         <div class="field field-span2">
