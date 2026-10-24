@@ -68,7 +68,7 @@ _ROOM_LET_RX = re.compile(
     r"|\bcerc(?:o|hiamo|asi|ano)\s+(?:un[ao]?\s+|\d\s+|due\s+)?(?:coinquilin\w+|ragazz[ae]|studentess\w+|student[ei])\b"
     r"|\b(?:stanza|camera)\s+in\s+affitto\b|\baffitto\s+(?:di\s+)?(?:stanz[ae]|camer[ae])\b", re.I)
 _NEGATED_RX = re.compile(r"\b(?:no|non|niente|vietat\w+)\b[^.\n]{0,30}$", re.I)
-RENT_ONLY_FLAGS = ("is_room_let",)
+RENT_ONLY_FLAGS = ("is_room_let", "text_says_studio")
 
 
 def is_room_let(text: str) -> bool:
@@ -77,8 +77,30 @@ def is_room_let(text: str) -> bool:
                for m in _ROOM_LET_RX.finditer(text))
 
 
-def _room_check(text: str) -> dict:
-    return {"is_room_let": is_room_let(text), "room_checked": 1}
+def says_studio(text: str) -> bool:
+    """The listing's words call it a studio: "monolocale" and no other room
+    word (Immobiliare 129426444, a "Bilocale" whose description reads
+    "Proponiamo in locazione MONOLOCALE con cucina separata"). Same rule as
+    Subito's form-vs-text check (fetch_subito)."""
+    from fetch_subito import _STUDIO_RX, _MULTI_RX
+    return bool(_STUDIO_RX.search(text or "")) and not _MULTI_RX.search(text or "")
+
+
+def _room_check(text: str, description: str = "") -> dict:
+    return {"is_room_let": is_room_let(text), "text_says_studio": says_studio(description),
+            "room_checked": 1}
+
+
+_mm_logged = False
+
+
+def _log_multimedia_keys(mm: dict) -> None:
+    """Once a run: what Immobiliare's page offers besides photos (where the
+    floor plans live wasn't known on 2026-10-25)."""
+    global _mm_logged
+    if not _mm_logged and mm:
+        _mm_logged = True
+        print(f"  [details] immobiliare multimedia keys: {sorted(mm)}", flush=True)
 
 
 # Bedrooms from a listing's words ("2 camere da letto", "camera
@@ -188,6 +210,8 @@ def apply_details(listings: list, cache: dict | None = None) -> int:
             if k in RENT_ONLY_FLAGS:
                 if l.get("source") in ("immobiliare", "idealista"):
                     l[k] = bool(v)
+                    if k == "text_says_studio" and v and (l.get("rooms") or 0) > 1:
+                        l["rooms"] = 1           # the description over the search card's room count
                 continue
             cur = l.get(k)
             if (cur is None
@@ -322,9 +346,20 @@ def parse_immobiliare_detail(next_data: dict) -> dict | None:
     # The full gallery (search results carry 8) — photo_eval.py reads it.
     from fetch_rentals import parse_photo_urls
     raw = (prop.get("multimedia") or {}).get("photos") or (re_data.get("multimedia") or {}).get("photos")
-    gallery = parse_photo_urls(raw, cap=20)
+    gallery = parse_photo_urls(raw, cap=50)          # 20 until 2026-10-25: Sonnet now sees them all
     if len(gallery) > 8:
         fields["photos"] = gallery
+    # The floor plan and the description (kept since 2026-10-25): they tell a
+    # "bilocale" with no bedroom apart (photo_eval reads both).
+    mm = {**(re_data.get("multimedia") or {}), **(prop.get("multimedia") or {})}
+    _log_multimedia_keys(mm)
+    plans = [u for k, v in mm.items() if "plan" in k.lower() and isinstance(v, list)
+             for u in parse_photo_urls(v, cap=4)]
+    if plans:
+        fields["floorplans"] = plans[:4]
+    desc = prop.get("description") or re_data.get("description")
+    if desc:
+        fields["description"] = str(desc)[:3000]
     fields["costs_read"] = 1     # heating / deposit / included parsed since 2026-10-17
     typology = prop.get("typology") or re_data.get("typology") or {}
     fields.update(_not_a_flat_to_buy(" | ".join(str(x or "") for x in (
@@ -332,7 +367,8 @@ def parse_immobiliare_detail(next_data: dict) -> dict | None:
         typology.get("name") if isinstance(typology, dict) else typology,
         prop.get("description") or re_data.get("description")))))
     fields.update(_room_check(" | ".join(str(x or "") for x in (
-        re_data.get("title"), prop.get("description") or re_data.get("description")))))
+        re_data.get("title"), prop.get("description") or re_data.get("description"))),
+        str(prop.get("description") or re_data.get("description") or "")))
     return {k: v for k, v in fields.items() if v is not None}
 
 
@@ -459,12 +495,14 @@ def parse_idealista_detail(page: dict) -> dict:
         # pictures in the DOM — build_queue fetches those listings again.
         out["gallery_read"] = 1
         if gallery:
-            out["photos"] = gallery[:20]
+            out["photos"] = gallery[:50]
     elif photos:
         out["photo_count"] = int(photos)
     out["costs_read"] = 1        # price box (condo, deposit) read since 2026-10-17
     out.update(_not_a_flat_to_buy(" | ".join([page.get("title") or "", text, comment])))
-    out.update(_room_check(" | ".join([page.get("title") or "", comment])))
+    out.update(_room_check(" | ".join([page.get("title") or "", comment]), comment))
+    if comment:
+        out["description"] = comment[:3000]
     beds = bedrooms_from_text(text + " | " + comment)
     if beds:
         out["bedrooms"] = beds

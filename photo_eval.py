@@ -56,7 +56,11 @@ FEEDBACK = BASE / "photo_feedback_milano.json"
 CALIBRATION_MAX = 15
 
 TILE_W, TILE_H = 512, 384
-MAX_PHOTOS = 9
+# Every photo the listing has (9 until 2026-10-25 — the user: "look at all
+# of them"; 3,169 read listings had more, and a "bilocale" with no bed in
+# any photo passed as having a bedroom), 9 to a sheet, numbered across.
+MAX_PHOTOS = 45
+PER_SHEET = 9
 MIN_PHOTOS = 4      # fewer can't show the flat — Idealista cards carry one
                     # photo until its listing page is read (listing_details.py)
 UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
@@ -220,6 +224,10 @@ def context(l: dict) -> dict:
         "floor": floor,
         "lift": l.get("elevator"),
         "discount_vs_nearby_pct": l.get("comps_sale_delta_pct") if _is_sale(l) else l.get("comps_delta_pct"),
+        "photos_on_site": l.get("photo_count"),
+        # The listing's own words, when a page or Subito gave them: they say
+        # what photos don't ("divano letto", "soppalco", "monolocale").
+        **({"description": l["description"][:1500]} if l.get("description") else {}),
     }
 
 
@@ -258,7 +266,8 @@ def cmd_select(args) -> None:
                               -(l.get("score_total") or 0)))
     todo += again
     CACHE.mkdir(exist_ok=True)
-    QUEUE.write_text(json.dumps([{**context(l), "photos": photo_urls(l)} for l in todo],
+    QUEUE.write_text(json.dumps([{**context(l), "photos": photo_urls(l),
+                                  "floorplans": (l.get("floorplans") or [])[:4]} for l in todo],
                                 ensure_ascii=False, indent=1))
     print(f"readable: {len(top)} · to read: {len(todo)} ({len(again)} again, older rubric) → {QUEUE}")
 
@@ -280,11 +289,29 @@ def _fetch(url: str) -> bytes | None:
     return None
 
 
-def build_sheet(item: dict, dest: Path) -> int:
-    """Numbered grid of the listing's photos: 2×2, 3×2 or 3×3 tiles."""
+def sheet_paths(item: dict) -> list[Path]:
+    """The listing's sheets, 9 photos each — named after the photos they
+    show, so a changed gallery gets new ones."""
+    fp, n = fingerprint(item["photos"]), -(-len(item["photos"]) // PER_SHEET)
+    return [SHEETS / f"{item['id']}-{fp}-{k + 1}.jpg" for k in range(n)]
+
+
+def plan_path(item: dict) -> Path | None:
+    """The floor plan sheet, when the listing page gave plans."""
+    plans = item.get("floorplans") or []
+    return SHEETS / f"{item['id']}-{fingerprint(plans)}-plan.jpg" if plans else None
+
+
+def _sheets_ready(item: dict) -> bool:
+    paths = sheet_paths(item)
+    return bool(paths) and all(p.exists() for p in paths)
+
+
+def build_sheet(urls: list[str], dest: Path, first: int = 1) -> int:
+    """Numbered grid of photos (numbers from `first`): 2×2, 3×2 or 3×3 tiles."""
     from PIL import Image, ImageDraw, ImageFont
     imgs = []
-    for u in item["photos"]:
+    for u in urls:
         raw = _fetch(u)
         time.sleep(0.3)                 # gentle on the portals' CDNs
         if not raw:
@@ -308,10 +335,40 @@ def build_sheet(item: dict, dest: Path) -> int:
     for i, im in enumerate(imgs):
         x, y = (i % cols) * TILE_W, (i // cols) * TILE_H
         sheet.paste(im, (x + (TILE_W - im.width) // 2, y + (TILE_H - im.height) // 2))
-        draw.rectangle([x + 6, y + 6, x + 44, y + 42], fill=(0, 0, 0))
-        draw.text((x + 15, y + 9), str(i + 1), fill=(255, 255, 255), font=font)
+        label = str(first + i)
+        draw.rectangle([x + 6, y + 6, x + 22 + 16 * len(label), y + 42], fill=(0, 0, 0))
+        draw.text((x + 15, y + 9), label, fill=(255, 255, 255), font=font)
     sheet.save(dest, "JPEG", quality=80)
     return n
+
+
+def _build_sheets(item: dict, force: bool = False) -> int:
+    """Every sheet of the listing (and its floor plan); returns how many
+    were built now. item["n_photos"]: photos on its sheets."""
+    made, shown = 0, 0
+    for k, dest in enumerate(sheet_paths(item)):
+        chunk = item["photos"][k * PER_SHEET:(k + 1) * PER_SHEET]
+        if dest.exists() and not force:
+            shown += len(chunk)
+            continue
+        got = build_sheet(chunk, dest, k * PER_SHEET + 1)
+        if not got:                      # nothing downloaded: leave no empty sheet behind
+            continue
+        shown += got
+        made += 1
+    plan = plan_path(item)
+    if plan and (force or not plan.exists()):
+        build_sheet(item["floorplans"][:4], plan)
+        made += 1
+    item["n_photos"] = shown
+    return made
+
+
+def _drop_sheets(item: dict) -> None:
+    """Sheets are only needed for the reading: ~200 KB each, ~3 a listing."""
+    for p in sheet_paths(item) + [plan_path(item)]:
+        if p:
+            p.unlink(missing_ok=True)
 
 
 def cmd_sheets(args) -> None:
@@ -319,16 +376,11 @@ def cmd_sheets(args) -> None:
     SHEETS.mkdir(parents=True, exist_ok=True)
     made = 0
     for i, item in enumerate(queue, 1):
-        dest = SHEETS / f"{item['id']}.jpg"
-        if dest.exists() and not args.force:
-            item["n_photos"] = item.get("n_photos") or len(item["photos"])
-            continue
-        item["n_photos"] = build_sheet(item, dest)
-        made += 1
+        made += _build_sheets(item, args.force)
         if i % 10 == 0:
             print(f"  {i}/{len(queue)}")
     QUEUE.write_text(json.dumps(queue, ensure_ascii=False, indent=1))
-    ok = sum(1 for it in queue if (SHEETS / f"{it['id']}.jpg").exists())
+    ok = sum(1 for it in queue if _sheets_ready(it))
     print(f"sheets: {ok}/{len(queue)} ready ({made} built now) in {SHEETS}")
 
 
@@ -395,9 +447,39 @@ def parse_answer(text: str) -> list[dict]:
     return json.loads(m.group(0))
 
 
+def _content(it: dict) -> list:
+    """One listing in a message: its facts, every sheet, its floor plan."""
+    ctx = {k: v for k, v in it.items() if k not in ("photos", "floorplans")}
+    out = [{"type": "text", "text": "Listing: " + json.dumps(ctx, ensure_ascii=False)}]
+    for p in sheet_paths(it):
+        out.append({"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
+                    "data": base64.b64encode(p.read_bytes()).decode()}})
+    plan = plan_path(it)
+    if plan and plan.exists():
+        out.append({"type": "text", "text": "Floor plan of the same listing:"})
+        out.append({"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
+                    "data": base64.b64encode(plan.read_bytes()).decode()}})
+    return out
+
+
+def _batches(queue: list, max_listings: int, max_images: int = 18) -> list[list]:
+    """Up to max_listings a call, fewer when they carry many sheets."""
+    out, cur, imgs = [], [], 0
+    for it in queue:
+        n = len(sheet_paths(it)) + (1 if plan_path(it) else 0)
+        if cur and (len(cur) >= max_listings or imgs + n > max_images):
+            out.append(cur)
+            cur, imgs = [], 0
+        cur.append(it)
+        imgs += n
+    return out + ([cur] if cur else [])
+
+
 def cmd_run(args) -> None:
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
     queue = json.loads(QUEUE.read_text())
-    queue = [it for it in queue if (SHEETS / f"{it['id']}.jpg").exists()]
+    queue = [it for it in queue if _sheets_ready(it)]
     res = load_results()
     queue = [it for it in queue if res.get(it["id"], {}).get("fingerprint") != fingerprint(it["photos"])
              or outdated(res.get(it["id"]))]
@@ -405,14 +487,11 @@ def cmd_run(args) -> None:
         queue = queue[: args.limit]
     rubric = PROMPT.read_text() + calibration_text()
     log = CACHE / "runs.jsonl"
-    for b in range(0, len(queue), args.batch):
-        batch = queue[b: b + args.batch]
-        content = []
-        for it in batch:
-            ctx = {k: v for k, v in it.items() if k not in ("photos",)}
-            content.append({"type": "text", "text": "Listing: " + json.dumps(ctx, ensure_ascii=False)})
-            content.append({"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
-                            "data": base64.b64encode((SHEETS / f"{it['id']}.jpg").read_bytes()).decode()}})
+    store_lock = threading.Lock()
+    failed = []
+
+    def one(n: int, batch: list) -> None:
+        content = [c for it in batch for c in _content(it)]
         content.append({"type": "text", "text": f"Answer for these {len(batch)} listings, in order, as one JSON array."})
         msg = {"type": "user", "message": {"role": "user", "content": content},
                "parent_tool_use_id": None, "session_id": ""}
@@ -420,19 +499,35 @@ def cmd_run(args) -> None:
         result = _ask_claude(msg, rubric, args.model, args.effort)
         if not result or result.get("is_error"):
             print("claude -p failed:", (result or {}).get("result"))
-            raise SystemExit("claude -p failed")
-        answers = parse_answer(result.get("result") or "")
-        stored = _store(answers, batch, args.model)
-        u = result.get("usage") or {}
-        with log.open("a") as f:
-            f.write(json.dumps({"at": datetime.now().isoformat(timespec="seconds"), "model": args.model,
-                                "listings": len(batch), "stored": stored, "seconds": round(time.time() - t0),
-                                "usage": {k: u.get(k) for k in ("input_tokens", "cache_creation_input_tokens",
-                                                                 "cache_read_input_tokens", "output_tokens")},
-                                "cost_equiv_usd": result.get("total_cost_usd")}) + "\n")
-        print(f"batch {b // args.batch + 1}: {stored}/{len(batch)} stored · {round(time.time() - t0)} s · "
+            failed.append(n)
+            return
+        try:
+            answers = parse_answer(result.get("result") or "")
+        except ValueError as exc:
+            print(f"batch {n}: {exc}")
+            failed.append(n)
+            return
+        with store_lock:
+            stored = _store(answers, batch, args.model)
+            u = result.get("usage") or {}
+            with log.open("a") as f:
+                f.write(json.dumps({"at": datetime.now().isoformat(timespec="seconds"), "model": args.model,
+                                    "listings": len(batch), "stored": stored, "seconds": round(time.time() - t0),
+                                    "usage": {k: u.get(k) for k in ("input_tokens", "cache_creation_input_tokens",
+                                                                     "cache_read_input_tokens", "output_tokens")},
+                                    "cost_equiv_usd": result.get("total_cost_usd")}) + "\n")
+        for it in batch:
+            _drop_sheets(it)
+        print(f"batch {n}: {stored}/{len(batch)} stored · {round(time.time() - t0)} s · "
               f"in {u.get('input_tokens')}+{u.get('cache_creation_input_tokens')}+{u.get('cache_read_input_tokens')} "
-              f"out {u.get('output_tokens')}")
+              f"out {u.get('output_tokens')}", flush=True)
+
+    batches = _batches(queue, args.batch)
+    # Calls in parallel (`workers`): the one-session re-read of 2026-10-25.
+    with ThreadPoolExecutor(max_workers=max(1, getattr(args, "workers", 1))) as pool:
+        list(pool.map(lambda nb: one(*nb), enumerate(batches, 1)))
+    if failed and len(failed) == len(batches):
+        raise SystemExit("claude -p failed")
 
 
 # ── ingest / store ───────────────────────────────────────────────────────────
@@ -443,21 +538,24 @@ FIELDS = ("photos_usable", "rooms_seen", "condition", "kitchen", "bathroom", "re
 # no-bedroom / tiny-kitchen / rooms-not-shown flags, after the user's
 # examples. Readings of an older version are re-read (focus areas and
 # labelled listings first, after the unread ones — cmd_select).
-RUBRIC_VERSION = 3
+RUBRIC_VERSION = 4
 # 3 (2026-10-19): unseen rooms lower the confidence, not the grade (the user:
 # "not shown is missing information, why penalise it"). Only v2 readings
 # that flagged rooms_not_shown / few_photos are read again (1,374 of 1,803).
 INFO_FLAGS = {"rooms_not_shown", "few_photos"}
 
 
+# 4 (2026-10-25): every photo (was the first 9), the floor plan and the
+# description when known, and "no bed in any photo" counts as no bedroom
+# (Immobiliare 129426444: sofa in the living room, a desk in the "bedroom",
+# read as "separate bedroom visible"). Every older reading is read again.
+
+
 def outdated(r: dict | None) -> bool:
     """A reading the current rubric would answer differently."""
     if not r:
         return False
-    v = r.get("rubric", 1)
-    if v < 2:
-        return True
-    return v < RUBRIC_VERSION and bool(set(r.get("red_flags") or []) & INFO_FLAGS)
+    return r.get("rubric", 1) < RUBRIC_VERSION
 
 
 def _store(answers: list[dict], batch: list[dict], model: str) -> int:
@@ -578,7 +676,7 @@ def main() -> None:
     s = sub.add_parser("sheets"); s.add_argument("--force", action="store_true")
     s = sub.add_parser("run"); s.add_argument("--model", default="sonnet"); s.add_argument("--batch", type=int, default=8)
     s.add_argument("--effort", default="low")
-    s.add_argument("--limit", type=int)
+    s.add_argument("--limit", type=int); s.add_argument("--workers", type=int, default=1)
     s = sub.add_parser("ingest"); s.add_argument("file"); s.add_argument("--model", default="session")
     sub.add_parser("report")
     args = ap.parse_args()
