@@ -23,6 +23,7 @@ user school search key bed stairs bolt sun eye calendar file-text air-conditioni
 diamond coin moon device-desktop arrow-up-right copy trash plus minus mail lock list-details world
 circle-half-2 language player-play player-stop player-pause pencil folder arrow-down arrow-up
 selector walk percentage tool database circle-check arrow-left dots-vertical door tag maximize
+chevron-left
 """.split()
 
 
