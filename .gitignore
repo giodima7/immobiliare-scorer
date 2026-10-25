@@ -65,9 +65,8 @@ generate_icons.js
 # package.json IS tracked — Cloudflare Pages uses it to skip pip install
 # and to run `npm run build` → bash build.sh.
 
-# Generated PWA icons (build from source elsewhere)
-icon-192.png
-icon-512.png
+# PWA icons: tracked since 2026-10-25 (the Lume mark; Cloudflare never had
+# them — generate_icons.js made local-only copies).
 
 # Local POI cache (large, can be re-downloaded via dashboard Settings)
 milan_pois.json
