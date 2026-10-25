@@ -258,7 +258,8 @@ def cmd_select(args) -> None:
     # wants the grade everywhere; ~776 then, ~1.5M tokens) — where the user
     # searches and the labelled deals first.
     seen_ids = {str(l["id"]) for l in todo}
-    again = [l for l in top if str(l["id"]) not in seen_ids and outdated(done.get(str(l["id"])))]
+    again = [l for l in top if str(l["id"]) not in seen_ids
+             and (outdated(done.get(str(l["id"]))) or missed_words(done.get(str(l["id"])), l))]
     # Where the user searches, then labelled deals and the ones a photo
     # verdict capped (they may get their label back), then the rest.
     again.sort(key=lambda l: (not in_focus(l),
@@ -444,7 +445,16 @@ def parse_answer(text: str) -> list[dict]:
     m = re.search(r"\[.*\]", text, re.S)
     if not m:
         raise ValueError("no JSON array in the answer")
-    return json.loads(m.group(0))
+    # strict=False: a note quoting the listing's description can carry a raw
+    # line break inside a string. Then the slips seen in answers: a stray
+    # ',"' before a closing brace (129900526, 2026-10-25), trailing commas.
+    raw = m.group(0)
+    try:
+        return json.loads(raw, strict=False)
+    except ValueError:
+        fixed = re.sub(r',\s*"\s*([}\]])', r'\1', raw)
+        fixed = re.sub(r',\s*([}\]])', r'\1', fixed)
+        return json.loads(fixed, strict=False)
 
 
 def _content(it: dict) -> list:
@@ -482,7 +492,7 @@ def cmd_run(args) -> None:
     queue = [it for it in queue if _sheets_ready(it)]
     res = load_results()
     queue = [it for it in queue if res.get(it["id"], {}).get("fingerprint") != fingerprint(it["photos"])
-             or outdated(res.get(it["id"]))]
+             or outdated(res.get(it["id"])) or missed_words(res.get(it["id"]), it)]
     if args.limit:
         queue = queue[: args.limit]
     rubric = PROMPT.read_text() + calibration_text()
@@ -551,6 +561,17 @@ INFO_FLAGS = {"rooms_not_shown", "few_photos"}
 # read as "separate bedroom visible"). Every older reading is read again.
 
 
+def missed_words(r: dict | None, l: dict) -> bool:
+    """Read before the listing's description or floor plan was known — they
+    arrive with the night's page reads (129900526: "letto King" in the
+    ingresso, written only in the description; read from photos alone as a
+    real bedroom)."""
+    if not r or r.get("by_user"):
+        return False
+    return bool((l.get("description") and not r.get("saw_text"))
+                or (l.get("floorplans") and not r.get("saw_plan")))
+
+
 def outdated(r: dict | None) -> bool:
     """A reading the current rubric would answer differently."""
     if not r:
@@ -569,6 +590,7 @@ def _store(answers: list[dict], batch: list[dict], model: str) -> int:
             continue
         res[lid] = {**{k: a.get(k) for k in FIELDS}, "fingerprint": fingerprint(it["photos"]),
                     "n_photos": it.get("n_photos"), "model": model, "rubric": RUBRIC_VERSION,
+                    "saw_text": bool(it.get("description")), "saw_plan": bool(it.get("floorplans")),
                     "read_at": datetime.now().isoformat(timespec="seconds")}
         n += 1
     save_results(res)

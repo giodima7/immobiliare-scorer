@@ -2167,7 +2167,7 @@ def load_photo_evals() -> dict:
         base = evals.get(lid) or {}
         evals[lid] = {**base, "deal_check": fb["deal"], "confidence": "high",
                       "grade": fb.get("grade") if fb.get("grade") is not None else base.get("grade"),
-                      "fingerprint": fb.get("fingerprint") or base.get("fingerprint"),
+                      "fingerprint": base.get("fingerprint") or fb.get("fingerprint"),
                       "by_user": True, "user_note": fb.get("note") or None,
                       "sonnet_deal": base.get("deal_check")}
     return evals
@@ -2180,11 +2180,21 @@ def apply_photo_verdict(l: dict, evals: dict, cap: int, grade_max: float = 4,
     label and caps the score at `cap` (reason in score_cap_reason)."""
     for k in PHOTO_FIELDS:
         l.pop(k, None)
+    # Its own reasons from an earlier pass go first: sales keep the row's
+    # score_cap_reason between passes, and "photos contradict the deal → max
+    # 69" piled up dozens of times (4.5k characters, 74 sales, 2026-10-25).
+    kept = [x for x in (l.get("score_cap_reason") or "").split("; ")
+            if x and not x.startswith(("photos contradict", "photos graded", "you judged the photos"))]
+    l["score_cap_reason"] = "; ".join(kept) or None
     r = evals.get(str(l.get("id")))
     if not r:
         return
     from photo_eval import fingerprint, photo_urls
-    if r.get("fingerprint") != fingerprint(photo_urls(l)):
+    # The user's verdict is on the flat, whatever its gallery looks like now
+    # (id_37131214: judged on 18 Oct, gallery changed since — the verdict
+    # carried the old fingerprint, so neither it nor Sonnet's new reading
+    # applied, and it stayed a Hidden Gem at 89).
+    if not r.get("by_user") and r.get("fingerprint") != fingerprint(photo_urls(l)):
         return                       # photos changed since: wait for a re-read
     l.update({
         "photo_deal": r.get("deal_check"), "photo_confidence": r.get("confidence"),

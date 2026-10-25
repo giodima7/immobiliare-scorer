@@ -423,6 +423,7 @@
 
 <!-- ── Tab bar ── -->
 <nav class="tab-bar" role="tablist" aria-label="Sections">
+  <button type="button" class="tab-btn" id="tabForyou" data-tab="foryou" role="tab" aria-selected="false"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#sparkles"></use></svg><span data-i18n="tab.foryou">For you</span></button>
   <button type="button" class="tab-btn active" id="tabRentals" data-tab="rentals" role="tab" aria-selected="true"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#home"></use></svg><span data-i18n="tab.rentals">Rentals</span></button>
   <button type="button" class="tab-btn" id="tabSales" data-tab="sales" role="tab" aria-selected="false"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#key"></use></svg><span data-i18n="tab.sales">For sale</span></button>
   <button type="button" class="tab-btn" id="tabMap" data-tab="map" role="tab" aria-selected="false"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#map"></use></svg><span data-i18n="tab.map">Map</span></button>
@@ -475,6 +476,17 @@
       <button type="button" class="seg-btn gem-tab" data-gem="good" aria-pressed="false" data-i18n="gem.good">Great Value</button>
       <button type="button" class="seg-btn gem-tab" data-gem="hidden" aria-pressed="false" data-i18n="gem.hidden">Hidden Gem</button>
     </div>
+    <!-- In the bar since 2026-10-25: inside "More filters" nobody found it. -->
+    <label class="fb-field fb-sort" data-i18n-title="fb.min_photo" title="Photo grade (Sonnet or yours)">
+      <svg class="i" aria-hidden="true"><use href="assets/icons.svg#photo"></use></svg>
+      <select id="rMinPhoto" data-i18n-aria="fb.min_photo" aria-label="Photo grade (Sonnet or yours)">
+        <option value="" data-i18n="fb.photo_any">Photos: any</option>
+        <option value="5" data-i18n="fb.photo_5">Photos 5+</option>
+        <option value="6" data-i18n="fb.photo_6">Photos 6+</option>
+        <option value="7" data-i18n="fb.photo_7">Photos 7+</option>
+        <option value="8" data-i18n="fb.photo_8">Photos 8+</option>
+      </select>
+    </label>
     <label class="fb-field fb-sort">
       <svg class="i" aria-hidden="true"><use href="assets/icons.svg#arrows-sort"></use></svg>
       <select id="rSortSelect" data-i18n-aria="filter.sort" aria-label="Sort">
@@ -581,16 +593,6 @@
           <option value="A">A</option>
         </select>
       </div>
-      <div class="field">
-        <label class="field-label" for="rMinPhoto" data-i18n="fb.min_photo">Photo grade (Sonnet or yours)</label>
-        <select id="rMinPhoto" class="input">
-          <option value="" data-i18n="filter.any">Any</option>
-          <option value="5">5+</option>
-          <option value="6">6+</option>
-          <option value="7">7+</option>
-          <option value="8">8+</option>
-        </select>
-      </div>
       <div class="field field-span2">
         <span class="field-label" data-i18n="filter.source">Source</span>
         <div class="seg seg-full" id="rSourceFilter" role="group">
@@ -645,6 +647,81 @@
 <!-- ══════════════════════════════════════════════════════════════
      SALES VIEW — listings for sale in the focus areas (sales.js)
 ═══════════════════════════════════════════════════════════════ -->
+<!-- For you (foryou.js): budgets from pay and cash, best listings in the zones. -->
+<div id="foryouView" class="fy" hidden>
+  <div class="fy-card">
+    <div class="fy-card-head">
+      <span class="fy-title"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#pencil"></use></svg><span data-i18n="fy.yours">You set</span></span>
+      <span class="fy-note"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#lock"></use></svg><span data-i18n="fy.private">Only on this device</span></span>
+    </div>
+    <div class="fy-fields">
+      <label class="fy-field"><span data-i18n="fy.income">Net pay per month €</span><input type="number" id="fyIncome" class="input" min="0" step="100" inputmode="numeric" placeholder="2800"></label>
+      <label class="fy-field"><span data-i18n="fy.cash">Savings €</span><input type="number" id="fyCash" class="input" min="0" step="1000" inputmode="numeric" placeholder="60000"></label>
+      <label class="fy-field"><span data-i18n="fy.share">Share for housing %</span><input type="number" id="fyShare" class="input" min="5" max="80" step="1" inputmode="numeric"></label>
+      <label class="fy-field"><span data-i18n="fy.reserve">Savings to keep €</span><input type="number" id="fyReserve" class="input" min="0" step="1000" inputmode="numeric" placeholder="0"></label>
+      <label class="fy-field"><span data-i18n="fy.down">Down payment %</span><input type="number" id="fyDown" class="input" min="0" max="100" step="5" inputmode="numeric"></label>
+      <label class="fy-field"><span data-i18n="fy.rate">Rate %</span><input type="number" id="fyRate" class="input" min="0" step="0.1" inputmode="decimal"></label>
+      <label class="fy-field"><span data-i18n="fy.years">Years</span><input type="number" id="fyYears" class="input" min="5" max="40" step="5" inputmode="numeric"></label>
+      <label class="fy-field"><span data-i18n="fy.costs">Purchase costs %</span><input type="number" id="fyCosts" class="input" min="0" max="20" step="1" inputmode="numeric"></label>
+    </div>
+    <div class="fy-prefs">
+      <span class="fy-zones-label" data-i18n="fy.exclude">Leave out</span>
+      <label class="fy-check"><input type="checkbox" id="fyNoStudio"><span data-i18n="fy.no_studio">Studios</span></label>
+      <label class="fy-check"><span data-i18n="fy.floor">Floor</span>
+        <select id="fyFloor" class="input">
+          <option value="" data-i18n="fy.floor_any">any</option>
+          <option value="up" data-i18n="fy.floor_up">no ground or raised floor</option>
+          <option value="2" data-i18n="fy.floor_2">2nd floor and up</option>
+        </select>
+      </label>
+    </div>
+    <div class="fy-zones">
+      <span class="fy-zones-label"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#map-pin"></use></svg><span data-i18n="fy.zones">Zones</span></span>
+      <div class="msd-wrap fb-area" id="fyAreaWrap">
+        <button type="button" class="msd-trigger" id="fyAreaTrigger">All areas</button>
+        <div class="msd-panel" id="fyAreaPanel">
+          <input class="msd-search-input" id="fyAreaSearch" placeholder="Search areas…" data-i18n-placeholder="fb.search_areas" type="text" autocomplete="off">
+          <div class="msd-list" id="fyAreaList"></div>
+          <div class="msd-footer">
+            <button type="button" class="btn btn-ghost btn-sm msd-footer-clear" id="fyAreaClear" data-i18n="fb.clear">Clear</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="fyAreaDone" data-i18n="fb.done">Done</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="fy-calc-head"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#percentage"></use></svg><span data-i18n="fy.calculated">Worked out by Lume</span></div>
+  <div class="fy-tiles">
+    <div class="fy-tile"><div class="fy-tile-k"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#user"></use></svg><span data-i18n="fy.alone">On your own · bilocale</span></div><div class="fy-tile-v" id="fyOutSolo">–</div><div class="fy-tile-s" data-i18n="fy.alone_sub">pay × share</div></div>
+    <div class="fy-tile"><div class="fy-tile-k"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#users"></use></svg><span data-i18n="fy.two">Two of you · 2 bedrooms</span></div><div class="fy-tile-v" id="fyOutDuo">–</div><div class="fy-tile-s" id="fyOutDuoSub"></div></div>
+    <div class="fy-tile"><div class="fy-tile-k"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#key"></use></svg><span data-i18n="fy.buy">Buy up to</span></div><div class="fy-tile-v" id="fyOutBuy">–</div><div class="fy-tile-s" id="fyOutBuySub"></div></div>
+  </div>
+  <div class="fy-disclaimer" data-i18n="fy.disclaimer">Estimates, not financial advice. The mortgage terms are the same as in For sale.</div>
+  <div class="seg fy-mode" role="group">
+    <button type="button" class="seg-btn" data-fy-mode="rent" aria-pressed="true" data-i18n="fy.rent">Rent</button>
+    <button type="button" class="seg-btn" data-fy-mode="buy" aria-pressed="false" data-i18n="fy.buying">Buy</button>
+  </div>
+  <div id="fyRent">
+    <section class="fy-section">
+      <h3 class="fy-head"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#user"></use></svg><span id="fyHeadSolo"></span></h3>
+      <p class="fy-sub" data-i18n="fy.sub_solo">Bilocali with a real bedroom, best suited to you first</p>
+      <div class="grid" id="fyGridSolo"></div>
+    </section>
+    <section class="fy-section">
+      <h3 class="fy-head"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#users"></use></svg><span id="fyHeadDuo"></span></h3>
+      <p class="fy-sub" data-i18n="fy.sub_duo">Two real bedrooms, the cost shown per person</p>
+      <div class="grid" id="fyGridDuo"></div>
+    </section>
+  </div>
+  <div id="fyBuy" hidden>
+    <section class="fy-section">
+      <h3 class="fy-head"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#key"></use></svg><span id="fyHeadBuy"></span></h3>
+      <p class="fy-sub" data-i18n="fy.sub_buy">What owning costs a month next to renting the same flat</p>
+      <div class="grid" id="fyGridBuy"></div>
+    </section>
+  </div>
+</div>
+
 <div id="salesView" hidden>
   <!-- Same bar as Rentals (#filterBar): areas, max price, rooms, m², deals,
        sort, "More filters" (mortgage inputs, condition, listed, source). -->
@@ -681,6 +758,16 @@
         <button type="button" class="seg-btn" data-sdeal="below" aria-pressed="false" data-i18n="sale.deal_below">10%+ below nearby</button>
         <button type="button" class="seg-btn" data-sdeal="yield" aria-pressed="false" data-i18n="sale.deal_yield">Yield 5%+</button>
       </div>
+      <label class="fb-field fb-sort" data-i18n-title="fb.min_photo" title="Photo grade (Sonnet or yours)">
+        <svg class="i" aria-hidden="true"><use href="assets/icons.svg#photo"></use></svg>
+        <select id="sMinPhoto" data-i18n-aria="fb.min_photo" aria-label="Photo grade (Sonnet or yours)">
+          <option value="" data-i18n="fb.photo_any">Photos: any</option>
+          <option value="5" data-i18n="fb.photo_5">Photos 5+</option>
+          <option value="6" data-i18n="fb.photo_6">Photos 6+</option>
+          <option value="7" data-i18n="fb.photo_7">Photos 7+</option>
+          <option value="8" data-i18n="fb.photo_8">Photos 8+</option>
+        </select>
+      </label>
       <label class="fb-field fb-sort">
         <svg class="i" aria-hidden="true"><use href="assets/icons.svg#arrows-sort"></use></svg>
         <select id="sSortSelect" data-i18n-aria="filter.sort" aria-label="Sort">
@@ -757,16 +844,6 @@
             <option value="7" data-i18n="listed.7">Last 7 days</option>
             <option value="14" data-i18n="listed.14">Last 14 days</option>
             <option value="30" data-i18n="listed.30">Last 30 days</option>
-          </select>
-        </div>
-        <div class="field">
-          <label class="field-label" for="sMinPhoto" data-i18n="fb.min_photo">Photo grade (Sonnet or yours)</label>
-          <select id="sMinPhoto" class="input">
-            <option value="" data-i18n="filter.any">Any</option>
-            <option value="5">5+</option>
-            <option value="6">6+</option>
-            <option value="7">7+</option>
-            <option value="8">8+</option>
           </select>
         </div>
         <div class="field field-span2">
@@ -1347,6 +1424,7 @@
 <script src="assets/settings.js"></script>
 <script src="assets/filters.js"></script>
 <script src="assets/details.js"></script>
+<script src="assets/foryou.js"></script>
 <script src="assets/init.js"></script>
 
 <!-- ════════════════════════════════════════════════════════════════

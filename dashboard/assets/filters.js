@@ -153,7 +153,7 @@ function renderRentFilterExtras(f, shown) {
 
   const chips = rentActiveFilterChips(f);
   const moreKeys = ['condition', 'minDiscount', 'contract', 'fascia', 'maxMetro', 'minFloor', 'source',
-                    'minEnergy', 'minPhoto', 'minScore', 'fListed', 'idQuery', 'showStale'];
+                    'minEnergy', 'minScore', 'fListed', 'idQuery', 'showStale'];
   const nMore = chips.filter(c => moreKeys.includes(c.key)).length;
   const moreBadge = document.getElementById('rMoreBadge');
   if (moreBadge) { moreBadge.textContent = nMore || ''; moreBadge.hidden = !nMore; }

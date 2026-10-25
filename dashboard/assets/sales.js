@@ -132,7 +132,7 @@ function _syncSaleBar(f) {
   seg('#sDealFilter [data-sdeal]', 'sdeal', f.deal);
   seg('#sSourceFilter [data-ssource]', 'ssource', f.source);
   if (_saleAreaMsd) _saleAreaMsd.setSelected(f.areas);
-  const nMore = _saleChips(f).filter(c => ['condition', 'listed', 'source', 'minFloor', 'maxMetro', 'minEnergy', 'minPhoto'].includes(c.key)).length;
+  const nMore = _saleChips(f).filter(c => ['condition', 'listed', 'source', 'minFloor', 'maxMetro', 'minEnergy'].includes(c.key)).length;
   const badge = document.getElementById('sMoreBadge');
   if (badge) { badge.textContent = nMore || ''; badge.hidden = !nMore; }
   document.getElementById('sMoreBtn')?.classList.toggle('on', nMore > 0);
@@ -309,7 +309,10 @@ function saleCardHtml(l, f) {
   const street = l.address ? formatAddress(String(l.address).replace(/,?\s*milano\s*$/i, '')) : '';
   const meta = [typeof _metroMeta === 'function' ? _metroMeta(l) : '', _saleSeenMeta(l)].filter(Boolean).join('');
   return `<article class="card sale-card" data-listing-id="${id}">
-    ${l.thumbnail ? `<button type="button" class="card-photo-wrap" data-open-sale="${id}" aria-label="${esc(t('card.details') + ': ' + title)}"><img class="card-thumb" src="${_safeUrl(l.thumbnail)}" alt="" loading="lazy">${isNew ? `<span class="card-photo-new-badge">${esc(t('badge.new'))}</span>` : ''}</button>` : ''}
+    ${l.thumbnail ? `<div class="card-photo" data-photo-id="${id}"><button type="button" class="card-photo-wrap" data-open-sale="${id}" aria-label="${esc(t('card.details') + ': ' + title)}"><img class="card-thumb" src="${_safeUrl(l.thumbnail)}" alt="" loading="lazy">${isNew ? `<span class="card-photo-new-badge">${esc(t('badge.new'))}</span>` : ''}</button>${(l.photo_count || 0) !== 1 ? `
+       <button type="button" class="card-photo-nav prev" data-photo-step="-1" aria-label="${esc(t('pv.prev'))}" tabindex="-1">${icon('chevron-left')}</button>
+       <button type="button" class="card-photo-nav next" data-photo-step="1" aria-label="${esc(t('pv.next'))}" tabindex="-1">${icon('chevron-right')}</button>
+       <span class="card-photo-count" hidden></span>` : ''}</div>` : ''}
     <div class="card-body">
       <div class="card-head">
         <div class="card-title-wrap">

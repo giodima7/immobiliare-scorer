@@ -600,7 +600,7 @@ function switchTab(tab, opts) {
   const persist = !opts || opts.persist !== false;
   activeTab = tab;
   document.body.dataset.tab = tab;
-  ['rentalsView','salesView','mapView','savedView','insightsView','settingsView'].forEach(id => {
+  ['foryouView','rentalsView','salesView','mapView','savedView','insightsView','settingsView'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.hidden = id !== tab + 'View';
@@ -621,7 +621,13 @@ function switchTab(tab, opts) {
   if (persist) {
     try { Storage.set(TAB_STORAGE_KEY, tab); } catch (_) {}
   }
-  if (tab === 'rentals') {
+  if (tab === 'foryou') {
+    stopScannerPoll();
+    renderForYou();
+    // Both kinds of listing feed it; render again as each arrives.
+    if (!ALL_RENT.length) loadRentals().then(() => { if (activeTab === 'foryou') renderForYou(); });
+    if (!ALL_SALE.length) loadSales().then(() => { if (activeTab === 'foryou') renderForYou(); });
+  } else if (tab === 'rentals') {
     startScannerPoll();
     if (!ALL_RENT.length) loadRentals();
   } else if (tab === 'sales') {
@@ -684,7 +690,7 @@ function restoreActiveTab() {
     const params = new URLSearchParams(location.search);
     if (params.get('c'))                  return;
 
-    const validTabs = ['rentals', 'sales', 'map', 'saved', 'insights', 'settings'];
+    const validTabs = ['foryou', 'rentals', 'sales', 'map', 'saved', 'insights', 'settings'];
     // ?tab=saved — the old /favourites page redirects here.
     const asked = params.get('tab');
     if (asked && validTabs.includes(asked)) {

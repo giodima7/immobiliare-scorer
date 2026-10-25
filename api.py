@@ -1635,6 +1635,26 @@ def _pipeline_status() -> dict:
     return out
 
 
+def _marker_alive(path: Path) -> bool:
+    """A scan marker whose daemon (the pid it holds) is still alive. A daemon
+    killed mid-slot leaves its marker behind — on 2026-10-25 that kept the
+    API "busy" for hours and blocked every restart."""
+    try:
+        pid = int(path.read_text().strip() or 0)
+    except (OSError, ValueError):
+        return False
+    if not pid:
+        return True                  # an old marker without a pid: trust it
+    import os as _os
+    try:
+        _os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+
+
 @app.route("/scanner-status")
 def scanner_status():
     running_immo      = _scanner_proc   is not None and _scanner_proc.poll()   is None
@@ -1655,8 +1675,8 @@ def scanner_status():
     ideal_st["running"] = running_idealista
     # `running` = the daemon process is alive (always, in daily mode);
     # `scanning` = a scan is in progress right now (marker the daemon writes).
-    immo_st["scanning"]  = running_immo and (BASE_DIR / ".scan_running_immobiliare").exists()
-    ideal_st["scanning"] = running_idealista and (BASE_DIR / ".scan_running_idealista").exists()
+    immo_st["scanning"]  = running_immo and _marker_alive(BASE_DIR / ".scan_running_immobiliare")
+    ideal_st["scanning"] = running_idealista and _marker_alive(BASE_DIR / ".scan_running_idealista")
 
     # Top-level fields from immobiliare (for backward compat with existing JS)
     result = {

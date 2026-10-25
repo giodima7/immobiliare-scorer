@@ -295,6 +295,39 @@ def _dup_near(a: dict, b: dict) -> bool:
     return bool(a.get("omi_zona")) and a.get("omi_zona") == b.get("omi_zona")
 
 
+# Cross-site copies the exact key misses (2026-10-25: one flat at €318,000
+# in Corso di Porta Ticinese, 4th floor, as 43, 45 and 50 m² on the two sites,
+# the Idealista pin 310 m off at the street's centre). Same price, rooms and
+# floor on two sites, m² within these shares, and the same street when both
+# name one (then up to DUP_LOOSE_STREET_M apart).
+LOOSE_DUPS = True          # 2026-10-25: rentals 2,443 → 3,353 listings grouped, labels +29 −26
+DUP_LOOSE_SQM = {"rent": 0.07, "sale": 0.15}    # a sale price is nearly a signature
+DUP_LOOSE_STREET_M = 800
+
+
+def _site(l: dict) -> str:
+    src = l.get("source") or ""
+    return "idealista" if "idealista" in src else "immobiliare" if src in ("immobiliare", "sale") else src
+
+
+def _loose_dup(a: dict, b: dict) -> bool:
+    if _site(a) == _site(b):
+        return False
+    fa, fb = a.get("floor_n"), b.get("floor_n")
+    if fa is not None and fb is not None and fa != fb:
+        return False
+    tol = DUP_LOOSE_SQM["rent" if a.get("rent_mo") else "sale"]
+    if abs(a["sqm"] - b["sqm"]) > max(3, tol * min(a["sqm"], b["sqm"])):
+        return False
+    st_a, st_b = _street(a), _street(b)
+    if st_a and st_b:
+        if st_a[0] != st_b[0] or (st_a[1] and st_b[1] and st_a[1] != st_b[1]):
+            return False
+        la, lb = _ll(a), _ll(b)
+        return not (all(la) and all(lb)) or _haversine_m(*la, *lb) <= DUP_LOOSE_STREET_M
+    return _dup_near(a, b)
+
+
 def _dup_rank(l: dict) -> tuple:
     """Which copy of a duplicate group stays in the pool: one still on the
     market (not excluded, not archived), then Immobiliare (scraped coords
@@ -446,6 +479,15 @@ def build_comps_index(all_listings: list[dict], relist: bool = True) -> dict:
             for b in members[i + 1:]:
                 if _dup_near(a, b):
                     union(a, b)
+    if LOOSE_DUPS:
+        by_loose: dict[tuple, list[dict]] = {}
+        for (price, _sqm, rooms, _floor), members in by_key.items():
+            by_loose.setdefault((price, rooms), []).extend(members)
+        for members in by_loose.values():
+            for i, a in enumerate(members):
+                for b in members[i + 1:]:
+                    if _loose_dup(a, b):
+                        union(a, b)
     # Relistings stay links (earlier → later copy), not duplicate groups:
     # merged into groups they chained identical flats of one building.
     relist_succ: dict[int, dict] = {}
