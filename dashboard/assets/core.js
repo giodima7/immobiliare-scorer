@@ -271,6 +271,7 @@ const Auth = (() => {
       // into this user's namespace and refresh UI.
       Storage.migrate(user.id);
       _syncAccountData(user);
+      _addFavsFromUrl();
       // Cache the Clerk user ID so other static pages (e.g. favourites.html)
       // can scope their localStorage keys without re-loading the Clerk SDK.
       try { localStorage.setItem('lume_clerk_user_id', user.id); } catch (_) {}
@@ -333,13 +334,12 @@ const Storage = {
   },
 
   set(name, value) {
+    const account = _ACCOUNT_KEYS.includes(name);
+    const before = account ? this.get(name, []) : null;
     try { localStorage.setItem(this.key(name), JSON.stringify(value)); }
     catch (e) { console.warn('Storage.set failed:', e); }
     _pushUserData(name, value);
-    if (_ACCOUNT_KEYS.includes(name)) {
-      try { localStorage.setItem(this.key(name) + '_at', String(Date.now())); } catch { /* full */ }
-      _pushAccountData();
-    }
+    if (account) { _lwwRecord(name, before, value); _pushAccountData(); }
   },
 
   remove(name) { localStorage.removeItem(this.key(name)); },
@@ -405,13 +405,40 @@ async function _syncUserDataFromServer() {
 }
 
 // ── Saved items follow the account ────────────────────────────────────────────
-// Online, saved listings and collections lived in one browser's storage only
-// (2026-10-25: "signed in from another browser, my saved listings aren't
-// there"). Signed in, they're also kept on the Clerk user — unsafeMetadata
-// .lume = { name: { v, at } } — and the newer copy wins; the first time a
-// browser meets the account, both sides are merged.
+// Online, saved listings and collections lived in one browser's storage only;
+// signed in, they're also kept on the Clerk user (unsafeMetadata.lume).
+// Per item, not per list (2026-10-25: "newest list wins" let one browser wipe
+// the other's favourites): each saved id or collection carries {on, at, item}
+// and the two sides merge item by item, the later change winning — adding on
+// one browser and removing on another both survive.
 const _ACCOUNT_KEYS = ['rentFavourites', 'favourites', 'collections'];
+const _itemId = x => String(x && typeof x === 'object' ? x.id : x);
+const _lwwKey = name => Storage.key(name) + '_lww';
 let _acctTimer = null;
+
+function _lwwGet(name) {
+  try { return JSON.parse(localStorage.getItem(_lwwKey(name)) || 'null'); } catch { return null; }
+}
+
+// What changed between two versions of a saved list, item by item.
+function _lwwRecord(name, before, after) {
+  const map = _lwwGet(name) || _lwwFrom(before, 0);
+  const now = Date.now(), had = new Map((before || []).map(x => [_itemId(x), x]));
+  for (const x of after || []) {
+    const id = _itemId(x), prev = map[id];
+    if (!prev || !prev.on || JSON.stringify(prev.item) !== JSON.stringify(x)) map[id] = { on: true, at: now, item: x };
+    had.delete(id);
+  }
+  for (const id of had.keys()) map[id] = { on: false, at: now };
+  try { localStorage.setItem(_lwwKey(name), JSON.stringify(map)); } catch { /* full */ }
+}
+
+// A list saved before item times existed: every item present, at time `at`.
+function _lwwFrom(list, at) {
+  const map = {};
+  for (const x of list || []) map[_itemId(x)] = { on: true, at, item: x };
+  return map;
+}
 
 function _pushAccountData() {
   const u = Auth.user;
@@ -419,51 +446,50 @@ function _pushAccountData() {
   clearTimeout(_acctTimer);
   _acctTimer = setTimeout(() => {
     const lume = {};
-    for (const k of _ACCOUNT_KEYS) {
-      lume[k] = { v: Storage.get(k, null), at: Number(localStorage.getItem(Storage.key(k) + '_at')) || 0 };
-    }
+    for (const k of _ACCOUNT_KEYS) lume[k] = _lwwGet(k) || _lwwFrom(Storage.get(k, []), 0);
     u.update({ unsafeMetadata: { ...(u.unsafeMetadata || {}), lume } })
       .catch(e => console.warn('Saving to your account failed:', e));
   }, 1500);
 }
 
-function _mergeSaved(a, b) {
-  const key = x => (x && typeof x === 'object' ? x.id : x);
-  const seen = new Set(), out = [];
-  for (const x of [...(a || []), ...(b || [])]) {
-    if (!seen.has(key(x))) { seen.add(key(x)); out.push(x); }
-  }
-  return out;
-}
-
-// Returns true when this browser's saved items changed.
+// Merge this browser's saved items with the account's. Returns true when
+// this browser's list changed.
 function _syncAccountData(user) {
   const remote = user?.unsafeMetadata?.lume || {};
   let changed = false, push = false;
   for (const k of _ACCOUNT_KEYS) {
-    const r = remote[k] || {};
-    const atKey = Storage.key(k) + '_at';
-    const localAt = Number(localStorage.getItem(atKey)) || 0;
-    const local = Storage.get(k, null);
-    if (r.v != null && !localAt) {                     // first meeting: keep both
-      const v = Array.isArray(r.v) && Array.isArray(local) ? _mergeSaved(r.v, local) : r.v;
-      localStorage.setItem(Storage.key(k), JSON.stringify(v));
-      localStorage.setItem(atKey, String(Date.now()));
-      changed = true; push = push || (Array.isArray(local) && local.length > 0);
-    } else if (r.v != null && (r.at || 0) > localAt) { // the account's copy is newer
-      localStorage.setItem(Storage.key(k), JSON.stringify(r.v));
-      localStorage.setItem(atKey, String(r.at));
-      changed = true;
-    } else if (local != null && (r.v == null || localAt > (r.at || 0))) {
-      // The account has none yet, or this browser's is newer. Items saved
-      // before this sync existed carry no time: give them one now, or the
-      // 0-vs-0 comparison never sent them (the first version's bug).
-      if (!localAt) localStorage.setItem(atKey, String(Date.now()));
-      push = true;
+    let r = remote[k] || {};
+    if (Array.isArray(r.v)) r = _lwwFrom(r.v, r.at || 0);          // the first version's {v, at}
+    const local = _lwwGet(k) || _lwwFrom(Storage.get(k, []), 0);
+    const merged = { ...local };
+    for (const [id, e] of Object.entries(r)) {
+      const m = merged[id];
+      if (!m || e.at > m.at || (e.at === m.at && e.on && !m.on)) merged[id] = e;
     }
+    if (JSON.stringify(merged) !== JSON.stringify(r)) push = true;
+    // The list: this browser's order first, then what came from elsewhere.
+    const cur = Storage.get(k, []) || [];
+    const order = [...cur.map(_itemId), ...Object.keys(merged)];
+    const list = [...new Set(order)].filter(id => merged[id]?.on).map(id => merged[id].item ?? id);
+    if (JSON.stringify(list) !== JSON.stringify(cur)) {
+      localStorage.setItem(Storage.key(k), JSON.stringify(list));
+      changed = true;
+    }
+    localStorage.setItem(_lwwKey(k), JSON.stringify(merged));
   }
   if (push) _pushAccountData();
   return changed;
+}
+
+// ?addfav=id1,id2 — saved listings to add back (recovering ones a sync lost).
+function _addFavsFromUrl() {
+  const p = new URLSearchParams(location.search);
+  const ids = (p.get('addfav') || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (!ids.length) return;
+  const cur = Storage.get('rentFavourites', []) || [];
+  Storage.set('rentFavourites', [...new Set([...cur.map(String), ...ids])]);
+  p.delete('addfav');
+  history.replaceState({}, '', location.pathname + (p.toString() ? '?' + p : '') + location.hash);
 }
 
 // ── Auth screen helpers ───────────────────────────────────────────────────────
