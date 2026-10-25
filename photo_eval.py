@@ -315,6 +315,7 @@ def _sheets_ready(item: dict) -> bool:
 # again (2026-10-25, the user: "once we've looked at them, why download them
 # every time?"). prune_photo_cache drops the ones no listing shows any more.
 PHOTO_CACHE = CACHE / "photos"
+PROGRESS = CACHE / "progress.json"        # the reading in progress: {total, done, started, at}
 
 
 def _photo_path(url: str) -> Path:
@@ -569,6 +570,10 @@ def cmd_run(args) -> None:
                                     "usage": {k: u.get(k) for k in ("input_tokens", "cache_creation_input_tokens",
                                                                      "cache_read_input_tokens", "output_tokens")},
                                     "cost_equiv_usd": result.get("total_cost_usd")}) + "\n")
+        with store_lock:
+            progress["done"] += len(batch)
+            progress["at"] = datetime.now().isoformat(timespec="seconds")
+            PROGRESS.write_text(json.dumps(progress))
         for it in batch:
             _drop_sheets(it)
         print(f"batch {n}: {stored}/{len(batch)} stored · {round(time.time() - t0)} s · "
@@ -576,6 +581,8 @@ def cmd_run(args) -> None:
               f"out {u.get('output_tokens')}", flush=True)
 
     batches = _batches(queue, args.batch)
+    progress = {"total": len(queue), "done": 0, "started": datetime.now().isoformat(timespec="seconds")}
+    PROGRESS.write_text(json.dumps(progress))
     # Calls in parallel (`workers`): the one-session re-read of 2026-10-25.
     with ThreadPoolExecutor(max_workers=max(1, getattr(args, "workers", 1))) as pool:
         list(pool.map(lambda nb: one(*nb), enumerate(batches, 1)))
@@ -711,6 +718,35 @@ NIGHTLY_MAX = 40        # listings per call (5 claude calls; ~2k tokens each)
 # weekly plan (2026-10-25: 40 % of the week used, "split it up"). New and
 # changed listings come first (cmd_select), re-reads after.
 DAILY_MAX = 150
+
+
+def status() -> dict:
+    """For the dashboard (Tools → photo reading): today's count against the
+    budget, what's queued, a reading in progress, the cache."""
+    import fcntl
+    rows, done = load_listings(), load_results()
+    top = [l for l in rows if is_top(l, MIN_SCORE, True) and len(photo_urls(l)) >= MIN_PHOTOS]
+    new = sum(1 for l in top if done.get(str(l["id"]), {}).get("fingerprint") != fingerprint(photo_urls(l)))
+    again = sum(1 for l in top if done.get(str(l["id"]), {}).get("fingerprint") == fingerprint(photo_urls(l))
+                and (outdated(done.get(str(l["id"]))) or missed_words(done.get(str(l["id"])), l)
+                     or needs_bedrooms(done.get(str(l["id"])), l)))
+    busy = False
+    try:
+        with open(CACHE / ".reading.lock", "w") as fh:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        busy = True
+    except OSError:
+        pass
+    try:
+        prog = json.loads(PROGRESS.read_text())
+    except (OSError, ValueError):
+        prog = None
+    last = max((r.get("read_at") or "" for r in done.values() if not r.get("by_user")), default="")
+    return {"today": read_today(), "budget": DAILY_MAX, "queued_new": new, "queued_again": again,
+            "busy": busy, "progress": prog if busy else None, "last_read": last or None,
+            "cached_photos": sum(1 for _ in PHOTO_CACHE.glob("*.jpg")) if PHOTO_CACHE.exists() else 0,
+            "readable": len(top)}
 
 
 def read_today() -> int:

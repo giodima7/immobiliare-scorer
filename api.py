@@ -1336,6 +1336,23 @@ def api_photo_feedback():
     return jsonify({"error": "listing not found"}), 404
 
 
+_photo_status_cache: dict = {}
+
+
+@app.route("/api/photo-status")
+def api_photo_status():
+    """Tools → photo reading: today's readings vs the daily budget, the
+    queue, a reading in progress (photo_eval.status). Cached 20 s."""
+    import time as _t
+    hit = _photo_status_cache.get("v")
+    if hit and _t.time() - hit[0] < 20:
+        return jsonify(hit[1])
+    import photo_eval as _pe
+    st = _pe.status()
+    _photo_status_cache["v"] = (_t.time(), st)
+    return jsonify(st)
+
+
 @app.route("/api/sale-areas", methods=["GET", "POST"])
 def api_sale_areas():
     """The areas (and price / rooms filters) the scanners read for sales —

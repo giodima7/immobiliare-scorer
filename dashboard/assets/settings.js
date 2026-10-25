@@ -684,3 +684,33 @@ async function _dqClearSingle(id, btn) {
     btn.style.color = r.ok ? 'var(--green-ink)' : 'var(--coral-ink)';
   } catch(e) { btn.textContent = '✗'; btn.disabled = false; }
 }
+
+
+// ── Photo reading status (Tools) ─────────────────────────────────────────────
+// photo_eval.status via /api/photo-status: today vs the daily budget, the
+// queue, a reading in progress. Polled every 20 s while Tools is open.
+let _psTimer = null;
+async function loadPhotoStatus() {
+  const card = document.getElementById('photoStatusCard');
+  if (!card) return;
+  card.hidden = !(typeof IS_LIVE !== 'undefined' && IS_LIVE);
+  if (card.hidden) return;
+  let st = null;
+  try { st = await fetch('/api/photo-status').then(r => r.json()); } catch { /* API down */ }
+  const box = document.getElementById('photoStatus');
+  if (!st || !box) return;
+  const tile = (k, v, s = '') => `<div class="ps-tile"><div class="ps-k">${escapeHtml(k)}</div><div class="ps-v">${v}</div>${s ? `<div class="ps-s">${escapeHtml(s)}</div>` : ''}</div>`;
+  const p = st.progress;
+  const pct = p && p.total ? Math.round(100 * p.done / p.total) : 0;
+  box.innerHTML = [
+    tile(t('ps.today'), `${fmt(st.today)} <span class="ps-of">/ ${fmt(st.budget)}</span>`,
+         st.today >= st.budget ? t('ps.budget_used') : t('ps.budget_left', { n: fmt(st.budget - st.today) })),
+    tile(t('ps.queue'), fmt(st.queued_new + st.queued_again),
+         t('ps.queue_sub', { a: fmt(st.queued_new), b: fmt(st.queued_again) })),
+    tile(t('ps.now'), p ? `${fmt(p.done)} <span class="ps-of">/ ${fmt(p.total)}</span>` : escapeHtml(t(st.busy ? 'ps.busy' : 'ps.idle')),
+         p ? `${pct}%` : (st.last_read ? t('ps.last', { d: fmtDate(new Date(st.last_read)) + ' ' + st.last_read.slice(11, 16) }) : '')),
+    tile(t('ps.cache'), fmt(st.cached_photos), t('ps.cache_sub')),
+  ].join('') + (p ? `<div class="ps-bar"><span style="width:${pct}%"></span></div>` : '');
+  clearTimeout(_psTimer);
+  if (typeof activeTab !== 'undefined' && activeTab === 'settings') _psTimer = setTimeout(loadPhotoStatus, 20000);
+}
