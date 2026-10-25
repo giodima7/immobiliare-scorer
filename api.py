@@ -1091,6 +1091,9 @@ def full_dashboard():
 @app.route("/manifest.json")
 @app.route("/icon-192.png")
 @app.route("/icon-512.png")
+@app.route("/favicon.svg")
+@app.route("/favicon-32.png")
+@app.route("/apple-touch-icon.png")
 def dashboard_root_files():
     """PWA manifest + icons the page links from the site root (Cloudflare
     serves them from dashboard/; locally they were 404s)."""
