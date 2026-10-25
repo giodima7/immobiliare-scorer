@@ -118,7 +118,7 @@ function rentActiveFilterChips(f) {
   if (f.maxRent)   add('maxRent', t('chip.max_rent', { n: fmt(f.maxRent) }));
   if (f.minRooms)  add('minRooms', t('chip.min_rooms', { n: f.minRooms }));
   if (f.minSqm)    add('minSqm', t('chip.min_sqm', { n: f.minSqm }));
-  if (f.gemFilter) add('gemFilter', f.gemFilter === 'hidden' ? t('gem.hidden') : t('gem.good'));
+  if (f.gemFilter) add('gemFilter', t({ hidden: 'gem.hidden', good: 'gem.good', fair: 'gem.fair' }[f.gemFilter] || 'gem.good'));
   for (const k of f.must || []) add('must:' + k, t('must.' + k));
   if (f.includeUnknown) add('includeUnknown', t('chip.include_unknown'));
   if (f.condition)   add('condition', t('cond.' + f.condition));

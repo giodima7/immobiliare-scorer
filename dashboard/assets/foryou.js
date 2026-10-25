@@ -230,6 +230,7 @@ function _fyScore(l, kind, p, b, loan, centres) {
   if (zone.km != null) why.push({ bad: true, w: 2, t: t_('fy.w_near', { km: zone.km.toFixed(1).replace('.', ','), z: zone.zone }) });
   const live = kind === 'buy' ? _fyLiveBuy(l, p, loan, why) : kind === 'duo' ? _fyLiveDuo(l, why) : _fyLiveSolo(l, why);
   const trust = _fyTrust(l, why);
+  if (kind !== 'buy' && typeof isFairPick === 'function' && isFairPick(l)) why.push({ w: 4, t: t_('gem.fair') });
   const fit = 100 * (FY_W.deal * (l.score_total || 0) / 100 + FY_W.live * live + FY_W.budget * room
                      + FY_W.trust * trust + FY_W.zone * zone.fit);
   return { l, fit: Math.round(fit), why, near: zone.km != null };

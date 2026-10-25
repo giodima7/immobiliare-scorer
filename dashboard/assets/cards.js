@@ -429,6 +429,24 @@ function scoreRingHtml(l, size = 44) {
     </div>`;
 }
 
+// "A good flat at a fair price" (2026-10-25): the deal labels reward a
+// discount, and the cheapest listings often have the worst interiors; this
+// one finds the flats priced like their neighbours that are worth it. Price
+// within ±5 % of nearby flats, photos 7/10 or better (6 with two strong
+// pluses — light, a terrace, a renovation…), a good location, no serious
+// defect. 182 rentals on the day.
+const _FAIR_STRONG = ['bright', 'open_view', 'big_living', 'high_ceilings', 'recently_renovated', 'new_bathroom',
+                      'new_kitchen', 'dual_aspect', 'big_windows', 'quiet_courtyard'];
+const _FAIR_BAD = ['damp', 'cracks', 'plan_mismatch', 'windowless_bathroom', 'dark', 'facing_wall', 'shabby_building'];
+function isFairPick(l) {
+  const d = l.comps_delta_pct, g = l.photo_grade, tags = l.photo_tags || [];
+  if (d == null || d < -5 || d > 5 || typeof g !== 'number') return false;
+  if (l.hidden_gem || l.good_value || l.price_suspect || l.is_room_let || l.is_stale || l.excluded
+      || (l.floor_n ?? 0) < 0 || l.photo_deal === 'contradicts' || tags.some(k => _FAIR_BAD.includes(k))) return false;
+  const strong = tags.filter(k => _FAIR_STRONG.includes(k)).length + (l.photo_features?.terrace ? 1 : 0);
+  return (g >= 7 || (g >= 6 && strong >= 2)) && (l.score_location ?? 0) >= 70;
+}
+
 function renderRentalCard(l) {
   const id   = escapeHtml(String(l.id));
   const site = siteName(l.source);
@@ -441,6 +459,8 @@ function renderRentalCard(l) {
     ? `<span class="gem-photo-chip chip-hidden">${icon('diamond')}<span>${escapeHtml(t('gem.hidden'))}</span></span>`
     : l.good_value
     ? `<span class="gem-photo-chip chip-good">${icon('coin')}<span>${escapeHtml(t('gem.good'))}</span></span>`
+    : isFairPick(l)
+    ? `<span class="gem-photo-chip chip-fair">${icon('sparkles')}<span>${escapeHtml(t('gem.fair'))}</span></span>`
     : '';
   const newChip = isNew(l) ? `<span class="card-photo-new-badge">${escapeHtml(t('badge.new'))}</span>` : '';
   // What the photos showed sits on the photo (2026-10-19 card redesign: the

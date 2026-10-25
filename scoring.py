@@ -401,6 +401,9 @@ _DEFAULT_SETTINGS: dict = {
     "photo_grade_points":    15,       # 2026-10-25, measured: 2,331 scores move (953 ↑, 1,378 ↓), labels unchanged
     # Days on market counted in the penalty score only for rentals.
     "rent_dom_once":         False,
+    # A discount counts as much as the photos back it (apply_credible_discount).
+    "credible_discount":     True,       # 2026-10-25, measured: top-100 photos 7.1 → 7.4, ≥80 1,084 → 651, labels unchanged
+    "credible_unread":       0.7,
     "rent_dom_tiers":        None,
     # A flat under small_brake_max_sqm whose all-in €/m² is more than
     # small_brake_ratio × what a normal-size flat asks in its zone: no label,
@@ -2295,6 +2298,33 @@ def apply_small_flat_brake(l: dict, ref: dict, max_sqm: float, ratio: float, cap
         l["score_cap_reason"] = "; ".join(x for x in (l.get("score_cap_reason"), reason) if x)
 
 
+def apply_credible_discount(l: dict, settings: dict) -> None:
+    """The price score's part above 50 (a discount) counts as much as the
+    photos back the flat: in full from 7/10, three quarters at 6, half at 5,
+    a fifth below; credible_unread when the photos aren't read yet; in full
+    when the user found them convincing. A price in line with nearby flats
+    loses nothing. 2026-10-25: the cheapest listings had the worst interiors
+    (over −20 %: 39 % photos ≤5/10, 3 % ≥8; in line: 32 %, 9 %) and filled the
+    top while a good flat at a fair price sat 3,108th (id_37058700).
+    score_price_raw keeps the uncredited figure."""
+    p = l.get("score_price")
+    if p is None or p <= 50:
+        return
+    g = l.get("photo_grade")
+    if l.get("photo_by_user") and l.get("photo_deal") == "confirms":
+        f = 1.0
+    elif not isinstance(g, (int, float)):
+        f = settings.get("credible_unread", 0.7)
+    else:
+        f = 1.0 if g >= 7 else 0.75 if g >= 6 else 0.5 if g >= 5 else 0.2
+    if f >= 1:
+        return
+    new = 50 + (p - 50) * f
+    l["score_price_raw"] = p
+    l["score_price"] = round(new)
+    l["score_total"] = max(0, round((l.get("score_total") or 0) + (new - p) * settings.get("w_price", 0.45)))
+
+
 def score_all(listings: list, settings: dict | None = None,
               comps_pool: list | None = None) -> list:
     """Score all listings, log null-field coverage, return sorted list.
@@ -2359,6 +2389,8 @@ def score_all(listings: list, settings: dict | None = None,
             apply_photo_verdict(merged, photo_evals, settings["photo_contradicts_cap"],
                                 settings.get("photo_grade_cap_max", 4),
                                 settings.get("photo_grade_points", 0), settings.get("w_property", 0.25))
+        if settings.get("credible_discount"):
+            apply_credible_discount(merged, settings)
         if small_ref:
             apply_small_flat_brake(merged, small_ref, settings["small_brake_max_sqm"],
                                    settings.get("small_brake_ratio", 1.25),
