@@ -310,21 +310,61 @@ def _sheets_ready(item: dict) -> bool:
     return bool(paths) and all(p.exists() for p in paths)
 
 
+# Every photo downloaded is kept at tile size (~30 KB), so a re-read — a new
+# rubric, a floor plan arriving later — builds its sheets without fetching
+# again (2026-10-25, the user: "once we've looked at them, why download them
+# every time?"). prune_photo_cache drops the ones no listing shows any more.
+PHOTO_CACHE = CACHE / "photos"
+
+
+def _photo_path(url: str) -> Path:
+    return PHOTO_CACHE / (hashlib.sha1(url.encode()).hexdigest()[:20] + ".jpg")
+
+
+def _tile(url: str):
+    from PIL import Image
+    p = _photo_path(url)
+    if p.exists():
+        try:
+            return Image.open(p).convert("RGB")
+        except Exception:
+            p.unlink(missing_ok=True)
+    raw = _fetch(url)
+    time.sleep(0.3)                     # gentle on the portals' CDNs — only for real downloads
+    if not raw:
+        return None
+    try:
+        im = Image.open(io.BytesIO(raw)).convert("RGB")
+    except Exception:
+        return None
+    im.thumbnail((TILE_W, TILE_H))
+    PHOTO_CACHE.mkdir(parents=True, exist_ok=True)
+    im.save(p, "JPEG", quality=82)
+    return im
+
+
+def prune_photo_cache(rows: list | None = None) -> int:
+    """Delete cached photos no live listing shows any more, and the sheets of
+    the old naming ({id}.jpg, before 2026-10-25). Returns files removed."""
+    rows = load_listings() if rows is None else rows
+    keep = {_photo_path(u).name for l in rows if not l.get("is_stale")
+            for u in photo_urls(l) + list(l.get("floorplans") or [])}
+    n = 0
+    if PHOTO_CACHE.exists():
+        for p in PHOTO_CACHE.glob("*.jpg"):
+            if p.name not in keep:
+                p.unlink(missing_ok=True); n += 1
+    if SHEETS.exists():
+        for p in SHEETS.glob("*.jpg"):
+            if "-" not in p.stem:                       # old {id}.jpg sheets
+                p.unlink(missing_ok=True); n += 1
+    return n
+
+
 def build_sheet(urls: list[str], dest: Path, first: int = 1) -> int:
     """Numbered grid of photos (numbers from `first`): 2×2, 3×2 or 3×3 tiles."""
     from PIL import Image, ImageDraw, ImageFont
-    imgs = []
-    for u in urls:
-        raw = _fetch(u)
-        time.sleep(0.3)                 # gentle on the portals' CDNs
-        if not raw:
-            continue
-        try:
-            im = Image.open(io.BytesIO(raw)).convert("RGB")
-        except Exception:
-            continue
-        im.thumbnail((TILE_W, TILE_H))
-        imgs.append(im)
+    imgs = [im for im in (_tile(u) for u in urls) if im is not None]
     if not imgs:
         return 0
     n = len(imgs)
@@ -698,6 +738,13 @@ def nightly(log=print, limit: int = NIGHTLY_MAX) -> int:
         lock.close()
         return 0
     try:
+        # Once a day: drop cached photos of listings gone since.
+        mark = CACHE / ".pruned"
+        if not mark.exists() or time.time() - mark.stat().st_mtime > 86400:
+            removed = prune_photo_cache()
+            mark.touch()
+            if removed:
+                log(f"[photos] cache: {removed} old photos removed")
         left = DAILY_MAX - read_today()
         if left <= 0:
             log(f"[photos] daily budget used ({DAILY_MAX}) — next reading tomorrow")
