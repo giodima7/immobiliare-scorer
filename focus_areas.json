@@ -45,12 +45,19 @@
     "immobiliare": [
       "porta-romana-cadore-montenero",
       "genova-ticinese",
-      "quadronno-palestro-guastalla"
+      "quadronno-palestro-guastalla",
+      "porta-venezia-indipendenza",
+      "centro",
+      "solari-washington",
+      "garibaldi-moscova-porta-nuova",
+      "arco-della-pace-arena-pagano"
     ],
     "idealista": [
       "porta-vittoria/porta-romana",
-      "navigli-bocconi/corso-genova",
-      "navigli-bocconi/mercalli-quadronno"
+      "garibaldi-porta-venezia",
+      "centro-storico",
+      "fiera-de-angeli",
+      "navigli-bocconi"
     ]
   }
 }
