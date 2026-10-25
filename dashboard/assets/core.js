@@ -264,6 +264,7 @@ const Auth = (() => {
       // App is already visible (no auth gate). Just migrate any guest data
       // into this user's namespace and refresh UI.
       Storage.migrate(user.id);
+      _syncAccountData(user);
       // Cache the Clerk user ID so other static pages (e.g. favourites.html)
       // can scope their localStorage keys without re-loading the Clerk SDK.
       try { localStorage.setItem('lume_clerk_user_id', user.id); } catch (_) {}
@@ -329,6 +330,10 @@ const Storage = {
     try { localStorage.setItem(this.key(name), JSON.stringify(value)); }
     catch (e) { console.warn('Storage.set failed:', e); }
     _pushUserData(name, value);
+    if (_ACCOUNT_KEYS.includes(name)) {
+      try { localStorage.setItem(this.key(name) + '_at', String(Date.now())); } catch { /* full */ }
+      _pushAccountData();
+    }
   },
 
   remove(name) { localStorage.removeItem(this.key(name)); },
@@ -391,6 +396,64 @@ async function _syncUserDataFromServer() {
       }
     }
   } catch { /* offline file → keep browser copy */ }
+}
+
+// ── Saved items follow the account ────────────────────────────────────────────
+// Online, saved listings and collections lived in one browser's storage only
+// (2026-10-25: "signed in from another browser, my saved listings aren't
+// there"). Signed in, they're also kept on the Clerk user — unsafeMetadata
+// .lume = { name: { v, at } } — and the newer copy wins; the first time a
+// browser meets the account, both sides are merged.
+const _ACCOUNT_KEYS = ['rentFavourites', 'favourites', 'collections'];
+let _acctTimer = null;
+
+function _pushAccountData() {
+  const u = Auth.user;
+  if (!u?.update) return;
+  clearTimeout(_acctTimer);
+  _acctTimer = setTimeout(() => {
+    const lume = {};
+    for (const k of _ACCOUNT_KEYS) {
+      lume[k] = { v: Storage.get(k, null), at: Number(localStorage.getItem(Storage.key(k) + '_at')) || 0 };
+    }
+    u.update({ unsafeMetadata: { ...(u.unsafeMetadata || {}), lume } })
+      .catch(e => console.warn('Saving to your account failed:', e));
+  }, 1500);
+}
+
+function _mergeSaved(a, b) {
+  const key = x => (x && typeof x === 'object' ? x.id : x);
+  const seen = new Set(), out = [];
+  for (const x of [...(a || []), ...(b || [])]) {
+    if (!seen.has(key(x))) { seen.add(key(x)); out.push(x); }
+  }
+  return out;
+}
+
+// Returns true when this browser's saved items changed.
+function _syncAccountData(user) {
+  const remote = user?.unsafeMetadata?.lume || {};
+  let changed = false, push = false;
+  for (const k of _ACCOUNT_KEYS) {
+    const r = remote[k] || {};
+    const atKey = Storage.key(k) + '_at';
+    const localAt = Number(localStorage.getItem(atKey)) || 0;
+    const local = Storage.get(k, null);
+    if (r.v != null && !localAt) {                     // first meeting: keep both
+      const v = Array.isArray(r.v) && Array.isArray(local) ? _mergeSaved(r.v, local) : r.v;
+      localStorage.setItem(Storage.key(k), JSON.stringify(v));
+      localStorage.setItem(atKey, String(Date.now()));
+      changed = true; push = push || (Array.isArray(local) && local.length > 0);
+    } else if (r.v != null && (r.at || 0) > localAt) { // the account's copy is newer
+      localStorage.setItem(Storage.key(k), JSON.stringify(r.v));
+      localStorage.setItem(atKey, String(r.at));
+      changed = true;
+    } else if (local != null && localAt > (r.at || 0)) {
+      push = true;                                     // this browser's is newer
+    }
+  }
+  if (push) _pushAccountData();
+  return changed;
 }
 
 // ── Auth screen helpers ───────────────────────────────────────────────────────
