@@ -208,6 +208,18 @@ def is_top(l: dict, min_score: int = MIN_SCORE, gems: bool = False) -> bool:
     return (l.get("score_total") or 0) >= min_score or (gems and bool(l.get("hidden_gem")))
 
 
+def fair_candidate(l: dict) -> bool:
+    """A flat priced like its neighbours in a good location, photos never
+    read: the "Fair pick" label needs a photo grade, and the reading only
+    took listings scored 70+, which a fair price rarely reaches (2026-10-25:
+    1,664 such rentals unread, 629 under €1,300)."""
+    d = l.get("comps_delta_pct")
+    return (d is not None and -5 <= d <= 5 and (l.get("score_location") or 0) >= 70
+            and not l.get("is_stale") and not l.get("excluded") and not l.get("_excluded")
+            and not l.get("price_suspect") and not l.get("is_room_let") and bool(l.get("rent_mo"))
+            and len(photo_urls(l)) >= MIN_PHOTOS)
+
+
 def context(l: dict) -> dict:
     """What the reader is told about the listing — not its stated condition,
     so the photo judgement stays blind and can be checked against it."""
@@ -255,6 +267,12 @@ def cmd_select(args) -> None:
     except Exception:
         in_focus = lambda l: False
     todo.sort(key=lambda l: (not in_focus(l), -(l.get("score_total") or 0)))
+    # Then fair-price candidates never read: the user's zones first, cheapest first.
+    have = {str(l["id"]) for l in todo}
+    fair = [l for l in rows if fair_candidate(l) and str(l["id"]) not in have
+            and str(l["id"]) not in done and not is_top(l, args.min_score, args.gems)]
+    fair.sort(key=lambda l: (not in_focus(l), l.get("rent_mo") or 0))
+    todo += fair
     # Then readings of an older rubric: every one since 2026-10-19 (the user
     # wants the grade everywhere; ~776 then, ~1.5M tokens) — where the user
     # searches and the labelled deals first.
@@ -718,6 +736,16 @@ NIGHTLY_MAX = 40        # listings per call (5 claude calls; ~2k tokens each)
 # weekly plan (2026-10-25: 40 % of the week used, "split it up"). New and
 # changed listings come first (cmd_select), re-reads after.
 DAILY_MAX = 150
+# One-off budgets by date, e.g. {"2026-10-26": 1500} (the user's call).
+BUDGET_OVERRIDE = CACHE / "budget_override.json"
+
+
+def daily_max(day: str | None = None) -> int:
+    day = day or datetime.now().date().isoformat()
+    try:
+        return int(json.loads(BUDGET_OVERRIDE.read_text()).get(day, DAILY_MAX))
+    except (OSError, ValueError, TypeError):
+        return DAILY_MAX
 
 
 def status() -> dict:
@@ -743,7 +771,7 @@ def status() -> dict:
     except (OSError, ValueError):
         prog = None
     last = max((r.get("read_at") or "" for r in done.values() if not r.get("by_user")), default="")
-    return {"today": read_today(), "budget": DAILY_MAX, "queued_new": new, "queued_again": again,
+    return {"today": read_today(), "budget": daily_max(), "queued_new": new, "queued_again": again,
             "busy": busy, "progress": prog if busy else None, "last_read": last or None,
             "cached_photos": sum(1 for _ in PHOTO_CACHE.glob("*.jpg")) if PHOTO_CACHE.exists() else 0,
             "readable": len(top)}
@@ -781,9 +809,9 @@ def nightly(log=print, limit: int = NIGHTLY_MAX) -> int:
             mark.touch()
             if removed:
                 log(f"[photos] cache: {removed} old photos removed")
-        left = DAILY_MAX - read_today()
+        left = daily_max() - read_today()
         if left <= 0:
-            log(f"[photos] daily budget used ({DAILY_MAX}) — next reading tomorrow")
+            log(f"[photos] daily budget used ({daily_max()}) — next reading tomorrow")
             return 0
         limit = min(limit, left)
         before = len(load_results())
