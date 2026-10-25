@@ -83,5 +83,32 @@
    "lift": true,
    "discount_vs_nearby_pct": -11.9
   }
+ },
+ "129900526": {
+  "at": "2026-10-25T08:03:03",
+  "deal": "contradicts",
+  "note": "Nessuna camera da letto: il divano del soggiorno diventa letto e c'è un altro letto nell'ingresso.",
+  "grade": null,
+  "fingerprint": "afe367315304",
+  "sonnet": {
+   "deal_check": "confirms",
+   "confidence": "medium",
+   "grade": 7,
+   "note_it": "Bilocale ristrutturato e arredato con cucina completa e bagno nuovo; la camera è separata, ma il divano in soggiorno è probabilmente un divano letto.",
+   "red_flags": []
+  },
+  "context": {
+   "id": "129900526",
+   "label": "Great Value",
+   "area": "Quadronno - Crocetta",
+   "rent_eur_month": 1000,
+   "sqm": 45,
+   "rooms": 2,
+   "floor": 1,
+   "lift": true,
+   "discount_vs_nearby_pct": -21.4,
+   "photos_on_site": 16,
+   "description": "BILOCALE ARREDATO CONFORT\nImmobile storico con portineria. Appartamento di recente ristrutturazione. Ingresso con armadio e letto King. Servizio igienico con ampia doccia e finestra. Soggiorno con cucina a giorno completa di elettrodomestici lavastoviglie, lavatrice, frigo, forno, forno a microonde, TV. \nImpianto di riscaldamento con caldaia a condensazione autonoma e caloriferi. Impianto di climatizzazione estiva con split (fa anche aria calda). \nCONTRATTO: transitorio 18 mesi.\nPOSIZIONE: sono raggiungibili a piedi la stazione (8 minuti), la fermata dell'autobus, i negozi, i supermercati, i ristoranti, i bar, i giardinetti. Il centro città è raggiungibile in 12 minuti a piedi.\nINCLUSO NEL PREZZO: acqua, conduzione caldaia, manutenzioni straordinarie, tassa rifiuti, spese condominiali. Uniche spese a carico del conduttore sono le UTENZE con rimborso delle bollette in base ai consumi: energia elettrica e gas per riscaldamento. \nADATTA e singoli o coppie. Poco adatta a disabili e bambini piccoli perché dal cortile all'appartamento ci sono dei gradini.\nLIBERO: dal 1 agosto 2026\nANIMALI mi dispiace ma non sono ammessi.\n"
+  }
  }
 }

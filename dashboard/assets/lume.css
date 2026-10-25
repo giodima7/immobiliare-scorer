@@ -3507,7 +3507,8 @@ header { gap: 10px; padding: 10px 24px; z-index: var(--z-sticky); }
 /* Views only some tabs show */
 body[data-tab="saved"] #filterBar, body[data-tab="insights"] #filterBar, body[data-tab="settings"] #filterBar,
 body[data-tab="sales"] #filterBar, body[data-tab="sales"] #rActiveChips,
-body[data-tab="saved"] #rActiveChips, body[data-tab="insights"] #rActiveChips, body[data-tab="settings"] #rActiveChips { display: none; }
+body[data-tab="saved"] #rActiveChips, body[data-tab="insights"] #rActiveChips, body[data-tab="settings"] #rActiveChips,
+body[data-tab="foryou"] #filterBar, body[data-tab="foryou"] #rActiveChips { display: none; }
 
 /* ── Filter bar: one sticky row; panels open as popovers below it ── */
 .filters.fbar { display: block; padding: 10px 12px; margin: var(--s-4) var(--s-6) 0; z-index: var(--z-sticky); }
@@ -3956,7 +3957,7 @@ body.pv-open { overflow: hidden; }
   /* Sales keep their bar inline on a phone (no drawer): it scrolls away
      instead of taking half the screen, and the Rentals drawer button goes. */
   #saleFilterBar { position: static; margin: var(--s-3) var(--s-3) 0; }
-  body[data-tab="sales"] .mobile-filter-btn { display: none !important; }
+  body[data-tab="sales"] .mobile-filter-btn, body[data-tab="foryou"] .mobile-filter-btn { display: none !important; }
   .fchips { margin: var(--s-3) var(--s-3) 0; }
   .grid { padding: var(--s-3); gap: var(--s-3); }
   .page { padding: var(--s-4) var(--s-3) 64px; }
@@ -4021,3 +4022,44 @@ body.pv-open { overflow: hidden; }
 /* Tools → Areas for sale */
 .sale-limits { display: flex; flex-wrap: wrap; gap: 12px; margin: 14px 0 6px; }
 .sale-limits .field { width: 160px; }
+
+/* ── For you (foryou.js) ─────────────────────────────────────────────────── */
+.fy { display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-4) var(--s-6) var(--s-6); }
+.fy .grid { padding: 0; }            /* the page gutter is .fy's */
+.fy-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; }
+.fy-card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.fy-title, .fy-note, .fy-calc-head, .fy-zones-label, .fy-tile-k, .fy-head { display: inline-flex; align-items: center; gap: 6px; }
+.fy-title, .fy-calc-head { font-weight: 600; font-size: var(--text-sm); }
+.fy-note, .fy-disclaimer { font-size: var(--text-xs); color: var(--text-secondary); }
+.fy-fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.fy-field { display: flex; flex-direction: column; gap: 4px; font-size: var(--text-xs); color: var(--text-secondary); }
+.fy-field input { width: 100%; }
+.fy-zones, .fy-prefs { display: flex; align-items: center; gap: 10px 16px; margin-top: 12px; flex-wrap: wrap; }
+.fy-check { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-sm); }
+.fy-check select { width: auto; height: 32px; }
+.fy-zones-label { font-size: var(--text-xs); color: var(--text-secondary); }
+.fy-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.fy-tile { background: var(--bg-muted); border-radius: 12px; padding: 12px 14px; }
+.fy-tile-k, .fy-tile-s { font-size: var(--text-xs); color: var(--text-secondary); }
+.fy-tile-v { font-size: 22px; font-weight: 600; margin: 2px 0; }
+.fy-unit { font-size: var(--text-sm); font-weight: 400; color: var(--text-secondary); }
+.fy .i { width: 15px; height: 15px; }
+.fy-mode { align-self: flex-start; }
+.fy-section { border-top: 1px solid var(--border); padding-top: var(--s-5, 20px); margin-top: var(--s-4, 16px); }
+.fy-section:first-child { border-top: 0; padding-top: var(--s-2, 8px); margin-top: 0; }
+.fy-head { font-size: var(--text-lg, 18px); font-weight: 600; margin: 0; gap: 8px; }
+.fy-head .i { width: 20px; height: 20px; }
+.fy-sub { font-size: var(--text-xs); color: var(--text-secondary); margin: 2px 0 var(--s-3, 12px); }
+.fy-each { font-size: var(--text-xs); color: var(--green-ink); font-weight: 600; }
+.fy-own { font-size: var(--text-xs); color: var(--text-secondary); margin: -2px 0 4px; }
+.fy-more { grid-column: 1 / -1; display: flex; justify-content: center; padding-top: 4px; }
+.fy-why { display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 0 6px; }
+.fy-fit, .fy-chip { font-size: var(--text-xs); padding: 2px 8px; border-radius: 999px; }
+.fy-fit { background: var(--blue-light, var(--bg-muted)); color: var(--blue-ink, var(--text-primary)); font-weight: 600; cursor: help; }
+.fy-chip { background: var(--bg-muted); color: var(--text-secondary); }
+.fy-chip.warn { background: var(--amber-light); color: var(--amber-ink); }
+@media (max-width: 720px) {
+  .fy { padding: var(--s-3); }
+  .fy-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fy-tiles { grid-template-columns: 1fr; }
+}

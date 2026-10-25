@@ -204,6 +204,11 @@ def listing_to_row(listing: dict, listing_type: str) -> dict:
     # Idealista rentals never carried the field, so ~2.2k of them were
     # invisible online only. Unknown staleness → visible, same as local.
     row["is_stale"] = bool(listing.get("is_stale"))
+    # Sent even when empty: an upsert leaves a column it isn't given as it
+    # was, so a cap reason gone locally stayed online (sale 96022006,
+    # 2026-10-25: the reason repeated 13 times online, empty locally).
+    if "score_cap_reason" in columns:
+        row["score_cap_reason"] = _normalise(listing.get("score_cap_reason"))
 
     # The photos' 1–5 scales are SMALLINT columns (migration 016) and Sonnet
     # sometimes answers a half (4.5): one failed its whole 200-row batch

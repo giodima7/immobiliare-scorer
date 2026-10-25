@@ -75,7 +75,8 @@ async function listingPhotos(l) {
   if (l._photos) return l._photos;
   let photos = Array.isArray(l.photos) ? l.photos : null;
   try {
-    if (!photos && IS_LIVE) {
+    const sale = /sale/.test(l.source || '');      // sales carry their photos locally
+    if (!photos && IS_LIVE && !sale) {
       const r = await fetch(`/rentals/extras?ids=${encodeURIComponent(String(l.id))}`);
       if (r.ok) photos = ((await r.json())[0] || {}).photos || null;
     } else if (!photos && SupabaseClient.configured) {
@@ -107,6 +108,7 @@ async function _lmLoadPhotos(l) {
 async function cardPhotoStep(box, step) {
   const id = box.dataset.photoId;
   const l = ALL_RENT.find(x => String(x.id) === id)
+         || (typeof ALL_SALE !== 'undefined' && ALL_SALE.find(x => String(x.id) === id))
          || (typeof _savedRows !== 'undefined' && _savedRows.find(x => String(x.id) === id));
   if (!l) return;
   const photos = await listingPhotos(l);
