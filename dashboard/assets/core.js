@@ -247,9 +247,15 @@ const Auth = (() => {
     userName() {
       const u = this.user;
       if (!u) return 'User';
+      // The Google account linked to it when the user's own fields are empty
+      // (2026-10-25: "Signed in as User" after signing in with Google).
+      const g = (u.externalAccounts || [])[0] || {};
       return u.fullName
           || [u.firstName, u.lastName].filter(Boolean).join(' ')
+          || [g.firstName, g.lastName].filter(Boolean).join(' ')
           || u.primaryEmailAddress?.emailAddress
+          || u.emailAddresses?.[0]?.emailAddress
+          || g.emailAddress
           || u.username
           || 'User';
     },
@@ -502,7 +508,9 @@ function updateUserAvatar() {
   wrap.hidden = local && !signedIn;
   el.classList.toggle('is-signed-in', !!signedIn);
   if (signedIn) {
-    el.textContent = Auth.userInitial();
+    const img = Auth.user?.hasImage && Auth.user?.imageUrl;
+    if (img) el.innerHTML = `<img class="user-avatar-img" src="${_safeUrl(img)}" alt="">`;
+    else el.textContent = Auth.userInitial();
     el.title = Auth.userName();
     el.setAttribute('aria-label', t('menu.account'));
     el.setAttribute('onclick', 'showUserMenu(event)');
