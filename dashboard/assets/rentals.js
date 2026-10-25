@@ -100,6 +100,7 @@ function applyRentFilters(data, f) {
     if (!passesExtraFilters(l, f)) return false;
     if (f.gemFilter === 'hidden' && !l.hidden_gem) return false;
     if (f.gemFilter === 'good'   && !(l.good_value === true && l.hidden_gem !== true)) return false;
+    if (f.gemFilter === 'fair'   && !isFairPick(l)) return false;
     if (f.fListed) {
       if (!l.first_seen_date) return false;
       if (f.fListed === 'today') {
@@ -260,11 +261,12 @@ function renderRentals() {
     const shown   = ALL_RENT.filter(l => !l.excluded);
     const nHidden = shown.filter(l => l.hidden_gem).length;
     const nGood   = shown.filter(l => l.good_value && !l.hidden_gem).length;
+    const nFair   = shown.filter(isFairPick).length;
     // Deal-type buttons: label + count (the count hides on narrower bars).
     ['rGemFilter', 'dGemFilter'].forEach(gid => document.querySelectorAll(`#${gid} .gem-tab`).forEach(btn => {
       const gem = btn.dataset.gem;
-      const label = gem === 'hidden' ? t('gem.hidden') : gem === 'good' ? t('gem.good') : t('gem.all');
-      const n = gem === 'hidden' ? nHidden : gem === 'good' ? nGood : null;
+      const label = t({ hidden: 'gem.hidden', good: 'gem.good', fair: 'gem.fair' }[gem] || 'gem.all');
+      const n = { hidden: nHidden, good: nGood, fair: nFair }[gem] ?? null;
       btn.innerHTML = `${escapeHtml(label)}${n != null ? ` <span class="pill-count">${fmt(n)}</span>` : ''}`;
       btn.removeAttribute('data-i18n');
     }));

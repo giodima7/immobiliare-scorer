@@ -3589,6 +3589,7 @@ body[data-tab="foryou"] #filterBar, body[data-tab="foryou"] #rActiveChips { disp
                   backdrop-filter: none; box-shadow: 0 2px 6px rgba(0,0,0,.18); font-size: var(--text-xs); }
 .gem-photo-chip.chip-hidden { color: var(--gem-ink); }
 .gem-photo-chip.chip-good   { color: var(--green-ink); }
+.gem-photo-chip.chip-fair   { color: var(--amber-ink); }
 .card-photo-new-badge { top: 10px; right: 10px; background: var(--bg-card); color: var(--blue-ink);
                         backdrop-filter: none; -webkit-backdrop-filter: none; font-size: var(--text-xs); }
 .card-body { display: flex; flex-direction: column; gap: 8px; padding: var(--s-3) var(--s-4) 0; }
