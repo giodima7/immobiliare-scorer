@@ -2666,8 +2666,8 @@ def _between_slots(args, source: str, next_slot: float, log, run_slot_fn, discov
     import scan_window
     next_discover = (discover_state().get("at") or 0) + DISCOVER_EVERY_SEC
     while time.time() < next_slot:
-        if not scan_window.in_window():
-            return                             # the window closed: the loop sleeps
+        if not scan_window.in_window() or time.time() < scan_window.paused_until(source):
+            return                             # the window closed or the site blocked us: the loop sleeps
         try:                                   # sales in the focus areas (sales_scan)
             from sales_scan import sales_due, run_sales
             if sales_due(source):
@@ -2708,6 +2708,12 @@ def _spread_loop(args, log) -> None:
         f"{_gap() // 60} min, discover every {DISCOVER_EVERY_SEC / 60:g} min, output {OUTPUT_PATH}")
     next_slot = last_scan_at("immobiliare") + _gap()
     while True:
+        until = scan_window.paused_until("immobiliare")
+        if until > time.time():
+            log(f"Immobiliare paused until {datetime.fromtimestamp(until):%d %b %H:%M} — no pages")
+            time.sleep(min(until - time.time(), 3600) + 5)
+            next_slot = max(next_slot, time.time() + 120)
+            continue
         if not scan_window.in_window():
             _sleep_outside_window(args, "immobiliare", log)
             next_slot = time.time()          # first slot as the window opens

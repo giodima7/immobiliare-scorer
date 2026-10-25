@@ -741,6 +741,8 @@ def drip_until(source: str, deadline: float, log=print, after_batch=None) -> Non
         if date.today() != st["day"]:
             st["day"], st["done"] = date.today(), 0
         import scan_window
+        if time.time() < scan_window.paused_until(source):
+            return                             # the whole site is paused (scan_window.pause)
         eligible = (scan_window.in_window(now)
                     and st["done"] < DRIP_PER_DAY and time.time() >= st["blocked_until"])
         if eligible and time.time() >= next_batch:
@@ -792,6 +794,10 @@ def _pace(source: str, st: dict, stats: dict, n: int, log) -> None:
         st["level"], st["changed"], st["last_block"] = st["level"] // 2, now, now
         st["blocked_until"] = now + pause
         log(f"[details] {source}: blocked — pausing {pause // 3600} h, level {st['level']}")
+        # The whole site, not just its listing pages: zone and discover
+        # searches from the same IP keep the block going.
+        import scan_window
+        scan_window.pause(source, datetime.fromtimestamp(now + pause), "listing pages blocked", log)
         return
     if n and stats["error"] >= max(2, n / 3):
         st["level"], st["changed"] = max(0, st["level"] - 1), now

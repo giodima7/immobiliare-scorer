@@ -29,6 +29,7 @@ sales_scans_*.jsonl
 milano_sales_latest.json.lock
 .subito.lock
 .subito_state.json
+.source_pause.json
 subito_scans_*.jsonl
 scan_slots_*.jsonl
 scanner.log

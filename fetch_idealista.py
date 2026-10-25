@@ -2404,6 +2404,12 @@ def _spread_loop(args, log) -> None:
         f"{_gap() // 60} min, discover every {DISCOVER_EVERY_SEC / 60:g} min, output {OUTPUT_PATH}")
     next_slot = last_scan_at("idealista") + _gap()
     while True:
+        until = scan_window.paused_until("idealista")
+        if until > time.time():
+            log(f"Idealista paused until {datetime.fromtimestamp(until):%d %b %H:%M} — no pages")
+            time.sleep(min(until - time.time(), 3600) + 5)
+            next_slot = max(next_slot, time.time() + 120)
+            continue
         if not scan_window.in_window():
             _sleep_outside_window(args, "idealista", log)
             next_slot = time.time() + 120     # the Immobiliare daemon starts first

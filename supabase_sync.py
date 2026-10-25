@@ -205,6 +205,14 @@ def listing_to_row(listing: dict, listing_type: str) -> dict:
     # invisible online only. Unknown staleness → visible, same as local.
     row["is_stale"] = bool(listing.get("is_stale"))
 
+    # The photos' 1–5 scales are SMALLINT columns (migration 016) and Sonnet
+    # sometimes answers a half (4.5): one failed its whole 200-row batch
+    # (HTTP 400, 2026-10-25), so online fell behind. Rounded half up.
+    for col in ("photo_condition", "photo_kitchen", "photo_bathroom", "photo_light"):
+        v = row.get(col)
+        if isinstance(v, float):
+            row[col] = int(v + 0.5)
+
     # Multi-city safety net: the listings.city column stores the lowercase
     # code ('milano', 'roma') — match the cities table PK. Old scanner
     # output occasionally writes the display label ("Milano"); fall back

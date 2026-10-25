@@ -10,6 +10,12 @@ Edit scan_window.json — {"start": "23:30", "end": "07:30"} — to move it;
 it is read on every check, no restart needed. A window may cross midnight.
 Inside the window the daemons keep the Mac from idle-sleeping (caffeinate
 -i); it still has to be on power with the lid open.
+
+A site that blocks us pauses as a whole — zone slots, discover, listing
+pages — not just the page that saw the block (2026-10-25, Idealista: the
+listing-page drip paused itself but the zone and discover searches kept
+going). .source_pause.json holds {source: {"until", "why"}}; pause() never
+shortens one.
 """
 from __future__ import annotations
 
@@ -19,6 +25,7 @@ from datetime import datetime, time as dtime, timedelta
 from pathlib import Path
 
 CONFIG_PATH = Path(__file__).resolve().parent / "scan_window.json"
+PAUSE_PATH = Path(__file__).resolve().parent / ".source_pause.json"
 DEFAULT = ("23:30", "07:30")
 
 
@@ -89,3 +96,25 @@ def keep_awake(log=print) -> None:
 def describe() -> str:
     start, end = window()
     return f"{start:%H:%M}–{end:%H:%M}"
+
+
+def paused_until(source: str) -> float:
+    """Epoch seconds until which `source` opens no page (0 when not paused)."""
+    try:
+        d = json.loads(PAUSE_PATH.read_text()).get(source) or {}
+        return datetime.fromisoformat(d["until"]).timestamp()
+    except (OSError, ValueError, KeyError, TypeError):
+        return 0.0
+
+
+def pause(source: str, until: datetime, why: str, log=print) -> None:
+    if paused_until(source) >= until.timestamp():
+        return
+    try:
+        d = json.loads(PAUSE_PATH.read_text())
+    except (OSError, ValueError):
+        d = {}
+    d[source] = {"until": until.isoformat(timespec="minutes"), "why": why,
+                 "at": datetime.now().isoformat(timespec="minutes")}
+    PAUSE_PATH.write_text(json.dumps(d, indent=1))
+    log(f"[window] {source} paused until {until:%d %b %H:%M} — {why}")
