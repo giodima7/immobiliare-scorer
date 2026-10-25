@@ -396,6 +396,12 @@ _DEFAULT_SETTINGS: dict = {
     "photo_contradicts_cap": 69,
     # A photo grade of this or less caps like a "contradicts" (rubric v2).
     "photo_grade_cap_max":   4,
+    # The photo grade moves the property score by up to ± this many points
+    # (linear from grade 4 to 9; 0 = photos only cap). See apply_photo_verdict.
+    "photo_grade_points":    15,       # 2026-10-25, measured: 2,331 scores move (953 ↑, 1,378 ↓), labels unchanged
+    # Days on market counted in the penalty score only for rentals.
+    "rent_dom_once":         False,
+    "rent_dom_tiers":        None,
     # A flat under small_brake_max_sqm whose all-in €/m² is more than
     # small_brake_ratio × what a normal-size flat asks in its zone: no label,
     # score capped (apply_small_flat_brake).
@@ -754,8 +760,10 @@ def property_parts(listing: dict, settings: dict | None = None) -> dict:
             parts['photos'] -= 0.05
 
     # ── Days on market (staleness penalty — not a property coefficient) ──────
+    # rent_dom_once: rentals count it in penalty_score only (it was taken
+    # off twice, −2.6 and −2.5 on the total past 60 days — 2026-10-25).
     dom = listing.get('days_on_market')
-    if dom is not None:
+    if dom is not None and not (settings.get("rent_dom_once") and listing.get("rent_mo")):
         parts['dom'] = 0.0
         if   dom > 60:  parts['dom'] -= 0.07
         elif dom > 30:  parts['dom'] -= 0.03
@@ -1032,7 +1040,12 @@ def penalty_score(listing: dict, settings: dict) -> int:
     # ── Very stale listing ──────────────────────────────────────────────────
     stale = settings.get("penalty_dom_stale", 60)
     warn  = settings.get("penalty_dom_warn",  30)
-    if dom > stale:
+    # rent_dom_tiers [[days, points], …]: graded by age for rentals — a
+    # flat online for 9 months is likelier let than one online for 2.
+    tiers = settings.get("rent_dom_tiers") if rent_mo else None
+    if tiers:
+        score -= next((pts for days, pts in sorted(tiers, reverse=True) if dom > days), 0)
+    elif dom > stale:
         score -= 25
     elif dom > warn:
         score -= 10
@@ -2160,7 +2173,8 @@ def load_photo_evals() -> dict:
     return evals
 
 
-def apply_photo_verdict(l: dict, evals: dict, cap: int, grade_max: float = 4) -> None:
+def apply_photo_verdict(l: dict, evals: dict, cap: int, grade_max: float = 4,
+                        grade_points: float = 0, w_property: float = 0.25) -> None:
     """Stamp what the photos showed (photo_* fields) when the answer is for
     the listing's current photos; a confident "contradicts" strips the deal
     label and caps the score at `cap` (reason in score_cap_reason)."""
@@ -2182,6 +2196,18 @@ def apply_photo_verdict(l: dict, evals: dict, cap: int, grade_max: float = 4) ->
         "photo_sonnet_deal": r.get("sonnet_deal") if r.get("by_user") else None,
         "photo_grade": r.get("grade"),
     })
+    # What the photos show counts in the property score, both ways: a 9/10
+    # adds grade_points, a 4/10 takes them off (2026-10-25, Immobiliare
+    # 125803325: 8.5/10, renovated, real bedroom — and property 51, since
+    # photos could only ever cap). Never above a cap already applied.
+    g = r.get("grade")
+    if grade_points and isinstance(g, (int, float)) and l.get("score_property") is not None:
+        adj = max(-1.0, min(1.0, (g - 6.5) / 2.5)) * grade_points
+        new_prop = max(0, min(100, round(l["score_property"] + adj)))
+        d_total = (new_prop - l["score_property"]) * w_property
+        l["score_property"] = new_prop
+        if d_total < 0 or not l.get("score_was_capped"):
+            l["score_total"] = max(0, min(100, round((l.get("score_total") or 0) + d_total)))
     # A photo stamped AFFITTATO / TOO LATE: the flat is gone (2026-10-19,
     # Idealista 34735598 "CASASI TOO LATE!" still listed, graded 8/10).
     if "rented_stamp" in (r.get("red_flags") or []):
@@ -2313,7 +2339,8 @@ def score_all(listings: list, settings: dict | None = None,
         apply_extreme_underpricing_flag(merged, merged.get("comps_delta_pct"))
         if photo_evals:
             apply_photo_verdict(merged, photo_evals, settings["photo_contradicts_cap"],
-                                settings.get("photo_grade_cap_max", 4))
+                                settings.get("photo_grade_cap_max", 4),
+                                settings.get("photo_grade_points", 0), settings.get("w_property", 0.25))
         if small_ref:
             apply_small_flat_brake(merged, small_ref, settings["small_brake_max_sqm"],
                                    settings.get("small_brake_ratio", 1.25),

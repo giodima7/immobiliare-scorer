@@ -368,7 +368,31 @@ function _metroMeta(l) {
   return `<span>${icon('train')}${escapeHtml(name + t('card.walk_min', { n: walk }))}</span>`;
 }
 
+// Days since the site published it (days_on_market as of the last scan).
+function daysOnline(l) {
+  if (l.published_date) {
+    const d = Math.floor((Date.now() - new Date(l.published_date)) / 86400000);
+    if (Number.isFinite(d) && d >= 0) return d;
+  }
+  return l.days_on_market ?? null;
+}
+
+// Online for over two months: shown instead of "seen N days ago" — a flat
+// still listed after months is often already let (2026-10-25, Immobiliare
+// 125803325: −20 %, 8.5/10 photos, online since January).
+const LONG_ONLINE_DAYS = 60;
+function _longOnlineText(l) {
+  const d = daysOnline(l);
+  if (d == null || d <= LONG_ONLINE_DAYS) return null;
+  return t('card.online_months', { n: fmt(Math.floor(d / 30)) });
+}
+
 function _freshMeta(l) {
+  const long = _longOnlineText(l);
+  if (long) {
+    const since = l.published_date ? fmtDate(new Date(l.published_date)) : '';
+    return `<span class="meta-warn" title="${escapeHtml(t('card.online_tip', { date: since }))}">${icon('clock')}${escapeHtml(long)}</span>`;
+  }
   const days = _daysSinceFirstSeen(l);
   if (days == null) return '';
   const earlier = days <= 3 && _listedEarlier(l);

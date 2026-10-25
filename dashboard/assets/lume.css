@@ -3646,6 +3646,9 @@ body[data-tab="saved"] #rActiveChips, body[data-tab="insights"] #rActiveChips, b
 .card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; font-size: var(--text-xs); color: var(--text-secondary); }
 .card-meta > span { display: inline-flex; align-items: center; gap: 4px; }
 .card-meta .i { width: 14px; height: 14px; }
+.card-meta .meta-warn { color: var(--amber-ink); }
+.lm-online { display: flex; align-items: center; gap: 6px; color: var(--amber-ink); }
+.lm-online .i { width: 14px; height: 14px; }
 .card-meta .near { color: var(--green-ink); font-weight: 600; }
 .card-meta .fresh { color: var(--blue-ink); font-weight: 600; }
 .was-price { margin: 0; font-size: var(--text-xs); color: var(--green-ink); }
