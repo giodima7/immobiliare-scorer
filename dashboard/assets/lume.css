@@ -4073,3 +4073,5 @@ body.pv-open { overflow: hidden; }
 .lm-seen-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .lm-seen-feats { font-size: var(--text-xs); color: var(--text-secondary); margin-top: 6px; }
 .fy-chip.good { background: var(--green-light, var(--bg-muted)); color: var(--green-ink); }
+
+.user-avatar-img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
