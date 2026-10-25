@@ -4076,3 +4076,13 @@ body.pv-open { overflow: hidden; }
 .fy-chip.good { background: var(--green-light, var(--bg-muted)); color: var(--green-ink); }
 
 .user-avatar-img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
+
+/* Tools → photo reading (settings.js loadPhotoStatus) */
+.ps-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.ps-tile { background: var(--bg-muted); border-radius: 12px; padding: 10px 12px; }
+.ps-k, .ps-s { font-size: var(--text-xs); color: var(--text-secondary); }
+.ps-v { font-size: 20px; font-weight: 600; margin: 2px 0; }
+.ps-of { font-size: var(--text-sm); font-weight: 400; color: var(--text-secondary); }
+.ps-bar { grid-column: 1 / -1; height: 6px; border-radius: 999px; background: var(--bg-muted); overflow: hidden; }
+.ps-bar span { display: block; height: 100%; background: var(--green-deep); }
+@media (max-width: 720px) { .ps-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

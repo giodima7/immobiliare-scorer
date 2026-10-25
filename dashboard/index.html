@@ -1156,6 +1156,17 @@
   <!-- ── Sale areas (sales_scan.py) ─────────────────────────────────
        Which macro-areas the scanners read for sale, and the price / rooms
        limits. sales.js loadSaleAreasCard → /api/sale-areas. -->
+  <!-- Photo reading (Sonnet): photo_eval.status via /api/photo-status, polled while Tools is open. -->
+  <div class="settings-card" id="photoStatusCard" hidden>
+    <div class="settings-card-header">
+      <div>
+        <h2 class="settings-card-title"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#photo"></use></svg> <span data-i18n="ps.title">Photo reading</span></h2>
+        <p class="settings-card-subtitle" data-i18n="ps.sub">Sonnet reads the photos, plan and description of listings scored 70+. It draws on your Claude plan, so it stops at a daily budget.</p>
+      </div>
+    </div>
+    <div class="ps-grid" id="photoStatus"></div>
+  </div>
+
   <div class="settings-card" id="saleAreasCard" hidden>
     <div class="settings-card-header">
       <div>

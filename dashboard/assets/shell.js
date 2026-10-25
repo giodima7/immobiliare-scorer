@@ -493,6 +493,8 @@ async function init() {
         _scannerCard.hidden = false;
         if (typeof _renderCityScanGrid === 'function') _renderCityScanGrid();
       }
+      if (typeof loadPhotoStatus === 'function') loadPhotoStatus();
+      if (typeof loadSaleAreasCard === 'function') loadSaleAreasCard();
     }
     if (activeTab === 'settings' || activeTab === 'rentals') startScannerPoll();
     const _staleGroup = document.getElementById('rShowStaleGroup');
@@ -659,6 +661,7 @@ function switchTab(tab, opts) {
     startScannerPoll();
     _settingsLoad();
     if (typeof loadSaleAreasCard === 'function') loadSaleAreasCard();
+    if (typeof loadPhotoStatus === 'function') loadPhotoStatus();
     _loadScoreSettings();
     ensureChart().catch(() => {}).finally(() => _dqLoad());
     if (typeof initCollapsibleCards === 'function') initCollapsibleCards();
