@@ -66,6 +66,7 @@ async function _loadSalesNow() {
     ...Object.entries(n).sort((a, b) => b[1] - a[1]).map(([k, c]) => ({ key: k, label: `${k} · ${fmt(c)}` })));
   _saleLoading = false;
   renderSales();
+  if (typeof activeTab !== 'undefined' && activeTab === 'foryou' && typeof renderForYou === 'function') renderForYou();
 }
 
 // ── Filter bar ───────────────────────────────────────────────────────────────
@@ -470,7 +471,7 @@ function saleModalHtml(l) {
       <div class="lm-verdict-head">${esc(v.head)}</div>
       ${v.sub ? `<div class="lm-verdict-sub">${esc(v.sub)}</div>` : ''}
     </div>
-    ${typeof _lmPhotoVerdict === 'function' ? _lmPhotoVerdict(l) + _lmPhotoFeedbackHtml(l) : ''}
+    ${typeof _lmPhotoVerdict === 'function' ? _lmPhotoVerdict(l) + _lmSeenHtml(l) + _lmPhotoFeedbackHtml(l) : ''}
 
     <div class="lm-money">
       <span class="lm-rent">€${fmt(l.price)}</span>

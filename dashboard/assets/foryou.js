@@ -12,7 +12,10 @@ const FY_PAGE = 6;                       // cards per list, "show more" adds as 
 
 let _fyMsd = null;
 const _FY_AREA_ITEMS = [];
-const _fyShown = { solo: FY_PAGE, duo: FY_PAGE, buy: FY_PAGE };
+const FY_NEAR_PAGE = 3;                  // "near your zones": a shorter list below
+const _FY_SHOWN0 = { solo: FY_PAGE, duo: FY_PAGE, buy: FY_PAGE,
+                     soloNear: FY_NEAR_PAGE, duoNear: FY_NEAR_PAGE, buyNear: FY_NEAR_PAGE };
+const _fyShown = { ..._FY_SHOWN0 };
 
 function fyProfile() {
   return Object.assign({}, FY_DEFAULTS, Storage.get('forYou', {}));
@@ -82,11 +85,14 @@ function _fyZone(l, p, centres) {
   return { fit: 0.3 + 0.7 * (1 - _clamp01(out / FY_NEAR_KM)), km: near.km, zone: near.z.name };
 }
 
-// Never proposed: a price too low to trust, a room let, a basement, no bedroom.
+// Never proposed: a price too low to trust, a room let, a basement, no
+// bedroom, photos that contradict the deal (a grade of 4 or less, or the
+// user's own "not convincing").
 function _fyLiveable(l) {
   return !l.is_stale && !l.excluded && !l._excluded && !l.price_suspect && !l.extreme_underpricing
          && !l._extreme_underpricing && !l.is_room_let && !(l.floor_n != null && l.floor_n < 0)
-         && !(l.photo_flags || []).includes('no_bedroom');
+         && !(l.photo_flags || []).includes('no_bedroom')
+         && l.photo_deal !== 'contradicts' && !(typeof l.photo_grade === 'number' && l.photo_grade <= 4);
 }
 
 const _grade = l => (typeof l.photo_grade === 'number' ? l.photo_grade : null);
@@ -137,8 +143,20 @@ function _fyCommonLive(l, why) {
     parts.push(0.3); why.push({ bad: true, w: 2, t: t_('fy.w_nolift', { n: l.floor_n }) });
   }
   if (l.has_balcony) { parts.push(0.9); why.push({ w: 1, t: t_('fy.w_balcony') }); }
+  // What Sonnet saw (details.js PHOTO_TAGS): pluses and minuses an agent
+  // would point out — light, room sizes, old windows, a windowless bathroom…
+  const tags = (l.photo_tags || []).filter(k => typeof PHOTO_TAGS !== 'undefined' && k in PHOTO_TAGS);
+  if (tags.length) {
+    const net = tags.reduce((s, k) => s + PHOTO_TAGS[k], 0);
+    parts.push(_clamp01(0.55 + 0.12 * net));
+    for (const k of tags) why.push({ bad: PHOTO_TAGS[k] < 0, w: _FY_TAG_W[k] || 1, t: t_('ptag.' + k) });
+  }
   return parts;
 }
+// The tags that weigh most in a choice to live there.
+const _FY_TAG_W = { bright: 3, dark: 3, damp: 3, windowless_bathroom: 2, big_living: 2, quiet_courtyard: 2,
+                    busy_street: 2, new_bathroom: 2, recently_renovated: 2, walk_through_rooms: 2, cramped: 2,
+                    plan_mismatch: 3, cracks: 3, old_windows: 2, small_bathroom: 2 };
 
 const _avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0.6;
 
@@ -160,10 +178,13 @@ function _fyLiveDuo(l, why) {
     parts.push(each < 25 ? 0.2 : each < 32 ? 0.6 : 1);
     if (each >= 35) why.push({ w: 2, t: t_('fy.w_each_sqm', { n: Math.round(each) }) });
   }
-  if ((l.bathrooms || 0) >= 2) { parts.push(1); why.push({ w: 3, t: t_('fy.w_baths') }); }
+  const f = l.photo_features || {};
+  const baths = l.bathrooms ?? f.bathrooms;
+  if ((baths || 0) >= 2) { parts.push(1); why.push({ w: 3, t: t_('fy.w_baths') }); }
   else parts.push(0.5);
-  // A living room besides the two bedrooms.
-  if (l.rooms && l.bedrooms) parts.push(l.rooms > l.bedrooms ? 1 : 0.4);
+  // A living room besides the two bedrooms — the photos tell when the site doesn't.
+  if (f.separate_living != null) parts.push(f.separate_living ? 1 : 0.3);
+  else if (l.rooms && l.bedrooms) parts.push(l.rooms > l.bedrooms ? 1 : 0.4);
   return _avg(parts);
 }
 
@@ -211,7 +232,7 @@ function _fyScore(l, kind, p, b, loan, centres) {
   const trust = _fyTrust(l, why);
   const fit = 100 * (FY_W.deal * (l.score_total || 0) / 100 + FY_W.live * live + FY_W.budget * room
                      + FY_W.trust * trust + FY_W.zone * zone.fit);
-  return { l, fit: Math.round(fit), why };
+  return { l, fit: Math.round(fit), why, near: zone.km != null };
 }
 
 // Best first, with at most FY_PER_ZONE from one neighbourhood on the first page.
@@ -228,14 +249,21 @@ function _fyOrder(scored) {
 
 function fyLists(p = fyProfile()) {
   const b = fyBudgets(p), loan = _fyLoan(), centres = _fyZoneCentres(p.areas);
-  const run = (rows, kind, ok) => _fyOrder(rows.filter(l => ok(l) && _fyLiveable(l))
-    .map(l => _fyScore(l, kind, p, b, loan, centres)).filter(Boolean));
+  // Inside the chosen zones, and — kept apart, never mixed in — up to
+  // FY_NEAR_KM outside them (the user: "you don't respect my request if you
+  // put in listings from other zones").
+  const run = (rows, kind, ok) => {
+    const all = rows.filter(l => ok(l) && _fyLiveable(l))
+      .map(l => _fyScore(l, kind, p, b, loan, centres)).filter(Boolean);
+    return [_fyOrder(all.filter(s => !s.near)), _fyOrder(all.filter(s => s.near))];
+  };
   const rents = (ALL_RENT || []).filter(l => l.rent_mo);
-  const solo = run(rents, 'solo', l => (l.rooms || 0) >= 2 && (l.bedrooms == null || l.bedrooms >= 1));
-  // Two bedrooms — or three rooms when the bedrooms aren't known.
-  const duo = run(rents, 'duo', l => (l.bedrooms != null ? l.bedrooms >= 2 : (l.rooms || 0) >= 3));
-  const buy = run((ALL_SALE || []).filter(l => l.price), 'buy', () => true);
-  return { b, solo, duo, buy };
+  const [solo, soloNear] = run(rents, 'solo', l => (l.rooms || 0) >= 2 && (l.bedrooms == null || l.bedrooms >= 1));
+  // Two bedrooms the site or the photos confirm — not "3 rooms, so 2
+  // bedrooms" (8 % of trilocali have one: id_37182070).
+  const [duo, duoNear] = run(rents, 'duo', l => (l.bedrooms ?? 0) >= 2);
+  const [buy, buyNear] = run((ALL_SALE || []).filter(l => l.price), 'buy', () => true);
+  return { b, solo, soloNear, duo, duoNear, buy, buyNear };
 }
 
 // "Why this one": the best three reasons and the main caveat.
@@ -269,7 +297,7 @@ function renderForYou() {
       set(id, `<div class="empty-state">${escapeHtml(t('fy.enter_pay'))}</div>`));
     return;
   }
-  const { b, solo, duo, buy } = fyLists(p);
+  const { b, solo, soloNear, duo, duoNear, buy, buyNear } = fyLists(p);
   const mo = `<span class="fy-unit">${escapeHtml(t('fy.per_month'))}</span>`;
   set('fyOutSolo', '€' + fmt(Math.round(b.solo)) + mo);
   set('fyOutDuo', '€' + fmt(Math.round(b.duo)) + mo);
@@ -282,8 +310,29 @@ function renderForYou() {
   set('fyHeadBuy', escapeHtml(t('fy.head_buy', { v: fmt(b.buy), n: fmt(buy.length) })));
 
   _fyRentGrid('fyGridSolo', solo, 'solo', null);
+  _fyNear('fyGridSolo', soloNear, 'soloNear', (id, l, k) => _fyRentGrid(id, l, k, null));
   _fyRentGrid('fyGridDuo', duo, 'duo', 2);
-  _fyBuyGrid(buy);
+  _fyNear('fyGridDuo', duoNear, 'duoNear', (id, l, k) => _fyRentGrid(id, l, k, 2));
+  _fyBuyGrid('fyGridBuy', buy, 'buy');
+  _fyNear('fyGridBuy', buyNear, 'buyNear', _fyBuyGrid);
+}
+
+// "Near your zones": its own block under a list, only when there are any.
+function _fyNear(gridId, list, key, render) {
+  const grid = document.getElementById(gridId);
+  if (!grid) return;
+  let box = document.getElementById(gridId + 'Near');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = gridId + 'Near';
+    box.className = 'fy-near';
+    grid.after(box);
+  }
+  box.hidden = !list.length;
+  if (!list.length) { box.innerHTML = ''; return; }
+  box.innerHTML = `<h4 class="fy-near-head">${icon('map-pin')}<span>${escapeHtml(t('fy.near_head', { n: fmt(list.length) }))}</span></h4>
+    <p class="fy-sub">${escapeHtml(t('fy.near_sub'))}</p><div class="grid" id="${gridId}NearGrid"></div>`;
+  render(gridId + 'NearGrid', list, key);
 }
 
 function _fyMore(grid, list, key) {
@@ -297,7 +346,7 @@ function _fyRentGrid(id, list, key, split) {
   const grid = document.getElementById(id);
   if (!grid) return;
   grid.innerHTML = '';
-  if (!list.length) { grid.innerHTML = `<div class="empty-state">${escapeHtml(t('fy.none'))}</div>`; return; }
+  if (!list.length) { grid.innerHTML = `<div class="empty-state">${escapeHtml(t(key.endsWith('Near') ? 'fy.none' : 'fy.none_zones'))}</div>`; return; }
   for (const s of list.slice(0, _fyShown[key])) {
     const card = renderRentalCard(s.l);
     const price = card.querySelector('.card-price');
@@ -312,12 +361,12 @@ function _fyRentGrid(id, list, key, split) {
   _fyMore(grid, list, key);
 }
 
-function _fyBuyGrid(list) {
-  const grid = document.getElementById('fyGridBuy');
+function _fyBuyGrid(id, list, key) {
+  const grid = document.getElementById(id);
   if (!grid) return;
-  if (!list.length) { grid.innerHTML = `<div class="empty-state">${escapeHtml(t('fy.none'))}</div>`; return; }
+  if (!list.length) { grid.innerHTML = `<div class="empty-state">${escapeHtml(t(key.endsWith('Near') ? 'fy.none' : 'fy.none_zones'))}</div>`; return; }
   const loan = _fyLoan();
-  const shown = list.slice(0, _fyShown.buy);
+  const shown = list.slice(0, _fyShown[key]);
   grid.innerHTML = shown.map(s => saleCardHtml(s.l, loan)).join('');
   // Rent or buy: what owning costs a month next to what renting it would.
   grid.querySelectorAll('.card').forEach((card, i) => {
@@ -329,7 +378,7 @@ function _fyBuyGrid(list) {
         rent ? ` · ${escapeHtml(t('fy.vs_rent', { v: fmt(Math.round(rent / 10) * 10) }))}` : ''}</div>${_fyWhyHtml(s)}`);
   });
   if (typeof _observeScoreRings === 'function') _observeScoreRings(grid, false);
-  _fyMore(grid, list, 'buy');
+  _fyMore(grid, list, key);
 }
 
 // ── Form ──────────────────────────────────────────────────────────────────────
@@ -349,7 +398,7 @@ function _fyInitPrefs(p) {
 
 function _fySave(patch) {
   Storage.set('forYou', Object.assign(fyProfile(), patch));
-  _fyShown.solo = _fyShown.duo = _fyShown.buy = FY_PAGE;
+  Object.assign(_fyShown, _FY_SHOWN0);
   renderForYou();
 }
 

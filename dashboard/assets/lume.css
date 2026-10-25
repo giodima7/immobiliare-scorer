@@ -4050,6 +4050,8 @@ body.pv-open { overflow: hidden; }
 .fy-head { font-size: var(--text-lg, 18px); font-weight: 600; margin: 0; gap: 8px; }
 .fy-head .i { width: 20px; height: 20px; }
 .fy-sub { font-size: var(--text-xs); color: var(--text-secondary); margin: 2px 0 var(--s-3, 12px); }
+.fy-near { margin-top: var(--s-4, 16px); padding: var(--s-3, 12px) var(--s-4, 16px) var(--s-4, 16px); border: 1px dashed var(--border); border-radius: 14px; }
+.fy-near-head { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-sm); font-weight: 600; margin: 0; }
 .fy-each { font-size: var(--text-xs); color: var(--green-ink); font-weight: 600; }
 .fy-own { font-size: var(--text-xs); color: var(--text-secondary); margin: -2px 0 4px; }
 .fy-more { grid-column: 1 / -1; display: flex; justify-content: center; padding-top: 4px; }
@@ -4063,3 +4065,11 @@ body.pv-open { overflow: hidden; }
   .fy-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .fy-tiles { grid-template-columns: 1fr; }
 }
+
+/* What Sonnet saw (details.js _lmSeenHtml) */
+.lm-seen { margin-top: var(--s-2, 8px); padding: 10px 12px; border-radius: 12px; background: var(--bg-muted); }
+.lm-seen-head { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-sm); font-weight: 600; }
+.lm-seen-head .i { width: 15px; height: 15px; }
+.lm-seen-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.lm-seen-feats { font-size: var(--text-xs); color: var(--text-secondary); margin-top: 6px; }
+.fy-chip.good { background: var(--green-light, var(--bg-muted)); color: var(--green-ink); }

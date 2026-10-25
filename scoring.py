@@ -2145,7 +2145,7 @@ PHOTO_EVALS_PATH = Path(__file__).resolve().parent / "photo_eval_milano.json"
 PHOTO_FIELDS = ("photo_deal", "photo_confidence", "photo_condition", "photo_kitchen",
                 "photo_bathroom", "photo_light", "photo_flags", "photo_note_it",
                 "photo_note_en", "photo_read_at", "photo_by_user", "photo_user_note",
-                "photo_sonnet_deal", "photo_grade")
+                "photo_sonnet_deal", "photo_grade", "photo_bedrooms", "photo_features", "photo_tags")
 
 
 def load_photo_evals() -> dict:
@@ -2205,7 +2205,15 @@ def apply_photo_verdict(l: dict, evals: dict, cap: int, grade_max: float = 4,
         "photo_by_user": r.get("by_user") or None, "photo_user_note": r.get("user_note"),
         "photo_sonnet_deal": r.get("sonnet_deal") if r.get("by_user") else None,
         "photo_grade": r.get("grade"),
+        "photo_bedrooms": r.get("bedrooms"),
+        "photo_features": r.get("features") or None,
+        "photo_tags": r.get("tags") or None,
     })
+    # Bedrooms the site doesn't state: Sonnet's count from photos, plan and
+    # description (bedrooms_from "photos" — a listing page's own figure
+    # replaces it, listing_details.apply_details).
+    if isinstance(r.get("bedrooms"), int) and (l.get("bedrooms") is None or l.get("bedrooms_from") == "photos"):
+        l["bedrooms"], l["bedrooms_from"] = r["bedrooms"], "photos"
     # What the photos show counts in the property score, both ways: a 9/10
     # adds grade_points, a 4/10 takes them off (2026-10-25, Immobiliare
     # 125803325: 8.5/10, renovated, real bedroom — and property 51, since

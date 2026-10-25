@@ -219,10 +219,13 @@ def apply_details(listings: list, cache: dict | None = None) -> int:
                 continue
             cur = l.get(k)
             if (cur is None
+                    or (k == "bedrooms" and l.get("bedrooms_from") == "photos")
                     or (k in CARD_YES_ONLY and l.get("source") == "idealista")
                     or (k == "condition" and _condition_unknown(cur))
                     or (k == "photos" and len(v) > len(cur or []))):
                 l[k] = v
+        if (e.get("fields") or {}).get("bedrooms") is not None:
+            l.pop("bedrooms_from", None)         # the page says how many
         l["detail_fetched_at"] = e.get("fetched_at")
         if l.get("days_on_market") is None and l.get("published_date"):
             try:

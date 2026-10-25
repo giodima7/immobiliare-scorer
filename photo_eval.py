@@ -221,6 +221,7 @@ def context(l: dict) -> dict:
            else {"rent_eur_month": l.get("rent_mo") or l.get("price")}),
         "sqm": l.get("sqm"),
         "rooms": l.get("rooms"),
+        "bedrooms": l.get("bedrooms"),
         "floor": floor,
         "lift": l.get("elevator"),
         "discount_vs_nearby_pct": l.get("comps_sale_delta_pct") if _is_sale(l) else l.get("comps_delta_pct"),
@@ -259,7 +260,8 @@ def cmd_select(args) -> None:
     # searches and the labelled deals first.
     seen_ids = {str(l["id"]) for l in todo}
     again = [l for l in top if str(l["id"]) not in seen_ids
-             and (outdated(done.get(str(l["id"]))) or missed_words(done.get(str(l["id"])), l))]
+             and (outdated(done.get(str(l["id"]))) or missed_words(done.get(str(l["id"])), l)
+                  or needs_bedrooms(done.get(str(l["id"])), l))]
     # Where the user searches, then labelled deals and the ones a photo
     # verdict capped (they may get their label back), then the rest.
     again.sort(key=lambda l: (not in_focus(l),
@@ -492,7 +494,8 @@ def cmd_run(args) -> None:
     queue = [it for it in queue if _sheets_ready(it)]
     res = load_results()
     queue = [it for it in queue if res.get(it["id"], {}).get("fingerprint") != fingerprint(it["photos"])
-             or outdated(res.get(it["id"])) or missed_words(res.get(it["id"]), it)]
+             or outdated(res.get(it["id"])) or missed_words(res.get(it["id"]), it)
+             or needs_bedrooms(res.get(it["id"]), it)]
     if args.limit:
         queue = queue[: args.limit]
     rubric = PROMPT.read_text() + calibration_text()
@@ -541,14 +544,14 @@ def cmd_run(args) -> None:
 
 
 # ── ingest / store ───────────────────────────────────────────────────────────
-FIELDS = ("photos_usable", "rooms_seen", "condition", "kitchen", "bathroom", "renovation_era",
+FIELDS = ("photos_usable", "rooms_seen", "bedrooms", "features", "tags", "condition", "kitchen", "bathroom", "renovation_era",
           "furnishing", "furniture_quality", "light", "space", "grade", "red_flags", "deal_check",
           "confidence", "note_it", "note_en")
 # The rubric's version: 2 (2026-10-18) added the 1–10 grade and the attic /
 # no-bedroom / tiny-kitchen / rooms-not-shown flags, after the user's
 # examples. Readings of an older version are re-read (focus areas and
 # labelled listings first, after the unread ones — cmd_select).
-RUBRIC_VERSION = 4
+RUBRIC_VERSION = 5
 # 3 (2026-10-19): unseen rooms lower the confidence, not the grade (the user:
 # "not shown is missing information, why penalise it"). Only v2 readings
 # that flagged rooms_not_shown / few_photos are read again (1,374 of 1,803).
@@ -561,6 +564,13 @@ INFO_FLAGS = {"rooms_not_shown", "few_photos"}
 # read as "separate bedroom visible"). Every older reading is read again.
 
 
+# 5 (2026-10-25): bedrooms counted only where a bed or the plan shows one,
+# plus features the listing doesn't state (bathrooms, balcony, AC, kitchen
+# type…) and up to 8 tags from a fixed list — what an agent or a surveyor
+# points out (big living room, old windows, windowless bathroom, damp, plan
+# not matching the photos…). Every older reading is read again.
+
+
 def missed_words(r: dict | None, l: dict) -> bool:
     """Read before the listing's description or floor plan was known — they
     arrive with the night's page reads (129900526: "letto King" in the
@@ -570,6 +580,15 @@ def missed_words(r: dict | None, l: dict) -> bool:
         return False
     return bool((l.get("description") and not r.get("saw_text"))
                 or (l.get("floorplans") and not r.get("saw_plan")))
+
+
+def needs_bedrooms(r: dict | None, l: dict) -> bool:
+    """Read before Sonnet counted bedrooms, for a flat of 3+ rooms whose site
+    doesn't say how many (Idealista: 1,424 trilocali and up; 8 % of the
+    trilocali that do say have one bedroom — id_37182070 was proposed to
+    share as two)."""
+    return bool(r) and not r.get("by_user") and "bedrooms" not in r \
+        and (l.get("rooms") or 0) >= 3 and l.get("bedrooms") is None
 
 
 def outdated(r: dict | None) -> bool:
@@ -648,6 +667,16 @@ def cmd_report(args) -> None:
 
 # ── Nightly ──────────────────────────────────────────────────────────────────
 NIGHTLY_MAX = 40        # listings per call (5 claude calls; ~2k tokens each)
+# Listings read per day, all callers together: claude -p draws on the user's
+# weekly plan (2026-10-25: 40 % of the week used, "split it up"). New and
+# changed listings come first (cmd_select), re-reads after.
+DAILY_MAX = 150
+
+
+def read_today() -> int:
+    today = datetime.now().date().isoformat()
+    return sum(1 for r in load_results().values()
+               if not r.get("by_user") and str(r.get("read_at") or "").startswith(today))
 
 
 def nightly(log=print, limit: int = NIGHTLY_MAX) -> int:
@@ -669,6 +698,11 @@ def nightly(log=print, limit: int = NIGHTLY_MAX) -> int:
         lock.close()
         return 0
     try:
+        left = DAILY_MAX - read_today()
+        if left <= 0:
+            log(f"[photos] daily budget used ({DAILY_MAX}) — next reading tomorrow")
+            return 0
+        limit = min(limit, left)
         before = len(load_results())
         cmd_select(types.SimpleNamespace(pilot=None, seed=7, min_score=MIN_SCORE, gems=True))
         queue = json.loads(QUEUE.read_text())

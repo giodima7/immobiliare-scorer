@@ -59,6 +59,37 @@ Fields, one object per listing, in the order given:
   "id": "<listing id>",
   "photos_usable": true | false,        // false when there are no interior photos
   "rooms_seen": ["kitchen","bathroom","living","bedroom","floor_plan","exterior","other"],
+  "bedrooms": <integer or null — count a bedroom only where a photo shows a
+               bed in its own room, or where the floor plan or the description
+               names it ("camera", "letto"); a room with only a sofa, a desk or
+               a table is a living room or study, not a bedroom; a bed or sofa
+               bed in the living room, the entrance or on a loft doesn't count;
+               null when you can't tell — never guess from the number of rooms>,
+  "features": {                         // what the photos, plan or description show; null when they don't
+    "bathrooms": <integer or null>,
+    "balcony": true | false | null,     "terrace": true | false | null,
+    "air_conditioning": true | false | null,   // split units seen
+    "kitchen_type": "separate" | "eat_in" | "open" | "kitchenette" | null,
+    "separate_living": true | false | null,    // a living room apart from the bedrooms
+    "washing_machine": true | false | null,    "dishwasher": true | false | null,
+    "floors": "parquet" | "tiles" | "marble" | "terrazzo" | "other" | null,
+    "view": "open" | "street" | "courtyard" | "wall" | null
+  },
+  "tags": [ up to 8 of these, only what the photos, plan or description clearly
+            show — what an estate agent or surveyor would point out:
+     space:      "big_living", "big_bedroom", "big_kitchen", "night_zone_apart",
+                 "storage", "high_ceilings",
+                 "small_living", "small_bedroom", "small_bathroom", "walk_through_rooms",
+                 "long_corridor", "cramped", "low_ceilings",
+     light:      "bright", "big_windows", "open_view", "quiet_courtyard", "dual_aspect",
+                 "dark", "small_windows", "facing_wall", "busy_street",
+     finishes:   "new_bathroom", "new_kitchen", "recently_renovated", "new_windows",
+                 "armoured_door", "air_conditioning", "bathroom_window",
+                 "dated_bathroom", "dated_kitchen", "old_windows", "old_radiators",
+                 "exposed_wiring", "windowless_bathroom", "worn_floors",
+     problems:   "damp", "cracks", "plan_mismatch",   // plan ≠ what the photos show
+     furniture:  "modern_furniture", "period_features", "dated_furniture", "mismatched_furniture",
+     building:   "smart_entrance", "good_facade", "shabby_building" ],
   "condition": 1-5 | null,
   "kitchen": 1-5 | null,
   "bathroom": 1-5 | null,

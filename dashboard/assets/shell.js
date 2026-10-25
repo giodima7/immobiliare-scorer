@@ -388,10 +388,12 @@ async function applyStaticMode() {
 
   // Public mode: hide Settings tab only
   hide('tabSettings');
-  // Ensure rentals tab is active on initial load
+  // Highlight the tab that is open (a restored one — For you, Map — too;
+  // this used to light Rentals whatever was showing).
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  const rentTab = document.getElementById('tabRentals');
-  if (rentTab) rentTab.classList.add('active');
+  const curTab = document.querySelector(`.tab-btn[data-tab="${typeof activeTab !== 'undefined' ? activeTab : 'rentals'}"]`)
+              || document.getElementById('tabRentals');
+  if (curTab) curTab.classList.add('active');
 
   // The Snapshot pill and the CI pill expose self-hosted-runner state —
   // useful when working locally against the scanner, meaningless to a
@@ -624,9 +626,9 @@ function switchTab(tab, opts) {
   if (tab === 'foryou') {
     stopScannerPoll();
     renderForYou();
-    // Both kinds of listing feed it; render again as each arrives.
-    if (!ALL_RENT.length) loadRentals().then(() => { if (activeTab === 'foryou') renderForYou(); });
-    if (!ALL_SALE.length) loadSales().then(() => { if (activeTab === 'foryou') renderForYou(); });
+    // Both kinds of listing feed it; their loaders render it again as each arrives.
+    if (!ALL_RENT.length) loadRentals();
+    if (!ALL_SALE.length) loadSales();
   } else if (tab === 'rentals') {
     startScannerPoll();
     if (!ALL_RENT.length) loadRentals();
