@@ -272,6 +272,40 @@ function _lmPhotoVerdict(l) {
     </div>`;
 }
 
+// What Sonnet saw that the listing doesn't say (rubric v5, 2026-10-25): its
+// features and up to 8 tags from a fixed list — what an agent or a surveyor
+// would point out. +1 a plus, −1 a minus.
+const PHOTO_TAGS = {
+  big_living: 1, big_bedroom: 1, big_kitchen: 1, night_zone_apart: 1, storage: 1, high_ceilings: 1,
+  small_living: -1, small_bedroom: -1, small_bathroom: -1, walk_through_rooms: -1, long_corridor: -1,
+  cramped: -1, low_ceilings: -1,
+  bright: 1, big_windows: 1, open_view: 1, quiet_courtyard: 1, dual_aspect: 1,
+  dark: -1, small_windows: -1, facing_wall: -1, busy_street: -1,
+  new_bathroom: 1, new_kitchen: 1, recently_renovated: 1, new_windows: 1, armoured_door: 1,
+  air_conditioning: 1, bathroom_window: 1,
+  dated_bathroom: -1, dated_kitchen: -1, old_windows: -1, old_radiators: -1, exposed_wiring: -1,
+  windowless_bathroom: -1, worn_floors: -1,
+  damp: -1, cracks: -1, plan_mismatch: -1,
+  modern_furniture: 1, period_features: 1, dated_furniture: -1, mismatched_furniture: -1,
+  smart_entrance: 1, good_facade: 1, shabby_building: -1,
+};
+
+function _lmSeenHtml(l) {
+  const tags = (l.photo_tags || []).filter(k => k in PHOTO_TAGS)
+    .sort((a, b) => PHOTO_TAGS[b] - PHOTO_TAGS[a]);
+  const f = l.photo_features || {};
+  const val = (k, v) => v === true ? t('pfeat.' + k) : v === false ? t('pfeat.no_' + k)
+                      : typeof v === 'number' ? t('pfeat.' + k + '_n', { n: v }) : t('pfeat.' + k + '.' + v);
+  const feats = Object.entries(f).filter(([, v]) => v != null && v !== '').map(([k, v]) => val(k, v));
+  if (!tags.length && !feats.length) return '';
+  return `<div class="lm-seen">
+      <div class="lm-seen-head">${icon('eye')} ${escapeHtml(t('pfeat.title'))}</div>
+      ${tags.length ? `<div class="lm-seen-tags">${tags.map(k =>
+        `<span class="fy-chip ${PHOTO_TAGS[k] < 0 ? 'warn' : 'good'}">${escapeHtml(t('ptag.' + k))}</span>`).join('')}</div>` : ''}
+      ${feats.length ? `<div class="lm-seen-feats">${escapeHtml(feats.join(' · '))}</div>` : ''}
+    </div>`;
+}
+
 // "What do you think of the photos?" — the user's verdict on what Sonnet
 // read (api.py /api/photo-feedback): it applies to this listing at once
 // and teaches the next readings. Local dashboard only.
@@ -432,6 +466,7 @@ function listingModalHtml(l) {
       ${v.sub ? `<div class="lm-verdict-sub">${esc(v.sub)}</div>` : ''}
     </div>
     ${_lmPhotoVerdict(l)}
+    ${_lmSeenHtml(l)}
     ${_lmPhotoFeedbackHtml(l)}
 
     <div class="lm-money">

@@ -426,6 +426,7 @@ async function _loadRentalsNow() {
   if (typeof activeTab !== 'undefined') {
     if (activeTab === 'insights' && typeof showInsightsTab === 'function') showInsightsTab();
     if (activeTab === 'map' && typeof _mapRender === 'function') _mapRender();
+    if (activeTab === 'foryou' && typeof renderForYou === 'function') renderForYou();
   }
 }
 
