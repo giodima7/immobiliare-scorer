@@ -448,8 +448,12 @@ function _syncAccountData(user) {
       localStorage.setItem(Storage.key(k), JSON.stringify(r.v));
       localStorage.setItem(atKey, String(r.at));
       changed = true;
-    } else if (local != null && localAt > (r.at || 0)) {
-      push = true;                                     // this browser's is newer
+    } else if (local != null && (r.v == null || localAt > (r.at || 0))) {
+      // The account has none yet, or this browser's is newer. Items saved
+      // before this sync existed carry no time: give them one now, or the
+      // 0-vs-0 comparison never sent them (the first version's bug).
+      if (!localAt) localStorage.setItem(atKey, String(Date.now()));
+      push = true;
     }
   }
   if (push) _pushAccountData();
