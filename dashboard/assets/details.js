@@ -417,6 +417,7 @@ function listingModalHtml(l) {
       <h2 id="lmTitle">${esc([formatAddress(l.neighbourhood), l.address ? formatAddress(l.address) : ''].filter(Boolean).join(' · ')
                               || (l.title || '').trim() || '–')}</h2>
       <div class="lm-sub">${esc(site)}${subito ? ' · ' + esc(t('card.private')) : ''}${_lmAlsoOn(l)} · ID ${id}${l.first_seen_date ? ' · ' + esc(t('lm.first_seen', { date: _lmDate(l.first_seen_date) })) : ''}</div>
+      ${_longOnlineText(l) ? `<div class="lm-cap lm-online">${icon('clock')} ${esc(_longOnlineText(l))} — ${esc(t('card.online_ask'))}</div>` : ''}
     </div>
     <button type="button" class="btn btn-secondary btn-icon lm-close" aria-label="${esc(t('lm.close'))}">${icon('x')}</button>
   </div>

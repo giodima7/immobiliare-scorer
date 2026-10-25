@@ -207,6 +207,19 @@ _ALL_IN_RX = re.compile(r"(\d[\d.]{2,5})\s*(?:€|euro|eur)\s*(?:al\s+mese\s*|me
                         r"(?:tutto\s+compreso|tutto\s+incluso|comprensiv\w+|spese\s+incluse)", re.I)
 
 
+# "Con un affitto di €1100 + € 200" (sb_640856746): the rent, then the
+# monthly extras after a "+". Only when the first number is the form's rent.
+_PLUS_RX = re.compile(r"(?:€\s*)?(\d[\d.]{2,5})\s*(?:€|euro|eur)?\s*\+\s*(?:€\s*)?(\d{2,4})(?!\d|[.,]\d)", re.I)
+
+
+def _plus_extra(text: str, rent: int) -> Optional[int]:
+    for m in _PLUS_RX.finditer(text or ""):
+        first, extra = _int(m.group(1).replace(".", "")), _int(m.group(2))
+        if first == rent and extra and 20 <= extra <= rent * 0.6:
+            return extra
+    return None
+
+
 def _all_in_extra(text: str, rent: int) -> Optional[int]:
     for m in _ALL_IN_RX.finditer(text or ""):
         v = _int(m.group(1).replace(".", ""))
@@ -316,7 +329,7 @@ def parse_item(it: dict, max_rent: int = 0, min_rooms: int = 0) -> tuple[Optiona
     dep = _DEPOSIT_RX.search(text)
     deposit = (_NUM_WORDS.get(dep.group(1).lower()) or _int(dep.group(1))) if dep else None
     images = [i.get("cdnBaseUrl") for i in it.get("images") or [] if i.get("cdnBaseUrl")]
-    spese = _parse_condo_from_description(body) or _all_in_extra(text, rent)
+    spese = _parse_condo_from_description(body) or _all_in_extra(text, rent) or _plus_extra(text, rent)
     return {
         "id":                 f"sb_{m.group(1)}",
         "source":             SOURCE,

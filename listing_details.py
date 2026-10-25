@@ -57,16 +57,20 @@ SALE_ONLY_FLAGS = ("is_nuda_proprieta", "is_auction")
 # out. Whole flats say "4 posti letto" or "ideale per due coinquilini", so
 # only the room-let wordings count, and "no / non …" just before cancels.
 _ROOM_LET_RX = re.compile(
-    r"\bposto\s+letto\b"
+    # A bed on offer — not "camera singola, con un posto letto" in a flat's rooms.
+    r"\b(?:affitt\w*|offr\w*|disponibil\w*|liber[oa]|cerc\w*)\s+(?:un\s+|1\s+)?posto\s+letto\b"
+    r"|\bposto\s+letto\s+in\s+(?:camera|stanza)\b"
     r"|\b(?:affitt(?:o|asi|iamo|ano)|si\s+affitta(?:no)?|offresi|offro|subaffitt\w*|cedo)\s+"
     r"(?:una\s+|la\s+|nostra\s+|mia\s+)?(?:bellissim\w+\s+|ampi\w+\s+|luminos\w+\s+|grande\s+)?"
     r"(?:stanz[ae]|camer[ae])\b(?!\s+da\s+letto)"
     r"|\b(?:stanza|camera)\s+(?:singola|doppia|matrimoniale)?\s*(?:in|all['’]interno\s+di)\s+"
     r"(?:un\s+|una\s+|ampio\s+|grande\s+|bellissimo\s+)?(?:appartamento|casa|trilocale|quadrilocale|bilocale)"
     r"\s+(?:condivis\w+|con\s+(?:altr\w+|\d|due|tre)\s)"
-    r"|\b(?:appartamento|casa|alloggio|loft)\s+(?:condivis\w+|in\s+condivisione)\b"
+    # A shared flat as the ad's subject — at a line's start, not "the everyday
+    # life of a casa condivisa" in a whole flat's pitch to flatmates.
+    r"|^[^\n|]{0,60}\b(?:appartamento|loft)\s+(?:condivis\w+|in\s+condivisione)\b"
     r"|\bcerc(?:o|hiamo|asi|ano)\s+(?:un[ao]?\s+|\d\s+|due\s+)?(?:coinquilin\w+|ragazz[ae]|studentess\w+|student[ei])\b"
-    r"|\b(?:stanza|camera)\s+in\s+affitto\b|\baffitto\s+(?:di\s+)?(?:stanz[ae]|camer[ae])\b", re.I)
+    r"|\b(?:stanza|camera)\s+in\s+affitto\b|\baffitto\s+(?:di\s+)?(?:stanz[ae]|camer[ae])\b", re.I | re.M)
 _NEGATED_RX = re.compile(r"\b(?:no|non|niente|vietat\w+)\b[^.\n]{0,30}$", re.I)
 RENT_ONLY_FLAGS = ("is_room_let", "text_says_studio")
 
