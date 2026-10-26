@@ -401,6 +401,11 @@ _DEFAULT_SETTINGS: dict = {
     "photo_grade_points":    15,       # 2026-10-25, measured: 2,331 scores move (953 ↑, 1,378 ↓), labels unchanged
     # Days on market counted in the penalty score only for rentals.
     "rent_dom_once":         False,
+    # Sonnet's photo tags (rubric v5) in the property score: their points,
+    # terrace included, clamped to ±photo_tag_max, minus the mean of all
+    # tagged readings (so re-read listings aren't favoured over unread ones).
+    "photo_tags_score":      True,        # 2026-10-26, measured: 1,044 scores move (±1.8), ≥80 679 → 711, labels unchanged
+    "photo_tag_max":         15,
     # A discount counts as much as the photos back it (apply_credible_discount).
     "credible_discount":     True,       # 2026-10-25, measured: top-100 photos 7.1 → 7.4, ≥80 1,084 → 651, labels unchanged
     "credible_unread":       0.7,
@@ -2176,8 +2181,32 @@ def load_photo_evals() -> dict:
     return evals
 
 
+PHOTO_TAG_POINTS = {
+    "bright": 4, "open_view": 3, "big_living": 3, "dual_aspect": 3, "quiet_courtyard": 3, "recently_renovated": 3,
+    "high_ceilings": 2, "new_bathroom": 2, "new_kitchen": 2, "big_windows": 2, "big_bedroom": 2, "big_kitchen": 2,
+    "new_windows": 2, "air_conditioning": 2, "night_zone_apart": 1, "storage": 1, "armoured_door": 1,
+    "bathroom_window": 1, "modern_furniture": 1, "period_features": 1, "smart_entrance": 1, "good_facade": 1,
+    "damp": -6, "cracks": -6, "dark": -5, "facing_wall": -4, "cramped": -4, "plan_mismatch": -4,
+    "windowless_bathroom": -3, "busy_street": -3, "small_living": -3, "walk_through_rooms": -3, "low_ceilings": -3,
+    "exposed_wiring": -3, "shabby_building": -3, "small_bedroom": -2, "small_bathroom": -2, "dated_bathroom": -2,
+    "dated_kitchen": -2, "old_windows": -2, "worn_floors": -2, "small_windows": -2, "long_corridor": -1,
+    "old_radiators": -1, "dated_furniture": -1, "mismatched_furniture": -1,
+}
+TERRACE_POINTS = 4
+
+
+def photo_tag_points(r: dict, cap: float = 15) -> float | None:
+    """A reading's tag points (None before rubric v5 / no tags)."""
+    tags = r.get("tags")
+    if tags is None:
+        return None
+    pts = sum(PHOTO_TAG_POINTS.get(k, 0) for k in tags) + (TERRACE_POINTS if (r.get("features") or {}).get("terrace") else 0)
+    return max(-cap, min(cap, pts))
+
+
 def apply_photo_verdict(l: dict, evals: dict, cap: int, grade_max: float = 4,
-                        grade_points: float = 0, w_property: float = 0.25) -> None:
+                        grade_points: float = 0, w_property: float = 0.25,
+                        tag_mean: float | None = None, tag_max: float = 15) -> None:
     """Stamp what the photos showed (photo_* fields) when the answer is for
     the listing's current photos; a confident "contradicts" strips the deal
     label and caps the score at `cap` (reason in score_cap_reason)."""
@@ -2224,6 +2253,16 @@ def apply_photo_verdict(l: dict, evals: dict, cap: int, grade_max: float = 4,
     g = r.get("grade")
     if grade_points and isinstance(g, (int, float)) and l.get("score_property") is not None:
         adj = max(-1.0, min(1.0, (g - 6.5) / 2.5)) * grade_points
+        new_prop = max(0, min(100, round(l["score_property"] + adj)))
+        d_total = (new_prop - l["score_property"]) * w_property
+        l["score_property"] = new_prop
+        if d_total < 0 or not l.get("score_was_capped"):
+            l["score_total"] = max(0, min(100, round((l.get("score_total") or 0) + d_total)))
+    # What the tags say (rubric v5) — light, a terrace, damp… — centred on the
+    # mean of all tagged readings (photo_tags_score).
+    pts = photo_tag_points(r, tag_max) if tag_mean is not None else None
+    if pts is not None and l.get("score_property") is not None:
+        adj = pts - tag_mean
         new_prop = max(0, min(100, round(l["score_property"] + adj)))
         d_total = (new_prop - l["score_property"]) * w_property
         l["score_property"] = new_prop
@@ -2376,6 +2415,10 @@ def score_all(listings: list, settings: dict | None = None,
     if settings.get("property_impute_unknown"):
         settings = {**settings, "_feature_means": _property_feature_means(pool, settings, comps_index)}
     photo_evals = load_photo_evals() if settings.get("photo_contradicts_cap") else {}
+    tag_mean = None
+    if settings.get("photo_tags_score") and photo_evals:
+        pts = [p for p in (photo_tag_points(r, settings.get("photo_tag_max", 15)) for r in photo_evals.values()) if p is not None]
+        tag_mean = sum(pts) / len(pts) if pts else None
     small_ref = zone_normal_psqm(pool) if settings.get("small_brake_max_sqm") else {}
     scored = []
     for l in listings:
@@ -2388,7 +2431,8 @@ def score_all(listings: list, settings: dict | None = None,
         if photo_evals:
             apply_photo_verdict(merged, photo_evals, settings["photo_contradicts_cap"],
                                 settings.get("photo_grade_cap_max", 4),
-                                settings.get("photo_grade_points", 0), settings.get("w_property", 0.25))
+                                settings.get("photo_grade_points", 0), settings.get("w_property", 0.25),
+                                tag_mean, settings.get("photo_tag_max", 15))
         if settings.get("credible_discount"):
             apply_credible_discount(merged, settings)
         if small_ref:
