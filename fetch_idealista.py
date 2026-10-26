@@ -2286,9 +2286,11 @@ def run_once(args) -> list:
     # "id_" prefix ensures no collision with Immobiliare numeric IDs.
     seen      = load_seen_ids()
     today_str = str(date.today())
+    now_iso   = datetime.now().isoformat(timespec="minutes")
     for l in scored:
         lid = l["id"]
         l["first_seen_date"] = seen[lid]["first_seen_date"] if lid in seen else today_str
+        l["first_seen_at"]   = seen[lid].get("first_seen_at") if lid in seen else now_iso
         # Seen in this scan. Staleness marking and archive_old_listings key
         # off last_seen_date; Idealista rentals never carried it, so all
         # 13k looked "never seen" (Immobiliare + Idealista sales stamp it).
@@ -2304,7 +2306,7 @@ def run_once(args) -> list:
     # Update shared seen_ids.json
     new_listings = [l for l in scored if l["id"] not in seen]
     for l in scored:
-        seen[l["id"]] = {"first_seen_date": l["first_seen_date"],
+        seen[l["id"]] = {"first_seen_date": l["first_seen_date"], "first_seen_at": l.get("first_seen_at"),
                          "last_seen_date":  today_str}
     save_seen_ids(seen)
 
@@ -2361,16 +2363,18 @@ def run_slot(args, zone: str | None, do_discover: bool) -> dict:
     if raw:
         scored = score_all(raw, comps_pool=raw + _other_source_comps())
         today_str = str(date.today())
+        now_iso = datetime.now().isoformat(timespec="minutes")
         for l in scored:
             lid = l["id"]
             l["first_seen_date"] = seen[lid]["first_seen_date"] if lid in seen else today_str
+            l["first_seen_at"] = seen[lid].get("first_seen_at") if lid in seen else now_iso
             l["last_seen_date"] = today_str
             l["is_stale"] = False
         rec.update(write_output(scored, source=SOURCE,
                                 swept_areas=set(complete.values()) or None))
         new = [l for l in scored if l["id"] not in seen]
         for l in scored:
-            seen[l["id"]] = {"first_seen_date": l["first_seen_date"],
+            seen[l["id"]] = {"first_seen_date": l["first_seen_date"], "first_seen_at": l.get("first_seen_at"),
                              "last_seen_date": today_str}
         save_seen_ids(seen)
         rec.update(new=len(new),

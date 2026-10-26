@@ -1,4 +1,8 @@
-"""When the scanners may open browser pages: at night only.
+"""When the scanners may open browser pages.
+
+Since 2026-10-26: weekdays 07:30–18:00, never on Saturday or Sunday (the
+user: "the scan must run during the day except Saturday and Sunday, from
+7:30 to 18:00"). Before, at night only (23:30–07:30).
 
 The user, 2026-10-24: "I can't work with the PC opening pages all day, it
 has to run only at night." Everything that opens a page — zone slots, the
@@ -42,27 +46,26 @@ def window() -> tuple[dtime, dtime]:
         return _hm(DEFAULT[0]), _hm(DEFAULT[1])
 
 
+def days() -> set[int]:
+    """Weekdays the window opens on (Monday 0 … Sunday 6); all when unset."""
+    try:
+        return {int(x) % 7 for x in json.loads(CONFIG_PATH.read_text()).get("days", range(7))}
+    except (OSError, ValueError, TypeError):
+        return set(range(7))
+
+
 def in_window(now: datetime | None = None) -> bool:
     now = now or datetime.now()
     start, end = window()
-    t = now.time()
+    t, on = now.time(), days()
     if start <= end:
-        return start <= t < end
-    return t >= start or t < end            # crosses midnight
+        return now.weekday() in on and start <= t < end
+    # crosses midnight: the window belongs to the day it opened
+    return (t >= start and now.weekday() in on) or (t < end and (now - timedelta(days=1)).weekday() in on)
 
 
 def _at(day: datetime, t: dtime) -> datetime:
     return day.replace(hour=t.hour, minute=t.minute, second=0, microsecond=0)
-
-
-def closes_at(now: datetime | None = None) -> datetime:
-    """End of the window `now` is in (or of the next one)."""
-    now = now or datetime.now()
-    start, end = window()
-    close = _at(now, end)
-    if close <= now:
-        close += timedelta(days=1)
-    return close
 
 
 def next_open(now: datetime | None = None) -> datetime:
@@ -70,8 +73,23 @@ def next_open(now: datetime | None = None) -> datetime:
     now = now or datetime.now()
     if in_window(now):
         return now
-    start = _at(now, window()[0])
-    return start if start > now else start + timedelta(days=1)
+    start, on = window()[0], days()
+    for k in range(8):
+        cand = _at(now + timedelta(days=k), start)
+        if cand > now and cand.weekday() in on:
+            return cand
+    return _at(now + timedelta(days=1), start)
+
+
+def closes_at(now: datetime | None = None) -> datetime:
+    """End of the window `now` is in (or of the next one)."""
+    now = now or datetime.now()
+    start, end = window()
+    opened = now if in_window(now) else next_open(now)
+    close = _at(opened, end)
+    if close <= opened:
+        close += timedelta(days=1)
+    return close
 
 
 def hours() -> float:
@@ -95,7 +113,9 @@ def keep_awake(log=print) -> None:
 
 def describe() -> str:
     start, end = window()
-    return f"{start:%H:%M}–{end:%H:%M}"
+    on = days()
+    d = "" if len(on) == 7 else " Mon–Fri" if on == {0, 1, 2, 3, 4} else " days " + ",".join(map(str, sorted(on)))
+    return f"{start:%H:%M}–{end:%H:%M}{d}"
 
 
 def paused_until(source: str) -> float:

@@ -698,8 +698,10 @@ def _run(args, log) -> dict:
             scored = score_all(rows, comps_pool=rows + [l for l in pool if l.get("source") != SOURCE])
         seen = fr.load_seen_ids()
         today = str(date.today())
+        now_iso = datetime.now().isoformat(timespec="minutes")
         for l in scored:
             l["first_seen_date"] = (seen.get(l["id"]) or {}).get("first_seen_date") or today
+            l["first_seen_at"] = (seen.get(l["id"]) or {}).get("first_seen_at") or (None if l["id"] in seen else now_iso)
             l["last_seen_date"] = today
             l["is_stale"] = False
         # A pass that stopped early must not hide what it didn't reach.
@@ -707,7 +709,8 @@ def _run(args, log) -> dict:
                                    swept_areas={SCAN_AREA} if stats["complete"] else None))
         new = [l["id"] for l in scored if l["id"] not in seen]
         for l in scored:
-            seen[l["id"]] = {"first_seen_date": l["first_seen_date"], "last_seen_date": today}
+            seen[l["id"]] = {"first_seen_date": l["first_seen_date"], "first_seen_at": l.get("first_seen_at"),
+                             "last_seen_date": today}
         fr.save_seen_ids(seen)
         fr._queue_digest(new)
         rec["new"] = len(new)

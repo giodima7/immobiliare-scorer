@@ -7,7 +7,28 @@
 // Estimates, not financial advice.
 
 const FY_DEFAULTS = { income: 0, cash: 0, share: 33, reserve: 0, costs: 8,
-                      areas: [], mode: 'rent', noStudio: true, floor: '' };
+                      areas: [], mode: 'rent', noStudio: true, floor: '', onlyNew: false };
+
+// "New since the last scan": first seen in the latest scan window — weekdays
+// from 07:30 (scan_window.json, 2026-10-26). Rows stamped before
+// first_seen_at existed fall back to the date of that window's start.
+function _fyScanStart() {
+  const now = new Date();
+  for (let k = 0; k < 8; k++) {
+    const s = new Date(now);
+    s.setDate(now.getDate() - k);
+    s.setHours(7, 30, 0, 0);
+    if (s <= now && s.getDay() !== 0 && s.getDay() !== 6) return s;
+  }
+  return now;
+}
+function isNewTonight(l) {
+  if (typeof _listedEarlier === 'function' && _listedEarlier(l)) return false;   // an old ad found late
+  const start = _fyScanStart();
+  if (l.first_seen_at) return new Date(l.first_seen_at) >= start;
+  const ymd = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
+  return !!l.first_seen_date && l.first_seen_date >= ymd;
+}
 const FY_PAGE = 6;                       // cards per list, "show more" adds as many
 
 let _fyMsd = null;
@@ -254,7 +275,7 @@ function fyLists(p = fyProfile()) {
   // FY_NEAR_KM outside them (the user: "you don't respect my request if you
   // put in listings from other zones").
   const run = (rows, kind, ok) => {
-    const all = rows.filter(l => ok(l) && _fyLiveable(l))
+    const all = rows.filter(l => ok(l) && _fyLiveable(l) && (!p.onlyNew || isNewTonight(l)))
       .map(l => _fyScore(l, kind, p, b, loan, centres)).filter(Boolean);
     return [_fyOrder(all.filter(s => !s.near)), _fyOrder(all.filter(s => s.near))];
   };
@@ -282,6 +303,11 @@ function renderForYou() {
   if (!view) return;
   _fyInitForm();
   const p = fyProfile();
+  view.querySelectorAll('[data-fy-new]').forEach(btn => {
+    const on = (btn.dataset.fyNew === '1') === !!p.onlyNew;
+    btn.classList.toggle('active', on);
+    btn.setAttribute('aria-pressed', String(on));
+  });
   view.querySelectorAll('[data-fy-mode]').forEach(btn => {
     const on = btn.dataset.fyMode === p.mode;
     btn.classList.toggle('active', on);
@@ -299,6 +325,11 @@ function renderForYou() {
     return;
   }
   const { b, solo, soloNear, duo, duoNear, buy, buyNear } = fyLists(p);
+  // How many new tonight fit you, whichever view is on.
+  const nn = p.onlyNew ? { solo, soloNear, duo, duoNear, buy, buyNear } : fyLists({ ...p, onlyNew: true });
+  const nNew = new Set([...nn.solo, ...nn.soloNear, ...nn.duo, ...nn.duoNear, ...nn.buy, ...nn.buyNear].map(s => s.l.id)).size;
+  const newBtn = view.querySelector('[data-fy-new="1"]');
+  if (newBtn) newBtn.innerHTML = `${escapeHtml(t('fy.only_new'))} <span class="pill-count">${fmt(nNew)}</span>`;
   const mo = `<span class="fy-unit">${escapeHtml(t('fy.per_month'))}</span>`;
   set('fyOutSolo', '€' + fmt(Math.round(b.solo)) + mo);
   set('fyOutDuo', '€' + fmt(Math.round(b.duo)) + mo);
@@ -451,6 +482,8 @@ function _fyInitForm() {
 document.addEventListener('click', e => {
   const mode = e.target.closest?.('[data-fy-mode]');
   if (mode) { _fySave({ mode: mode.dataset.fyMode }); return; }
+  const onlyNew = e.target.closest?.('[data-fy-new]');
+  if (onlyNew) { _fySave({ onlyNew: onlyNew.dataset.fyNew === '1' }); return; }
   const more = e.target.closest?.('[data-fy-more]');
   if (more) { _fyShown[more.dataset.fyMore] += FY_PAGE; renderForYou(); }
 });

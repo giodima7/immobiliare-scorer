@@ -1,5 +1,6 @@
 {
-  "_doc": "When the scanners may open browser pages (scan_window.py). Outside it they sleep. Read on every check.",
-  "start": "23:30",
-  "end": "07:30"
+  "_doc": "When scanners may open pages: weekdays (0 = Monday) from start to end. Read on every check — no restart needed to move it. Until 2026-10-26 it was 23:30–07:30 every night.",
+  "start": "07:30",
+  "end": "18:00",
+  "days": [0, 1, 2, 3, 4]
 }
