@@ -2300,9 +2300,11 @@ def run_once(args) -> list:
 
     seen = load_seen_ids()
     today_str = str(date.today())
+    now_iso = datetime.now().isoformat(timespec="minutes")
     for l in scored:
         lid = l["id"]
         l["first_seen_date"] = seen[lid]["first_seen_date"] if lid in seen else today_str
+        l["first_seen_at"] = seen[lid].get("first_seen_at") if lid in seen else now_iso
         # Always stamp last_seen_date — we just saw this listing in *this* scan.
         l["last_seen_date"] = today_str
 
@@ -2314,6 +2316,7 @@ def run_once(args) -> list:
     for l in scored:
         seen[l["id"]] = {
             "first_seen_date": l["first_seen_date"],
+            "first_seen_at":   l.get("first_seen_at"),
             "last_seen_date":  today_str,
         }
     save_seen_ids(seen)
@@ -2375,14 +2378,18 @@ def run_slot(args, area: str | None, do_discover: bool) -> dict:
         _carry_over_detail_fields(raw)
         scored = score_all(raw)
         today_str = str(date.today())
+        # The time too, since 2026-10-26: For you's "new tonight" (dates alone
+        # can't tell last night's scan from the night before).
+        now_iso = datetime.now().isoformat(timespec="minutes")
         for l in scored:
             lid = l["id"]
             l["first_seen_date"] = seen[lid]["first_seen_date"] if lid in seen else today_str
+            l["first_seen_at"] = seen[lid].get("first_seen_at") if lid in seen else now_iso
             l["last_seen_date"] = today_str
         rec.update(write_output(scored, swept_areas=set(complete.values()) or None))
         new = [l for l in scored if l["id"] not in seen]
         for l in scored:
-            seen[l["id"]] = {"first_seen_date": l["first_seen_date"],
+            seen[l["id"]] = {"first_seen_date": l["first_seen_date"], "first_seen_at": l.get("first_seen_at"),
                              "last_seen_date": today_str}
         save_seen_ids(seen)
         rec.update(new=len(new),

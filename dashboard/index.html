@@ -700,9 +700,15 @@
     <div class="fy-tile"><div class="fy-tile-k"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#key"></use></svg><span data-i18n="fy.buy">Buy up to</span></div><div class="fy-tile-v" id="fyOutBuy">–</div><div class="fy-tile-s" id="fyOutBuySub"></div></div>
   </div>
   <div class="fy-disclaimer" data-i18n="fy.disclaimer">Estimates, not financial advice. The mortgage terms are the same as in For sale.</div>
-  <div class="seg fy-mode" role="group">
-    <button type="button" class="seg-btn" data-fy-mode="rent" aria-pressed="true" data-i18n="fy.rent">Rent</button>
-    <button type="button" class="seg-btn" data-fy-mode="buy" aria-pressed="false" data-i18n="fy.buying">Buy</button>
+  <div class="fy-modes">
+    <div class="seg fy-mode" role="group">
+      <button type="button" class="seg-btn" data-fy-mode="rent" aria-pressed="true" data-i18n="fy.rent">Rent</button>
+      <button type="button" class="seg-btn" data-fy-mode="buy" aria-pressed="false" data-i18n="fy.buying">Buy</button>
+    </div>
+    <div class="seg fy-mode" role="group">
+      <button type="button" class="seg-btn" data-fy-new="0" aria-pressed="true" data-i18n="fy.all">All</button>
+      <button type="button" class="seg-btn" data-fy-new="1" aria-pressed="false" data-i18n="fy.only_new">New since the last scan</button>
+    </div>
   </div>
   <div id="fyRent">
     <section class="fy-section">
