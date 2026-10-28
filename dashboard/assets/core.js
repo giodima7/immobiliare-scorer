@@ -77,7 +77,7 @@ const SupabaseClient = {
       limit:        '1000',
       offset:       String(offset),
     });
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const resp = await fetch(`${this._base}/listings?${params}`, {
           headers: this._headers(), signal: AbortSignal.timeout(30000),
@@ -88,7 +88,9 @@ const SupabaseClient = {
       } catch (err) {
         console.warn(`[supabase] fetch error at offset ${offset}: ${err.message}`);
       }
-      await new Promise(r => setTimeout(r, 1500));   // transient 5xx / network: one retry
+      // Transient 5xx / network: retry, waiting longer each time. A 500 is
+      // mostly the 8 s statement timeout (2026-10-28: pages took 5–8 s).
+      if (attempt < 2) await new Promise(r => setTimeout(r, attempt ? 4000 : 1500));
     }
     return { ok: false, status: 0, rows: [] };
   },
@@ -118,7 +120,8 @@ const SupabaseClient = {
   async fetchAll(listingType, opts = {}) {
     if (!this.configured) return null;
     const { order = 'score_total.desc', onFirstPage = null } = opts;
-    const PAGE = 1000, WAVE = 4;
+    // Three pages at a time: four together hit the 8 s statement timeout (2026-10-28).
+    const PAGE = 1000, WAVE = 3;
     const _city = (typeof currentCity === 'string' && currentCity) || 'milano';
     let select = listingType === 'rental' ? this._RENT_COLUMNS : '*';
     this.lastLoadPartial = false;
