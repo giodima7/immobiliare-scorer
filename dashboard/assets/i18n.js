@@ -210,7 +210,7 @@ const STRINGS = {
     'chip.max_rent':'Up to €{n}','chip.min_rooms':'{n}+ rooms','chip.min_sqm':'{n}+ m²','chip.include_unknown':'incl. not yet known',
     'chip.min_discount':'{n}%+ below nearby','chip.fascia':'Fascia {v}','chip.max_metro':'Metro ≤ {n} m','chip.min_floor':'Floor {n}+',
     'chip.min_energy':'Energy {v}+','chip.min_photo':'Photos {n}+/10','chip.min_score':'Score ≥ {n}','chip.listed_today':'Listed today','chip.listed_days':'Listed in last {n} days',
-    'chip.remove':'Remove filter','chip.flats':'flats','chip.so_far':'so far · loading the rest…',
+    'chip.remove':'Remove filter','chip.flats':'flats','chip.so_far':'so far · loading the rest…','fb.selected_n':'{n} selected',
 
     'stats.showing':'Showing','stats.rentals':'rentals','stats.avg_score':'Avg score','stats.avg_rent':'Avg rent',
     'stats.new_3d':'new in the last 3 days','stats.zone_fallback':'Zone by name',
@@ -766,7 +766,7 @@ const STRINGS = {
     'chip.max_rent':'Fino a €{n}','chip.min_rooms':'{n}+ locali','chip.min_sqm':'{n}+ m²','chip.include_unknown':'incl. non ancora noti',
     'chip.min_discount':'{n}%+ sotto i vicini','chip.fascia':'Fascia {v}','chip.max_metro':'Metro ≤ {n} m','chip.min_floor':'Piano {n}+',
     'chip.min_energy':'Classe {v}+','chip.min_photo':'Foto {n}+/10','chip.min_score':'Punteggio ≥ {n}','chip.listed_today':'Pubblicati oggi','chip.listed_days':'Ultimi {n} giorni',
-    'chip.remove':'Rimuovi filtro','chip.flats':'appartamenti','chip.so_far':'finora · carico gli altri…',
+    'chip.remove':'Rimuovi filtro','chip.flats':'appartamenti','chip.so_far':'finora · carico gli altri…','fb.selected_n':'{n} selezionate',
 
     'stats.showing':'Mostra','stats.rentals':'affitti','stats.avg_score':'Score medio','stats.avg_rent':'Affitto medio',
     'stats.new_3d':'nuovi negli ultimi 3 giorni','stats.zone_fallback':'Zona dal nome',

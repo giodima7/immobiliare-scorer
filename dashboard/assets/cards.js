@@ -466,15 +466,16 @@ function renderRentalCard(l) {
   // What the photos showed sits on the photo (2026-10-19 card redesign: the
   // price row carried three chips); without a photo it stays in the row.
   const photoChip = _photoChipHtml(l);
-  // Arrows (and a swipe) page through the photos on the card itself
-  // (details.js, cardPhotoStep); a click on the photo opens Details.
+  // A swipe or the arrows page through the photos on the card itself
+  // (details.js, cardPhotoFill / cardPhotoStep); a tap on the photo opens
+  // Details. A div, not a button: iOS won't scroll a strip inside a button.
   const nav = l.thumbnail && (l.photo_count || 0) !== 1
     ? `<button type="button" class="card-photo-nav prev" data-photo-step="-1" aria-label="${escapeHtml(t('pv.prev'))}" tabindex="-1">${icon('chevron-left')}</button>
        <button type="button" class="card-photo-nav next" data-photo-step="1" aria-label="${escapeHtml(t('pv.next'))}" tabindex="-1">${icon('chevron-right')}</button>
        <span class="card-photo-count" hidden></span>`
     : '';
   const photo = (l.thumbnail || gemChip || newChip)
-    ? `<div class="card-photo" data-photo-id="${id}"><button type="button" class="card-photo-wrap" data-open-details="${id}" aria-label="${escapeHtml(t('card.details') + ': ' + nb)}">${l.thumbnail ? `<img class="card-thumb" src="${_safeUrl(l.thumbnail)}" alt="" loading="lazy">` : ''}${gemChip}${newChip}${l.thumbnail && photoChip ? `<span class="card-photo-grade">${photoChip}</span>` : ''}</button>${nav}</div>`
+    ? `<div class="card-photo" data-photo-id="${id}"><div class="card-photo-wrap" data-open-details="${id}" aria-label="${escapeHtml(t('card.details') + ': ' + nb)}">${l.thumbnail ? `<div class="card-photo-track"><img class="card-thumb" src="${_safeUrl(l.thumbnail)}" alt="" loading="lazy" draggable="false"></div>` : ''}${gemChip}${newChip}${l.thumbnail && photoChip ? `<span class="card-photo-grade">${photoChip}</span>` : ''}</div>${nav}</div>`
     : '';
   // The site is the Open button's label; "+1" when the flat is on another site too.
   const others = alsoOnSites(l) ? alsoOnSites(l).split(', ').length : 0;
