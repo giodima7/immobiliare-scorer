@@ -74,7 +74,7 @@ const SupabaseClient = {
       is_stale:     'eq.false',
       // id breaks score ties — without it offset paging skips/repeats rows.
       order:        `${order},id.asc`,
-      limit:        '1000',
+      limit:        '500',
       offset:       String(offset),
     });
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -120,8 +120,10 @@ const SupabaseClient = {
   async fetchAll(listingType, opts = {}) {
     if (!this.configured) return null;
     const { order = 'score_total.desc', onFirstPage = null } = opts;
-    // Three pages at a time: four together hit the 8 s statement timeout (2026-10-28).
-    const PAGE = 1000, WAVE = 3;
+    // Pages of 500, three at a time: a page of 1,000 rows (127 columns, ~4 MB)
+    // took 2.5–8 s to build and hit the 8 s statement timeout under load;
+    // 500 take ~1–2.5 s (2026-10-28, after migration 022's index).
+    const PAGE = 500, WAVE = 3;
     const _city = (typeof currentCity === 'string' && currentCity) || 'milano';
     let select = listingType === 'rental' ? this._RENT_COLUMNS : '*';
     this.lastLoadPartial = false;
