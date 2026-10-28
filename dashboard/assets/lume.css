@@ -4167,3 +4167,12 @@ body.pv-open { overflow: hidden; }
 .area-msearch-summary { position: sticky; top: 0; z-index: 1; padding: 8px 12px; background: var(--bg-card);
                         border-bottom: 1px solid var(--border-light); color: var(--green-ink); font-size: 13px;
                         font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Details → Location: the map snippet (details.js lmMapSnipHtml). */
+.lm-mapsnip { height: 200px; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border-light);
+              background: var(--bg-muted); cursor: pointer; margin-bottom: 6px; z-index: 0; }
+.lm-mapsnip .leaflet-control-attribution { font-size: 9px; padding: 0 4px; background: rgba(255,255,255,.6); }
+.lm-maplink { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 8px; font-size: var(--text-sm);
+              color: var(--green-ink); font-weight: 600; text-decoration: none; }
+.lm-maplink .i { width: 15px; height: 15px; }
+.lm-maplink:hover { text-decoration: underline; }

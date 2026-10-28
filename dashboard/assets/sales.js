@@ -350,6 +350,7 @@ function openSaleModal(id) {
   document.body.classList.add('lm-open');
   box.querySelector('.lm-close')?.focus();
   _lmLoadPhotos(l);
+  lmLoadMapSnip(l);
 }
 
 document.addEventListener('click', e => {
@@ -492,6 +493,7 @@ function saleModalHtml(l) {
     <div class="lm-two">
       <section>
         <h3 class="lm-section-title">${esc(t('lm.location'))}</h3>
+        ${lmMapSnipHtml(l)}
         <ul class="lm-near">
           ${near('train', l.metro_nearest_name ? `${l.metro_nearest_name}${l.metro_nearest_line ? ' ' + l.metro_nearest_line : ''}` : t('lm.metro'), l.metro_walk_min != null ? t('lm.walk', { n: l.metro_walk_min }) : dist(l.metro_nearest_dist_m))}
           ${near('bus', t('lm.tram'), dist(l.tram_nearest_dist_m))}

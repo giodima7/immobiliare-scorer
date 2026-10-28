@@ -21,6 +21,7 @@ function openListingModal(id) {
   box.hidden = false;
   document.body.classList.add('lm-open');
   box.querySelector('.lm-close')?.focus();
+  lmLoadMapSnip(l);
   _lmEnsureFull(l).then(() => {
     if (_lmListing !== l || box.hidden) return;
     _lmLoadPhotos(l);
@@ -31,11 +32,63 @@ function openListingModal(id) {
   });
 }
 
+// Where the flat is, as a map snippet in Details (2026-10-28, the user: "a
+// snippet of the flat's location"): OpenStreetMap's standard tiles in both
+// themes — the Map tab's grey canvas left the street names unreadable ("I
+// can't read the streets or tell where it is"); these name streets, parks
+// and metro stops. Fixed (no drag or zoom), a pin — or a circle as wide as
+// the guess when the place is approximate (geo_precision) — and Google Maps
+// on a tap.
+const _LM_APPROX_M = { zone: 600, metro: 350, street: 250, near: 200 };
+let _lmMap = null;
+
+function lmMapSnipHtml(l) {
+  if (l.latitude == null || l.longitude == null) return '';
+  const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${l.latitude},${l.longitude}`)}`;
+  return `<div class="lm-mapsnip" id="lmMapSnip" data-href="${escapeHtml(url)}" role="link" tabindex="0"
+               aria-label="${escapeHtml(t('lm.open_maps'))}"></div>
+    <a class="lm-maplink" href="${escapeHtml(url)}" target="_blank" rel="noopener">${icon('map-pin')}<span>${escapeHtml(t('lm.open_maps'))}</span>${icon('external-link')}</a>`;
+}
+
+async function lmLoadMapSnip(l) {
+  const el = document.getElementById('lmMapSnip');
+  if (!el) return;
+  try { await ensureLeaflet(); } catch { el.remove(); return; }
+  if (!el.isConnected || _lmListing !== l) return;
+  _lmMap?.remove();
+  const at = [Number(l.latitude), Number(l.longitude)];
+  const approx = _LM_APPROX_M[l.geo_precision];
+  const zoom = approx >= 500 ? 14 : 15;
+  const m = L.map(el, { zoomControl: false, dragging: false, scrollWheelZoom: false, touchZoom: false,
+                        doubleClickZoom: false, boxZoom: false, keyboard: false, tap: false })
+    .setView(at, zoom);
+  m.attributionControl.setPrefix(false);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(m);
+  if (approx) L.circle(at, { radius: approx, color: '#2A7A5A', weight: 1.5, fillOpacity: 0.12 }).addTo(m);
+  else L.circleMarker(at, { radius: 8, color: '#fff', weight: 2.5, fillColor: '#2A7A5A', fillOpacity: 1 }).addTo(m);
+  _lmMap = m;
+  // The sheet may still be sliding in or laying out: redraw at the real size.
+  const fit = () => { if (_lmMap === m) { m.invalidateSize(); m.setView(at, zoom, { animate: false }); } };
+  if ('ResizeObserver' in window) new ResizeObserver(fit).observe(el);
+  else setTimeout(fit, 60);
+}
+
+document.addEventListener('click', e => {
+  const snip = e.target.closest?.('#lmMapSnip');
+  if (snip && !e.target.closest('.leaflet-control-attribution')) window.open(snip.dataset.href, '_blank', 'noopener');
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.id === 'lmMapSnip') window.open(e.target.dataset.href, '_blank', 'noopener');
+});
+
 function closeListingModal() {
   const box = document.getElementById('listingModal');
   if (!box || box.hidden) return;
   box.hidden = true;
   _lmListing = null;
+  _lmMap?.remove();
+  _lmMap = null;
   document.body.classList.remove('lm-open');
   document.getElementById('lmBody').innerHTML = '';
   if (_lmLastFocus && _lmLastFocus.isConnected) _lmLastFocus.focus();
@@ -590,6 +643,7 @@ function listingModalHtml(l) {
     <div class="lm-two">
       <section>
         <h3 class="lm-section-title">${esc(t('lm.location'))}</h3>
+        ${lmMapSnipHtml(l)}
         ${approx || unplaced ? `<div class="lm-muted">${esc(t(unplaced ? 'lm.geo_none' : approx))}</div>` : ''}
         <ul class="lm-near">
           ${near('train', metroLine, l.geo_precision === 'zone' ? t('lm.from_zone_centre') : l.geo_precision === 'metro' ? t('lm.metro_named') : l.metro_walk_min != null ? t('lm.walk', { n: l.metro_walk_min }) : dist(l.metro_nearest_dist_m))}
