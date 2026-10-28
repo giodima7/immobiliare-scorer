@@ -433,6 +433,10 @@ function _updateStickyTops() {
   const headerH = header ? header.offsetHeight : 0;
   const tabH    = tabBar ? tabBar.offsetHeight : 0;
   if (tabBar) tabBar.style.top = headerH + 'px';
+  // Phone: header and tab bar are fixed — the page starts below both,
+  // measured (a fixed offset in CSS went stale and hid 22 px of content).
+  const main = document.querySelector('main#content');
+  if (main) main.style.marginTop = matchMedia('(max-width: 768px)').matches ? (headerH + tabH) + 'px' : '';
 
   // Only ONE sticky bar to position: the filter bar itself.
   document.querySelectorAll('.filters').forEach(f => {

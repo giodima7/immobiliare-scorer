@@ -310,7 +310,7 @@ function saleCardHtml(l, f) {
   const street = l.address ? formatAddress(String(l.address).replace(/,?\s*milano\s*$/i, '')) : '';
   const meta = [typeof _metroMeta === 'function' ? _metroMeta(l) : '', _saleSeenMeta(l)].filter(Boolean).join('');
   return `<article class="card sale-card" data-listing-id="${id}">
-    ${l.thumbnail ? `<div class="card-photo" data-photo-id="${id}"><button type="button" class="card-photo-wrap" data-open-sale="${id}" aria-label="${esc(t('card.details') + ': ' + title)}"><img class="card-thumb" src="${_safeUrl(l.thumbnail)}" alt="" loading="lazy">${isNew ? `<span class="card-photo-new-badge">${esc(t('badge.new'))}</span>` : ''}</button>${(l.photo_count || 0) !== 1 ? `
+    ${l.thumbnail ? `<div class="card-photo" data-photo-id="${id}"><div class="card-photo-wrap" data-open-sale="${id}" aria-label="${esc(t('card.details') + ': ' + title)}"><div class="card-photo-track"><img class="card-thumb" src="${_safeUrl(l.thumbnail)}" alt="" loading="lazy" draggable="false"></div>${isNew ? `<span class="card-photo-new-badge">${esc(t('badge.new'))}</span>` : ''}</div>${(l.photo_count || 0) !== 1 ? `
        <button type="button" class="card-photo-nav prev" data-photo-step="-1" aria-label="${esc(t('pv.prev'))}" tabindex="-1">${icon('chevron-left')}</button>
        <button type="button" class="card-photo-nav next" data-photo-step="1" aria-label="${esc(t('pv.next'))}" tabindex="-1">${icon('chevron-right')}</button>
        <span class="card-photo-count" hidden></span>` : ''}</div>` : ''}

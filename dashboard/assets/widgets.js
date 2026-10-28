@@ -66,6 +66,9 @@ function AreaMSearch(inputId, tagsId, dropdownId, allAreas, onChange) {
   const wrap = input.closest('.area-msearch');
   let options = [...(allAreas || [])];
   const selected = new Set();
+  // Chosen when the list opened: listed first. Not re-sorted while it is
+  // open, so a zone you tick doesn't jump away from under your finger.
+  let pinned = new Set();
   let focusedIdx = -1;
   let lastFiltered = [];
 
@@ -96,9 +99,18 @@ function AreaMSearch(inputId, tagsId, dropdownId, allAreas, onChange) {
   function _renderDropdown(q = '') {
     dropdown.innerHTML = '';
     const ql = (q || '').toLowerCase();
-    const list = options.filter(n => !ql || n.toLowerCase().includes(ql));
+    let list = options.filter(n => !ql || n.toLowerCase().includes(ql));
+    list = [...list.filter(n => pinned.has(n)), ...list.filter(n => !pinned.has(n))];
     lastFiltered = list;
     focusedIdx = -1;
+    // 2026-10-28, the user: once the list is scrolled you can't see the zones
+    // you picked — a line that stays on top of the list names them.
+    if (selected.size) {
+      const sum = document.createElement('div');
+      sum.className = 'area-msearch-summary';
+      sum.textContent = `${t('fb.selected_n', { n: selected.size })}: ${[...selected].join(', ')}`;
+      dropdown.appendChild(sum);
+    }
     if (!list.length) {
       const empty = document.createElement('div');
       empty.className = 'area-msearch-empty';
@@ -135,7 +147,11 @@ function AreaMSearch(inputId, tagsId, dropdownId, allAreas, onChange) {
 
   function open() {
     dropdown.hidden = false;
+    pinned = new Set(selected);
     _renderDropdown(input.value);
+    // In the phone drawer the list opens in place: bring the field to the
+    // top of the sheet so the keyboard doesn't cover the list.
+    if (wrap.closest('#mobileFilterDrawer')) setTimeout(() => wrap.scrollIntoView({ block: 'start', behavior: 'smooth' }), 300);
   }
   function close() {
     dropdown.hidden = true;
@@ -218,6 +234,7 @@ function buildMultiSelect({ wrapId, triggerId, panelId, searchId, listId,
   const search  = document.getElementById(searchId);
   const list    = document.getElementById(listId);
   const selected = new Set();
+  let pinned = new Set();          // chosen when the panel opened: a "Selected" group on top
 
   function _makeOption(key, label) {
     const lbl = document.createElement('label');
@@ -236,16 +253,28 @@ function buildMultiSelect({ wrapId, triggerId, panelId, searchId, listId,
   function renderList(q = '') {
     list.innerHTML = '';
     const ql = q.toLowerCase();
+    const top = [...pinned].filter(k => !ql || String(k).toLowerCase().includes(ql));
+    if (top.length) {
+      const hdr = document.createElement('div');
+      hdr.className = 'msd-group-header';
+      hdr.textContent = t('fb.selected_n', { n: top.length });
+      list.appendChild(hdr);
+      const labelOf = k => {
+        const it = items && items.find(x => (typeof x === 'string' ? x : x.key) === k);
+        return it ? (typeof it === 'string' ? it : it.label) : k;
+      };
+      for (const k of top) list.appendChild(_makeOption(k, labelOf(k)));
+    }
     if (items) {
       for (const item of items) {
         const key   = typeof item === 'string' ? item : item.key;
         const label = typeof item === 'string' ? item : item.label;
-        if (ql && !label.toLowerCase().includes(ql)) continue;
+        if ((ql && !label.toLowerCase().includes(ql)) || pinned.has(key)) continue;
         list.appendChild(_makeOption(key, label));
       }
     } else {
       for (const [fascia, names] of Object.entries(MILAN_AREAS)) {
-        const matches = names.filter(n => !ql || n.toLowerCase().includes(ql));
+        const matches = names.filter(n => (!ql || n.toLowerCase().includes(ql)) && !pinned.has(n));
         if (!matches.length) continue;
         const hdr = document.createElement('div');
         hdr.className = 'msd-group-header';
@@ -276,6 +305,7 @@ function buildMultiSelect({ wrapId, triggerId, panelId, searchId, listId,
     if (!isOpen()) {
       open();
       search.value = '';
+      pinned = new Set(selected);
       renderList();
       search.focus();
     } else {

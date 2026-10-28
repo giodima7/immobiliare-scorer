@@ -105,21 +105,119 @@ async function _lmLoadPhotos(l) {
 // ── Photos: paging on the card, full-screen viewer from Details ──────────────
 // The user, 2026-10-25: "can I scroll through the pictures… right now I can
 // just click on one and see that one only in a new page".
-async function cardPhotoStep(box, step) {
-  const id = box.dataset.photoId;
-  const l = ALL_RENT.find(x => String(x.id) === id)
-         || (typeof ALL_SALE !== 'undefined' && ALL_SALE.find(x => String(x.id) === id))
-         || (typeof _savedRows !== 'undefined' && _savedRows.find(x => String(x.id) === id));
-  if (!l) return;
-  const photos = await listingPhotos(l);
-  if (photos.length < 2 || !box.isConnected) return;
-  const i = ((Number(box.dataset.photoIndex) || 0) + step + photos.length) % photos.length;
-  box.dataset.photoIndex = i;
-  const img = box.querySelector('.card-thumb');
-  if (img) img.src = photos[i];
-  const count = box.querySelector('.card-photo-count');
-  if (count) { count.textContent = `${i + 1}/${photos.length}`; count.hidden = false; }
+// Card photos (2026-10-28, "the photo scrolling before opening the listing
+// doesn't work well"): the card's .card-photo-track starts with the thumbnail
+// and is filled with the rest of the gallery — prefetched for the cards about
+// to scroll into view, one request for many — so a swipe is a native scroll
+// that follows the finger and snaps photo by photo. Arrows scroll the strip.
+function _cardListing(id) {
+  return ALL_RENT.find(x => String(x.id) === id)
+      || (typeof ALL_SALE !== 'undefined' && ALL_SALE.find(x => String(x.id) === id))
+      || (typeof _savedRows !== 'undefined' && _savedRows.find(x => String(x.id) === id));
 }
+
+function cardPhotoFill(box) {
+  if (!box) return Promise.resolve();
+  if (box._fill) return box._fill;
+  box._fill = (async () => {
+    const l = _cardListing(box.dataset.photoId);
+    const track = box.querySelector('.card-photo-track');
+    if (!l || !track) return;
+    const photos = await listingPhotos(l);
+    if (photos.length < 2 || !box.isConnected || track.children.length > 1) return;
+    // The thumbnail is the first photo, small: the strip goes on from the second.
+    track.insertAdjacentHTML('beforeend', photos.slice(1).map(u =>
+      `<img class="card-thumb" src="${_safeUrl(u)}" alt="" loading="lazy" decoding="async" draggable="false">`).join(''));
+    box.dataset.n = photos.length;
+    _cardPhotoCount(box);
+  })();
+  return box._fill;
+}
+
+function _cardPhotoCount(box) {
+  const track = box.querySelector('.card-photo-track');
+  const count = box.querySelector('.card-photo-count');
+  const n = Number(box.dataset.n) || 0;
+  if (!track || !count || n < 2) return;
+  const i = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+  count.textContent = `${Math.min(i, n - 1) + 1}/${n}`;
+  count.hidden = false;
+}
+
+async function cardPhotoStep(box, step) {
+  if (!box) return;
+  await cardPhotoFill(box);
+  const track = box.querySelector('.card-photo-track');
+  if (!track || track.children.length < 2) return;
+  const w = track.clientWidth, n = track.children.length;
+  const i = Math.round(track.scrollLeft / Math.max(1, w));
+  const to = (i + step + n) % n;            // round the end, like the viewer
+  track.scrollTo({ left: to * w, behavior: Math.abs(to - i) > 1 ? 'auto' : 'smooth' });
+}
+
+// Prefetch the galleries of the cards about to be seen: one request for all
+// of them (local /rentals/extras?ids=…, else Supabase), so the first swipe
+// already has something to scroll to.
+const _photoPrefetchIds = new Set();
+let _photoPrefetchTimer = 0;
+async function _prefetchCardPhotos() {
+  const ids = [..._photoPrefetchIds];
+  _photoPrefetchIds.clear();
+  const ls = ids.map(_cardListing).filter(l => l && !l._photos && !Array.isArray(l.photos));
+  if (!ls.length) return;
+  try {
+    let rows = [];
+    const sale = l => /sale/.test(l.source || '');
+    const rent = ls.filter(l => !sale(l));
+    if (IS_LIVE && rent.length) {
+      const r = await fetch(`/rentals/extras?ids=${encodeURIComponent(rent.map(l => l.id).join(','))}`);
+      if (r.ok) rows = await r.json();
+    } else if (!IS_LIVE && SupabaseClient.configured) {
+      rows = await SupabaseClient.fetchByIds(ls.map(l => l.id), 'id,photos');
+    }
+    const by = new Map(rows.map(r => [String(r.id), r.photos]));
+    for (const l of ls) {
+      const p = by.get(String(l.id));
+      if (Array.isArray(p)) l.photos = p;          // listingPhotos() takes it from here
+    }
+  } catch { /* each card falls back to its own fetch on touch */ }
+  document.querySelectorAll('.card-photo[data-photo-id]').forEach(box => {
+    if (!box._fill && ids.includes(box.dataset.photoId) && box.isConnected) cardPhotoFill(box);
+  });
+}
+const _photoObserver = 'IntersectionObserver' in window ? new IntersectionObserver(entries => {
+  for (const en of entries) {
+    if (!en.isIntersecting) continue;
+    _photoObserver.unobserve(en.target);
+    if (en.target.querySelector('.card-photo-nav')) _photoPrefetchIds.add(en.target.dataset.photoId);
+  }
+  if (_photoPrefetchIds.size) {
+    clearTimeout(_photoPrefetchTimer);
+    _photoPrefetchTimer = setTimeout(_prefetchCardPhotos, 250);
+  }
+}, { rootMargin: '300px 0px' }) : null;
+function observeCardPhotos(root = document) {
+  if (!_photoObserver) return;
+  root.querySelectorAll('.card-photo[data-photo-id]:not([data-observed])').forEach(box => {
+    box.dataset.observed = '1';
+    _photoObserver.observe(box);
+  });
+}
+// The counter follows the strip; a touch or a hover fills a card not prefetched yet.
+document.addEventListener('scroll', e => {
+  const box = e.target.closest?.('.card-photo');
+  if (box) _cardPhotoCount(box);
+}, true);
+document.addEventListener('touchstart', e => {
+  const box = e.target.closest?.('.card-photo');
+  if (box) cardPhotoFill(box);
+}, { passive: true });
+document.addEventListener('mouseover', e => {
+  const box = e.target.closest?.('.card-photo');
+  if (box && !box._fill) cardPhotoFill(box);
+});
+// Cards come and go (filters, infinite scroll): watch for new ones.
+new MutationObserver(() => observeCardPhotos()).observe(document.documentElement, { childList: true, subtree: true });
 
 let _pv = null;          // { el, photos, i, lastFocus }
 
@@ -196,21 +294,25 @@ window.addEventListener('keydown', e => {
   e.stopImmediatePropagation();
 }, true);
 
-// A horizontal swipe pages: on a card's photo and in the viewer.
+// A horizontal swipe pages in the viewer. On a card the strip scrolls
+// natively; a swipe that came before its photos did is replayed.
 let _swipe = null;
 document.addEventListener('touchstart', e => {
   const box = e.target.closest?.('.card-photo, .pv');
-  if (box && e.touches.length === 1) _swipe = { box, x: e.touches[0].clientX, y: e.touches[0].clientY };
+  if (box && e.touches.length === 1) {
+    const track = box.querySelector('.card-photo-track');
+    _swipe = { box, x: e.touches[0].clientX, y: e.touches[0].clientY, n: track ? track.children.length : 0 };
+  }
 }, { passive: true });
 document.addEventListener('touchend', e => {
   if (!_swipe) return;
-  const { box, x, y } = _swipe;
+  const { box, x, y, n } = _swipe;
   _swipe = null;
   const dx = e.changedTouches[0].clientX - x, dy = e.changedTouches[0].clientY - y;
   if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
   const step = dx < 0 ? 1 : -1;
-  if (box.classList.contains('pv')) _pvShow(step);
-  else cardPhotoStep(box, step);
+  if (box.classList.contains('pv')) { _pvShow(step); return; }
+  if (n < 2) cardPhotoStep(box, step);       // the strip had nothing to scroll yet
 }, { passive: true });
 
 function _lmDate(iso) {
