@@ -244,9 +244,9 @@ function renderRentals() {
     //   (a) Filters narrowed an existing dataset to zero → loosen-filters copy
     //   (b) Initial fetch in flight (_rentLoading) → branded loading shimmer
     //   (c) Fetch completed but dataset is genuinely empty → scan-now copy
-    if (ALL_RENT.length) {
+    if (ALL_RENT.length && !_rentLoadingMore) {
       grid.innerHTML = _emptyStateHtml(f);
-    } else if (typeof _rentLoading !== 'undefined' && _rentLoading) {
+    } else if (_rentLoadingMore || (typeof _rentLoading !== 'undefined' && _rentLoading)) {
       grid.innerHTML = _renderLumeLoading();
     } else {
       grid.innerHTML = `<div class="empty"><h3>${escapeHtml(t('empty.no_data'))}</h3><p>${escapeHtml(t('empty.no_data_hint'))}</p></div>`;
@@ -292,6 +292,10 @@ function renderRentals() {
 // message (which previously appeared during the initial fetch and
 // implied the data was missing when it was just in flight).
 let _rentLoading = false;
+// The first page is on screen, the rest still on its way (Supabase load):
+// the count says "so far" and an empty result isn't final (2026-10-28 —
+// "it shows two listings, then adds two more: why not all at once?").
+let _rentLoadingMore = false;
 
 // Branded loading-state markup. Renders the same green-glow lume mark
 // from the login screen, plus 3 shimmering skeleton cards so the user
@@ -387,12 +391,13 @@ async function _loadRentalsNow() {
   }
   let _partial = false;
   if ((!raw || !raw.length) && _supabaseReady) {
-    // Paint the first 1,000 (best-scored) as soon as they arrive.
+    // Paint the first page (the best-scored 500) as soon as it arrives.
     raw = await SupabaseClient.fetchAll('rental', {
       onFirstPage: rows => {
         if (ALL_RENT.length) return;
         ALL_RENT = _dedupListings(rows.filter(l => !l.is_stale), true);
         _rentLoading = false;
+        _rentLoadingMore = true;
         renderRentals();
       },
     });
@@ -417,6 +422,7 @@ async function _loadRentalsNow() {
   // message switches from "loading…" animation back to the real
   // "Nothing matches yet" / "Lume hasn't scanned yet" copy.
   _rentLoading = false;
+  _rentLoadingMore = false;
   renderRentals();
   _updateUnmatchedBadge();
   // Replace the "Lume is reading the listings…" placeholder with the real

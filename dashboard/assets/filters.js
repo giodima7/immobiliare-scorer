@@ -179,7 +179,11 @@ function renderRentFilterExtras(f, shown) {
        ${escapeHtml(c.label)}${icon('x')}
      </button>`).join('')
     + (chips.length ? `<button type="button" class="btn btn-ghost btn-sm" data-clear="all">${escapeHtml(t('filter.clear_filters'))}</button>` : '')
-    + `<span class="fchips-count"><strong>${fmt(shown)}</strong> ${escapeHtml(t(shown === 1 ? 'chip.flat' : 'chip.flats'))}</span>`
+    // No count before the first page is in ("0 flats" while loading).
+    + (typeof _rentLoading !== 'undefined' && _rentLoading && !ALL_RENT.length ? ''
+      : `<span class="fchips-count"><strong>${fmt(shown)}</strong> ${escapeHtml(t(shown === 1 ? 'chip.flat' : 'chip.flats'))}`
+        + (typeof _rentLoadingMore !== 'undefined' && _rentLoadingMore ? ` ${escapeHtml(t('chip.so_far'))}` : '')
+        + `</span>`)
     + alertBtn;
 }
 
