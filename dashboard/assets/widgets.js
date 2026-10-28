@@ -464,7 +464,7 @@ function _dedupListings(list, isRental) {
       for (const x of grp.slice(1)) {
         for (const c of [x, ...(x.also_on || [])]) {
           if (c.url && c.url !== winner.url && !also.some(a => a.url === c.url)) {
-            also.push({ id: c.id, source: c.source, url: c.url, price: c[priceField] ?? c.price });
+            also.push({ id: c.id, source: c.source, url: c.url, price: c[priceField] ?? c.price, private: isPrivate(c) });
           }
         }
       }

@@ -127,7 +127,7 @@ function rentActiveFilterChips(f) {
   if (f.fascia)      add('fascia', t('fascia.' + f.fascia));
   if (f.maxMetro)    add('maxMetro', t('chip.max_metro', { n: fmt(f.maxMetro) }));
   if (f.minFloor > -999) add('minFloor', t('chip.min_floor', { n: f.minFloor }));
-  if (f.source)      add('source', siteName(f.source));
+  if (f.source)      add('source', f.source === 'private' ? t('filter.private') : siteName(f.source));
   if (f.minEnergy)   add('minEnergy', t('chip.min_energy', { v: f.minEnergy }));
   if (f.minPhoto)    add('minPhoto', t('chip.min_photo', { n: f.minPhoto }));
   if (f.minScore)    add('minScore', t('chip.min_score', { n: f.minScore }));

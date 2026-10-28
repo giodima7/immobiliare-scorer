@@ -176,7 +176,7 @@ def lookup(address: str) -> tuple[float, float, str] | None:
 # the neighbourhood the site names (Bovisa in Cordusio, Sulmona 15 km out of
 # town) — coordinates a geocoder guessed before this index existed, kept in
 # enriched_cache. The portals' neighbourhood names are reliable; Subito's
-# come from the pin itself, so Subito rows are left alone.
+# come from the pin itself, so Subito and Casa.it rows are left alone.
 FAR_PIN_KM = 2.0
 # With no street-index answer, a pin only this far off moves to the centre:
 # at 2–3 km it may be right in a wide neighbourhood (Via Lodovico il Moro).
@@ -200,7 +200,7 @@ def zone_centres(rows: list, min_n: int = 5) -> dict:
     import statistics
     pts: dict = {}
     for r in rows:
-        if r.get("is_stale") or r.get("source") == "subito" or r.get("latitude") is None:
+        if r.get("is_stale") or r.get("source") in ("subito", "casait") or r.get("latitude") is None:
             continue
         if r.get("neighbourhood"):
             pts.setdefault(r["neighbourhood"], []).append((r["latitude"], r["longitude"]))
@@ -219,7 +219,7 @@ def repin_far(rows: list, max_km: float = FAR_PIN_KM, centre_km: float = FAR_PIN
     centres = zone_centres(rows)
     keys = []
     for r in rows:
-        if r.get("source") == "subito" or r.get("latitude") is None:
+        if r.get("source") in ("subito", "casait") or r.get("latitude") is None:
             continue
         c = centres.get(r.get("neighbourhood") or "")
         off = _km((r["latitude"], r["longitude"]), c) if c else 0

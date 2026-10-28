@@ -2667,7 +2667,7 @@ def _sleep_outside_window(args, source: str, log) -> None:
 
 def _between_slots(args, source: str, next_slot: float, log, run_slot_fn, discover_state) -> None:
     """Until the next slot: the site's sales sweep when due (sales_scan),
-    the Subito.it pass when due (fetch_subito), discover every
+    the Subito.it and Casa.it passes when due (fetch_subito, fetch_casait), discover every
     DISCOVER_EVERY_SEC (new listings within ~20 min), and listing pages
     meanwhile, with a photo reading after each page session."""
     import scan_window
@@ -2687,6 +2687,12 @@ def _between_slots(args, source: str, next_slot: float, log, run_slot_fn, discov
                 run_marked("subito", run_subito, args, log)
         except Exception as exc:
             log(f"✗ Subito error: {type(exc).__name__}: {exc}")
+        try:                                   # Casa.it private landlords (fetch_casait)
+            from fetch_casait import casait_due, run_casait
+            if casait_due():                   # either daemon; a lock keeps it to one
+                run_marked("casait", run_casait, args, log)
+        except Exception as exc:
+            log(f"✗ Casa.it error: {type(exc).__name__}: {exc}")
         if time.time() >= next_discover:
             try:
                 rec = run_marked(source, run_slot_fn, args, None, True)

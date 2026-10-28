@@ -299,7 +299,8 @@ def _fetch(url: str) -> bytes | None:
     tries = [url] + ([url.replace("/xs-c.jpg", v) for v in ("/s-c.jpg", "/m-c.jpg")]
                      if url.endswith("/xs-c.jpg") else [])
     referer = ("https://www.idealista.it/" if "idealista" in url else
-               "https://www.subito.it/" if "sbito.it" in url else "https://www.immobiliare.it/")
+               "https://www.subito.it/" if "sbito.it" in url else
+               "https://www.casa.it/" if "casa.it" in url else "https://www.immobiliare.it/")
     for u in tries:
         req = urllib.request.Request(u, headers={"User-Agent": UA, "Referer": referer})
         try:

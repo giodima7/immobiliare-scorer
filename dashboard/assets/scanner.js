@@ -613,16 +613,18 @@ function _renderCityScanGrid() {
 // The four "workers" (Tools → Scanner): zone tour, new-listing search,
 // listing pages, photo reading — what each did last, today and next, and
 // progress on the top listings (api.py _pipeline_status).
-// Subito.it (fetch_subito): the whole city in one pass every few hours.
-function _subitoLine(s, hm, next) {
+// Subito.it / Casa.it (fetch_subito, fetch_casait): the whole city in one
+// pass a day. key: 'subito' | 'casait'.
+function _subitoLine(s, hm, next, key = 'subito', site = 'Subito') {
   if (!s) return '';
   const l = s.last;
-  const txt = s.paused ? t('w.subito_paused', { until: hm(s.next) })
-    : l ? t('w.subito_line', { at: hm(l.at), pages: fmt(l.pages || 0), total: fmt(l.total_pages || 0),
-                               n: fmt(l.new || 0), next: next(s.next) })
-    : t('w.never', { site: 'Subito' });
+  const txt = s.paused ? t(`w.${key}_paused`, { until: hm(s.next) })
+    : l ? t(`w.${key}_line`, { at: hm(l.at), pages: fmt(l.pages || 0), total: fmt(l.total_pages || 0),
+                               n: fmt(l.new || 0), next: next(s.next), details: fmt(l.details || 0),
+                               zone: formatAddress(String(l.zone || '').replace(/-/g, ' ')) })
+    : t('w.never', { site });
   return `<div class="w-line">${escapeHtml(txt)}</div>`
-    + `<div class="w-today">${escapeHtml(t('w.subito_today', { n: fmt(s.today_new || 0) }))}</div>`;
+    + `<div class="w-today">${escapeHtml(t(`w.${key}_today`, { n: fmt(s.today_new || 0) }))}</div>`;
 }
 
 function _renderPipeline(p) {
@@ -648,7 +650,8 @@ function _renderPipeline(p) {
     ? t('w.slot_line', { site: name[src], at: hm(s.slot.last.at), area: area(s.slot.last.area), n: fmt(s.slot.last.new || 0), next: next(s.slot.next) })
     : t('w.never', { site: name[src] }))
     + `<div class="w-today">${esc(t('w.today_slots', { n: sum(s => s.slot?.today), k: fmt(sum(s => s.slot?.new_today)) }))}</div>`
-    + _subitoLine(p.subito, hm, next);
+    + _subitoLine(p.subito, hm, next)
+    + _subitoLine(p.casait, hm, next, 'casait', 'Casa.it');
   const disc = lines((src, s) => s.discover?.last
     ? t('w.discover_line', { site: name[src], at: hm(s.discover.last.at), n: fmt(s.discover.last.new || 0), next: next(s.discover.next) })
     : t('w.never', { site: name[src] }))

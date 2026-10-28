@@ -287,7 +287,24 @@ function siteName(source) {
   const s = String(source || '');
   if (s.startsWith('idealista')) return 'Idealista';
   if (s === 'subito') return 'Subito.it';
+  if (s === 'casait') return 'Casa.it';
   return 'Immobiliare.it';
+}
+
+// A private landlord — no agency fee. "user" is Immobiliare's word for a
+// private advertiser (fetch_casait uses it too); Subito is read from private
+// ads only; Idealista says it on the listing page (listing_details).
+function isPrivate(l) {
+  return !!l && (l.agency_type === 'user' || l.source === 'subito');
+}
+
+// The site where the same flat is up from a private landlord, when this
+// copy is an agency's (an owner who also hired an agency): the way round
+// the fee. '' when none.
+function privateCopySite(l) {
+  if (!l || isPrivate(l)) return '';
+  const a = (l.also_on || []).find(x => x.private);
+  return a ? siteName(a.source) : '';
 }
 
 // The other sites / agencies the same flat is listed on (widgets.js

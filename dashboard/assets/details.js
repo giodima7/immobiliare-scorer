@@ -393,7 +393,7 @@ function _lmCostTable(l) {
 function _lmAlsoOn(l) {
   const seen = new Set();
   const links = (l.also_on || []).filter(a => a.url && !seen.has(a.url) && seen.add(a.url)).map(a =>
-    `<a href="${_safeUrl(a.url)}" target="_blank" rel="noopener">${escapeHtml(siteName(a.source))}${a.price && a.price !== (l.rent_mo ?? l.price) ? ' €' + fmt(a.price) : ''}</a>`);
+    `<a href="${_safeUrl(a.url)}" target="_blank" rel="noopener">${escapeHtml(siteName(a.source))}${a.price && a.price !== (l.rent_mo ?? l.price) ? ' €' + fmt(a.price) : ''}${a.private && !isPrivate(l) ? ' (' + escapeHtml(t('card.private').toLowerCase()) + ')' : ''}</a>`);
   return links.length ? ' · ' + escapeHtml(t('lm.also_on')) + ' ' + links.join(', ') : '';
 }
 
@@ -437,12 +437,13 @@ function listingModalHtml(l) {
   const metroLine = l.metro_nearest_name
     ? `${l.metro_nearest_name}${l.metro_nearest_line ? ' ' + l.metro_nearest_line : ''}` : t('lm.metro');
   const site = siteName(l.source);
-  const subito = l.source === 'subito';
+  const subito = l.source === 'subito', casait = l.source === 'casait';
   const provenance = subito ? t('lm.subito_read')
-    : l.detail_fetched_at ? t('lm.page_read', { date: _lmDate(l.detail_fetched_at) }) : t('lm.page_not_read');
-  // Subito listings without the site's own pin are placed from their text.
+    : l.detail_fetched_at ? t('lm.page_read', { date: _lmDate(l.detail_fetched_at) })
+    : casait ? t('lm.casait_read') : t('lm.page_not_read');
+  // Subito / Casa.it listings without the site's own pin are placed from their text.
   const approx = { street: 'lm.geo_street', metro: 'lm.geo_metro', zone: 'lm.geo_zone' }[l.geo_precision];
-  const unplaced = subito && l.latitude == null;
+  const unplaced = (subito || casait) && l.latitude == null;
   const fav = isRentFav(l.id);
   const id = esc(String(l.id));
   const method = compsMethodTip(l);
@@ -452,7 +453,7 @@ function listingModalHtml(l) {
     <div class="lm-title">
       <h2 id="lmTitle">${esc([formatAddress(l.neighbourhood), l.address ? formatAddress(l.address) : ''].filter(Boolean).join(' · ')
                               || (l.title || '').trim() || '–')}</h2>
-      <div class="lm-sub">${esc(site)}${subito ? ' · ' + esc(t('card.private')) : ''}${_lmAlsoOn(l)} · ID ${id}${l.first_seen_date ? ' · ' + esc(t('lm.first_seen', { date: _lmDate(l.first_seen_date) })) : ''}</div>
+      <div class="lm-sub">${esc(site)}${isPrivate(l) ? ' · ' + esc(t('card.private')) : ''}${_lmAlsoOn(l)} · ID ${id}${l.first_seen_date ? ' · ' + esc(t('lm.first_seen', { date: _lmDate(l.first_seen_date) })) : ''}</div>
       ${_longOnlineText(l) ? `<div class="lm-cap lm-online">${icon('clock')} ${esc(_longOnlineText(l))} — ${esc(t('card.online_ask'))}</div>` : ''}
     </div>
     <button type="button" class="btn btn-secondary btn-icon lm-close" aria-label="${esc(t('lm.close'))}">${icon('x')}</button>
