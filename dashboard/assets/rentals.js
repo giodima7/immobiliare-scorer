@@ -85,7 +85,8 @@ function applyRentFilters(data, f) {
     if (f.minSqm   && l.sqm < f.minSqm)                       return false;
     if (f.minRooms && (l.rooms ?? 0) < f.minRooms)            return false;
     if (f.minScore && (l.score_total ?? 0) < f.minScore)      return false;
-    if (f.source   && (l.source || 'immobiliare') !== f.source) return false;
+    if (f.source === 'private' ? !(isPrivate(l) || privateCopySite(l))
+        : f.source && (l.source || 'immobiliare') !== f.source) return false;
     // New enriched filters
     if (f.maxMetro > 0) {
       // When a metro distance filter is active, listings with NO geo data are

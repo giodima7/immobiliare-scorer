@@ -594,17 +594,18 @@ def place_by_zone(rows: list, pool: list) -> int:
     return n
 
 
-def settle_places(rows: list, pool: list) -> dict:
+def settle_places(rows: list, pool: list, source: str = SOURCE) -> dict:
     """After enrichment: a pin outside the Comune di Milano marks the
     listing outside the city (scored out, like Idealista's); a placed row
     gets the neighbourhood the other sites' listings around it use (most
     common within 300 m, else the nearest within 800 m), else its OMI
     zone's first name — the card title, the area filter, focus areas and
-    stats read it."""
+    stats read it. `source`: the caller's rows (fetch_casait), left out of
+    the grid like Subito's — their names come from the pin too."""
     import omi_lookup
     grid: dict = {}
     for l in pool:
-        if (l.get("source") != SOURCE and l.get("neighbourhood")
+        if (l.get("source") not in (SOURCE, source) and l.get("neighbourhood")
                 and l.get("latitude") is not None and l.get("longitude") is not None):
             key = (math.floor(l["latitude"] * 100), math.floor(l["longitude"] * 100))   # ~1 km cells
             grid.setdefault(key, []).append((l["latitude"], l["longitude"], l["neighbourhood"]))

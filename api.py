@@ -211,8 +211,8 @@ def _has_geocodable_data(l: dict) -> bool:
 
     if l.get("latitude") and l.get("longitude"):
         return True
-    if l.get("source") == "subito":
-        return False   # fetch_subito already read its text for a place, or found none
+    if l.get("source") in ("subito", "casait"):
+        return False   # fetch_subito / fetch_casait already read its text for a place, or found none
     addr = (l.get("address") or "").strip()
     if addr and not _RE_POSIZIONE_APPROSSIMATIVA.search(addr):
         return True
@@ -1549,9 +1549,12 @@ def stop_scanner():
 _pipeline_cache: dict = {"at": 0.0, "data": None}
 
 
-def _subito_status(today: str) -> dict:
-    """The Subito.it pass (fetch_subito): last run, new today, next."""
-    import fetch_subito as _fs
+def _subito_status(today: str, _fs=None, every: int | None = None) -> dict:
+    """The Subito.it pass (fetch_subito) — or, given its module, the
+    Casa.it one (fetch_casait): last run, new today, next."""
+    if _fs is None:
+        import fetch_subito as _fs
+    every = every or _fs.SUBITO_EVERY_SEC
     from datetime import datetime as _dt
     out: dict = {"today_new": 0}
     if _fs.LOG_PATH.exists():
@@ -1560,14 +1563,20 @@ def _subito_status(today: str) -> dict:
                 r = _json.loads(line)
             except ValueError:
                 continue
-            out["last"] = {k: r.get(k) for k in ("at", "pages", "total_pages", "kept", "new", "complete", "blocked")}
+            out["last"] = {k: r.get(k) for k in ("at", "pages", "total_pages", "kept", "new", "complete", "blocked",
+                                                 "zone", "details")}
             out["today_new"] += (r.get("new") or 0) if str(r.get("at", ""))[:10] == today else 0
     st = _fs._state()
-    nxt = max((st.get("at") or 0) + _fs.SUBITO_EVERY_SEC, st.get("pause_until") or 0)
+    nxt = max((st.get("at") or 0) + every, st.get("pause_until") or 0)
     if nxt:
         out["next"] = _dt.fromtimestamp(nxt).isoformat(timespec="minutes")
     out["paused"] = (st.get("pause_until") or 0) > _time.time()
     return out
+
+
+def _casait_status(today: str) -> dict:
+    import fetch_casait as _fc
+    return _subito_status(today, _fc, _fc.CASAIT_EVERY_SEC)
 
 
 def _pipeline_status() -> dict:
@@ -1648,7 +1657,8 @@ def _pipeline_status() -> dict:
                 r = _json.loads(last[0])
                 photos["last"] = {"at": r.get("at"), "listings": r.get("listings"), "stored": r.get("stored")}
         out = {"min_score": _pe.MIN_SCORE, "top": top, "sites": sites, "photos": photos,
-               "subito": _subito_status(today)}
+               "subito": _subito_status(today),
+               "casait": _casait_status(today)}
     except Exception as exc:
         out = {"error": f"{type(exc).__name__}: {exc}"}
     _pipeline_cache.update(at=_time.time(), data=out)

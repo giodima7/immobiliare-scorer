@@ -233,7 +233,7 @@ def _listing_tile(l: dict) -> str:
     # Style tokens
     sc_bg, sc_col, sc_border = _score_style(score)
     fb_bg, fb_col            = _fascia_style(fascia)
-    source_lbl = {"idealista": "Idealista", "subito": "Subito.it"}.get(source, "Immobiliare.it")
+    source_lbl = {"idealista": "Idealista", "subito": "Subito.it", "casait": "Casa.it"}.get(source, "Immobiliare.it")
 
     # ── Photo section ─────────────────────────────────────────────────────────
     gem_chip = ""

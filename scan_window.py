@@ -12,6 +12,9 @@ opens nothing, may still run: fetch_rentals._sleep_outside_window).
 
 Edit scan_window.json — {"start": "23:30", "end": "07:30"} — to move it;
 it is read on every check, no restart needed. A window may cross midnight.
+One-off extra windows go in "extra": [{"from": "2026-10-27T23:25", "to":
+"2026-10-28T06:30"}] — 2026-10-27, the user: catch up on a day the Mac
+spent asleep with the lid closed. Past ones are simply ignored.
 Inside the window the daemons keep the Mac from idle-sleeping (caffeinate
 -i); it still has to be on power with the lid open.
 
@@ -54,8 +57,21 @@ def days() -> set[int]:
         return set(range(7))
 
 
+def extra() -> list[tuple[datetime, datetime]]:
+    """One-off windows on top of the weekly one (see the module doc)."""
+    try:
+        return [(datetime.fromisoformat(e["from"]), datetime.fromisoformat(e["to"]))
+                for e in json.loads(CONFIG_PATH.read_text()).get("extra") or []]
+    except (OSError, ValueError, KeyError, TypeError):
+        return []
+
+
 def in_window(now: datetime | None = None) -> bool:
     now = now or datetime.now()
+    return _in_weekly(now) or any(a <= now < b for a, b in extra())
+
+
+def _in_weekly(now: datetime) -> bool:
     start, end = window()
     t, on = now.time(), days()
     if start <= end:
@@ -74,22 +90,27 @@ def next_open(now: datetime | None = None) -> datetime:
     if in_window(now):
         return now
     start, on = window()[0], days()
+    weekly = _at(now + timedelta(days=1), start)
     for k in range(8):
         cand = _at(now + timedelta(days=k), start)
         if cand > now and cand.weekday() in on:
-            return cand
-    return _at(now + timedelta(days=1), start)
+            weekly = cand
+            break
+    return min([weekly] + [a for a, _ in extra() if a > now])
 
 
 def closes_at(now: datetime | None = None) -> datetime:
     """End of the window `now` is in (or of the next one)."""
     now = now or datetime.now()
-    start, end = window()
-    opened = now if in_window(now) else next_open(now)
-    close = _at(opened, end)
-    if close <= opened:
-        close += timedelta(days=1)
-    return close
+    t = now if in_window(now) else next_open(now)
+    for _ in range(10):                  # an extra window may run into the weekly one
+        ends = [b for a, b in extra() if a <= t < b]
+        if _in_weekly(t):
+            close = _at(t, window()[1])
+            ends.append(close + timedelta(days=1) if close <= t else close)
+        if not ends or not in_window(t := max(ends)):
+            return t
+    return t
 
 
 def hours() -> float:

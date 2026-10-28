@@ -31,6 +31,9 @@ milano_sales_latest.json.lock
 .subito_state.json
 .source_pause.json
 subito_scans_*.jsonl
+.casait.lock
+.casait_state.json
+casait_scans_*.jsonl
 scan_slots_*.jsonl
 scanner.log
 scanner_idealista.log

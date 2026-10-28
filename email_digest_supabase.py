@@ -154,7 +154,9 @@ def fetch_new_listings_for_user(filters: dict) -> list[dict]:
     elif gems == "great_value":
         params.append(("good_value", "eq.true"))
     src = filters.get("source_filter") or "all"
-    if src and src != "all":
+    if src == "private":                 # any site, private advertiser (Immobiliare's "user")
+        params.append(("agency_type", "eq.user"))
+    elif src and src != "all":
         params.append(("source", f"eq.{src}"))
     if filters.get("fascia"):
         f_in = ",".join(filters["fascia"])

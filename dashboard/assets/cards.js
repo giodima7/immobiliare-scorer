@@ -478,7 +478,8 @@ function renderRentalCard(l) {
     : '';
   // The site is the Open button's label; "+1" when the flat is on another site too.
   const others = alsoOnSites(l) ? alsoOnSites(l).split(', ').length : 0;
-  const openLabel = site.replace('.it', '') + (others ? ` +${others}` : '');
+  // "Immobiliare", "Subito" — but "Casa" alone reads as a word: kept whole.
+  const openLabel = (site === 'Casa.it' ? site : site.replace('.it', '')) + (others ? ` +${others}` : '');
 
   const cost = monthlyCost(l);
   const history = priceHistoryText(l);
@@ -494,7 +495,7 @@ function renderRentalCard(l) {
       <div class="card-head">
         <div class="card-title-wrap">
           <h2 class="card-title"><button type="button" class="card-title-btn" data-open-details="${id}">${escapeHtml(nb)}</button></h2>
-          <div class="card-sub">${escapeHtml([street && street.toLowerCase() !== nb.toLowerCase() ? street : '', l.source === 'subito' ? t('card.private') : ''].filter(Boolean).join(' · '))}</div>
+          <div class="card-sub">${escapeHtml([street && street.toLowerCase() !== nb.toLowerCase() ? street : '', isPrivate(l) ? t('card.private') : privateCopySite(l) ? t('card.private_on', { site: privateCopySite(l) }) : ''].filter(Boolean).join(' · '))}</div>
         </div>
         ${scoreRingHtml(l)}
       </div>

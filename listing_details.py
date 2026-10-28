@@ -187,6 +187,10 @@ def _condition_unknown(value) -> bool:
     return condition_group({"condition": value}) == "unknown"
 
 
+# Who placed the ad, from Idealista's listing page (parse_idealista_detail).
+ADVERTISER_KEYS = ("agency_type", "agency_name")
+
+
 def apply_details(listings: list, cache: dict | None = None) -> int:
     """Fill listing fields from the detail cache. Returns rows touched."""
     cache = load_cache() if cache is None else cache
@@ -212,17 +216,21 @@ def apply_details(listings: list, cache: dict | None = None) -> int:
                     l[k] = True          # the page says so, whatever the search card said
                 continue
             if k in RENT_ONLY_FLAGS:
-                if l.get("source") in ("immobiliare", "idealista"):
+                if l.get("source") in ("immobiliare", "idealista", "casait"):
                     l[k] = bool(v)
                     if k == "text_says_studio" and v and (l.get("rooms") or 0) > 1:
                         l["rooms"] = 1           # the description over the search card's room count
                 continue
             cur = l.get(k)
             if (cur is None
+                    or (k in ADVERTISER_KEYS and not cur)      # Idealista's card leaves them ""
                     or (k == "bedrooms" and l.get("bedrooms_from") == "photos")
                     or (k in CARD_YES_ONLY and l.get("source") == "idealista")
                     or (k == "condition" and _condition_unknown(cur))
-                    or (k == "photos" and len(v) > len(cur or []))):
+                    or (k == "photos" and len(v) > len(cur or []))
+                    # Casa.it's search card cuts the description at ~400 characters.
+                    or (k in ("description", "photo_count") and l.get("source") == "casait"
+                        and (len(str(v)) > len(str(cur)) if k == "description" else v > (cur or 0)))):
                 l[k] = v
         if (e.get("fields") or {}).get("bedrooms") is not None:
             l.pop("bedrooms_from", None)         # the page says how many
@@ -392,6 +400,10 @@ _IDEALISTA_EXTRACT_JS = r"""JSON.stringify({
   // "Spese condominiali: 160 €/mese", "Cauzione di 3 mesi" — on every page.
   priceBox: Array.from(document.querySelectorAll('.price-features__container .flex-feature'))
                  .map(e => (e.innerText || '').replace(/\s+/g, ' ').trim()),
+  // Who placed the ad: "Professionista Italservizi Web srl" or "Privato".
+  // The search card can't tell: a small agency has no logo either.
+  advertiser: ((document.querySelector('.professional-name') || {}).innerText || '').replace(/\s+/g, ' ').trim().slice(0, 120),
+  contactBox: ((document.querySelector('.contact-data-container') || {}).innerText || '').replace(/\s+/g, ' ').trim().slice(0, 300),
   photos: (() => {
     // The whole gallery sits in one inline script (multimediaCarrousel /
     // fullScreenGalleryPics); the DOM holds only the first picture or two.
@@ -435,6 +447,17 @@ def parse_idealista_detail(page: dict) -> dict:
     text = " | ".join(feats)
     comment = page.get("comment") or ""
     out: dict = {}
+
+    adv, box = page.get("advertiser") or "", page.get("contactBox") or ""
+    if re.match(r"privat", adv, re.I) or (not adv and re.search(r"\bprivato\b", box, re.I)):
+        out["agency_type"] = "user"              # Immobiliare's word for a private advertiser
+        out["advertiser_checked"] = 1
+    elif adv:
+        out["agency_type"] = "agency"
+        out["advertiser_checked"] = 1
+        name = re.sub(r"^professionista\s*", "", adv, flags=re.I).strip()
+        if name:
+            out["agency_name"] = name
 
     m = re.search(r"(\d+)\s+bagn", text)
     if m:
@@ -543,7 +566,7 @@ def build_queue(source: str, cache: dict | None = None,
     except Exception:
         in_focus = lambda l: False
     today = date.today()
-    focus, suspect, top, deals, new, rest = [], [], [], [], [], []
+    focus, suspect, top, deals, new, rest, adv = [], [], [], [], [], [], []
     for l in rows:
         if (l.get("source") or "immobiliare") != source:
             continue
@@ -556,6 +579,12 @@ def build_queue(source: str, cache: dict | None = None,
         # in a shared flat — read again first (~160 pages).
         if entry and not entry.get("gone") and l.get("price_suspect") and not f.get("room_checked"):
             suspect.append((l.get("price_z") or 0, (lid, l["url"])))
+            continue
+        # No agency name on the card: a private landlord or a small agency
+        # without a logo — only the page says which (the "Private" filter).
+        if (source == "idealista" and not l.get("agency_name") and not entry.get("gone")
+                and not f.get("advertiser_checked")):
+            (focus if in_focus(l) else adv).append((-(l.get("score_total") or 0), (lid, l["url"])))
             continue
         if not entry.get("gone") and not (f.get("costs_read") and f.get("room_checked")):
             if in_focus(l):
@@ -592,7 +621,7 @@ def build_queue(source: str, cache: dict | None = None,
         if not entry.get("gone") and not (f.get("costs_read") and f.get("nuda_checked")):
             sales.append((-(l.get("score_total") or 0), (str(l["id"]), l["url"])))
     return ([i for _, i in sorted(suspect)] + [i for _, i in sorted(focus)] + [i for _, i in sorted(sales)]
-            + [i for _, i in sorted(top)] + [i for _, i in sorted(deals)]
+            + [i for _, i in sorted(top)] + [i for _, i in sorted(deals)] + [i for _, i in sorted(adv)]
             + [i for _, i in sorted(new)] + [i for _, i in sorted(rest)])
 
 
