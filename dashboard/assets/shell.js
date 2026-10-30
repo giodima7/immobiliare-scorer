@@ -358,9 +358,9 @@ function avg(arr, key) {
 // ── Favourites ────────────────────────────────────────────────────────────────
 function getFavourites()     { return Storage.get('favourites', []); }
 
-// Header "Saved" count — rental favourites (the sales list is retired).
+// Header "Saved" count — saved rentals and sales.
 function updateFavBadge() {
-  const n     = getRentFavs().length;
+  const n     = getRentFavs().length + getSaleFavs().length;
   const badge = document.getElementById('favBadge');
   if (!badge) return;
   badge.textContent = fmt(n);
@@ -382,6 +382,38 @@ function toggleRentFav(id) {
   updateFavBadge();
   if (typeof activeTab !== 'undefined' && activeTab === 'saved' && typeof renderSaved === 'function') renderSaved();
   return i === -1;
+}
+
+// ── Sale favourites (2026-10-30: a ♡ on sale cards again) ───────────────────
+// A key of their own: the old 'favourites' list may still hold May's sale ids.
+function getSaleFavs()       { return Storage.get('saleFavourites', []).map(String); }
+function isSaleFav(id)       { return getSaleFavs().includes(String(id)); }
+function toggleSaleFav(id) {
+  const ids = getSaleFavs();
+  const i   = ids.indexOf(String(id));
+  if (i === -1) ids.push(String(id)); else ids.splice(i, 1);
+  Storage.set('saleFavourites', ids);
+  updateFavBadge();
+  if (typeof activeTab !== 'undefined' && activeTab === 'saved' && typeof renderSaved === 'function') renderSaved();
+  return i === -1;
+}
+
+// A toast with one action ("Saved · Add to a collection"): tap the action.
+let _actionToastTimer = null;
+function showActionToast(msg, actionLabel, onAction, ms = 4500) {
+  let el = document.querySelector('.lume-toast-action');
+  if (!el) {
+    el = document.createElement('div');
+    el.className = 'lume-toast lume-toast-action';
+    el.setAttribute('role', 'status');
+    document.body.appendChild(el);
+  }
+  el.innerHTML = `<span>${escapeHtml(msg)}</span>${actionLabel ? `<button type="button">${escapeHtml(actionLabel)}</button>` : ''}`;
+  el.querySelector('button')?.addEventListener('click', () => { el.classList.remove('show'); onAction?.(); }, { once: true });
+  void el.offsetWidth;
+  el.classList.add('show');
+  clearTimeout(_actionToastTimer);
+  _actionToastTimer = setTimeout(() => el.classList.remove('show'), ms);
 }
 
 // ── Live-API vs static-mode detection ────────────────────────────────────────

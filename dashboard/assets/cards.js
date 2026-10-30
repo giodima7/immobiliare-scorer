@@ -644,14 +644,16 @@ function renderRentalCard(l, opts = {}) {
     ${photo}
     <div class="card-body">
       <div class="card-top">
-        <div class="card-price">
-          <span class="price-main">${l.rent_mo != null ? '€' + fmt(cost.total) : '–'}</span>
-          <span class="price-unit">${escapeHtml(t(cost.known ? 'cost.all_in' : 'cost.rent_only'))}</span>
-          ${l.thumbnail ? '' : photoChip}
+        <div class="card-top-main">
+          <div class="card-price">
+            <span class="price-main">${l.rent_mo != null ? '€' + fmt(cost.total) : '–'}</span>
+            <span class="price-unit">${escapeHtml(t(cost.known ? 'cost.all_in' : 'cost.rent_only'))}</span>
+            ${l.thumbnail ? '' : photoChip}
+          </div>
+          ${_rentMoneyHtml(cost, l)}
         </div>
         ${opts.fit != null ? scoreRingHtml(l, 40, { value: opts.fit, caption: t('ring.fit') }) : scoreRingHtml(l, 40, { caption: t('ring.score') })}
       </div>
-      ${_rentMoneyHtml(cost, l)}
       ${_factsHtml(l)}
       ${_placeHtml(nb, street, `data-open-details="${id}"`, priv ? `<span class="place-private">${escapeHtml(priv)}</span>` : '')}
     </div>

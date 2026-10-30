@@ -347,16 +347,20 @@ function saleCardHtml(l, f, opts = {}) {
        <span class="card-photo-count" hidden></span>` : ''}</div>` : ''}
     <div class="card-body">
       <div class="card-top">
-        <div class="card-price"><span class="price-main">€${fmt(l.price)}</span></div>
+        <div class="card-top-main">
+          <div class="card-price"><span class="price-main">€${fmt(l.price)}</span></div>
+          ${psqm ? `<div class="card-money"><span>€${fmt(Math.round(psqm))}/m²</span>${vs ? '<i aria-hidden="true">·</i>' + vs : ''}</div>` : ''}
+        </div>
         ${opts.fit != null ? scoreRingHtml(l, 40, { value: opts.fit, caption: t('ring.fit') }) : scoreRingHtml(l, 40, { caption: t('ring.score') })}
       </div>
-      ${psqm ? `<div class="card-money"><span>€${fmt(Math.round(psqm))}/m²</span>${vs ? '<i aria-hidden="true">·</i>' + vs : ''}</div>` : ''}
       ${_factsHtml(l)}
       ${_placeHtml(title, street, `data-open-sale="${id}"`)}
       ${_ownLineHtml(l, f)}
     </div>
     ${_cardFootHtml({
       metaHtml: (typeof _metroFootHtml === 'function' ? _metroFootHtml(l) : '') + _saleFreshHtml(l),
+      favHtml: (() => { const fav = isSaleFav(l.id); return `<button type="button" class="btn btn-secondary btn-icon btn-fav${fav ? ' is-fav' : ''}" data-sale-id="${id}"
+              aria-pressed="${fav}" aria-label="${esc(t(fav ? 'card.unsave' : 'card.save'))}" title="${esc(t(fav ? 'card.unsave' : 'card.save'))}">${favBtnInner()}</button>`; })(),
       openHtml: `<a class="btn btn-secondary btn-open" href="${_safeUrl(l.url)}" target="_blank" rel="noopener"
          title="${esc(t('lm.open_on', { site }) + (others ? ' · ' + t('card.also_on', { sites: alsoOnSites(l) }) : ''))}">${esc(openLabel)}${icon('external-link')}</a>`,
     })}

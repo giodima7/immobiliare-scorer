@@ -4183,13 +4183,15 @@ body.pv-open { overflow: hidden; }
    (For you), then one footer row: metro and freshness, ♡ and Open. */
 .card .card-body { gap: 6px; }
 .card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-3); }
-.card-top .card-price { flex: 1; min-width: 0; }
-.card-top .score-ring-wrap { width: 40px; height: 40px; flex: none; margin-bottom: 14px; }
+/* Price and its money line stacked on the left, the ring beside both: the
+   ring's caption no longer pushes the money line down (2026-10-30, the
+   user: "a lot of space between these rows"). */
+.card-top-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.card-top .score-ring-wrap { width: 40px; height: 40px; flex: none; margin-bottom: 10px; }
 .score-ring-cap { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 2px;
                   font-size: 11px; line-height: 1.2; font-weight: 500; color: var(--text-muted); white-space: nowrap; }
 /* Plain text flow, not flex: flex drops the spaces around "+ condo". */
-.card-money, .card-own { display: block; font-size: var(--text-sm); line-height: 1.45;
-                         color: var(--text-secondary); margin-top: -4px; }
+.card-money, .card-own { display: block; font-size: var(--text-sm); line-height: 1.45; color: var(--text-secondary); }
 .card-money .fact-unk, .card-own .fact-unk { vertical-align: -2px; }
 .card-own { margin-top: 0; }
 .card-own b { color: var(--text-primary); font-weight: 600; }
@@ -4224,3 +4226,8 @@ body.pv-open { overflow: hidden; }
 .fy-chip { white-space: nowrap; }
 /* Touch: swipe pages the photos, the arrows only cover them. */
 @media (hover: none) { .card-photo-nav { display: none; } }
+/* A toast with one action (shell.js showActionToast): it can be tapped. */
+.lume-toast-action { display: inline-flex; align-items: center; gap: 12px; padding: 8px 8px 8px 18px; pointer-events: none; }
+.lume-toast-action.show { pointer-events: auto; }
+.lume-toast-action button { border: 0; border-radius: var(--radius-full); padding: 6px 12px; cursor: pointer;
+                            background: var(--green-deep); color: #fff; font: inherit; font-weight: 600; }

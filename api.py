@@ -1221,7 +1221,7 @@ def rentals_by_ids():
 # The dashboard keeps them in localStorage; locally it also mirrors them here
 # so they survive a cleared browser or another browser on this machine.
 USER_DATA_PATH = BASE_DIR / "user_data.json"
-_USER_DATA_KEYS = {"rentFavourites", "favourites", "collections"}
+_USER_DATA_KEYS = {"rentFavourites", "favourites", "collections", "saleFavourites"}
 
 
 @app.route("/api/user-data", methods=["GET"])

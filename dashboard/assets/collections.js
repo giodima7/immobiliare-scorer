@@ -301,7 +301,23 @@ async function renderSaved() {
       grid.insertAdjacentHTML('beforeend', `<div class="empty-block" style="grid-column:1/-1">${escapeHtml(t('saved.gone', { n: ids.length - rows.length }))}</div>`);
     }
   }
+  await _renderSavedSales(grid);
   renderSavedCollections();
+}
+
+// Saved sales, under the saved rentals (sale cards, today's mortgage terms).
+async function _renderSavedSales(grid) {
+  const ids = getSaleFavs();
+  grid.querySelectorAll('.saved-sales').forEach(e => e.remove());
+  if (!ids.length) return;
+  if (!ALL_SALE.length && typeof loadSales === 'function') await loadSales();
+  const byId = new Map(ALL_SALE.map(l => [String(l.id), l]));
+  const rows = ids.map(i => byId.get(i)).filter(Boolean);
+  const f = typeof saleFilters === 'function' ? saleFilters() : {};
+  grid.querySelector(':scope > .empty-block')?.remove();
+  grid.insertAdjacentHTML('beforeend', `<h2 class="section-title saved-sales" style="grid-column:1/-1">${escapeHtml(t('saved.sales', { n: fmt(rows.length) }))}</h2>`
+    + rows.map(l => saleCardHtml(l, f).replace('class="card sale-card"', 'class="card sale-card saved-sales no-anim"')).join(''));
+  _observeScoreRings(grid, false);
 }
 
 function renderSavedCollections() {

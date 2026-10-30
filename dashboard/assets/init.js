@@ -185,10 +185,26 @@ if (!window._digestActionDelegatorBound) {
 
 // ── from cards.js · favourite button on every card (delegated) ──
 document.addEventListener('click', e => {
+  const sale = e.target.closest && e.target.closest('.btn-fav[data-sale-id]');
+  if (sale) {
+    const on = toggleSaleFav(sale.dataset.saleId);
+    document.querySelectorAll(`.btn-fav[data-sale-id="${CSS.escape(sale.dataset.saleId)}"]`).forEach(b => {
+      b.classList.toggle('is-fav', on); b.setAttribute('aria-pressed', String(on));
+      b.title = t(on ? 'card.unsave' : 'card.save'); b.setAttribute('aria-label', b.title);
+    });
+    if (on) showActionToast(t('fav.saved'));
+    return;
+  }
   const btn = e.target.closest && e.target.closest('.btn-fav[data-rent-id]');
   if (!btn) return;
   const id = btn.dataset.rentId;
-  setFavUi(id, toggleRentFav(id));
+  const on = toggleRentFav(id);
+  setFavUi(id, on);
+  // Saved: one tap more files it in a collection, without opening Details first.
+  if (on && !btn.closest('#listingModal')) showActionToast(t('fav.saved'), t('fav.to_collection'), () => {
+    openListingModal(id);
+    setTimeout(() => document.querySelector('#listingModal [data-lm-collections]')?.click(), 0);
+  });
 });
 
 // ── from rentals.js · Rentals — data loading ──

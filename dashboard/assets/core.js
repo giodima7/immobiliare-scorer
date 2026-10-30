@@ -353,7 +353,7 @@ const Storage = {
   // Also lifts pre-auth raw keys (immo_favourites etc.) into the scoped namespace.
   migrate(userId) {
     // guest-scoped → user-scoped
-    ['favourites', 'rentFavourites', 'filters', 'onboarded', 'saleFetchPrefs'].forEach(name => {
+    ['favourites', 'rentFavourites', 'saleFavourites', 'filters', 'onboarded', 'saleFetchPrefs'].forEach(name => {
       const guestKey = `scorer_${name}_guest`;
       const userKey  = `scorer_${name}_${userId}`;
       const guestVal = localStorage.getItem(guestKey);
@@ -381,7 +381,7 @@ const Storage = {
 // Locally (IS_LIVE) favourites and collections are mirrored to api.py
 // (/api/user-data → user_data.json), so a cleared or different browser on
 // this machine keeps them. Online they stay in this browser's storage.
-const _USER_DATA_KEYS = ['rentFavourites', 'favourites', 'collections'];
+const _USER_DATA_KEYS = ['rentFavourites', 'favourites', 'collections', 'saleFavourites'];
 
 function _pushUserData(name, value) {
   let live = false;
@@ -416,7 +416,7 @@ async function _syncUserDataFromServer() {
 // the other's favourites): each saved id or collection carries {on, at, item}
 // and the two sides merge item by item, the later change winning — adding on
 // one browser and removing on another both survive.
-const _ACCOUNT_KEYS = ['rentFavourites', 'favourites', 'collections'];
+const _ACCOUNT_KEYS = ['rentFavourites', 'favourites', 'collections', 'saleFavourites'];
 const _itemId = x => String(x && typeof x === 'object' ? x.id : x);
 const _lwwKey = name => Storage.key(name) + '_lww';
 let _acctTimer = null;
