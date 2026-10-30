@@ -1,7 +1,7 @@
 {
-  "_doc": "When scanners may open pages: weekdays (0 = Monday) from start to end. Read on every check — no restart needed to move it. Until 2026-10-26 it was 23:30–07:30 every night.",
-  "start": "07:30",
-  "end": "18:00",
+  "_doc": "When scanners may open pages: weekdays (0 = Monday) from start to end. Read on every check — no restart needed to move it. 2026-10-30: 00:00–18:30 Mon–Fri (was 07:30–18:00; before 10-26, 23:30–07:30 nightly). \"extra\": one-off catch-up windows (slots spread over their length).",
+  "start": "00:00",
+  "end": "18:30",
   "days": [
     0,
     1,
@@ -11,9 +11,9 @@
   ],
   "extra": [
     {
-      "from": "2026-10-27T23:08",
-      "to": "2026-10-28T06:30",
-      "why": "catch-up: Mac asleep (lid closed) 08:11–19:25 on 2026-10-27"
+      "from": "2026-10-30T19:00",
+      "to": "2026-10-31T00:00",
+      "why": "catch-up at full pace: the Mac slept with the lid shut Thu 29 03:20 – Fri 30 18:30"
     }
   ]
 }

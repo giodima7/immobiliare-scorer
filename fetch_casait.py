@@ -104,17 +104,39 @@ def _save_state(state: dict) -> None:
 
 
 def casait_due() -> bool:
+    """A pass an hour — every half hour inside a one-off catch-up window."""
+    import scan_window
     s = _state()
-    return time.time() >= max((s.get("at") or 0) + CASAIT_EVERY_SEC, s.get("pause_until") or 0)
+    every = CASAIT_EVERY_SEC // 2 if scan_window.in_extra() else CASAIT_EVERY_SEC
+    return time.time() >= max((s.get("at") or 0) + every, s.get("pause_until") or 0)
+
+
+# Casa.it's zones holding the user's focus areas (2026-10-30: Corso Genova,
+# Porta Romana, Crocetta, Guastalla, Missori, Solari): swept first each
+# time the window opens, with any the kept listings point to.
+FOCUS_ZONES = ("porta-romana-risorgimento", "ticinese", "navigli-porta-genova", "guastalla-palestro",
+               "centro-duomo-brera", "solari-tortona-washington")
 
 
 def next_zone(state: dict) -> tuple[str, int]:
-    """(zone, first page): the one a pass left half-read, else the zone
-    swept longest ago (never swept first, in ZONES order)."""
+    """(zone, first page): a focus zone not swept since the window opened
+    (resumed where a pass left it), else the zone a pass left half-read,
+    else the zone swept longest ago (never swept first, in ZONES order)."""
     cur = state.get("cursor") or {}
+    swept = state.get("swept") or {}
+    try:
+        import scan_window
+        from focus_areas import priority_slugs
+        opened = scan_window.opened_at()
+        focus = set(FOCUS_ZONES) | {s.removeprefix("casait-") for s in priority_slugs(SOURCE, min_n=3)}
+        due = [z for z in ZONES if z in focus and (opened is None or swept.get(z, 0) < opened.timestamp())]
+        if due:
+            z = cur["zone"] if cur.get("zone") in due else min(due, key=lambda z: swept.get(z, 0))
+            return z, int(cur.get("page") or 1) if z == cur.get("zone") else 1
+    except Exception:
+        pass
     if cur.get("zone") in ZONES:
         return cur["zone"], int(cur.get("page") or 1)
-    swept = state.get("swept") or {}
     return min(ZONES, key=lambda z: swept.get(z, 0)), 1
 
 

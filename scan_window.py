@@ -1,8 +1,9 @@
 """When the scanners may open browser pages.
 
-Since 2026-10-26: weekdays 07:30–18:00, never on Saturday or Sunday (the
-user: "the scan must run during the day except Saturday and Sunday, from
-7:30 to 18:00"). Before, at night only (23:30–07:30).
+Since 2026-10-30: weekdays 00:00–18:30, never on Saturday or Sunday (the
+user: "the hours should be 00:00–18:30 every day except Saturday and
+Sunday"). 2026-10-26 to 10-30: weekdays 07:30–18:00 — the Mac spent whole
+days asleep with its lid shut. Before, at night only (23:30–07:30).
 
 The user, 2026-10-24: "I can't work with the PC opening pages all day, it
 has to run only at night." Everything that opens a page — zone slots, the
@@ -111,6 +112,38 @@ def closes_at(now: datetime | None = None) -> datetime:
         if not ends or not in_window(t := max(ends)):
             return t
     return t
+
+
+def _extra_at(now: datetime) -> tuple[datetime, datetime] | None:
+    """The one-off window `now` is in, outside the weekly one."""
+    if _in_weekly(now):
+        return None
+    return next(((a, b) for a, b in extra() if a <= now < b), None)
+
+
+def in_extra(now: datetime | None = None) -> bool:
+    return _extra_at(now or datetime.now()) is not None
+
+
+def opened_at(now: datetime | None = None) -> datetime | None:
+    """When the window `now` is in opened (None outside every window)."""
+    now = now or datetime.now()
+    ex = _extra_at(now)
+    if ex:
+        return ex[0]
+    if not _in_weekly(now):
+        return None
+    s = _at(now, window()[0])
+    return s if s <= now else s - timedelta(days=1)    # a window across midnight
+
+
+def slot_hours(now: datetime | None = None) -> float:
+    """The hours the zone slots are spread over: the weekly window's — or,
+    inside a one-off catch-up window, that window's, so every zone comes
+    round before it closes (2026-10-30, the user: "catch up, working them
+    flat out until midnight")."""
+    ex = _extra_at(now or datetime.now())
+    return (ex[1] - ex[0]).total_seconds() / 3600 if ex else hours()
 
 
 def hours() -> float:

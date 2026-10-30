@@ -36,6 +36,24 @@
         9.196
       ],
       "radius_m": 500
+    },
+    {
+      "name": "Missori",
+      "label": "missori",
+      "center": [
+        45.4601,
+        9.1893
+      ],
+      "radius_m": 450
+    },
+    {
+      "name": "Solari",
+      "label": "solari",
+      "center": [
+        45.456,
+        9.1655
+      ],
+      "radius_m": 600
     }
   ],
   "sales": {
