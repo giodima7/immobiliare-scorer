@@ -291,50 +291,75 @@ function _saleSeenMeta(l) {
   return `<span title="${escapeHtml(fmtDate(l.first_seen_date))}">${icon('clock')}${escapeHtml(days <= 0 ? t('card.seen_today') : t('card.seen_days', { n: fmt(days) }))}</span>`;
 }
 
-function saleCardHtml(l, f) {
+// What owning costs a month next to renting it, in one line. Condo fees
+// unknown (64 % of sales) are shown as unknown, not taken as €0 — the old
+// "Owning: €X/mo with fees" claimed fees it didn't have.
+function _ownLineHtml(l, f) {
+  const pay = mortgagePayment(l.price, f);
+  if (!pay) return '';
+  const esc = escapeHtml;
+  const condo = Number(l.spese_condominiali || l.condominium_fees) || 0;
+  const known = condo > 0 || l.condo_included === true;
+  const own = _round10(pay + condo);
+  const rent = l.estimated_rent_mo;
+  let html = `<b>€${fmt(own)}</b>${known ? '' : ' + ' + _unkHtml(t('own.condo'))} ${esc(t('own.to_own'))}`;
+  if (rent && known) {
+    const gap = own - rent;
+    html += '<i aria-hidden="true">·</i>' + (Math.abs(gap) < 50 ? `<span>${esc(t('own.same'))}</span>`
+      : `<span class="${gap > 0 ? 'tone-warn' : 'tone-good'}">${esc(t(gap > 0 ? 'own.more' : 'own.less', { v: fmt(_round10(Math.abs(gap))) }))}</span>`);
+  } else if (rent) {
+    html += `<i aria-hidden="true">·</i><span title="${esc(t('sale.rent_tip', { n: l.estimated_rent_n_comps || 0 }))}">${esc(t('own.rent', { v: fmt(_round10(rent)) }))}</span>`;
+  }
+  return `<div class="card-own" title="${esc(t('sale.pay_tip', { down: fmt(f.down), rate: fmt1(f.rate), years: fmt(f.years) }))}">${html}</div>`;
+}
+
+// Freshness on a sale card: online for over six months in amber (27 % of
+// dated sales), else "seen N days ago" — but not for the first sweep's rows.
+const LONG_ONLINE_SALE_DAYS = 180;
+function _saleFreshHtml(l) {
+  const d = daysOnline(l);
+  if (d != null && d > LONG_ONLINE_SALE_DAYS) return _freshFootHtml(l, LONG_ONLINE_SALE_DAYS);
+  if (!l.first_seen_date || l.first_seen_date <= SALE_SINCE) return '';
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const day = new Date(l.first_seen_date); day.setHours(0, 0, 0, 0);
+  const days = Math.round((today - day) / 86400000);
+  return `<span class="foot-fresh" title="${escapeHtml(fmtDate(l.first_seen_date))}">${escapeHtml(days <= 0 ? t('card.seen_today') : t('card.seen_days', { n: fmt(days) }))}</span>`;
+}
+
+// opts.fit: For you shows its fit in the ring instead of the score.
+function saleCardHtml(l, f, opts = {}) {
   const esc = escapeHtml;
   const psqm = l.ask_psqm || (l.sqm ? Math.round(l.price / l.sqm) : null);
-  const pay = mortgagePayment(l.price, f);
-  const condo = Number(l.spese_condominiali || l.condominium_fees) || 0;
-  // The three numbers that matter for buying: payment, rent it would fetch, yield.
-  const figs = [
-    pay ? `<span title="${esc(t('sale.pay_tip', { down: fmt(f.down), rate: fmt1(f.rate), years: fmt(f.years) }))}">${icon('calendar')}${esc(t('sale.card_pay', { v: fmt(_round10(pay)) }))}</span>` : '',
-    l.estimated_rent_mo ? `<span title="${esc(t('sale.rent_tip', { n: l.estimated_rent_n_comps || 0 }))}">${icon('key')}${esc(t('sale.card_rent', { v: fmt(l.estimated_rent_mo), y: fmt1(l.estimated_yield_pct ?? 0) }))}</span>` : '',
-    condo ? `<span>${icon('building')}${esc(t('sale.card_condo', { v: fmt(condo) }))}</span>` : '',
-  ].filter(Boolean).join('');
   const isNew = l.first_seen_date && l.first_seen_date > SALE_SINCE
     && (Date.now() - new Date(l.first_seen_date)) / 86400000 <= 3;
   const site = siteName(l.source);
   const id = esc(String(l.id));
   const title = _saleTitle(l);
   const street = l.address ? formatAddress(String(l.address).replace(/,?\s*milano\s*$/i, '')) : '';
-  const meta = [typeof _metroMeta === 'function' ? _metroMeta(l) : '', _saleSeenMeta(l)].filter(Boolean).join('');
-  return `<article class="card sale-card" data-listing-id="${id}">
-    ${l.thumbnail ? `<div class="card-photo" data-photo-id="${id}"><div class="card-photo-wrap" data-open-sale="${id}" aria-label="${esc(t('card.details') + ': ' + title)}"><div class="card-photo-track"><img class="card-thumb" src="${_safeUrl(l.thumbnail)}" alt="" loading="lazy" draggable="false"></div>${isNew ? `<span class="card-photo-new-badge">${esc(t('badge.new'))}</span>` : ''}</div>${(l.photo_count || 0) !== 1 ? `
+  const others = alsoOnSites(l) ? alsoOnSites(l).split(', ').length : 0;
+  const openLabel = (site === 'Casa.it' ? site : site.replace('.it', '')) + (others ? ` +${others}` : '');
+  const topRight = _priceCutBadge(l) || (isNew ? `<span class="card-photo-new-badge">${esc(t('badge.new'))}</span>` : '');
+  const vs = _vsNearbyHtml(l.comps_sale_delta_pct, t('sale.delta_tip', { n: l.comps_sale_n || 0 }));
+  return `<article class="card sale-card" data-listing-id="${id}" data-card-open="sale">
+    ${l.thumbnail ? `<div class="card-photo" data-photo-id="${id}"><div class="card-photo-wrap" data-open-sale="${id}" aria-label="${esc(t('card.details') + ': ' + title)}"><div class="card-photo-track"><img class="card-thumb" src="${_safeUrl(l.thumbnail)}" alt="" loading="lazy" draggable="false"></div>${topRight}</div>${(l.photo_count || 0) !== 1 ? `
        <button type="button" class="card-photo-nav prev" data-photo-step="-1" aria-label="${esc(t('pv.prev'))}" tabindex="-1">${icon('chevron-left')}</button>
        <button type="button" class="card-photo-nav next" data-photo-step="1" aria-label="${esc(t('pv.next'))}" tabindex="-1">${icon('chevron-right')}</button>
        <span class="card-photo-count" hidden></span>` : ''}</div>` : ''}
     <div class="card-body">
-      <div class="card-head">
-        <div class="card-title-wrap">
-          <h2 class="card-title"><button type="button" class="card-title-btn" data-open-sale="${id}">${esc(title)}</button></h2>
-          <div class="card-sub">${esc([street && street.toLowerCase() !== title.toLowerCase() ? street : '', site, alsoOnSites(l) ? t('card.also_on', { sites: alsoOnSites(l) }) : ''].filter(Boolean).join(' · '))}</div>
-        </div>
-        ${scoreRingHtml(l)}
+      <div class="card-top">
+        <div class="card-price"><span class="price-main">€${fmt(l.price)}</span></div>
+        ${opts.fit != null ? scoreRingHtml(l, 40, { value: opts.fit, caption: t('ring.fit') }) : scoreRingHtml(l, 40, { caption: t('ring.score') })}
       </div>
-      <div class="card-price">
-        <span class="price-main">€${fmt(l.price)}</span>
-        ${psqm ? `<span class="price-unit">€${fmt(Math.round(psqm))}/m²</span>` : ''}
-        ${_saleDeltaHtml(l)}
-      </div>
-      ${figs ? `<div class="sale-figs">${figs}</div>` : ''}
-      <div class="card-specs">${_specsHtml(l)}</div>
-      ${meta ? `<div class="card-meta">${meta}</div>` : ''}
+      ${psqm ? `<div class="card-money"><span>€${fmt(Math.round(psqm))}/m²</span>${vs ? '<i aria-hidden="true">·</i>' + vs : ''}</div>` : ''}
+      ${_factsHtml(l)}
+      ${_placeHtml(title, street, `data-open-sale="${id}"`)}
+      ${_ownLineHtml(l, f)}
     </div>
-    <div class="card-footer">
-      <button type="button" class="btn btn-secondary" data-open-sale="${id}">${esc(t('card.details'))}</button>
-      <a class="btn btn-primary btn-open" href="${_safeUrl(l.url)}" target="_blank" rel="noopener">${esc(t('card.open'))}${icon('external-link')}</a>
-    </div>
+    ${_cardFootHtml({
+      metaHtml: (typeof _metroFootHtml === 'function' ? _metroFootHtml(l) : '') + _saleFreshHtml(l),
+      openHtml: `<a class="btn btn-secondary btn-open" href="${_safeUrl(l.url)}" target="_blank" rel="noopener"
+         title="${esc(t('lm.open_on', { site }) + (others ? ' · ' + t('card.also_on', { sites: alsoOnSites(l) }) : ''))}">${esc(openLabel)}${icon('external-link')}</a>`,
+    })}
   </article>`;
 }
 

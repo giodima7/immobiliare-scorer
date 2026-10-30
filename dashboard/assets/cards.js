@@ -300,6 +300,108 @@ function _specsHtml(l) {
   return parts.map(p => `<span>${p}</span>`).join('');
 }
 
+// ── Card rows (2026-10-30 redesign) ─────────────────────────────────────────
+// From a product-design review against Zillow, Rightmove, Idealista and
+// Immobiliare (the user: "I don't see the floor here, or it takes me ages"):
+// fixed slots in scan order — price, key facts, place, money, reasons,
+// actions — words over pictograms, one verdict number (the ring), and a
+// fact we show is never silently dropped: unknown reads as a muted word
+// with a dashed circle (the user didn't want a "?").
+function _unkHtml(word) {
+  return `<span class="fact-unk" title="${escapeHtml(t('unk.tip'))}">${icon('circle-dashed')}${escapeHtml(word)}</span>`;
+}
+
+// "3° piano, ascensore" / "4° piano, senza ascensore" / "Piano terra" — the
+// floor slot is always there; the lift matters from the 2nd floor up.
+function _floorPhraseHtml(l) {
+  const esc = escapeHtml, fn = l.floor_n;
+  const label = _floorLabel(l);
+  if (fn == null && !label) return _unkHtml(t('fact.floor'));
+  const tone = fn != null && fn <= -2 ? 'tone-bad' : fn === -1 ? 'tone-warn' : '';
+  let html = tone ? `<span class="${tone}">${esc(label)}</span>` : esc(label);
+  if (fn != null && fn >= 2) {
+    if (l.elevator === true) html += esc(', ' + t('lm.lift'));
+    else if (l.elevator === false) html += `, <span class="${fn >= 4 ? 'tone-bad' : 'tone-warn'}">${esc(t('lm.no_lift'))}</span>`;
+    else html += ', ' + _unkHtml(t('lm.lift'));
+  } else if (fn === 1 && l.elevator === true) html += esc(', ' + t('lm.lift'));
+  return html;
+}
+
+// rooms · m² · floor[, lift] · (2+ baths) · (bedrooms of a 3+ room flat)
+function _factsHtml(l) {
+  const esc = escapeHtml, parts = [];
+  if (l.rooms != null) parts.push(esc(l.rooms === 1 ? t('card.studio') : t('card.rooms', { n: l.rooms })));
+  if (l.sqm) parts.push(`${fmt(l.sqm)} m²`);
+  parts.push(_floorPhraseHtml(l));
+  if (l.bathrooms >= 2) parts.push(esc(t('card.baths', { n: l.bathrooms })));
+  if ((l.rooms || 0) >= 3 && l.bedrooms != null) parts.push(esc(t(l.bedrooms === 1 ? 'card.bedroom' : 'card.bedrooms', { n: l.bedrooms })));
+  return `<div class="card-facts">${parts.map(p => `<span>${p}</span>`).join('<i aria-hidden="true">·</i>')}</div>`;
+}
+
+// "18% below nearby" as words with a tone, not a pill.
+function _vsNearbyHtml(dp, tip = '') {
+  if (dp == null) return '';
+  const tone = dp <= -5 ? 'tone-good' : dp >= 5 ? 'tone-bad' : '';
+  const txt = Math.abs(dp) < 1 ? t('card.in_line')
+            : t(dp < 0 ? 'card.below_nearby' : 'card.above_nearby', { pct: fmt(Math.round(Math.abs(dp))) });
+  return `<span class="vs-nearby ${tone}"${tip ? ` title="${escapeHtml(tip)}"` : ''}>${escapeHtml(txt)}</span>`;
+}
+
+// Zone · street — the card's heading; a tap anywhere on the card opens Details.
+function _placeHtml(zone, street, attr, suffix = '') {
+  const showStreet = street && street.toLowerCase() !== String(zone).toLowerCase();
+  return `<h2 class="card-place"><button type="button" class="card-title-btn" ${attr}><span class="place-zone">${escapeHtml(zone)}</span>${
+    showStreet ? `<span class="place-street"> · ${escapeHtml(street)}</span>` : ''}</button>${suffix}</h2>`;
+}
+
+// Milan's metro line colours (ATM), for the badge in the footer.
+const _MLINE = { M1: '#E3242B', M2: '#00A651', M3: '#F7B500', M4: '#0072BC', M5: '#97509F' };
+// The lines of each station. metro_nearest_line can't be trusted (the POI
+// file tags Tre Torri, Isola, Lodi, Porta Romana, Missori… all "M1").
+const _MLINE_STOPS = {
+  M1: 'sesto 1 maggio|sesto rondo|sesto marelli|villa san giovanni|precotto|gorla|turro|rovereto|pasteur|loreto|lima|porta venezia|palestro|san babila|duomo|cordusio|cairoli|cadorna|conciliazione|pagano|buonarroti|amendola|lotto|qt8|lampugnano|uruguay|bonola|san leonardo|molino dorino|pero|rho fiera|wagner|de angeli|gambara|bande nere|primaticcio|inganni|bisceglie',
+  M2: 'assago milanofiori nord|assago milanofiori forum|abbiategrasso|famagosta|romolo|porta genova|sant agostino|sant ambrogio|cadorna|lanza|moscova|garibaldi|gioia|centrale|caiazzo|loreto|piola|lambrate|udine|cimiano|crescenzago|cascina gobba|vimodrone|cologno sud|cologno centro|cologno nord|cascina burrona|cernusco sul naviglio|cascina antonietta|gorgonzola|villa fiorita|cassina de pecchi|bussero|villa pompea|gessate|cassina de pecchi',
+  M3: 'san donato|rogoredo|porto di mare|corvetto|brenta|lodi|porta romana|crocetta|missori|duomo|montenapoleone|turati|repubblica|centrale|sondrio|zara|maciachini|dergano|affori centro|affori fn|comasina',
+  M4: 'san cristoforo|segneri|gelsomini|frattini|tolstoj|washington bolivar|bolivar|california|coni zugna|sant ambrogio|de amicis|vetra|santa sofia|sforza policlinico|san babila|tricolore|dateo|susa|argonne|forlanini|stazione forlanini|repetti|linate',
+  M5: 'bignami|ponale|bicocca|ca granda|istria|marche|zara|isola|garibaldi|monumentale|cenisio|gerusalemme|domodossola|tre torri|portello|lotto|segesta|san siro ippodromo|san siro stadio',
+};
+const _stopKey = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  .replace(/^(?:milano|mm\d?|metro \w+)\s+/, '').replace(/\bp\.?ta\b/g, 'porta')
+  .replace(/\bs\.\s*(?=[aeiou])/g, 'sant ').replace(/\bs\.\s*/g, 'san ')
+  .replace(/[°º]/g, ' ').replace(/[^a-z0-9]+/g, ' ').replace(/\b(m[1-5]|mm|fn|fs|tibb|t i b b)\b$/g, '').trim();
+const _STOP_LINES = (() => {
+  const m = new Map();
+  for (const [line, list] of Object.entries(_MLINE_STOPS))
+    for (const st of list.split('|')) m.set(st, [...(m.get(st) || []), line]);
+  return m;
+})();
+function _stationLines(name) {
+  const k = _stopKey(name);
+  if (_STOP_LINES.has(k)) return _STOP_LINES.get(k);
+  // "Garibaldi FS" → garibaldi fs; "Lodi T.I.B.B." → lodi; "Sesto 1° Maggio FS"…
+  for (const [st, lines] of _STOP_LINES) if (k === st || k.startsWith(st + ' ') || st.startsWith(k + ' ')) return lines;
+  return [];
+}
+
+// "[M1] 8 min · Lodi TIBB": the minutes before the name so an ellipsis
+// never eats them.
+function _metroFootHtml(l) {
+  if (l.geo_precision === 'zone') return '';
+  let walk = l.metro_walk_min != null ? l.metro_walk_min : null;
+  if (walk == null && l.metro_nearest_dist_m != null) walk = Math.max(1, Math.round(l.metro_nearest_dist_m / 70));
+  if (walk == null || !l.metro_nearest_name) return '';
+  const badge = _stationLines(l.metro_nearest_name).slice(0, 2)
+    .map(line => `<b class="mline" style="--ml:${_MLINE[line]}"${line === 'M3' ? ' data-dark' : ''}>${line}</b>`).join('');
+  const what = l.geo_precision === 'metro' ? t('card.near_stop', { name: l.metro_nearest_name })
+             : `${t('card.min', { n: walk })} · ${l.metro_nearest_name}`;
+  return `<span class="foot-metro">${badge}<span>${escapeHtml(what)}</span></span>`;
+}
+
+// Bottom row: where and how fresh on the left, ♡ and Open on the right.
+function _cardFootHtml({ metaHtml = '', favHtml = '', openHtml = '' }) {
+  return `<div class="card-foot"><div class="foot-meta">${metaHtml}</div><div class="foot-act">${favHtml}${openHtml}</div></div>`;
+}
+
 function _dealDeltaHtml(l) {
   if (l.price_suspect) {
     return `<span class="deal-delta tone-warn" title="${escapeHtml(t('card.suspect'))}">${icon('alert-triangle')}${escapeHtml(t('card.verify'))}</span>`;
@@ -387,6 +489,21 @@ function _longOnlineText(l) {
   return t('card.online_months', { n: fmt(Math.floor(d / 30)) });
 }
 
+// Freshness for the footer: words, the long-online caution in amber.
+function _freshFootHtml(l, longDays = LONG_ONLINE_DAYS) {
+  const d = daysOnline(l);
+  if (d != null && d > longDays) {
+    const since = l.published_date ? fmtDate(new Date(l.published_date)) : '';
+    return `<span class="foot-fresh tone-warn" title="${escapeHtml(t('card.online_tip', { date: since }))}">${escapeHtml(t('card.online_months', { n: fmt(Math.floor(d / 30)) }))}</span>`;
+  }
+  const days = _daysSinceFirstSeen(l);
+  if (days == null) return '';
+  const earlier = days <= 3 && _listedEarlier(l);
+  const txt = earlier ? t(days <= 0 ? 'card.found_today_old' : 'card.found_days_old', { n: fmt(days) })
+            : days <= 0 ? t('card.seen_today') : t('card.seen_days', { n: fmt(days) });
+  return `<span class="foot-fresh" title="${escapeHtml(fmtDate(l.first_seen_date))}">${escapeHtml(txt)}</span>`;
+}
+
 function _freshMeta(l) {
   const long = _longOnlineText(l);
   if (long) {
@@ -402,8 +519,8 @@ function _freshMeta(l) {
 }
 
 // Score ring markup. animate=false (re-renders) paints the final state.
-function scoreRingHtml(l, size = 44) {
-  const score = l.score_total ?? 0;
+function scoreRingHtml(l, size = 44, opts = {}) {
+  const score = opts.value ?? l.score_total ?? 0;
   const sc    = scoreClass(score);
   const r     = size / 2 - 3;
   const C     = 2 * Math.PI * r;
@@ -412,20 +529,22 @@ function scoreRingHtml(l, size = 44) {
   const wPr = scoreSettings.w_property ?? 0.25;
   const wL  = scoreSettings.w_location ?? 0.20;
   const wPn = scoreSettings.w_penalty  ?? 0.10;
-  return `<div class="score-ring-wrap sc-${sc}" role="img" aria-label="${escapeHtml(t('lm.score', { n: score }))}"
-         data-score-target="${score}"
+  // The score's breakdown tooltip — not on a For-you fit, which isn't the score.
+  const parts = opts.value != null ? '' : `
          data-sc-total="${l.score_total ?? ''}" data-sc-price="${l.score_price ?? ''}"
          data-sc-prop="${l.score_property ?? l.score_physical ?? ''}" data-sc-loc="${l.score_location ?? l.geo_score ?? ''}"
          data-sc-pen="${l.score_penalty ?? ''}" data-sc-rent="${l.score_rent ?? ''}"
          data-w-price="${wP}" data-w-prop="${wPr}" data-w-loc="${wL}" data-w-pen="${wPn}"
-         data-sc-cap="${escapeHtml(l.score_cap_reason || '')}">
+         data-sc-cap="${escapeHtml(l.score_cap_reason || '')}"`;
+  return `<div class="score-ring-wrap sc-${sc}" role="img" aria-label="${escapeHtml((opts.caption ? opts.caption + ' ' : '') + score)}"
+         data-score-target="${score}"${parts}>
       <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="display:block" aria-hidden="true">
         <circle class="ring-track" cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke-width="3.5"/>
         <circle class="score-ring-fill" cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke-width="3.5"
                 stroke-linecap="round" stroke-dasharray="${C.toFixed(2)}" stroke-dashoffset="${C.toFixed(2)}"
                 transform="rotate(-90 ${size / 2} ${size / 2})" data-final-offset="${off.toFixed(2)}"/>
       </svg>
-      <div class="score-ring-text">0</div>
+      <div class="score-ring-text">0</div>${opts.caption ? `<div class="score-ring-cap">${escapeHtml(opts.caption)}</div>` : ''}
     </div>`;
 }
 
@@ -447,7 +566,39 @@ function isFairPick(l) {
   return (g >= 7 || (g >= 6 && strong >= 2)) && (l.score_location ?? 0) >= 70;
 }
 
-function renderRentalCard(l) {
+// What the monthly total is made of, then how it compares with nearby —
+// one line under the price ("rent €1,300 + condo €100 · 18% below nearby").
+function _rentMoneyHtml(c, l) {
+  let txt, cls = '', title = '';
+  if (c.included && !c.heating) { txt = t('cost.included'); cls = 'is-ok'; }
+  else if (!c.known) {
+    if (c.suspect) { txt = t('cost.suspect'); cls = 'tone-warn'; title = t('cost.suspect_long', { v: fmt(c.statedCondo) }); }
+    else { txt = t(c.pageRead ? 'cost.ask' : 'cost.pending'); title = t(c.pageRead ? 'cost.ask_long' : 'cost.pending_long'); }
+  } else {
+    const parts = [`${t('cost.rent')} €${fmt(c.rent)}`];
+    if (c.condo) parts.push(`${t('cost.condo')} €${fmt(c.condo)}`);
+    if (c.heating) parts.push(`${t('cost.heating')} €${fmt(c.heating)}`);
+    const note = c.included ? t('cost.included') : (!c.condo ? t('cost.condo_unknown') : '');
+    txt = parts.join(' + ') + (note ? ' · ' + note : '');
+    if (c.extraPct >= 25) cls = 'tone-warn';
+    if (c.extraPct >= 15) title = t('cost.extra_pct', { pct: c.extraPct });
+  }
+  const vs = l.price_suspect
+    ? `<span class="vs-nearby tone-warn" title="${escapeHtml(t('card.suspect'))}">${escapeHtml(t('card.verify'))}</span>`
+    : _vsNearbyHtml(l.comps_delta_pct, t('card.delta_tip', { n: l.comps_n || 0, m: l.comps_radius_m ? fmt(Math.round(l.comps_radius_m)) : '–' }));
+  return `<div class="card-money"><span class="${cls}"${title ? ` title="${escapeHtml(title)}"` : ''}>${escapeHtml(txt)}</span>${vs ? '<i aria-hidden="true">·</i>' + vs : ''}</div>`;
+}
+
+// A rent lowered since we first saw it: a badge on the photo.
+function _priceCutBadge(l) {
+  const was = l.previous_price, now = l.rent_mo ?? l.price;
+  if (!was || !now || was <= now) return '';
+  const pct = Math.round((was - now) / was * 100);
+  return pct >= 1 ? `<span class="card-photo-new-badge badge-cut" title="${escapeHtml(priceHistoryText(l) || '')}">${escapeHtml(t('badge.price_cut', { pct }))}</span>` : '';
+}
+
+// opts.fit: For you shows its fit in the ring instead of the score.
+function renderRentalCard(l, opts = {}) {
   const id   = escapeHtml(String(l.id));
   const site = siteName(l.source);
   const street = l.address ? formatAddress(String(l.address).replace(/,?\s*milano\s*$/i, '')) : '';
@@ -462,9 +613,8 @@ function renderRentalCard(l) {
     : isFairPick(l)
     ? `<span class="gem-photo-chip chip-fair">${icon('sparkles')}<span>${escapeHtml(t('gem.fair'))}</span></span>`
     : '';
-  const newChip = isNew(l) ? `<span class="card-photo-new-badge">${escapeHtml(t('badge.new'))}</span>` : '';
-  // What the photos showed sits on the photo (2026-10-19 card redesign: the
-  // price row carried three chips); without a photo it stays in the row.
+  // One badge top-right: a price cut says more than "New".
+  const topRight = _priceCutBadge(l) || (isNew(l) ? `<span class="card-photo-new-badge">${escapeHtml(t('badge.new'))}</span>` : '');
   const photoChip = _photoChipHtml(l);
   // A swipe or the arrows page through the photos on the card itself
   // (details.js, cardPhotoFill / cardPhotoStep); a tap on the photo opens
@@ -474,8 +624,8 @@ function renderRentalCard(l) {
        <button type="button" class="card-photo-nav next" data-photo-step="1" aria-label="${escapeHtml(t('pv.next'))}" tabindex="-1">${icon('chevron-right')}</button>
        <span class="card-photo-count" hidden></span>`
     : '';
-  const photo = (l.thumbnail || gemChip || newChip)
-    ? `<div class="card-photo" data-photo-id="${id}"><div class="card-photo-wrap" data-open-details="${id}" aria-label="${escapeHtml(t('card.details') + ': ' + nb)}">${l.thumbnail ? `<div class="card-photo-track"><img class="card-thumb" src="${_safeUrl(l.thumbnail)}" alt="" loading="lazy" draggable="false"></div>` : ''}${gemChip}${newChip}${l.thumbnail && photoChip ? `<span class="card-photo-grade">${photoChip}</span>` : ''}</div>${nav}</div>`
+  const photo = (l.thumbnail || gemChip || topRight)
+    ? `<div class="card-photo" data-photo-id="${id}"><div class="card-photo-wrap" data-open-details="${id}" aria-label="${escapeHtml(t('card.details') + ': ' + nb)}">${l.thumbnail ? `<div class="card-photo-track"><img class="card-thumb" src="${_safeUrl(l.thumbnail)}" alt="" loading="lazy" draggable="false"></div>` : ''}${gemChip}${topRight}${l.thumbnail && photoChip ? `<span class="card-photo-grade">${photoChip}</span>` : ''}</div>${nav}</div>`
     : '';
   // The site is the Open button's label; "+1" when the flat is on another site too.
   const others = alsoOnSites(l) ? alsoOnSites(l).split(', ').length : 0;
@@ -483,42 +633,36 @@ function renderRentalCard(l) {
   const openLabel = (site === 'Casa.it' ? site : site.replace('.it', '')) + (others ? ` +${others}` : '');
 
   const cost = monthlyCost(l);
-  const history = priceHistoryText(l);
-  const meta = [_metroMeta(l), _freshMeta(l)].filter(Boolean).join('');
   const fav = isRentFav(l.id);
+  const priv = isPrivate(l) ? t('card.private') : privateCopySite(l) ? t('card.private_on', { site: privateCopySite(l) }) : '';
 
   const card = document.createElement('article');
   card.className = 'card' + (l.hidden_gem ? ' is-gem' : (l.good_value ? ' is-goodvalue' : ''));
   card.setAttribute('data-listing-id', String(l.id));
+  card.dataset.cardOpen = 'rent';
   card.innerHTML = `
     ${photo}
     <div class="card-body">
-      <div class="card-head">
-        <div class="card-title-wrap">
-          <h2 class="card-title"><button type="button" class="card-title-btn" data-open-details="${id}">${escapeHtml(nb)}</button></h2>
-          <div class="card-sub">${escapeHtml([street && street.toLowerCase() !== nb.toLowerCase() ? street : '', isPrivate(l) ? t('card.private') : privateCopySite(l) ? t('card.private_on', { site: privateCopySite(l) }) : ''].filter(Boolean).join(' · '))}</div>
+      <div class="card-top">
+        <div class="card-price">
+          <span class="price-main">${l.rent_mo != null ? '€' + fmt(cost.total) : '–'}</span>
+          <span class="price-unit">${escapeHtml(t(cost.known ? 'cost.all_in' : 'cost.rent_only'))}</span>
+          ${l.thumbnail ? '' : photoChip}
         </div>
-        ${scoreRingHtml(l)}
+        ${opts.fit != null ? scoreRingHtml(l, 40, { value: opts.fit, caption: t('ring.fit') }) : scoreRingHtml(l, 40, { caption: t('ring.score') })}
       </div>
-      <div class="card-price">
-        <span class="price-main">${l.rent_mo != null ? '€' + fmt(cost.total) : '–'}</span>
-        <span class="price-unit">${escapeHtml(t(cost.known ? 'cost.all_in' : 'cost.rent_only'))}</span>
-        ${_dealDeltaHtml(l)}
-        ${l.thumbnail ? '' : photoChip}
-        ${_costLineHtml(cost)}
-      </div>
-      ${history ? `<div class="was-price lm-history">${icon('trending-down')}${escapeHtml(history)}</div>` : ''}
-      <div class="card-specs">${_specsHtml(l)}</div>
-      ${meta ? `<div class="card-meta">${meta}</div>` : ''}
+      ${_rentMoneyHtml(cost, l)}
+      ${_factsHtml(l)}
+      ${_placeHtml(nb, street, `data-open-details="${id}"`, priv ? `<span class="place-private">${escapeHtml(priv)}</span>` : '')}
     </div>
-    <div class="card-footer">
-      <button type="button" class="btn btn-secondary" data-open-details="${id}">${escapeHtml(t('card.details'))}</button>
-      <button type="button" class="btn btn-secondary btn-icon btn-fav${fav ? ' is-fav' : ''}" data-rent-id="${id}"
-              aria-pressed="${fav}" aria-label="${escapeHtml(t(fav ? 'card.unsave' : 'card.save'))}" title="${escapeHtml(t(fav ? 'card.unsave' : 'card.save'))}">${favBtnInner()}</button>
-      <a class="btn btn-primary btn-open" href="${_safeUrl(l.url)}" target="_blank" rel="noopener"
+    ${_cardFootHtml({
+      metaHtml: _metroFootHtml(l) + _freshFootHtml(l),
+      favHtml: `<button type="button" class="btn btn-secondary btn-icon btn-fav${fav ? ' is-fav' : ''}" data-rent-id="${id}"
+              aria-pressed="${fav}" aria-label="${escapeHtml(t(fav ? 'card.unsave' : 'card.save'))}" title="${escapeHtml(t(fav ? 'card.unsave' : 'card.save'))}">${favBtnInner()}</button>`,
+      openHtml: `<a class="btn btn-secondary btn-open" href="${_safeUrl(l.url)}" target="_blank" rel="noopener"
          data-listing-id="${id}" title="${escapeHtml(t('lm.open_on', { site }) + (others ? ' · ' + t('card.also_on', { sites: alsoOnSites(l) }) : ''))}"
-         onclick="_promptArchiveListing(this.dataset.listingId, 'rental', this)">${escapeHtml(openLabel)}${icon('external-link')}</a>
-    </div>
+         onclick="_promptArchiveListing(this.dataset.listingId, 'rental', this)">${escapeHtml(openLabel)}${icon('external-link')}</a>`,
+    })}
     ${extremeUnderpricingBannerHtml(l)}
     ${staleBannerHtml(l)}
   `;
