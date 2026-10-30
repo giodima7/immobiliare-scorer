@@ -18,17 +18,22 @@ function openListingModal(id) {
   _lmListing = l;
   if (box.hidden) _lmLastFocus = document.activeElement;
   document.getElementById('lmBody').innerHTML = listingModalHtml(l);
+  box.classList.remove('is-past-sum');
   box.hidden = false;
   document.body.classList.add('lm-open');
   box.querySelector('.lm-close')?.focus();
   lmLoadMapSnip(l);
+  _lmAfterRender(l, 'rent');
   _lmEnsureFull(l).then(() => {
     if (_lmListing !== l || box.hidden) return;
     _lmLoadPhotos(l);
     const reasons = document.getElementById('lmReasons');
     if (reasons) reasons.innerHTML = reasonsBulletsHtml(l);
-    const comps = document.getElementById('lmComps');
-    if (comps && (l.comps_n || 0) > 0) _loadCompsList(l, comps);
+    // The description arrives with the rest: add it if it wasn't there.
+    if (l.description && !document.getElementById('lmDesc')) {
+      document.querySelector('#listingModal .lm-know')?.insertAdjacentHTML('afterend', _lmDescHtml(l));
+      _lmAfterRender(l, 'rent');
+    }
   });
 }
 
@@ -147,12 +152,20 @@ async function _lmLoadPhotos(l) {
   const photos = await listingPhotos(l);
   const box = document.getElementById('lmPhotos');
   if (!box || !box.isConnected) return;
-  // A click opens the viewer at that photo; "+N" leads to the rest on the site.
-  box.innerHTML = photos.length
-    ? photos.map((u, i) => `<button type="button" class="lm-photo" data-pv-open="${i}" aria-label="${escapeHtml(t('pv.open', { i: i + 1, n: photos.length }))}">
-        <img src="${_safeUrl(u)}" alt="" loading="lazy"></button>`).join('')
-      + (l.photo_count > photos.length ? `<a class="lm-photo lm-photo-more" href="${_safeUrl(l.url)}" target="_blank" rel="noopener">${escapeHtml(t('lm.more_photos', { n: l.photo_count - photos.length }))}</a>` : '')
-    : `<div class="lm-photo lm-photo-empty">${icon('photo')}</div>`;
+  // A tap opens the viewer at that photo; floor plans come after the photos;
+  // "+N" leads to the rest on the site.
+  const plans = (l.floorplans || []).filter(Boolean);
+  if (!photos.length && !plans.length) return;
+  l._photos = [...photos, ...plans];
+  box.innerHTML = photos.map((u, i) => `<button type="button" class="lm-hero-slide" data-pv-open="${i}" aria-label="${escapeHtml(t('pv.open', { i: i + 1, n: photos.length }))}">
+        <img src="${_safeUrl(u)}" alt=""${i ? ' loading="lazy"' : ''}></button>`).join('')
+    + plans.map((u, j) => `<button type="button" class="lm-hero-slide is-plan" data-pv-open="${photos.length + j}" aria-label="${escapeHtml(t('lm.plan'))}">
+        <img src="${_safeUrl(u)}" alt="" loading="lazy"><span class="lm-plan-tag">${escapeHtml(t('lm.plan'))}</span></button>`).join('')
+    + (l.photo_count > photos.length ? `<a class="lm-hero-slide lm-hero-more" href="${_safeUrl(l.url)}" target="_blank" rel="noopener">${escapeHtml(t('lm.more_photos', { n: l.photo_count - photos.length }))} ↗</a>` : '');
+  const count = document.querySelector('#lmHero .lm-hero-count'), n = photos.length + plans.length;
+  const upd = () => { if (!count || n < 2) return; const i = Math.round(box.scrollLeft / Math.max(1, box.clientWidth)); count.textContent = i < photos.length ? `${i + 1}/${photos.length}` : t('lm.plan'); count.hidden = false; };
+  box.addEventListener('scroll', upd, { passive: true });
+  upd();
 }
 
 // ── Photos: paging on the card, full-screen viewer from Details ──────────────
@@ -376,7 +389,8 @@ function _lmDate(iso) {
 
 // "Was €X" — a price drop on this listing, or the same flat listed before.
 function priceHistoryText(l) {
-  if (l.previous_price && l.rent_mo && l.previous_price > l.rent_mo) {
+  const now = l.rent_mo ?? l.price;
+  if (l.previous_price && now && l.previous_price > now) {
     return t('lm.price_dropped', { was: fmt(l.previous_price), date: _lmDate(l.price_changed_date) || '' });
   }
   if (l.relisted_from_rent) {
@@ -385,47 +399,7 @@ function priceHistoryText(l) {
   return null;
 }
 
-function _lmVerdict(l) {
-  const dp = l.comps_delta_pct;
-  const label = l.hidden_gem ? t('gem.hidden') : l.good_value ? t('gem.good') : null;
-  const cls = l.price_suspect ? 'warn' : l.hidden_gem ? 'gem' : (label || (dp != null && dp <= -3)) ? 'good'
-            : (dp != null && dp >= 5) ? 'bad' : '';
-  const head = l.price_suspect ? t('card.suspect')
-    : dp == null ? t('lm.no_comps')
-    : (label ? label + ' · ' : '') + (Math.abs(dp) < 1 ? t('card.in_line')
-      : dp < 0 ? t('lm.below', { pct: fmtNum(Math.abs(dp), 1) }) : t('lm.above', { pct: fmtNum(dp, 1) }));
-  const gv = scoreSettings.rent_gv_z_max ?? -1.1;
-  const conf = { high: t('conf.high'), medium: t('conf.medium'), low: t('conf.thin') }[(l.comps_conf_label || '').toLowerCase()];
-  const sub = [
-    l.comps_n ? t('lm.comps_n', { n: l.comps_n, m: l.comps_radius_m ? fmt(Math.round(l.comps_radius_m)) : '–' }) : null,
-    l.comps_p40 != null && l.comps_p60 != null ? t('lm.middle', { a: fmt1(l.comps_p40), b: fmt1(l.comps_p60) }) : null,
-    dp != null && dp < 0 && l.price_z != null ? t(l.price_z <= gv ? 'lm.strong_discount' : 'lm.normal_discount') : null,
-    conf,
-  ].filter(Boolean).join(' · ');
-  return { cls, head, sub };
-}
 
-// What photo_eval.py saw in the photos (scoring stamps photo_* fields).
-function _lmPhotoVerdict(l) {
-  if (!l.photo_deal) return '';
-  const cls = { confirms: 'good', doubt: 'warn', contradicts: 'bad' }[l.photo_deal] || '';
-  const note = (currentLang === 'it' ? l.photo_note_it : l.photo_note_en) || l.photo_note_it || '';
-  const sc = (k, v) => v != null ? `${t(k)} ${v}/5` : null;
-  const scores = [sc('photo.condition', l.photo_condition), sc('photo.kitchen', l.photo_kitchen),
-                  sc('photo.bathroom', l.photo_bathroom), sc('photo.light', l.photo_light)].filter(Boolean).join(' · ');
-  const flags = (l.photo_flags || []).map(f => t('photo.flag.' + f)).join(', ');
-  // The user's own verdict (photo_feedback) wins; Sonnet's stays below it.
-  const grade = l.photo_grade != null ? ' · ' + t('photo.grade', { v: fmtNum(l.photo_grade, l.photo_grade % 1 ? 1 : 0) }) : '';
-  const head = (l.photo_by_user ? `${t('pfb.yours')}: ${t('pfb.' + l.photo_deal)}` : `Sonnet: ${t('photo.' + l.photo_deal)}`) + grade;
-  const sub = l.photo_by_user ? (l.photo_user_note || '') : note;
-  const sonnet = l.photo_by_user && l.photo_sonnet_deal
-    ? t('pfb.sonnet_said', { v: t('photo.' + l.photo_sonnet_deal) }) + (note ? ' — ' + note : '') : '';
-  return `<div class="lm-verdict lm-photo-verdict ${cls}">
-      <div class="lm-verdict-head">${icon('photo')} ${escapeHtml(head)}</div>
-      ${sub ? `<div class="lm-verdict-sub">${escapeHtml(sub)}</div>` : ''}
-      <div class="lm-photo-meta">${sonnet ? escapeHtml(sonnet) + '<br>' : ''}${escapeHtml([scores, flags].filter(Boolean).join(' · '))}${scores || flags ? '<br>' : ''}${escapeHtml(t('photo.read', { date: _lmDate(l.photo_read_at) || '–', conf: t('photo.conf.' + (l.photo_confidence || 'low')) }))}</div>
-    </div>`;
-}
 
 // What Sonnet saw that the listing doesn't say (rubric v5, 2026-10-25): its
 // features and up to 8 tags from a fixed list — what an agent or a surveyor
@@ -445,21 +419,6 @@ const PHOTO_TAGS = {
   smart_entrance: 1, good_facade: 1, shabby_building: -1,
 };
 
-function _lmSeenHtml(l) {
-  const tags = (l.photo_tags || []).filter(k => k in PHOTO_TAGS)
-    .sort((a, b) => PHOTO_TAGS[b] - PHOTO_TAGS[a]);
-  const f = l.photo_features || {};
-  const val = (k, v) => v === true ? t('pfeat.' + k) : v === false ? t('pfeat.no_' + k)
-                      : typeof v === 'number' ? t('pfeat.' + k + '_n', { n: v }) : t('pfeat.' + k + '.' + v);
-  const feats = Object.entries(f).filter(([, v]) => v != null && v !== '').map(([k, v]) => val(k, v));
-  if (!tags.length && !feats.length) return '';
-  return `<div class="lm-seen">
-      <div class="lm-seen-head">${icon('eye')} ${escapeHtml(t('pfeat.title'))}</div>
-      ${tags.length ? `<div class="lm-seen-tags">${tags.map(k =>
-        `<span class="fy-chip ${PHOTO_TAGS[k] < 0 ? 'warn' : 'good'}">${escapeHtml(t('ptag.' + k))}</span>`).join('')}</div>` : ''}
-      ${feats.length ? `<div class="lm-seen-feats">${escapeHtml(feats.join(' · '))}</div>` : ''}
-    </div>`;
-}
 
 // "What do you think of the photos?" — the user's verdict on what Sonnet
 // read (api.py /api/photo-feedback): it applies to this listing at once
@@ -510,8 +469,10 @@ async function _pfbSave(b, clear = false) {
                ...(typeof ALL_SALE !== 'undefined' ? ALL_SALE : [])].find(x => x && String(x.id) === id);
     if (l) {
       Object.assign(l, r.listing);
-      const v = box.parentElement.querySelector('.lm-photo-verdict');
-      if (v) v.outerHTML = _lmPhotoVerdict(l);
+      const know = document.querySelector('#listingModal .lm-know');
+      if (know) know.outerHTML = _lmKnowHtml(l, l.rent_mo != null ? 'rent' : 'sale');
+      const st = document.getElementById('lmPhotoState');
+      if (st) st.textContent = ' · ' + t('lm.your_verdict', { v: l.photo_by_user ? t('pfb.' + l.photo_deal) : t('pfb.none') });
       const card = document.querySelector(`#rentGrid .card[data-listing-id="${CSS.escape(id)}"]`);
       if (card && typeof renderRentalCard === 'function') card.replaceWith(renderRentalCard(l));
     }
@@ -552,134 +513,432 @@ function _lmAlsoOn(l) {
   return links.length ? ' · ' + escapeHtml(t('lm.also_on')) + ' ' + links.join(', ') : '';
 }
 
-function listingModalHtml(l) {
+// ── Details sheet, shared by rentals and sales (2026-10-30 redesign) ─────────
+// From a product-design review against Rightmove, Zillow, Redfin, Funda and
+// Airbnb: Details starts where the card ended — the card's own rows, larger —
+// then one "What to know" box, the listing's own words, the money, the
+// price vs nearby, the flat, the location; reference material (score maths,
+// comparables, photo-reading details) folded. Each thing said once.
+
+// Summary: price + ring, money line, price history, facts, owning (sale), metro.
+function _lmSummaryHtml(l, kind) {
+  const esc = escapeHtml;
+  let top, money, own = '';
+  if (kind === 'sale') {
+    const psqm = l.ask_psqm || (l.sqm ? Math.round(l.price / l.sqm) : null);
+    const vs = _vsNearbyHtml(l.comps_sale_delta_pct, t('sale.delta_tip', { n: l.comps_sale_n || 0 }));
+    top = `<span class="lm-sum-price">€${fmt(l.price)}</span>`;
+    money = psqm ? `<div class="card-money"><span>€${fmt(Math.round(psqm))}/m²</span>${vs ? '<i aria-hidden="true">·</i>' + vs : ''}</div>` : '';
+    own = _ownLineHtml(l, saleFilters());
+  } else {
+    const c = monthlyCost(l);
+    top = `<span class="lm-sum-price">€${fmt(c.total)}</span><span class="lm-sum-unit">${esc(t(c.known ? 'cost.all_in' : 'cost.rent_only'))}</span>`;
+    money = _rentMoneyHtml(c, l);
+  }
+  const hist = priceHistoryText(l);
+  return `<div class="lm-sum" id="lmSum">
+    <div class="lm-sum-top">
+      <div class="lm-sum-main"><div>${top}</div>${money}</div>
+      <button type="button" class="lm-ring-btn" data-lm-goto="lmScoreFold" aria-label="${esc(t('lm.why_score', { n: l.score_total ?? '–' }))}">${scoreRingHtml(l, 48, { value: l.score_total ?? 0, caption: t('ring.score') })}</button>
+    </div>
+    ${hist ? `<div class="lm-sum-hist">${esc(hist)}</div>` : ''}
+    ${_factsHtml(l)}
+    ${own}
+    ${_metroFootHtml(l) ? `<div class="lm-sum-metro">${_metroFootHtml(l)}</div>` : ''}
+  </div>`;
+}
+
+// The sticky header's short form once the summary has scrolled away.
+function _lmMiniText(l, kind) {
+  const c = kind === 'sale' ? null : monthlyCost(l);
+  const price = kind === 'sale' ? `€${fmt(l.price)}` : `€${fmt(c.total)}${t('lm.per_mo')}`;
+  const bits = [l.rooms != null ? (l.rooms === 1 ? t('card.studio') : t('card.rooms', { n: l.rooms })) : null,
+                l.sqm ? `${fmt(l.sqm)} m²` : null, _floorLabel(l)].filter(Boolean);
+  return `<b>${escapeHtml(price)}</b><span> · ${escapeHtml(bits.join(' · '))}</span>`;
+}
+
+// "What to know": the verdict in words and its basis, the photos, the
+// pluses and minuses, a private landlord, at most two cautions — replaces
+// the price-verdict, photo-verdict and "Seen in the photos" boxes.
+function _lmKnowHtml(l, kind) {
+  const esc = escapeHtml, rows = [];
+  const row = (lead, tone, rest, id = '') =>
+    `<div class="lm-know-row"${id ? ` id="${id}"` : ''}><b class="lm-know-lead tone-${tone}">${esc(lead)}</b>${rest ? ' ' + rest : ''}</div>`;
+  // 1. Price.
+  const dp = kind === 'sale' ? l.comps_sale_delta_pct : l.comps_delta_pct;
+  const n = kind === 'sale' ? l.comps_sale_n : l.comps_n;
+  const m = kind === 'sale' ? l.comps_sale_radius_m : l.comps_radius_m;
+  const confKey = String((kind === 'sale' ? l.comps_sale_conf_label : l.comps_conf_label) || '').toLowerCase();
+  let lead, tone;
+  if (kind !== 'sale' && l.price_suspect) { lead = t('know.check_price'); tone = 'warn'; }
+  else if (l.hidden_gem) { lead = t('gem.hidden'); tone = 'good'; }
+  else if (l.good_value) { lead = t('gem.good'); tone = 'good'; }
+  else if (dp == null) { lead = t('know.no_comp'); tone = 'muted'; }
+  else if (dp <= -5) { lead = t('know.good_price'); tone = 'good'; }
+  else if (dp >= 5) { lead = t('know.above'); tone = 'bad'; }
+  else { lead = t('know.like_nearby'); tone = 'muted'; }
+  let basis;
+  if (kind !== 'sale' && l.price_suspect) basis = t('card.suspect');
+  else if (dp == null) basis = t(kind === 'sale' ? 'sale.no_comps' : 'lm.no_comps');
+  else {
+    basis = m ? t(kind === 'sale' ? 'know.basis_sale_m' : 'know.basis', { n: fmt(n || 0), m: fmt(Math.round(m)) })
+              : t(kind === 'sale' ? 'know.basis_sale' : 'know.basis_nom', { n: fmt(n || 0) });
+    const gv = scoreSettings.rent_gv_z_max ?? -1.1;
+    if (kind !== 'sale' && dp < 0 && l.price_z != null) basis += '; ' + t(l.price_z <= gv ? 'lm.strong_discount' : 'lm.normal_discount');
+    if (confKey === 'medium') basis += '; ' + t('know.fair_comp');
+    else if (confKey === 'low') basis += '; ' + t('know.rough');
+  }
+  rows.push(row(lead, tone, esc(basis)));
+  // 2. Photos.
+  if (l.photo_deal) {
+    const g = l.photo_grade;
+    const ptone = g != null ? (g >= 7 ? 'good' : g <= 4.5 ? 'bad' : 'warn') : ({ confirms: 'good', doubt: 'warn', contradicts: 'bad' }[l.photo_deal] || 'muted');
+    const plead = l.photo_by_user ? t('know.your_photos', { v: t('pfb.' + l.photo_deal) })
+                : g != null ? t('know.photos_g', { g: fmtNum(g, g % 1 ? 1 : 0) }) : t('know.photos');
+    const note = l.photo_by_user ? (l.photo_user_note || '') : ((currentLang === 'it' ? l.photo_note_it : l.photo_note_en) || l.photo_note_it || '');
+    rows.push(row(plead, ptone, `<span class="lm-know-clamp">${esc(t('photo.' + l.photo_deal) + (note ? ' — ' + note : ''))}</span>`, 'lmKnowPhotos'));
+  }
+  // 3. Pluses and minuses from the photos.
+  const tags = (l.photo_tags || []).filter(k => k in PHOTO_TAGS);
+  const plus = tags.filter(k => PHOTO_TAGS[k] > 0).slice(0, 6), minus = tags.filter(k => PHOTO_TAGS[k] < 0).slice(0, 4);
+  if (plus.length || minus.length) {
+    rows.push(`<div class="lm-know-row">${plus.length ? `<b class="lm-know-lead tone-good">${esc(t('know.pluses'))}</b> ${esc(plus.map(k => t('ptag.' + k)).join(', '))}` : ''}${
+      plus.length && minus.length ? ' <i class="lm-dot">·</i> ' : ''}${minus.length ? `<b class="lm-know-lead tone-warn">${esc(t('know.minuses'))}</b> ${esc(minus.map(k => t('ptag.' + k)).join(', '))}` : ''}</div>`);
+  }
+  // 4. A private landlord.
+  if (kind !== 'sale' && (isPrivate(l) || privateCopySite(l))) {
+    rows.push(row(t('know.private'), 'good', esc(isPrivate(l) ? t('know.no_fee') : t('card.private_on', { site: privateCopySite(l) }))));
+  }
+  // 5. Cautions, at most two.
+  const cautions = [];
+  const d = daysOnline(l);
+  if (d != null && d > (kind === 'sale' ? 180 : LONG_ONLINE_DAYS))
+    cautions.push(row(t('card.online_months', { n: fmt(Math.floor(d / 30)) }), 'warn', esc(t('card.online_ask'))));
+  const approx = { street: 'lm.geo_street', metro: 'lm.geo_metro', zone: 'lm.geo_zone' }[l.geo_precision];
+  if (l.latitude == null && (l.source === 'subito' || l.source === 'casait')) cautions.push(row(t('know.no_pos'), 'warn', esc(t('lm.geo_none'))));
+  else if (approx) cautions.push(row(t('know.approx'), 'warn', esc(t(approx).split(/ — |: /)[0].replace(/^[^:]*:\s*/, ''))));
+  if (l.score_cap_reason) cautions.push(row(t('know.capped'), 'warn', esc(l.score_cap_reason)));
+  if (l.is_stale) cautions.push(row(t('know.stale'), 'bad', ''));
+  rows.push(...cautions.slice(0, 2));
+  return `<div class="lm-know">${rows.join('')}</div>`;
+}
+
+// The listing's own words: ** stripped, shouted paragraphs sentence-cased.
+function _lmDescClean(s) {
+  return String(s || '').replace(/\*\*|__/g, '').split('\n').map(x => x.trim()).join('\n')
+    .replace(/\n{3,}/g, '\n\n').split('\n\n').map(p => {
+      const letters = p.replace(/[^A-Za-zÀ-ÿ]/g, '');
+      if (letters.length < 20 || letters.replace(/[^A-ZÀ-Þ]/g, '').length < 0.8 * letters.length) return p;
+      return p.toLowerCase().replace(/(^|[.!?]\s+)([a-zà-ÿ])/g, (m, a, b) => a + b.toUpperCase());
+    }).join('\n\n').trim();
+}
+
+function _lmDescHtml(l) {
+  const text = _lmDescClean(l.description);
+  if (!text) return '';
+  const snippet = /^idealista/.test(l.source || '') && text.length <= 330;
+  return `<section class="lm-sec lm-desc" id="lmDesc">
+    <h3 class="lm-sec-title">${escapeHtml(t('lm.from_listing'))}</h3>
+    <div class="lm-desc-text" lang="it">${escapeHtml(text)}${snippet ? '…' : ''}</div>
+    ${snippet ? `<a class="btn-link lm-desc-more" href="${_safeUrl(l.url)}" target="_blank" rel="noopener">${escapeHtml(t('lm.read_on', { site: siteName(l.source) }))} ↗</a>`
+              : `<button type="button" class="btn-link lm-desc-toggle" data-lm-desc hidden>${escapeHtml(t('lm.read_all'))}</button>`}
+  </section>`;
+}
+
+// A clean condition / energy class, or null for junk ("Bilocale", "8").
+function _cleanCondition(v) {
+  const s = String(v || '').toLowerCase();
+  if (!s) return null;
+  if (/da ristruttur/.test(s)) return { v: t('cond.to_renovate'), tone: 'warn' };
+  if (/ottim|ristruttur/.test(s)) return { v: t('cond.renovated') };
+  if (/nuov|costruz/.test(s)) return { v: t('cond.new') };
+  if (/buon|abitabil|normale/.test(s)) return { v: t('cond.good') };
+  return null;
+}
+function _cleanEnergy(v) {
+  const s = String(v || '').trim().toUpperCase();
+  return /^(A[1-4]|A\+{0,4}|[A-G])$/.test(s) ? s : null;
+}
+
+// The flat: label–value rows the summary doesn't already show.
+function _lmFactsListHtml(l, kind) {
   const esc = escapeHtml;
   const yesNo = v => v === true ? t('lm.yes') : v === false ? t('lm.no') : null;
-  const heat  = { autonomous: t('lm.heat_own'), centralised: t('lm.heat_central'), none: t('lm.heat_none') };
-  const floor = (() => {
-    const lbl = _floorLabel(l);
-    if (!lbl) return null;
-    return lbl + (l.elevator === true ? ' · ' + t('lm.lift') : l.elevator === false ? ' · ' + t('lm.no_lift') : '');
-  })();
-  const facts = [
-    [t('lm.size'), l.sqm ? `${fmt(l.sqm)} m²` : null],
-    [t('lm.rooms'), l.rooms != null ? `${l.rooms}${l.bedrooms ? ' · ' + t('lm.bedrooms', { n: l.bedrooms }) : ''}` : null],
-    [t('lm.bathrooms'), l.bathrooms],
-    [t('lm.floor'), floor],
-    [t('lm.condition'), l.condition ? String(l.condition).replace(' (Idealista)', '') : null],
-    [t('lm.heating'), l.heating_type ? (heat[l.heating_type] ?? null) : null],
+  const heat = { autonomous: t('lm.heat_own'), centralised: t('lm.heat_central'), none: t('lm.heat_none') };
+  const cond = _cleanCondition(l.condition), en = _cleanEnergy(l.energy_class);
+  const rows = [
+    (l.rooms || 0) <= 2 && l.bedrooms != null ? [t('lm.bedrooms_k'), l.bedrooms] : null,
+    l.bathrooms === 1 ? [t('lm.bathrooms'), 1] : null,
+    [t('lm.condition'), cond?.v, cond?.tone],
+    kind === 'sale' ? null : [t('must.furnished'), yesNo(l.furnished)],
+    [t('lm.heating'), l.heating_type ? heat[l.heating_type] ?? null : null],
+    [t('lm.energy'), en, en === 'G' ? 'warn' : ''],
     [t('must.balcony'), yesNo(l.has_balcony)],
     [t('must.parking'), yesNo(l.has_parking)],
-    [t('must.furnished'), yesNo(l.furnished)],
-    [t('lm.energy'), l.energy_class],
-    [t('lm.year'), l.year_built],
+    l.air_conditioning ? [t('lm.ac'), t('lm.yes')] : null,
     [t('lm.exposure'), l.is_external === true ? t('lm.external') : l.is_external === false ? t('lm.internal') : null],
-    [t('lm.contract'), l.contract_type],
-    [t('lm.availability'), l.availability],
-    [t('lm.ac'), l.air_conditioning ? t('lm.yes') : null],
-  ];
-  const known   = facts.filter(([, v]) => v != null && v !== '');
-  const unknown = facts.filter(([, v]) => v == null || v === '').map(([k]) => k);
-  const v = _lmVerdict(l);
-  const history = priceHistoryText(l);
+    [t('lm.year'), l.year_built],
+    kind === 'sale' ? null : [t('lm.contract'), l.contract_type],
+    [t('lm.availability'), /^libero$/i.test(l.availability || '') ? t('lm.free_now') : l.availability],
+  ].filter(Boolean);
+  const known = rows.filter(([, v]) => v != null && v !== '');
+  const watch = [t('lm.bathrooms'), t('lm.condition'), t('lm.heating'), t('lm.energy'), t('must.balcony'), t('must.parking'), t('lm.year')]
+    .concat(kind === 'sale' ? [] : [t('must.furnished')]);
+  const unknown = watch.filter(k => !known.some(([kk]) => kk === k) && !(k === t('lm.bathrooms') && l.bathrooms >= 2));
+  const read = !!l.detail_fetched_at || l.source === 'subito';
+  return `<section class="lm-sec" id="lmFlat">
+    <h3 class="lm-sec-title">${esc(t('lm.the_flat'))}</h3>
+    ${known.length ? `<dl class="lm-dl">${known.map(([k, v, tone]) => `<div class="lm-dl-row"><dt>${esc(k)}</dt><dd${tone ? ` class="tone-${tone}"` : ''}>${esc(String(v))}</dd></div>`).join('')}</dl>` : ''}
+    ${unknown.length ? `<div class="lm-dl-unk">${icon('circle-dashed')}<span>${esc(t(read ? 'lm.not_stated_list' : 'lm.not_read_list', { list: unknown.join(', ').toLowerCase() }))}</span></div>` : ''}
+    ${(l.twin_filled || []).length ? `<div class="lm-fine">${esc(t('card.twin', { site: l.source === 'idealista' ? 'Immobiliare.it' : 'Idealista' }))}</div>` : ''}
+  </section>`;
+}
+
+// Price vs nearby: one scale for both sheets (this flat, nearby median, OMI band).
+function _lmScaleHtml(l, kind) {
+  const esc = escapeHtml, sale = kind === 'sale';
+  const psqm = sale ? (l.ask_psqm || (l.sqm ? l.price / l.sqm : null)) : l.ask_psqm;
+  const med = sale ? l.comps_sale_median : l.comps_median;
+  const lo = sale ? l.omi_compr_min : l.omi_loc_min, hi = sale ? l.omi_compr_max : l.omi_loc_max;
+  const f = v => sale ? fmt(Math.round(v)) : fmt1(v);
+  const vals = [psqm, med, lo, hi].filter(v => v != null && v > 0);
+  if (!psqm || vals.length < 2) return '';
+  const min = Math.min(...vals) * 0.92, max = Math.max(...vals) * 1.06;
+  const pos = v => Math.max(0, Math.min(100, (v - min) / (max - min) * 100));
+  const dp = sale ? l.comps_sale_delta_pct : l.comps_delta_pct;
+  const tone = dp == null ? '' : dp <= -5 ? 'good' : dp >= 5 ? 'bad' : '';
+  return `<div class="lm-scale" role="img" aria-label="${esc(t('sale.scale_this', { v: f(psqm) }))}">
+      <span class="lm-scale-track"></span>
+      ${lo && hi ? `<span class="lm-scale-band" style="left:${pos(lo)}%;width:${pos(hi) - pos(lo)}%"></span>` : ''}
+      ${med ? `<span class="lm-scale-med" style="left:${pos(med)}%"></span>` : ''}
+      <span class="lm-scale-dot ${tone ? 'tone-' + tone : ''}" style="left:${pos(psqm)}%"></span>
+    </div>
+    <div class="lm-scale-legend">
+      <span><i class="k-dot ${tone ? 'tone-' + tone : ''}"></i>${esc(t('sale.scale_this', { v: f(psqm) }))}</span>
+      ${med ? `<span><i class="k-med"></i>${esc(t('sale.scale_median', { v: f(med) }))}</span>` : ''}
+      ${lo && hi ? `<span><i class="k-band"></i>${esc(t('sale.scale_omi', { a: f(lo), b: f(hi) }))}</span>` : ''}
+    </div>`;
+}
+
+function _lmPriceVsHtml(l, kind) {
+  const esc = escapeHtml, sale = kind === 'sale';
+  const scale = _lmScaleHtml(l, kind);
+  const method = sale ? t('sale.delta_tip', { n: l.comps_sale_n || 0 }) : compsMethodTip(l);
+  const n = sale ? 0 : (l.comps_n || 0);
+  if (!scale && !method) return '';
+  return `<section class="lm-sec" id="lmVs">
+    <h3 class="lm-sec-title">${esc(t('lm.price_vs'))}</h3>
+    ${scale}
+    ${method ? `<p class="lm-note">${icon('info-circle')}<span>${esc(method)}</span></p>` : ''}
+    ${n > 0 ? `<details class="lm-fold lm-fold-inner" id="lmCompsFold"><summary>${esc(t('lm.see_comps', { n: fmt(n) }))}${icon('chevron-down')}</summary>
+      <div class="lm-comps" id="lmComps"></div></details>` : ''}
+  </section>`;
+}
+
+// Location: the map, then the nearby list (metro lines from the station table).
+function _lmLocationHtml(l) {
+  const esc = escapeHtml;
+  const dist = m => m != null ? `${fmt(Math.round(m))} m` : null;
+  const near = (ic, label, val) => val == null ? '' : `<li>${icon(ic)}<span>${label}</span><span class="lm-muted">${esc(val)}</span></li>`;
+  const lines = l.metro_nearest_name ? _stationLines(l.metro_nearest_name).map(x => `<b class="mline" style="--ml:${_MLINE[x]}"${x === 'M3' ? ' data-dark' : ''}>${x}</b>`).join('') : '';
+  const metroLabel = l.metro_nearest_name ? `${lines}${esc(l.metro_nearest_name)}` : esc(t('lm.metro'));
+  const metroVal = l.geo_precision === 'zone' ? t('lm.from_zone_centre') : l.geo_precision === 'metro' ? t('lm.metro_named')
+                 : l.metro_walk_min != null ? t('lm.walk', { n: l.metro_walk_min }) : dist(l.metro_nearest_dist_m);
+  const approx = l.geo_precision && l.geo_precision !== 'map' && l.latitude != null;
+  const snip = lmMapSnipHtml(l);
+  return `<section class="lm-sec" id="lmLoc">
+    <h3 class="lm-sec-title">${esc(t('lm.location'))}</h3>
+    ${snip ? `<div class="lm-map-wrap">${snip.replace(/<a class="lm-maplink"[\s\S]*<\/a>/, '')}${approx ? `<span class="lm-map-approx">${esc(t('know.approx'))}</span>` : ''}</div>` : ''}
+    <ul class="lm-near">
+      ${near('train', metroLabel, metroVal)}
+      ${near('bus', esc(t('lm.tram')), dist(l.tram_nearest_dist_m))}
+      ${near('shopping-cart', esc(t('lm.supermarket')), dist(l.supermarket_nearest_dist_m))}
+      ${near('trees', esc(t('lm.park')), dist(l.park_nearest_dist_m))}
+      ${near('school', esc(t('lm.university')), dist(l.university_nearest_dist_m))}
+    </ul>
+    ${snip ? (snip.match(/<a class="lm-maplink"[\s\S]*<\/a>/) || [''])[0] : ''}
+  </section>`;
+}
+
+// Why it scores N — folded; the ring at the top opens it.
+function _lmScoreFoldHtml(l) {
+  const esc = escapeHtml;
   const w = { price: scoreSettings.w_price ?? 0.45, prop: scoreSettings.w_property ?? 0.25,
               loc: scoreSettings.w_location ?? 0.20, pen: scoreSettings.w_penalty ?? 0.10 };
-  const bar = (k, val, wt) => `<div class="lm-bar sc-${scoreClass(val ?? 50)}"><span class="lm-bar-k">${esc(t(k))} <span class="lm-muted">${Math.round(wt * 100)}%</span></span>
+  const bar = (k, val, wt) => `<div class="lm-bar sc-${scoreClass(val ?? 50)}"><span class="lm-bar-k">${esc(t(k))} <span class="lm-muted">· ${esc(t('lm.counts', { p: Math.round(wt * 100) }))}</span></span>
       <span class="lm-bar-track"><span class="lm-bar-fill" style="width:${Math.max(0, Math.min(100, val ?? 50))}%"></span></span>
       <span class="lm-bar-v">${val ?? '–'}</span></div>`;
-  const near = (ic, label, val) => val == null ? '' : `<li>${icon(ic)}<span>${esc(label)}</span><span class="lm-muted">${esc(val)}</span></li>`;
-  const dist = m => m != null ? `${fmt(Math.round(m))} m` : null;
-  const metroLine = l.metro_nearest_name
-    ? `${l.metro_nearest_name}${l.metro_nearest_line ? ' ' + l.metro_nearest_line : ''}` : t('lm.metro');
-  const site = siteName(l.source);
+  const reasons = typeof reasonsBulletsHtml === 'function' ? reasonsBulletsHtml(l) : '';
+  return `<details class="lm-fold" id="lmScoreFold"><summary>${esc(t('lm.why_score', { n: l.score_total ?? '–' }))}${icon('chevron-down')}</summary>
+    <div class="lm-fold-body">
+      ${bar('lm.price', l.score_price, w.price)}
+      ${bar('lm.location', l.score_location ?? l.geo_score, w.loc)}
+      ${bar('lm.property', l.score_property, w.prop)}
+      ${bar('lm.flags_free', l.score_penalty, w.pen)}
+      ${l.score_cap_reason ? `<div class="lm-cap">${esc(t('card.cap', { reason: l.score_cap_reason }))}</div>` : ''}
+      <div id="lmReasons">${reasons}</div>
+    </div></details>`;
+}
+
+// About the photo reading — folded: sub-scores, flags, features, the
+// remaining tags, the reading date and (locally) the user's verdict form.
+function _lmPhotoFoldHtml(l) {
+  if (!l.photo_deal) return '';
+  const esc = escapeHtml;
+  const sc = (k, v) => v != null ? `${t(k)} ${v}/5` : null;
+  const scores = [sc('photo.condition', l.photo_condition), sc('photo.kitchen', l.photo_kitchen),
+                  sc('photo.bathroom', l.photo_bathroom), sc('photo.light', l.photo_light)].filter(Boolean).join(' · ');
+  const flags = (l.photo_flags || []).map(f => t('photo.flag.' + f)).join(', ');
+  const f = l.photo_features || {};
+  const val = (k, v) => v === true ? t('pfeat.' + k) : v === false ? t('pfeat.no_' + k)
+                      : typeof v === 'number' ? t('pfeat.' + k + '_n', { n: v }) : t('pfeat.' + k + '.' + v);
+  const feats = Object.entries(f).filter(([, v]) => v != null && v !== '').map(([k, v]) => val(k, v)).join(' · ');
+  const tags = (l.photo_tags || []).filter(k => k in PHOTO_TAGS);
+  const extra = [...tags.filter(k => PHOTO_TAGS[k] > 0).slice(6), ...tags.filter(k => PHOTO_TAGS[k] < 0).slice(4)].map(k => t('ptag.' + k)).join(', ');
+  const note = (currentLang === 'it' ? l.photo_note_it : l.photo_note_en) || l.photo_note_it || '';
+  const sonnet = l.photo_by_user && l.photo_sonnet_deal ? t('pfb.sonnet_said', { v: t('photo.' + l.photo_sonnet_deal) }) + (note ? ' — ' + note : '') : '';
+  const state = l.photo_by_user ? t('pfb.' + l.photo_deal) : t('pfb.none');
+  return `<details class="lm-fold" id="lmPhotoFold"><summary><span>${esc(t('lm.photo_reading'))}${typeof IS_LIVE !== 'undefined' && IS_LIVE ? `<span class="lm-muted" id="lmPhotoState"> · ${esc(t('lm.your_verdict', { v: state }))}</span>` : ''}</span>${icon('chevron-down')}</summary>
+    <div class="lm-fold-body lm-photo-meta">
+      ${[scores, flags, feats, extra, sonnet].filter(Boolean).map(x => `<div>${esc(x)}</div>`).join('')}
+      <div class="lm-muted">${esc(t('photo.read', { date: _lmDate(l.photo_read_at) || '–', conf: t('photo.conf.' + (l.photo_confidence || 'low')) }))}</div>
+      ${_lmPhotoFeedbackHtml(l)}
+    </div></details>`;
+}
+
+// About this listing: site, agency, ids and dates, what was read, collections.
+function _lmAboutHtml(l, kind) {
+  const esc = escapeHtml, id = esc(String(l.id));
   const subito = l.source === 'subito', casait = l.source === 'casait';
   const provenance = subito ? t('lm.subito_read')
     : l.detail_fetched_at ? t('lm.page_read', { date: _lmDate(l.detail_fetched_at) })
     : casait ? t('lm.casait_read') : t('lm.page_not_read');
-  // Subito / Casa.it listings without the site's own pin are placed from their text.
-  const approx = { street: 'lm.geo_street', metro: 'lm.geo_metro', zone: 'lm.geo_zone' }[l.geo_precision];
-  const unplaced = (subito || casait) && l.latitude == null;
-  const fav = isRentFav(l.id);
-  const id = esc(String(l.id));
-  const method = compsMethodTip(l);
+  const dates = [`ID ${id}`, l.published_date ? t('lm.online_since', { d: _lmDate(l.published_date) }) : null,
+                 l.first_seen_date ? t('lm.first_seen', { date: _lmDate(l.first_seen_date) }) : null].filter(Boolean).join(' · ');
+  return `<section class="lm-sec lm-about" id="lmAbout">
+    <h3 class="lm-sec-title">${esc(t('lm.about'))}</h3>
+    <div>${esc(siteName(l.source))}${kind !== 'sale' && isPrivate(l) ? ' · ' + esc(t('card.private').toLowerCase()) : ''}${_lmAlsoOn(l)}</div>
+    ${l.agency_name ? `<div>${esc(t('lm.agency', { v: l.agency_name }))}</div>` : ''}
+    <div>${dates}</div>
+    <div class="lm-note">${icon(l.detail_fetched_at || subito ? 'check' : 'clock')}<span>${esc(provenance)}</span></div>
+    ${kind === 'sale' ? '' : `<button type="button" class="btn btn-secondary btn-sm lm-col-btn" data-lm-collections="${id}" aria-expanded="false" aria-controls="lmCollections">${icon('folder')}<span>${esc(t('lm.add_collection'))}</span></button>
+    <div class="lm-collections" id="lmCollections" hidden></div>`}
+  </section>`;
+}
 
-  return `
-  <div class="lm-head">
-    <div class="lm-title">
-      <h2 id="lmTitle">${esc([formatAddress(l.neighbourhood), l.address ? formatAddress(l.address) : ''].filter(Boolean).join(' · ')
-                              || (l.title || '').trim() || '–')}</h2>
-      <div class="lm-sub">${esc(site)}${isPrivate(l) ? ' · ' + esc(t('card.private')) : ''}${_lmAlsoOn(l)} · ID ${id}${l.first_seen_date ? ' · ' + esc(t('lm.first_seen', { date: _lmDate(l.first_seen_date) })) : ''}</div>
-      ${_longOnlineText(l) ? `<div class="lm-cap lm-online">${icon('clock')} ${esc(_longOnlineText(l))} — ${esc(t('card.online_ask'))}</div>` : ''}
-    </div>
-    <button type="button" class="btn btn-secondary btn-icon lm-close" aria-label="${esc(t('lm.close'))}">${icon('x')}</button>
-  </div>
-
-  <div class="lm-scroll">
-    <div class="lm-photos" id="lmPhotos"></div>
-
-    <div class="lm-verdict ${v.cls}">
-      <div class="lm-verdict-head">${esc(v.head)}</div>
-      ${v.sub ? `<div class="lm-verdict-sub">${esc(v.sub)}</div>` : ''}
-    </div>
-    ${_lmPhotoVerdict(l)}
-    ${_lmSeenHtml(l)}
-    ${_lmPhotoFeedbackHtml(l)}
-
-    <div class="lm-money">
-      <div><span class="lm-rent">€${fmt(monthlyCost(l).total)}</span><span class="lm-muted">${esc(t(monthlyCost(l).known ? 'cost.all_in' : 'cost.rent_only'))}</span></div>
-      ${_lmCostTable(l)}
-      ${l.ask_psqm ? `<div class="lm-muted">€${fmt1(l.ask_psqm)}/m²${l.comps_median ? ' · ' + esc(t('lm.nearby_median', { v: fmt1(l.comps_median) })) : ''}</div>` : ''}
-      ${history ? `<div class="lm-history">${icon('trending-down')}${esc(history)}</div>` : ''}
-    </div>
-
-    <h3 class="lm-section-title">${esc(t('lm.facts'))}</h3>
-    <div class="lm-facts">
-      ${known.map(([k, val]) => `<div class="lm-fact"><div class="lm-fact-k">${esc(k)}</div><div class="lm-fact-v">${esc(String(val))}</div></div>`).join('')}
-    </div>
-    ${unknown.length ? `<div class="lm-unknown-line">${esc(t('lm.not_known_list', { list: unknown.join(', ') }))}</div>` : ''}
-    <div class="lm-note">${icon(l.detail_fetched_at || subito ? 'check' : 'clock')}${esc(provenance)}${(l.twin_filled || []).length
-        ? ' · ' + esc(t('card.twin', { site: l.source === 'idealista' ? 'Immobiliare.it' : 'Idealista' })) : ''}</div>
-
-    <div class="lm-two">
-      <section>
-        <h3 class="lm-section-title">${esc(t('lm.location'))}</h3>
-        ${lmMapSnipHtml(l)}
-        ${approx || unplaced ? `<div class="lm-muted">${esc(t(unplaced ? 'lm.geo_none' : approx))}</div>` : ''}
-        <ul class="lm-near">
-          ${near('train', metroLine, l.geo_precision === 'zone' ? t('lm.from_zone_centre') : l.geo_precision === 'metro' ? t('lm.metro_named') : l.metro_walk_min != null ? t('lm.walk', { n: l.metro_walk_min }) : dist(l.metro_nearest_dist_m))}
-          ${near('bus', t('lm.tram'), dist(l.tram_nearest_dist_m))}
-          ${near('shopping-cart', t('lm.supermarket'), dist(l.supermarket_nearest_dist_m))}
-          ${near('trees', t('lm.park'), dist(l.park_nearest_dist_m))}
-          ${near('school', t('lm.university'), dist(l.university_nearest_dist_m))}
-        </ul>
-      </section>
-      <section>
-        <h3 class="lm-section-title">${esc(t('lm.score', { n: l.score_total ?? '–' }))}</h3>
-        ${bar('lm.price', l.score_price, w.price)}
-        ${bar('lm.location', l.score_location ?? l.geo_score, w.loc)}
-        ${bar('lm.property', l.score_property, w.prop)}
-        ${bar('lm.red_flags', l.score_penalty, w.pen)}
-        ${l.score_cap_reason ? `<div class="lm-cap">${esc(t('card.cap', { reason: l.score_cap_reason }))}</div>` : ''}
-        <div id="lmReasons">${reasonsBulletsHtml(l)}</div>
-      </section>
-    </div>
-
-    ${(l.comps_n || 0) > 0 ? `<section>
-      <h3 class="lm-section-title">${esc(t('lm.compared_with'))}</h3>
-      ${method ? `<p class="lm-note">${icon('info-circle')}${esc(method)}</p>` : ''}
-      <div class="lm-comps" id="lmComps"></div>
-    </section>` : ''}
-
-    <div class="lm-collections" id="lmCollections" hidden></div>
-  </div>
-
-  <div class="lm-actions">
-    <button type="button" class="btn btn-secondary${fav ? ' on' : ''}" data-lm-fav="${id}" aria-pressed="${fav}">${icon('heart')}<span>${esc(t(fav ? 'lm.saved' : 'lm.save'))}</span></button>
-    <button type="button" class="btn btn-secondary" data-lm-collections="${id}" aria-expanded="false" aria-controls="lmCollections">${icon('folder')}<span>${esc(t('lm.collection'))}</span></button>
-    <button type="button" class="btn btn-ghost" data-listing-id="${id}" onclick="shareListing(this.dataset.listingId, event)">${icon('share')}<span>${esc(t('lm.share'))}</span></button>
-    <a class="btn btn-primary lm-open" href="${_safeUrl(l.url)}" target="_blank" rel="noopener"
-       data-listing-id="${id}" onclick="_promptArchiveListing(this.dataset.listingId, 'rental', this)"><span>${esc(t('lm.open_on', { site }))}</span>${icon('external-link')}</a>
+// One footer row: ♡, Share, and Open — the only filled button.
+function _lmActionsHtml(l, kind) {
+  const esc = escapeHtml, id = esc(String(l.id)), site = siteName(l.source);
+  const fav = kind === 'sale' ? isSaleFav(l.id) : isRentFav(l.id);
+  const favBtn = kind === 'sale'
+    ? `<button type="button" class="btn btn-secondary btn-icon btn-fav${fav ? ' is-fav' : ''}" data-sale-id="${id}" aria-pressed="${fav}" aria-label="${esc(t(fav ? 'card.unsave' : 'card.save'))}">${icon('heart')}</button>`
+    : `<button type="button" class="btn btn-secondary btn-icon btn-fav${fav ? ' is-fav' : ''}" data-lm-fav="${id}" aria-pressed="${fav}" aria-label="${esc(t(fav ? 'card.unsave' : 'card.save'))}">${icon('heart')}</button>`;
+  return `<div class="lm-actions">
+    ${favBtn}
+    <button type="button" class="btn btn-secondary btn-icon" data-listing-id="${id}" aria-label="${esc(t('lm.share'))}" title="${esc(t('lm.share'))}" onclick="shareListing(this.dataset.listingId, event)">${icon('share')}</button>
+    <a class="btn btn-primary lm-open" href="${_safeUrl(l.url)}" target="_blank" rel="noopener" data-listing-id="${id}"
+       ${kind === 'sale' ? '' : `onclick="_promptArchiveListing(this.dataset.listingId, 'rental', this)"`}><span>${esc(t('lm.open_on', { site }))}</span>${icon('external-link')}</a>
   </div>`;
+}
+
+// Header: zone · street, swapping to "€… · 2 rooms · 40 m² · Floor 5" once
+// the summary has scrolled under it.
+function _lmHeadHtml(l, kind) {
+  const esc = escapeHtml;
+  const zone = formatAddress(l.neighbourhood) || '';
+  const street = l.address ? formatAddress(String(l.address).replace(/,?\s*milano\s*$/i, '')) : '';
+  const place = zone && street && street.toLowerCase() !== zone.toLowerCase()
+    ? `<span class="place-zone">${esc(zone)}</span><span class="place-street"> · ${esc(street)}</span>`
+    : esc(zone || street || (l.title || '').trim() || '–');
+  return `<div class="lm-head">
+    <h2 id="lmTitle" class="lm-title"><span class="lm-title-place">${place}</span><span class="lm-title-mini" aria-hidden="true">${_lmMiniText(l, kind)}</span></h2>
+    <button type="button" class="btn btn-secondary btn-icon lm-close" aria-label="${esc(t('lm.close'))}">${icon('x')}</button>
+  </div>`;
+}
+
+// The hero: a full-width photo strip (filled by _lmLoadPhotos), the card's
+// badges in the same corners.
+function _lmHeroHtml(l, kind) {
+  const gem = kind === 'sale' ? '' : l.hidden_gem
+    ? `<span class="gem-photo-chip chip-hidden">${icon('diamond')}<span>${escapeHtml(t('gem.hidden'))}</span></span>`
+    : l.good_value ? `<span class="gem-photo-chip chip-good">${icon('coin')}<span>${escapeHtml(t('gem.good'))}</span></span>` : '';
+  const topRight = _priceCutBadge(l) || ((kind === 'sale' ? false : isNew(l)) ? `<span class="card-photo-new-badge">${escapeHtml(t('badge.new'))}</span>` : '');
+  const grade = _photoChipHtml(l);
+  return `<div class="lm-hero${l.thumbnail ? '' : ' is-empty'}" id="lmHero">
+    <div class="lm-hero-track" id="lmPhotos">${l.thumbnail ? `<button type="button" class="lm-hero-slide" data-pv-open="0"><img src="${_safeUrl(l.thumbnail)}" alt=""></button>` : `<span>${icon('photo')} ${escapeHtml(t('lm.no_photos'))}</span>`}</div>
+    ${gem}${topRight}${grade ? `<span class="lm-hero-grade">${grade}</span>` : ''}
+    <button type="button" class="card-photo-nav prev" data-lm-hero-step="-1" aria-label="${escapeHtml(t('pv.prev'))}">${icon('chevron-left')}</button>
+    <button type="button" class="card-photo-nav next" data-lm-hero-step="1" aria-label="${escapeHtml(t('pv.next'))}">${icon('chevron-right')}</button>
+    <span class="card-photo-count lm-hero-count" hidden></span>
+  </div>`;
+}
+
+// Monthly costs (rentals): the table, unchanged.
+function _lmCostsSecHtml(l) {
+  return `<section class="lm-sec" id="lmCosts"><h3 class="lm-sec-title">${escapeHtml(t('lm.monthly_costs'))}</h3>${_lmCostTable(l)}</section>`;
+}
+
+// The whole sheet: one skeleton for rentals and sales.
+function lmSheetHtml(l, kind) {
+  return `${_lmHeadHtml(l, kind)}
+  <div class="lm-scroll">
+    ${_lmHeroHtml(l, kind)}
+    ${_lmSummaryHtml(l, kind)}
+    ${_lmKnowHtml(l, kind)}
+    ${_lmDescHtml(l)}
+    ${kind === 'sale' ? _saleOwnTableHtml(l, saleFilters()) : _lmCostsSecHtml(l)}
+    ${_lmPriceVsHtml(l, kind)}
+    ${_lmFactsListHtml(l, kind)}
+    ${_lmLocationHtml(l)}
+    ${_lmScoreFoldHtml(l)}
+    ${_lmPhotoFoldHtml(l)}
+    ${_lmAboutHtml(l, kind)}
+  </div>
+  ${_lmActionsHtml(l, kind)}`;
+}
+
+// After a sheet is in the DOM: "Read all" when the text is clamped, the
+// header swap, the comparables on first open.
+function _lmAfterRender(l, kind) {
+  const box = document.getElementById('listingModal');
+  if (box && typeof _observeScoreRings === 'function') _observeScoreRings(box, false);   // the ring's final number
+  const desc = document.querySelector('#lmDesc .lm-desc-text'), more = document.querySelector('[data-lm-desc]');
+  if (desc && more) requestAnimationFrame(() => { if (desc.scrollHeight > desc.clientHeight + 2) more.hidden = false; });
+  const sum = document.getElementById('lmSum'), scroll = box?.querySelector('.lm-scroll');
+  if (sum && scroll && 'IntersectionObserver' in window) {
+    const io = new IntersectionObserver(([en]) => box.classList.toggle('is-past-sum', !en.isIntersecting && en.boundingClientRect.top < 100),
+                                        { root: scroll, threshold: 0 });
+    io.observe(sum);
+  }
+  const fold = document.getElementById('lmCompsFold');
+  if (fold && kind !== 'sale') fold.addEventListener('toggle', () => {
+    const c = document.getElementById('lmComps');
+    if (fold.open && c && !c.dataset.loaded) { c.dataset.loaded = '1'; _loadCompsList(l, c); }
+  });
+}
+
+document.addEventListener('click', e => {
+  const tog = e.target.closest?.('[data-lm-desc]');
+  if (tog) {
+    const sec = tog.closest('.lm-desc'), open = sec.classList.toggle('is-open');
+    tog.textContent = t(open ? 'lm.show_less' : 'lm.read_all');
+    return;
+  }
+  const go = e.target.closest?.('[data-lm-goto]');
+  if (go) {
+    const el = document.getElementById(go.dataset.lmGoto);
+    if (el) { el.open = true; el.scrollIntoView({ block: 'start', behavior: 'smooth' }); }
+    return;
+  }
+  const step = e.target.closest?.('[data-lm-hero-step]');
+  if (step) {
+    const track = document.getElementById('lmPhotos');
+    if (track) track.scrollBy({ left: Number(step.dataset.lmHeroStep) * track.clientWidth, behavior: 'smooth' });
+  }
+});
+
+function listingModalHtml(l) {
+  return lmSheetHtml(l, 'rent');
 }
 
 // "Collection" in Details: tick the collections this flat belongs to, or

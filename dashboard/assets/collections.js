@@ -96,7 +96,7 @@ async function shareListing(listingId, ev) {
   // Look up the listing in the lexically-scoped ALL_RENT — it's defined as
   // `let` in this script, not attached to `window`.
   const idStr = String(listingId);
-  const all   = (typeof ALL_RENT !== 'undefined' ? ALL_RENT : []);
+  const all   = [...(typeof ALL_RENT !== 'undefined' ? ALL_RENT : []), ...(typeof ALL_SALE !== 'undefined' ? ALL_SALE : [])];
   const listing = all.find(l => String(l.id) === idStr);
 
   // Prefer the original source URL (Immobiliare or Idealista); fall back to

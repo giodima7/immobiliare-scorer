@@ -682,7 +682,9 @@ function setFavUi(id, on) {
   const lm = document.querySelector(`[data-lm-fav="${CSS.escape(String(id))}"]`);
   if (lm) {
     lm.classList.toggle('on', on);
+    lm.classList.toggle('is-fav', on);       // the icon-only ♡ of the 2026-10-30 sheet
     lm.setAttribute('aria-pressed', String(on));
+    lm.setAttribute('aria-label', t(on ? 'card.unsave' : 'card.save'));
     const sp = lm.querySelector('span'); if (sp) sp.textContent = t(on ? 'lm.saved' : 'lm.save');
   }
 }

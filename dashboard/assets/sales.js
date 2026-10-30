@@ -378,8 +378,10 @@ function openSaleModal(id) {
   box.hidden = false;
   document.body.classList.add('lm-open');
   box.querySelector('.lm-close')?.focus();
+  box.classList.remove('is-past-sum');
   _lmLoadPhotos(l);
   lmLoadMapSnip(l);
+  _lmAfterRender(l, 'sale');
 }
 
 document.addEventListener('click', e => {
@@ -393,158 +395,44 @@ document.addEventListener('click', e => {
   }
 });
 
-function _saleVerdict(l) {
-  const dp = l.comps_sale_delta_pct;
-  if (dp == null) return { cls: '', head: t('sale.no_comps'), sub: '' };
-  const conf = { high: t('conf.high'), medium: t('conf.medium'), low: t('conf.thin') }[(l.comps_sale_conf_label || '').toLowerCase()];
-  return {
-    cls: dp <= -5 ? 'good' : dp >= 5 ? 'bad' : '',
-    head: Math.abs(dp) < 1 ? t('card.in_line') : t(dp < 0 ? 'sale.below' : 'sale.above', { pct: fmtNum(Math.abs(dp), 1) }),
-    sub: [t('sale.delta_tip', { n: l.comps_sale_n || 0 }),
-          l.comps_sale_p40 != null && l.comps_sale_p60 != null
-            ? t('sale.middle', { a: fmt(Math.round(l.comps_sale_p40)), b: fmt(Math.round(l.comps_sale_p60)) }) : null,
-          conf].filter(Boolean).join(' · '),
-  };
-}
 
-// Where the asking €/m² sits: nearby sales (median, middle half) and the
-// official OMI range, on one scale.
-function _saleScaleHtml(l, psqm) {
-  const esc = escapeHtml;
-  const med = l.comps_sale_median, lo = l.omi_compr_min, hi = l.omi_compr_max;
-  const vals = [psqm, med, lo, hi].filter(v => v != null && v > 0);
-  if (!psqm || vals.length < 2) return '';
-  const min = Math.min(...vals) * 0.92, max = Math.max(...vals) * 1.06;
-  const pos = v => Math.max(0, Math.min(100, (v - min) / (max - min) * 100));
-  const dp = l.comps_sale_delta_pct;
-  const tone = dp == null ? '' : dp <= -5 ? 'good' : dp >= 5 ? 'bad' : 'at';
-  return `<div class="sale-scale" role="img" aria-label="${esc(t('sale.scale_aria', { v: fmt(Math.round(psqm)) }))}">
-    <div class="sale-scale-track">
-      ${lo && hi ? `<span class="sale-scale-omi" style="left:${pos(lo)}%;width:${pos(hi) - pos(lo)}%"></span>` : ''}
-      ${med ? `<span class="sale-scale-median" style="left:${pos(med)}%"></span>` : ''}
-      <span class="sale-scale-this tone-${tone}" style="left:${pos(psqm)}%"></span>
-    </div>
-    <div class="sale-scale-legend">
-      <span><i class="k-this tone-${tone}"></i>${esc(t('sale.scale_this', { v: fmt(Math.round(psqm)) }))}</span>
-      ${med ? `<span><i class="k-median"></i>${esc(t('sale.scale_median', { v: fmt(Math.round(med)) }))}</span>` : ''}
-      ${lo && hi ? `<span><i class="k-omi"></i>${esc(t('sale.scale_omi', { a: fmt(Math.round(lo)), b: fmt(Math.round(hi)) }))}</span>` : ''}
-    </div>
-  </div>`;
-}
 
 function saleModalHtml(l) {
-  const esc = escapeHtml, f = saleFilters();
-  const yesNo = v => v === true ? t('lm.yes') : v === false ? t('lm.no') : null;
-  const heat = { autonomous: t('lm.heat_own'), centralised: t('lm.heat_central'), none: t('lm.heat_none') };
-  const psqm = l.ask_psqm || (l.sqm ? Math.round(l.price / l.sqm) : null);
-  const site = siteName(l.source);
-  const id = esc(String(l.id));
-  const v = _saleVerdict(l);
-  const down = l.price * (Number(f.down) || 0) / 100, pay = _round10(mortgagePayment(l.price, f));
+  return lmSheetHtml(l, 'sale');
+}
+
+// Owning vs renting: one table in the rentals' cost-table style — payment
+// (with its terms), condo fees, the monthly total, renting a similar flat,
+// and the gap; the yield as one quiet line under it.
+function _saleOwnTableHtml(l, f) {
+  const esc = escapeHtml;
+  const pay = _round10(mortgagePayment(l.price, f));
+  if (!pay) return '';
+  const down = l.price * (Number(f.down) || 0) / 100;
   const condo = Number(l.spese_condominiali || l.condominium_fees) || 0;
-  const rent = l.estimated_rent_mo, y = l.estimated_yield_pct;
-  const tile = (k, val, sub, cls = '') => `<div class="sale-tile ${cls}"><div class="sale-tile-k">${esc(k)}</div>
-      <div class="sale-tile-v">${val}</div>${sub ? `<div class="sale-tile-s">${esc(sub)}</div>` : ''}</div>`;
-  const perMonth = n => `€${fmt(n)}<span>/${esc(t('sale.month'))}</span>`;
-  const tiles = [
-    tile(t('sale.t_payment'), perMonth(pay), t('sale.t_payment_sub', { down: fmt(Math.round(down)), p: fmt(f.down), rate: fmt1(f.rate), years: fmt(f.years) })),
-    rent ? tile(t('sale.est_rent'), perMonth(rent), t('sale.t_rent_sub', { n: fmt(l.estimated_rent_n_comps || 0) }))
-         : tile(t('sale.est_rent'), '–', t('sale.no_rent'), 'is-muted'),
-    y ? tile(t('sale.gross_yield'), `${fmt1(y)}%`, condo && rent ? t('sale.t_net', { v: fmt1((rent - condo) * 12 / l.price * 100) }) : t('sale.t_gross_sub'),
-             y >= 5 ? 'is-good' : '')
-      : tile(t('sale.gross_yield'), '–', '', 'is-muted'),
-    condo ? tile(t('sale.condo_row'), perMonth(condo), l.heating_mo ? t('sale.t_heating', { v: fmt(l.heating_mo) }) : '')
-          : tile(t('sale.condo_row'), esc(t('cost.not_stated')), t('sale.t_condo_ask'), 'is-muted'),
-  ].join('');
-  // Buying vs renting a similar flat, month by month (both estimates).
-  const compare = rent && pay ? `<div class="sale-compare">${icon('home')}<span>${esc(t(condo ? 'sale.compare' : 'sale.compare_nocondo', {
-      buy: fmt(pay + condo), rent: fmt(rent) }))}</span></div>` : '';
-  const floor = (() => {
-    const lbl = _floorLabel(l);
-    if (!lbl) return null;
-    return lbl + (l.elevator === true ? ' · ' + t('lm.lift') : l.elevator === false ? ' · ' + t('lm.no_lift') : '');
-  })();
-  const facts = [
-    [t('lm.size'), l.sqm ? `${fmt(l.sqm)} m²` : null],
-    [t('lm.rooms'), l.rooms != null ? `${l.rooms}${l.bedrooms ? ' · ' + t('lm.bedrooms', { n: l.bedrooms }) : ''}` : null],
-    [t('lm.bathrooms'), l.bathrooms],
-    [t('lm.floor'), floor],
-    [t('lm.condition'), l.condition ? String(l.condition).replace(' (Idealista)', '') : null],
-    [t('lm.heating'), l.heating_type ? (heat[l.heating_type] ?? null) : null],
-    [t('must.balcony'), yesNo(l.has_balcony)],
-    [t('must.parking'), yesNo(l.has_parking)],
-    [t('lm.energy'), l.energy_class],
-    [t('lm.year'), l.year_built],
-    [t('lm.exposure'), l.is_external === true ? t('lm.external') : l.is_external === false ? t('lm.internal') : null],
-  ];
-  const known   = facts.filter(([, val]) => val != null && val !== '');
-  const unknown = facts.filter(([, val]) => val == null || val === '').map(([k]) => k);
-  const w = { price: scoreSettings.w_price ?? 0.45, prop: scoreSettings.w_property ?? 0.25,
-              loc: scoreSettings.w_location ?? 0.20, pen: scoreSettings.w_penalty ?? 0.10 };
-  const bar = (k, val, wt) => `<div class="lm-bar sc-${scoreClass(val ?? 50)}"><span class="lm-bar-k">${esc(t(k))} <span class="lm-muted">${Math.round(wt * 100)}%</span></span>
-      <span class="lm-bar-track"><span class="lm-bar-fill" style="width:${Math.max(0, Math.min(100, val ?? 50))}%"></span></span>
-      <span class="lm-bar-v">${val ?? '–'}</span></div>`;
-  const dist = m => m != null ? `${fmt(Math.round(m))} m` : null;
-  const near = (ic, label, val) => val == null ? '' : `<li>${icon(ic)}<span>${esc(label)}</span><span class="lm-muted">${esc(val)}</span></li>`;
-  const history = priceHistoryText(l);
-  return `
-  <div class="lm-head">
-    <div class="lm-title">
-      <h2 id="lmTitle">${esc([formatAddress(l.neighbourhood), l.address ? formatAddress(l.address) : ''].filter(Boolean).join(' · ') || _saleTitle(l))}</h2>
-      <div class="lm-sub">${esc(site)}${typeof _lmAlsoOn === 'function' ? _lmAlsoOn(l) : ''} · ID ${id}${l.first_seen_date ? ' · ' + esc(t('lm.first_seen', { date: _lmDate(l.first_seen_date) })) : ''}</div>
-    </div>
-    <button type="button" class="btn btn-secondary btn-icon lm-close" aria-label="${esc(t('lm.close'))}">${icon('x')}</button>
-  </div>
-  <div class="lm-scroll">
-    <div class="lm-photos" id="lmPhotos"></div>
-    <div class="lm-verdict ${v.cls}">
-      <div class="lm-verdict-head">${esc(v.head)}</div>
-      ${v.sub ? `<div class="lm-verdict-sub">${esc(v.sub)}</div>` : ''}
-    </div>
-    ${typeof _lmPhotoVerdict === 'function' ? _lmPhotoVerdict(l) + _lmSeenHtml(l) + _lmPhotoFeedbackHtml(l) : ''}
-
-    <div class="lm-money">
-      <span class="lm-rent">€${fmt(l.price)}</span>
-      ${psqm ? `<span class="lm-muted">€${fmt(Math.round(psqm))}/m²</span>` : ''}
-    </div>
-    ${history ? `<div class="lm-history">${icon('trending-down')}${esc(history)}</div>` : ''}
-    ${_saleScaleHtml(l, psqm)}
-
-    <h3 class="lm-section-title">${esc(t('sale.numbers'))}</h3>
-    <div class="sale-tiles">${tiles}</div>
-    ${compare}
-    <p class="lm-note">${icon('info-circle')}<span>${esc(t('sale.estimate_note'))} · <button type="button" class="btn-link" data-sale-mortgage>${esc(t('sale.change_mortgage'))}</button></span></p>
-
-    <h3 class="lm-section-title">${esc(t('lm.facts'))}</h3>
-    <div class="lm-facts">${known.map(([k, val]) => `<div class="lm-fact"><div class="lm-fact-k">${esc(k)}</div><div class="lm-fact-v">${esc(String(val))}</div></div>`).join('')}</div>
-    ${unknown.length ? `<div class="lm-unknown-line">${esc(t('lm.not_known_list', { list: unknown.join(', ') }))}</div>` : ''}
-
-    <div class="lm-two">
-      <section>
-        <h3 class="lm-section-title">${esc(t('lm.location'))}</h3>
-        ${lmMapSnipHtml(l)}
-        <ul class="lm-near">
-          ${near('train', l.metro_nearest_name ? `${l.metro_nearest_name}${l.metro_nearest_line ? ' ' + l.metro_nearest_line : ''}` : t('lm.metro'), l.metro_walk_min != null ? t('lm.walk', { n: l.metro_walk_min }) : dist(l.metro_nearest_dist_m))}
-          ${near('bus', t('lm.tram'), dist(l.tram_nearest_dist_m))}
-          ${near('shopping-cart', t('lm.supermarket'), dist(l.supermarket_nearest_dist_m))}
-          ${near('trees', t('lm.park'), dist(l.park_nearest_dist_m))}
-          ${near('school', t('lm.university'), dist(l.university_nearest_dist_m))}
-        </ul>
-      </section>
-      <section>
-        <h3 class="lm-section-title">${esc(t('lm.score', { n: l.score_total ?? '–' }))}</h3>
-        ${bar('lm.price', l.score_price, w.price)}
-        ${bar('lm.location', l.score_location ?? l.geo_score, w.loc)}
-        ${bar('lm.property', l.score_property, w.prop)}
-        ${bar('lm.red_flags', l.score_penalty, w.pen)}
-        ${l.score_cap_reason ? `<div class="lm-cap">${esc(t('card.cap', { reason: l.score_cap_reason }))}</div>` : ''}
-        <div>${typeof reasonsBulletsHtml === 'function' ? reasonsBulletsHtml(l) : ''}</div>
-      </section>
-    </div>
-  </div>
-  <div class="lm-actions">
-    <a class="btn btn-primary lm-open" href="${_safeUrl(l.url)}" target="_blank" rel="noopener"><span>${esc(t('lm.open_on', { site }))}</span>${icon('external-link')}</a>
-  </div>`;
+  const known = condo > 0 || l.condo_included === true;
+  const heat = Number(l.heating_mo) || 0;
+  const own = _round10(pay + condo + heat);
+  const rent = l.estimated_rent_mo;
+  const row = (k, v, cls = '') => `<tr class="${cls}"><td>${k}</td><td>${v}</td></tr>`;
+  let rows = row(esc(t('sale.t_payment')), `€${fmt(pay)}`);
+  rows += `<tr class="is-sub"><td colspan="2">${esc(t('sale.t_payment_sub', { down: fmt(Math.round(down)), p: fmt(f.down), rate: fmt1(f.rate), years: fmt(f.years) }))} · <button type="button" class="btn-link" data-sale-mortgage>${esc(t('sale.change'))}</button></td></tr>`;
+  rows += row(esc(t('sale.condo_row')), known ? `€${fmt(condo)}` : `<span class="lm-muted">${esc(t('cost.not_stated'))}</span>`, known ? '' : 'is-muted');
+  if (heat) rows += row(esc(t('cost.heating')), `€${fmt(heat)}`);
+  rows += row(esc(t('sale.to_own_row')), known ? `€${fmt(own)}` : `€${fmt(own)} + ${_unkHtml(t('own.condo'))}`, 'is-total');
+  rows += row(esc(t('sale.rent_similar')), rent ? `~€${fmt(_round10(rent))}` : `<span class="lm-muted">${esc(t('sale.no_rent'))}</span>`);
+  if (rent) rows += `<tr class="is-sub"><td colspan="2">${esc(t('sale.t_rent_sub', { n: fmt(l.estimated_rent_n_comps || 0) }))}</td></tr>`;
+  if (rent) {
+    const gap = own - rent;
+    const txt = !known ? `<span class="lm-muted">${esc(t('sale.no_compare_condo'))}</span>`
+      : Math.abs(gap) < 50 ? esc(t('own.same'))
+      : `<span class="tone-${gap > 0 ? 'warn' : 'good'}">${esc(t(gap > 0 ? 'own.more' : 'own.less', { v: fmt(_round10(Math.abs(gap))) }))}</span>`;
+    rows += `<tr class="is-gap"><td colspan="2">${txt}</td></tr>`;
+  }
+  const y = l.estimated_yield_pct;
+  const yieldLine = y ? `<div class="lm-yield">${esc(t('sale.yield_line', { g: fmt1(y) }))}${known && rent ? esc(t('sale.yield_net', { n: fmt1((rent - condo) * 12 / l.price * 100) })) : ''}</div>` : '';
+  return `<section class="lm-sec" id="lmOwn"><h3 class="lm-sec-title">${esc(t('sale.own_vs_rent'))}</h3>
+    <table class="lm-costs lm-own">${rows}</table>${yieldLine}<div class="lm-fine">${esc(t('sale.estimate_note'))}</div></section>`;
 }
 
 // ── Tools → Areas for sale ───────────────────────────────────────────────────
