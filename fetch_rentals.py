@@ -1849,7 +1849,10 @@ def record_sweeps(source: str, active_slugs: list, completed_slugs: list,
 
 
 def next_slot_area(source: str, area_slugs: list) -> str:
-    """The area swept (or, after a failed try, tried) longest ago."""
+    """The area swept (or, after a failed try, tried) longest ago — the
+    areas holding the user's focus areas first, each time the window opens
+    (focus_areas.priority_slugs: Corso Genova, Porta Romana, Crocetta,
+    Guastalla, Missori, Solari since 2026-10-30)."""
     try:
         entry = json.loads(_coverage_path().read_text()).get(source) or {}
     except (OSError, ValueError):
@@ -1862,6 +1865,16 @@ def next_slot_area(source: str, area_slugs: list) -> str:
             at = datetime.fromisoformat(entry["swept"][slug]).timestamp() + 12 * 3600
         return max(at or 0.0, entry.get("tried_at", {}).get(slug) or 0.0)
 
+    try:
+        import scan_window
+        from focus_areas import priority_slugs
+        opened = scan_window.opened_at()
+        due = [s for s in area_slugs if s in priority_slugs(source)
+               and (opened is None or last(s) < opened.timestamp())]
+        if due:
+            return min(sorted(due), key=last)
+    except Exception:
+        pass
     return min(sorted(area_slugs), key=last)
 
 
@@ -2715,7 +2728,7 @@ def _spread_loop(args, log) -> None:
     def _gap() -> int:
         # Every area once a night: the window's hours over the areas.
         n = len(_macro_slugs_for(_area_names(args))) or 1
-        return SLOT_GAP_SEC or int(scan_window.hours() * 3600 / (n + 1))
+        return SLOT_GAP_SEC or int(scan_window.slot_hours() * 3600 / (n + 1))
 
     log(f"Daemon started — spread scan at night ({scan_window.describe()}): one area every "
         f"{_gap() // 60} min, discover every {DISCOVER_EVERY_SEC / 60:g} min, output {OUTPUT_PATH}")

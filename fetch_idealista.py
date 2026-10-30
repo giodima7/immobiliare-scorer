@@ -2402,7 +2402,7 @@ def _spread_loop(args, log) -> None:
     def _gap() -> int:
         # Every zone once a night: the window's hours over the zones.
         n = len(_zone_slugs(_idealista_area_names(args))) or 1
-        return SLOT_GAP_SEC or int(scan_window.hours() * 3600 / (n + 1))
+        return SLOT_GAP_SEC or int(scan_window.slot_hours() * 3600 / (n + 1))
 
     log(f"Idealista daemon started — spread scan at night ({scan_window.describe()}): one zone every "
         f"{_gap() // 60} min, discover every {DISCOVER_EVERY_SEC / 60:g} min, output {OUTPUT_PATH}")

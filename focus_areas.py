@@ -50,3 +50,38 @@ def in_focus(l: dict) -> bool:
             except (TypeError, ValueError):
                 pass
     return False
+
+
+# Scan areas that hold the focus areas, per site — the zone slots sweep them
+# first each time the window opens (2026-10-30, the user: "always prioritise
+# Corso Genova, Porta Romana, Crocetta, Guastalla, Missori and Solari").
+# Read off the listings: a site's area is a priority when enough of its
+# live listings are in focus. Cached by the rentals file's mtime.
+_PRIORITY_CACHE: dict = {}
+
+
+def priority_slugs(source: str, min_n: int = 15, min_share: float = 0.10) -> set:
+    """{scan_area} of `source` with ≥ min_n live listings in a focus area
+    making up ≥ min_share of the area's live listings."""
+    rentals = Path(__file__).resolve().parent / "dashboard" / "milano_rentals_latest.json"
+    try:
+        mtime = rentals.stat().st_mtime
+    except OSError:
+        return set()
+    key = (mtime, PATH.stat().st_mtime if PATH.exists() else 0)
+    if _PRIORITY_CACHE.get("key") != key:
+        try:
+            rows = json.loads(rentals.read_text())
+        except (OSError, ValueError):
+            rows = []
+        counts: dict = {}
+        for l in rows:
+            if l.get("is_stale") or not l.get("scan_area"):
+                continue
+            c = counts.setdefault((l.get("source") or "immobiliare", l["scan_area"]), [0, 0])
+            c[0] += 1
+            c[1] += in_focus(l)
+        _PRIORITY_CACHE.clear()
+        _PRIORITY_CACHE.update(key=key, counts=counts)
+    return {area for (src, area), (n, f) in _PRIORITY_CACHE["counts"].items()
+            if src == source and f >= min_n and f >= min_share * n}
