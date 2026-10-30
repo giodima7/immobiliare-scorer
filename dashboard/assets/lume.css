@@ -4253,9 +4253,12 @@ body.pv-open { overflow: hidden; }
 .lm-head .lm-close { width: 44px; height: 44px; flex: none; border-color: var(--border-control); }
 .lm-scroll { padding-top: 0; }
 /* Hero: full width, swipe strip, the card's badges in the same corners. */
-.lm-hero { position: relative; margin: 0 calc(-1 * var(--s-5)); aspect-ratio: 16 / 9; max-height: 360px;
+/* A fixed height, not aspect-ratio + max-height: the browser carries the
+   max-height over to the width (360 × 16/9 = 640 px) and the photo sat on
+   the left of a wider sheet (2026-10-30, the user's desktop screenshot). */
+.lm-hero { position: relative; margin: 0 calc(-1 * var(--s-5)); height: min(360px, 56.25vw);
            background: var(--bg-muted); overflow: hidden; }
-.lm-hero.is-empty { aspect-ratio: auto; height: 120px; display: grid; place-items: center; color: var(--text-muted); font-size: var(--text-sm); }
+.lm-hero.is-empty { height: 120px; display: grid; place-items: center; color: var(--text-muted); font-size: var(--text-sm); }
 .lm-hero.is-empty .i { width: 18px; height: 18px; vertical-align: -4px; }
 .lm-hero-track { display: flex; height: 100%; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory;
                  scrollbar-width: none; overscroll-behavior-x: contain; }
@@ -4360,4 +4363,12 @@ body.pv-open { overflow: hidden; }
 @media (max-width: 639px) {
   .lm-hero { margin: 0 calc(-1 * var(--s-4)); }
   .lm-actions .lm-open { flex-basis: auto; order: 0; }
+}
+
+/* Money and price-vs-nearby side by side on a wide sheet: the cost breakdown
+   on the left, the comparison on the right (the user, 2026-10-30). */
+.lm-pair { display: grid; grid-template-columns: minmax(0, 1fr); }
+.lm-pair .lm-costs { max-width: none; }
+@media (min-width: 720px) {
+  .lm-pair { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--s-6); align-items: start; }
 }

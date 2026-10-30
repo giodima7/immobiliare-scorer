@@ -886,8 +886,10 @@ function lmSheetHtml(l, kind) {
     ${_lmSummaryHtml(l, kind)}
     ${_lmKnowHtml(l, kind)}
     ${_lmDescHtml(l)}
-    ${kind === 'sale' ? _saleOwnTableHtml(l, saleFilters()) : _lmCostsSecHtml(l)}
-    ${_lmPriceVsHtml(l, kind)}
+    <div class="lm-pair">
+      ${kind === 'sale' ? _saleOwnTableHtml(l, saleFilters()) : _lmCostsSecHtml(l)}
+      ${_lmPriceVsHtml(l, kind)}
+    </div>
     ${_lmFactsListHtml(l, kind)}
     ${_lmLocationHtml(l)}
     ${_lmScoreFoldHtml(l)}
