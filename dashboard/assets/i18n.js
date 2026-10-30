@@ -210,7 +210,7 @@ const STRINGS = {
     'chip.max_rent':'Up to €{n}','chip.min_rooms':'{n}+ rooms','chip.min_sqm':'{n}+ m²','chip.include_unknown':'incl. not yet known',
     'chip.min_discount':'{n}%+ below nearby','chip.fascia':'Fascia {v}','chip.max_metro':'Metro ≤ {n} m','chip.min_floor':'Floor {n}+',
     'chip.min_energy':'Energy {v}+','chip.min_photo':'Photos {n}+/10','chip.min_score':'Score ≥ {n}','chip.listed_today':'Listed today','chip.listed_days':'Listed in last {n} days',
-    'unk.tip':'Not stated in the listing','fact.floor':'floor','card.below_nearby':'{pct}% below nearby','card.above_nearby':'{pct}% above nearby','card.min':'{n} min','card.near_stop':'near {name}','ring.score':'score','ring.fit':'for you','badge.price_cut':'Price cut −{pct}%','own.condo':'condo','own.to_own':'/mo to own','own.more':'€{v} more than renting','own.less':'€{v} less than renting','own.same':'about the same as renting','own.rent':'rent ~€{v}',
+    'unk.tip':'Not stated in the listing','fact.floor':'floor','card.below_nearby':'{pct}% below nearby','card.above_nearby':'{pct}% above nearby','card.min':'{n} min','card.near_stop':'near {name}','ring.score':'score','ring.fit':'for you','badge.price_cut':'Price cut −{pct}%','own.condo':'condo','own.to_own':'/mo to own','own.more':'€{v} more than renting','own.less':'€{v} less than renting','own.same':'about the same as renting','own.rent':'rent ~€{v}','fav.saved':'Saved','fav.to_collection':'Add to a collection','saved.sales':'Saved sales · {n}',
     'chip.remove':'Remove filter','chip.flats':'flats','chip.so_far':'so far · loading the rest…','fb.selected_n':'{n} selected',
 
     'stats.showing':'Showing','stats.rentals':'rentals','stats.avg_score':'Avg score','stats.avg_rent':'Avg rent',
@@ -767,7 +767,7 @@ const STRINGS = {
     'chip.max_rent':'Fino a €{n}','chip.min_rooms':'{n}+ locali','chip.min_sqm':'{n}+ m²','chip.include_unknown':'incl. non ancora noti',
     'chip.min_discount':'{n}%+ sotto i vicini','chip.fascia':'Fascia {v}','chip.max_metro':'Metro ≤ {n} m','chip.min_floor':'Piano {n}+',
     'chip.min_energy':'Classe {v}+','chip.min_photo':'Foto {n}+/10','chip.min_score':'Punteggio ≥ {n}','chip.listed_today':'Pubblicati oggi','chip.listed_days':'Ultimi {n} giorni',
-    'unk.tip':'Non indicato nell\'annuncio','fact.floor':'piano','card.below_nearby':'{pct}% sotto la zona','card.above_nearby':'{pct}% sopra la zona','card.min':'{n} min','card.near_stop':'vicino a {name}','ring.score':'punteggio','ring.fit':'per te','badge.price_cut':'Ribassato −{pct}%','own.condo':'spese','own.to_own':'/mese da proprietario','own.more':'€{v} più che in affitto','own.less':'€{v} meno che in affitto','own.same':'come in affitto','own.rent':'affitto ~€{v}',
+    'unk.tip':'Non indicato nell\'annuncio','fact.floor':'piano','card.below_nearby':'{pct}% sotto la zona','card.above_nearby':'{pct}% sopra la zona','card.min':'{n} min','card.near_stop':'vicino a {name}','ring.score':'punteggio','ring.fit':'per te','badge.price_cut':'Ribassato −{pct}%','own.condo':'spese','own.to_own':'/mese da proprietario','own.more':'€{v} più che in affitto','own.less':'€{v} meno che in affitto','own.same':'come in affitto','own.rent':'affitto ~€{v}','fav.saved':'Salvato','fav.to_collection':'Aggiungi a una collezione','saved.sales':'Vendite salvate · {n}',
     'chip.remove':'Rimuovi filtro','chip.flats':'appartamenti','chip.so_far':'finora · carico gli altri…','fb.selected_n':'{n} selezionate',
 
     'stats.showing':'Mostra','stats.rentals':'affitti','stats.avg_score':'Score medio','stats.avg_rent':'Affitto medio',
