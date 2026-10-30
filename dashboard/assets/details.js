@@ -694,14 +694,18 @@ function _lmFactsListHtml(l, kind) {
   </section>`;
 }
 
-// Price vs nearby: one scale for both sheets (this flat, nearby median, OMI band).
+// Price vs nearby: one scale for both sheets. The nearby flats are the band
+// (their middle, p40–p60, with the median), since they are what the score
+// compares with; the official OMI range is a thin dashed line under it
+// (2026-10-30, the user: "if the band is OMI, I'd swap the two").
 function _lmScaleHtml(l, kind) {
   const esc = escapeHtml, sale = kind === 'sale';
   const psqm = sale ? (l.ask_psqm || (l.sqm ? l.price / l.sqm : null)) : l.ask_psqm;
   const med = sale ? l.comps_sale_median : l.comps_median;
+  const p40 = sale ? l.comps_sale_p40 : l.comps_p40, p60 = sale ? l.comps_sale_p60 : l.comps_p60;
   const lo = sale ? l.omi_compr_min : l.omi_loc_min, hi = sale ? l.omi_compr_max : l.omi_loc_max;
   const f = v => sale ? fmt(Math.round(v)) : fmt1(v);
-  const vals = [psqm, med, lo, hi].filter(v => v != null && v > 0);
+  const vals = [psqm, med, p40, p60, lo, hi].filter(v => v != null && v > 0);
   if (!psqm || vals.length < 2) return '';
   const min = Math.min(...vals) * 0.92, max = Math.max(...vals) * 1.06;
   const pos = v => Math.max(0, Math.min(100, (v - min) / (max - min) * 100));
@@ -709,14 +713,16 @@ function _lmScaleHtml(l, kind) {
   const tone = dp == null ? '' : dp <= -5 ? 'good' : dp >= 5 ? 'bad' : '';
   return `<div class="lm-scale" role="img" aria-label="${esc(t('sale.scale_this', { v: f(psqm) }))}">
       <span class="lm-scale-track"></span>
-      ${lo && hi ? `<span class="lm-scale-band" style="left:${pos(lo)}%;width:${pos(hi) - pos(lo)}%"></span>` : ''}
+      ${lo && hi ? `<span class="lm-scale-omi" style="left:${pos(lo)}%;width:${pos(hi) - pos(lo)}%"></span>` : ''}
+      ${p40 && p60 ? `<span class="lm-scale-band" style="left:${pos(p40)}%;width:${Math.max(1, pos(p60) - pos(p40))}%"></span>` : ''}
       ${med ? `<span class="lm-scale-med" style="left:${pos(med)}%"></span>` : ''}
       <span class="lm-scale-dot ${tone ? 'tone-' + tone : ''}" style="left:${pos(psqm)}%"></span>
     </div>
     <div class="lm-scale-legend">
       <span><i class="k-dot ${tone ? 'tone-' + tone : ''}"></i>${esc(t('sale.scale_this', { v: f(psqm) }))}</span>
-      ${med ? `<span><i class="k-med"></i>${esc(t('sale.scale_median', { v: f(med) }))}</span>` : ''}
-      ${lo && hi ? `<span><i class="k-band"></i>${esc(t('sale.scale_omi', { a: f(lo), b: f(hi) }))}</span>` : ''}
+      ${med && p40 && p60 ? `<span><i class="k-band"><b></b></i>${esc(t('lm.scale_nearby', { a: f(p40), b: f(p60), m: f(med) }))}</span>`
+        : med ? `<span><i class="k-med"></i>${esc(t('sale.scale_median', { v: f(med) }))}</span>` : ''}
+      ${lo && hi ? `<span><i class="k-omi"></i>${esc(t('sale.scale_omi', { a: f(lo), b: f(hi) }))}</span>` : ''}
     </div>`;
 }
 
