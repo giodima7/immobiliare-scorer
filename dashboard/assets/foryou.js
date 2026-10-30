@@ -49,18 +49,20 @@ function _fyLoan() {
   return { down: Number(f.down) || 20, rate: Number(f.rate) || 3.5, years: Number(f.years) || 25 };
 }
 
-// The three budgets. Buying: the lower of what the cash covers (down payment
-// plus purchase costs, keeping the reserve) and what a payment within the
-// share of pay borrows.
+// The three budgets. Buying: all the savings past the reserve and the
+// purchase costs go into the down payment (saleDown), so the price is what
+// that plus a loan paid within the share of pay reaches — unless the savings
+// can't cover the bank's minimum down payment plus the costs at that price.
 function fyBudgets(p = fyProfile(), loan = _fyLoan()) {
   const solo = p.income * p.share / 100;
   const n = loan.years * 12, r = loan.rate / 1200;
   const maxLoan = r ? solo * (1 - Math.pow(1 + r, -n)) / r : solo * n;
-  const byPayment = maxLoan / (1 - loan.down / 100);
-  const byCash = Math.max(0, p.cash - p.reserve) / ((loan.down + p.costs) / 100);
+  const avail = Math.max(0, p.cash - p.reserve), c = p.costs / 100;
+  const byPayment = (maxLoan + avail) / (1 + c);
+  const byCash = avail / (loan.down / 100 + c);
   const buy = Math.floor(Math.min(byPayment, byCash) / 1000) * 1000;
   return { solo, duo: solo * 2, buy, limit: byCash < byPayment ? 'cash' : 'payment',
-           payment: buy ? mortgagePayment(buy, loan) : 0 };
+           payment: buy ? mortgagePayment(buy, loan, p) : 0, down: buy ? saleDown(buy, loan, p) : 0 };
 }
 
 // ── Fit: how well a listing suits this person, not just whether it passes ──
@@ -212,7 +214,7 @@ function _fyLiveDuo(l, why) {
 function _fyLiveBuy(l, p, loan, why) {
   const parts = _fyCommonLive(l, why);
   const condo = Number(l.spese_condominiali || l.condominium_fees) || 0;
-  const own = mortgagePayment(l.price, loan) + condo;
+  const own = mortgagePayment(l.price, loan, p) + condo;
   if (l.estimated_rent_mo) {
     const gap = l.estimated_rent_mo - own;           // > 0: owning costs less than renting it
     parts.push(_lerp(gap / l.estimated_rent_mo, -0.3, 0.25));
@@ -226,7 +228,8 @@ function _fyLiveBuy(l, p, loan, why) {
   }
   if (/ristruttur|rinnov/i.test(l.condition || '') && !/da ristruttur/i.test(l.condition || '')) parts.push(1);
   if (/da ristruttur/i.test(l.condition || '')) { parts.push(0.3); why.push({ bad: true, w: 2, t: t_('fy.w_works') }); }
-  // Cash left after the down payment and the purchase costs.
+  // Savings past the minimum down payment and the costs: what could be kept
+  // back (they go into the down payment, lowering the payment above).
   const left = p.cash - l.price * (loan.down + p.costs) / 100;
   parts.push(_lerp(left, 0, 6 * own));
   if (left >= 6 * own) why.push({ w: 1, t: t_('fy.w_cash_left', { v: fmt(Math.round(left / 1000) * 1000) }) });
@@ -340,7 +343,7 @@ function renderForYou() {
   set('fyOutDuo', '€' + fmt(Math.round(b.duo)) + mo);
   set('fyOutDuoSub', escapeHtml(t('fy.each', { v: fmt(Math.round(b.solo)) })));
   set('fyOutBuy', b.buy ? '€' + fmt(b.buy) : '–');
-  set('fyOutBuySub', b.buy ? escapeHtml(t('fy.buy_sub', { v: fmt(Math.round(b.payment / 10) * 10),
+  set('fyOutBuySub', b.buy ? escapeHtml(t('fy.buy_sub', { v: fmt(Math.round(b.payment / 10) * 10), d: fmt(Math.round(b.down / 1000) * 1000),
                                                           limit: t(b.limit === 'cash' ? 'fy.limit_cash' : 'fy.limit_pay') })) : '');
   set('fyHeadSolo', escapeHtml(t('fy.head_solo', { v: fmt(Math.round(b.solo)), n: fmt(solo.length) })));
   set('fyHeadDuo', escapeHtml(t('fy.head_duo', { v: fmt(Math.round(b.duo)), n: fmt(duo.length) })));

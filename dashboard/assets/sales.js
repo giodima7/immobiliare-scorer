@@ -30,9 +30,20 @@ function _setSaleFilters(patch) {
   renderSales();
 }
 
+// Down payment: every euro of the For-you savings past the reserve and the
+// purchase costs goes in, never under the minimum % (2026-10-30, the user:
+// "più aumento il cash e maggiore è l'anticipo"). With no savings set, the
+// minimum % alone.
+function saleDown(price, f, p = typeof fyProfile === 'function' ? fyProfile() : null) {
+  const min = price * (Number(f.down) || 0) / 100;
+  if (!p || !(p.cash > 0)) return min;
+  const free = p.cash - (Number(p.reserve) || 0) - price * (Number(p.costs) || 0) / 100;
+  return Math.min(price, Math.max(min, free));
+}
+
 // Monthly payment of a fixed-rate loan for (price − down payment).
-function mortgagePayment(price, f) {
-  const loan = price * (1 - (Number(f.down) || 0) / 100);
+function mortgagePayment(price, f, p) {
+  const loan = price - saleDown(price, f, p);
   const n = (Number(f.years) || 25) * 12, r = (Number(f.rate) || 0) / 100 / 12;
   if (!loan || !n) return 0;
   return r ? loan * r / (1 - Math.pow(1 + r, -n)) : loan / n;
@@ -310,7 +321,7 @@ function _ownLineHtml(l, f) {
   } else if (rent) {
     html += `<i aria-hidden="true">·</i><span title="${esc(t('sale.rent_tip', { n: l.estimated_rent_n_comps || 0 }))}">${esc(t('own.rent', { v: fmt(_round10(rent)) }))}</span>`;
   }
-  return `<div class="card-own" title="${esc(t('sale.pay_tip', { down: fmt(f.down), rate: fmt1(f.rate), years: fmt(f.years) }))}">${html}</div>`;
+  return `<div class="card-own" title="${esc(t('sale.pay_tip', { down: fmt(Math.round(saleDown(l.price, f) / l.price * 100)), rate: fmt1(f.rate), years: fmt(f.years) }))}">${html}</div>`;
 }
 
 // Freshness on a sale card: online for over six months in amber (27 % of
@@ -408,7 +419,7 @@ function _saleOwnTableHtml(l, f) {
   const esc = escapeHtml;
   const pay = _round10(mortgagePayment(l.price, f));
   if (!pay) return '';
-  const down = l.price * (Number(f.down) || 0) / 100;
+  const down = saleDown(l.price, f);
   const condo = Number(l.spese_condominiali || l.condominium_fees) || 0;
   const known = condo > 0 || l.condo_included === true;
   const heat = Number(l.heating_mo) || 0;
@@ -416,7 +427,7 @@ function _saleOwnTableHtml(l, f) {
   const rent = l.estimated_rent_mo;
   const row = (k, v, cls = '') => `<tr class="${cls}"><td>${k}</td><td>${v}</td></tr>`;
   let rows = row(esc(t('sale.t_payment')), `€${fmt(pay)}`);
-  rows += `<tr class="is-sub"><td colspan="2">${esc(t('sale.t_payment_sub', { down: fmt(Math.round(down)), p: fmt(f.down), rate: fmt1(f.rate), years: fmt(f.years) }))} · <button type="button" class="btn-link" data-sale-mortgage>${esc(t('sale.change'))}</button></td></tr>`;
+  rows += `<tr class="is-sub"><td colspan="2">${esc(t('sale.t_payment_sub', { down: fmt(Math.round(down)), p: fmt(Math.round(down / l.price * 100)), rate: fmt1(f.rate), years: fmt(f.years) }))} · <button type="button" class="btn-link" data-sale-mortgage>${esc(t('sale.change'))}</button></td></tr>`;
   rows += row(esc(t('sale.condo_row')), known ? `€${fmt(condo)}` : `<span class="lm-muted">${esc(t('cost.not_stated'))}</span>`, known ? '' : 'is-muted');
   if (heat) rows += row(esc(t('cost.heating')), `€${fmt(heat)}`);
   rows += row(esc(t('sale.to_own_row')), known ? `€${fmt(own)}` : `€${fmt(own)} + ${_unkHtml(t('own.condo'))}`, 'is-total');
