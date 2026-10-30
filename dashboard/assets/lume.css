@@ -4310,9 +4310,10 @@ body.pv-open { overflow: hidden; }
 .lm-yield { font-size: var(--text-sm); color: var(--text-secondary); margin-top: var(--s-2); }
 .lm-fine { font-size: var(--text-xs); color: var(--text-muted); margin-top: 4px; }
 /* Price vs nearby: one scale for both sheets. */
-.lm-scale { position: relative; height: 18px; margin: var(--s-2) 0; }
+.lm-scale { position: relative; height: 22px; margin: var(--s-2) 0; }
 .lm-scale-track { position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: var(--border-light); }
-.lm-scale-band { position: absolute; top: 5px; height: 8px; border-radius: 999px; background: var(--border-control); }
+.lm-scale-band { position: absolute; top: 4px; height: 10px; border-radius: 999px; background: var(--border-control); }
+.lm-scale-omi { position: absolute; top: 17px; height: 0; border-top: 2px dashed var(--text-muted); }
 .lm-scale-med { position: absolute; top: 0; width: 2px; height: 18px; margin-left: -1px; background: var(--text-primary); border-radius: 1px; }
 .lm-scale-dot { position: absolute; top: 2px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; background: var(--text-primary);
                 box-shadow: 0 0 0 2px var(--bg-card); }
@@ -4322,7 +4323,9 @@ body.pv-open { overflow: hidden; }
 .lm-scale-legend .k-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--text-primary); }
 .lm-scale-legend .k-dot.tone-good { background: var(--green-deep); } .lm-scale-legend .k-dot.tone-bad { background: var(--coral); }
 .lm-scale-legend .k-med { width: 2px; height: 11px; background: var(--text-primary); }
-.lm-scale-legend .k-band { width: 14px; height: 6px; border-radius: 999px; background: var(--border-control); }
+.lm-scale-legend .k-band { position: relative; width: 16px; height: 8px; border-radius: 999px; background: var(--border-control); }
+.lm-scale-legend .k-band b { position: absolute; left: 7px; top: -2px; width: 2px; height: 12px; background: var(--text-primary); }
+.lm-scale-legend .k-omi { width: 16px; height: 0; border-top: 2px dashed var(--text-muted); }
 /* The flat: label–value rows. */
 .lm-dl { display: grid; grid-template-columns: 1fr 1fr; column-gap: var(--s-4); margin: 0; }
 @media (min-width: 720px) { .lm-dl { grid-template-columns: repeat(3, 1fr); } }
