@@ -694,36 +694,55 @@ function _lmFactsListHtml(l, kind) {
   </section>`;
 }
 
-// Price vs nearby: one scale for both sheets. The nearby flats are the band
-// (their middle, p40–p60, with the median), since they are what the score
-// compares with; the official OMI range is a thin dashed line under it
-// (2026-10-30, the user: "if the band is OMI, I'd swap the two").
+// Price vs nearby: one gauge for both sheets (2026-10-30; a number line with
+// a band, a tick and a dashed OMI line read as noise). The verdict comes
+// first, then a five-step bar centred on the nearby median, much lower …
+// much higher, with this flat's pin on it; the steps break at ±5 % (the
+// card's tone) and ±15 %, the outer ones run to ±40 %. OMI is one line of
+// text under it, since it is a cross-check, not what the score uses.
+const _LM_STEPS = ['lm.much_lower', 'lm.lower', 'lm.in_line', 'lm.higher', 'lm.much_higher'];
+function _lmGaugePos(dp) {
+  const seg = (lo, hi, at) => at + Math.max(0, Math.min(1, (dp - lo) / (hi - lo))) * 20;
+  return dp < -15 ? seg(-40, -15, 0) : dp < -5 ? seg(-15, -5, 20) : dp < 5 ? seg(-5, 5, 40)
+       : dp < 15 ? seg(5, 15, 60) : seg(15, 40, 80);
+}
+
 function _lmScaleHtml(l, kind) {
   const esc = escapeHtml, sale = kind === 'sale';
-  const psqm = sale ? (l.ask_psqm || (l.sqm ? l.price / l.sqm : null)) : l.ask_psqm;
+  // What the score compares: a sale's asking €/m²; a rental's rent plus condo
+  // fees (capped at 20 % of the rent, as scoring.compute_effective_psqm).
+  const condo = sale ? 0 : Math.min(+(l.spese_condominiali || l.condominium_fees || 0), (l.rent_mo || 0) * 0.2);
+  const psqm = sale ? (l.ask_psqm || (l.sqm ? l.price / l.sqm : null))
+             : (l.rent_mo && l.sqm ? (l.rent_mo + condo) / l.sqm : l.ask_psqm);
   const med = sale ? l.comps_sale_median : l.comps_median;
-  const p40 = sale ? l.comps_sale_p40 : l.comps_p40, p60 = sale ? l.comps_sale_p60 : l.comps_p60;
   const lo = sale ? l.omi_compr_min : l.omi_loc_min, hi = sale ? l.omi_compr_max : l.omi_loc_max;
   const f = v => sale ? fmt(Math.round(v)) : fmt1(v);
-  const vals = [psqm, med, p40, p60, lo, hi].filter(v => v != null && v > 0);
-  if (!psqm || vals.length < 2) return '';
-  const min = Math.min(...vals) * 0.92, max = Math.max(...vals) * 1.06;
-  const pos = v => Math.max(0, Math.min(100, (v - min) / (max - min) * 100));
-  const dp = sale ? l.comps_sale_delta_pct : l.comps_delta_pct;
-  const tone = dp == null ? '' : dp <= -5 ? 'good' : dp >= 5 ? 'bad' : '';
-  return `<div class="lm-scale" role="img" aria-label="${esc(t('sale.scale_this', { v: f(psqm) }))}">
-      <span class="lm-scale-track"></span>
-      ${lo && hi ? `<span class="lm-scale-omi" style="left:${pos(lo)}%;width:${pos(hi) - pos(lo)}%"></span>` : ''}
-      ${p40 && p60 ? `<span class="lm-scale-band" style="left:${pos(p40)}%;width:${Math.max(1, pos(p60) - pos(p40))}%"></span>` : ''}
-      ${med ? `<span class="lm-scale-med" style="left:${pos(med)}%"></span>` : ''}
-      <span class="lm-scale-dot ${tone ? 'tone-' + tone : ''}" style="left:${pos(psqm)}%"></span>
+  if (!psqm) return '';
+  let dp = sale ? l.comps_sale_delta_pct : l.comps_delta_pct;
+  if (dp == null && med) dp = (psqm / med - 1) * 100;
+  // OMI rents leave condo fees out, so a rental is held against them by rent alone.
+  const own = sale ? psqm : (l.ask_psqm || psqm);
+  const omi = lo && hi ? `<p class="lm-gauge-omi">${esc(t('lm.omi_line', { a: f(lo), b: f(hi) }))}${
+    esc(t(own < lo ? 'lm.omi_below' : own > hi ? 'lm.omi_above' : 'lm.omi_in'))}</p>` : '';
+  const head = `<b>€${f(psqm)}/m²</b>${condo > 0 ? `<small>${esc(t('lm.incl_condo'))}</small>` : ''}`;
+  if (dp == null) return `<div class="lm-gauge-head">${head}</div>${omi}`;
+  const tone = dp <= -5 ? 'good' : dp >= 5 ? 'bad' : '';
+  const step = dp < -15 ? 0 : dp < -5 ? 1 : dp < 5 ? 2 : dp < 15 ? 3 : 4;
+  const verdict = Math.abs(dp) < 1 ? t('card.in_line')
+    : t(dp < 0 ? 'card.below_nearby' : 'card.above_nearby', { pct: fmt(Math.round(Math.abs(dp))) });
+  // The centre is the benchmark the delta was taken against (nearby flats
+  // sized like this one; for sales weighed with OMI), so the two numbers
+  // always agree with the percentage — the raw median often doesn't.
+  const centre = psqm / (1 + dp / 100);
+  return `<div class="lm-gauge-head">${head}<span class="${tone ? 'tone-' + tone : ''}">${esc(verdict)}</span></div>
+    <div class="lm-gauge" role="img" aria-label="${esc(verdict)}">
+      ${_LM_STEPS.map((k, i) => `<span class="lm-gauge-seg s${i}"></span>`).join('')}
+      <span class="lm-gauge-pin ${tone ? 'tone-' + tone : ''}" style="left:${_lmGaugePos(dp).toFixed(1)}%"></span>
     </div>
-    <div class="lm-scale-legend">
-      <span><i class="k-dot ${tone ? 'tone-' + tone : ''}"></i>${esc(t('sale.scale_this', { v: f(psqm) }))}</span>
-      ${med && p40 && p60 ? `<span><i class="k-band"><b></b></i>${esc(t('lm.scale_nearby', { a: f(p40), b: f(p60), m: f(med) }))}</span>`
-        : med ? `<span><i class="k-med"></i>${esc(t('sale.scale_median', { v: f(med) }))}</span>` : ''}
-      ${lo && hi ? `<span><i class="k-omi"></i>${esc(t('sale.scale_omi', { a: f(lo), b: f(hi) }))}</span>` : ''}
-    </div>`;
+    <div class="lm-gauge-steps">${_LM_STEPS.map((k, i) => `<span${i === step ? ' class="is-here"' : ''}>${esc(t(k))}</span>`).join('')}</div>
+    <p class="lm-gauge-med">${esc(sale && med && Math.abs(centre / med - 1) > 0.02
+      ? t('lm.gauge_centre_omi', { v: f(centre), m: f(med) }) : t('lm.gauge_centre', { v: f(centre) }))}</p>
+    ${omi}`;
 }
 
 function _lmPriceVsHtml(l, kind) {
