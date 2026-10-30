@@ -4310,22 +4310,26 @@ body.pv-open { overflow: hidden; }
 .lm-yield { font-size: var(--text-sm); color: var(--text-secondary); margin-top: var(--s-2); }
 .lm-fine { font-size: var(--text-xs); color: var(--text-muted); margin-top: 4px; }
 /* Price vs nearby: one scale for both sheets. */
-.lm-scale { position: relative; height: 22px; margin: var(--s-2) 0; }
-.lm-scale-track { position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: var(--border-light); }
-.lm-scale-band { position: absolute; top: 4px; height: 10px; border-radius: 999px; background: var(--border-control); }
-.lm-scale-omi { position: absolute; top: 17px; height: 0; border-top: 2px dashed var(--text-muted); }
-.lm-scale-med { position: absolute; top: 0; width: 2px; height: 18px; margin-left: -1px; background: var(--text-primary); border-radius: 1px; }
-.lm-scale-dot { position: absolute; top: 2px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; background: var(--text-primary);
-                box-shadow: 0 0 0 2px var(--bg-card); }
-.lm-scale-dot.tone-good { background: var(--green-deep); } .lm-scale-dot.tone-bad { background: var(--coral); }
-.lm-scale-legend { display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: var(--text-xs); color: var(--text-secondary); }
-.lm-scale-legend i { display: inline-block; vertical-align: middle; margin-right: 5px; }
-.lm-scale-legend .k-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--text-primary); }
-.lm-scale-legend .k-dot.tone-good { background: var(--green-deep); } .lm-scale-legend .k-dot.tone-bad { background: var(--coral); }
-.lm-scale-legend .k-med { width: 2px; height: 11px; background: var(--text-primary); }
-.lm-scale-legend .k-band { position: relative; width: 16px; height: 8px; border-radius: 999px; background: var(--border-control); }
-.lm-scale-legend .k-band b { position: absolute; left: 7px; top: -2px; width: 2px; height: 12px; background: var(--text-primary); }
-.lm-scale-legend .k-omi { width: 16px; height: 0; border-top: 2px dashed var(--text-muted); }
+.lm-gauge-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; margin: var(--s-1) 0 var(--s-2); }
+.lm-gauge-head b { font-size: var(--text-lg); font-weight: 700; color: var(--text-primary); }
+.lm-gauge-head span { font-size: var(--text-sm); font-weight: 600; color: var(--text-secondary); }
+.lm-gauge-head small { margin-left: -6px; font-size: var(--text-xs); color: var(--text-muted); }
+.lm-gauge-head .tone-good { color: var(--green-deep); } .lm-gauge-head .tone-bad { color: var(--coral); }
+.lm-gauge { position: relative; display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; height: 8px; margin: 14px 0 6px; }
+.lm-gauge-seg { border-radius: 2px; }
+.lm-gauge-seg.s0 { background: var(--green-deep); border-radius: 999px 2px 2px 999px; }
+.lm-gauge-seg.s1 { background: color-mix(in srgb, var(--green-deep) 45%, var(--bg-muted)); }
+.lm-gauge-seg.s2 { background: var(--border-control); }
+.lm-gauge-seg.s3 { background: color-mix(in srgb, var(--coral) 45%, var(--bg-muted)); }
+.lm-gauge-seg.s4 { background: var(--coral); border-radius: 2px 999px 999px 2px; }
+.lm-gauge-pin { position: absolute; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%;
+  background: var(--text-primary); border: 3px solid var(--bg-card); box-shadow: 0 0 0 1px var(--border-control); }
+.lm-gauge-pin.tone-good { background: var(--green-deep); } .lm-gauge-pin.tone-bad { background: var(--coral); }
+.lm-gauge-steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; font-size: 11px; color: var(--text-muted); text-align: center; white-space: nowrap; }
+.lm-gauge-steps span:first-child { text-align: left; } .lm-gauge-steps span:last-child { text-align: right; }
+.lm-gauge-steps .is-here { color: var(--text-primary); font-weight: 600; }
+.lm-gauge-med, .lm-gauge-omi { margin: var(--s-2) 0 0; font-size: var(--text-sm); color: var(--text-secondary); }
+.lm-gauge-omi { margin-top: 2px; color: var(--text-muted); }
 /* The flat: label–value rows. */
 .lm-dl { display: grid; grid-template-columns: 1fr 1fr; column-gap: var(--s-4); margin: 0; }
 @media (min-width: 720px) { .lm-dl { grid-template-columns: repeat(3, 1fr); } }
