@@ -720,7 +720,8 @@ function _lmScaleHtml(l, kind) {
     </div>
     <div class="lm-scale-legend">
       <span><i class="k-dot ${tone ? 'tone-' + tone : ''}"></i>${esc(t('sale.scale_this', { v: f(psqm) }))}</span>
-      ${med ? `<span><i class="k-band"><b></b></i>${esc(p40 && p60 ? t('lm.scale_nearby', { a: f(p40), b: f(p60), m: f(med) }) : t('sale.scale_median', { v: f(med) }))}</span>` : ''}
+      ${med && p40 && p60 ? `<span><i class="k-band"><b></b></i>${esc(t('lm.scale_nearby', { a: f(p40), b: f(p60), m: f(med) }))}</span>`
+        : med ? `<span><i class="k-med"></i>${esc(t('sale.scale_median', { v: f(med) }))}</span>` : ''}
       ${lo && hi ? `<span><i class="k-omi"></i>${esc(t('sale.scale_omi', { a: f(lo), b: f(hi) }))}</span>` : ''}
     </div>`;
 }
