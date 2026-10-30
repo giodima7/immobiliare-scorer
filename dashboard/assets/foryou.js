@@ -158,10 +158,10 @@ function _fyCommonLive(l, why) {
   const walk = l.metro_walk_min;
   if (walk != null) {
     parts.push(walk <= 6 ? 1 : walk <= 12 ? 0.7 : walk <= 18 ? 0.4 : 0.2);
-    if (walk <= 6) why.push({ w: 2, t: walk <= 1 ? t_('fy.w_metro_door') : t_('fy.w_metro', { n: walk }) });
+    if (walk <= 6) why.push({ k: 'metro', w: 2, t: walk <= 1 ? t_('fy.w_metro_door') : t_('fy.w_metro', { n: walk }) });
   }
   if ((l.floor_n || 0) >= 3 && l.elevator === false) {
-    parts.push(0.3); why.push({ bad: true, w: 2, t: t_('fy.w_nolift', { n: l.floor_n }) });
+    parts.push(0.3); why.push({ k: 'floor', bad: true, w: 2, t: t_('fy.w_nolift', { n: l.floor_n }) });
   }
   if (l.has_balcony) { parts.push(0.9); why.push({ w: 1, t: t_('fy.w_balcony') }); }
   // What Sonnet saw (details.js PHOTO_TAGS): pluses and minuses an agent
@@ -186,7 +186,7 @@ function _fyLiveSolo(l, why) {
   const sqm = l.sqm || 0;
   if (sqm) {
     parts.push(sqm < 35 ? 0.2 : sqm < 42 ? 0.6 : sqm <= 70 ? 1 : 0.85);
-    if (sqm >= 50) why.push({ w: 2, t: t_('fy.w_sqm', { n: sqm }) });
+    if (sqm >= 50) why.push({ k: 'sqm', w: 2, t: t_('fy.w_sqm', { n: sqm }) });
   }
   if ((l.bedrooms || 0) >= 1) parts.push(1);
   return _avg(parts);
@@ -216,8 +216,8 @@ function _fyLiveBuy(l, p, loan, why) {
   if (l.estimated_rent_mo) {
     const gap = l.estimated_rent_mo - own;           // > 0: owning costs less than renting it
     parts.push(_lerp(gap / l.estimated_rent_mo, -0.3, 0.25));
-    why.push(gap >= 0 ? { w: 3, t: t_('fy.w_own_less', { v: fmt(Math.round(gap / 10) * 10) }) }
-                      : { bad: true, w: 2, t: t_('fy.w_own_more', { v: fmt(Math.round(-gap / 10) * 10) }) });
+    why.push(gap >= 0 ? { k: 'own', w: 3, t: t_('fy.w_own_less', { v: fmt(Math.round(gap / 10) * 10) }) }
+                      : { k: 'own', bad: true, w: 2, t: t_('fy.w_own_more', { v: fmt(Math.round(-gap / 10) * 10) }) });
   }
   const ec = (l.energy_class || '').toUpperCase()[0];
   if (ec) {
@@ -288,11 +288,16 @@ function fyLists(p = fyProfile()) {
   return { b, solo, soloNear, duo, duoNear, buy, buyNear };
 }
 
-// "Why this one": the best three reasons and the main caveat.
+// "Why this one": up to three reasons, at most one of them a caveat. The fit
+// is the ring's number; reasons the card already shows (metro, size, floor
+// and lift, owning vs renting) aren't repeated (2026-10-30 card review).
+const _FY_ON_CARD = new Set(['metro', 'sqm', 'floor', 'own']);
 function _fyWhyHtml(s) {
-  const good = s.why.filter(w => !w.bad).sort((a, b) => b.w - a.w).slice(0, 3);
-  const bad = s.why.filter(w => w.bad).sort((a, b) => b.w - a.w).slice(0, 1);
-  return `<div class="fy-why"><span class="fy-fit" title="${escapeHtml(t('fy.fit_tip'))}">${escapeHtml(t('fy.fit', { n: s.fit }))}</span>${
+  const why = s.why.filter(w => !_FY_ON_CARD.has(w.k));
+  const bad = why.filter(w => w.bad).sort((a, b) => b.w - a.w).slice(0, 1);
+  const good = why.filter(w => !w.bad).sort((a, b) => b.w - a.w).slice(0, 3 - bad.length);
+  if (!good.length && !bad.length) return '';
+  return `<div class="fy-why" title="${escapeHtml(t('fy.fit_tip'))}">${
     good.map(w => `<span class="fy-chip">${escapeHtml(w.t)}</span>`).join('')}${
     bad.map(w => `<span class="fy-chip warn">${escapeHtml(w.t)}</span>`).join('')}</div>`;
 }
@@ -380,13 +385,12 @@ function _fyRentGrid(id, list, key, split) {
   grid.innerHTML = '';
   if (!list.length) { grid.innerHTML = `<div class="empty-state">${escapeHtml(t(key.endsWith('Near') ? 'fy.none' : 'fy.none_zones'))}</div>`; return; }
   for (const s of list.slice(0, _fyShown[key])) {
-    const card = renderRentalCard(s.l);
-    const price = card.querySelector('.card-price');
+    const card = renderRentalCard(s.l, { fit: s.fit });
     if (split) {
-      price?.insertAdjacentHTML('beforeend',
+      card.querySelector('.card-price')?.insertAdjacentHTML('beforeend',
         `<span class="fy-each">${escapeHtml(t('fy.each', { v: fmt(Math.round(monthlyCost(s.l).total / split)) }))}</span>`);
     }
-    price?.insertAdjacentHTML('afterend', _fyWhyHtml(s));
+    card.querySelector('.card-place')?.insertAdjacentHTML('afterend', _fyWhyHtml(s));
     grid.appendChild(card);
   }
   if (typeof _observeScoreRings === 'function') _observeScoreRings(grid, false);
@@ -399,15 +403,10 @@ function _fyBuyGrid(id, list, key) {
   if (!list.length) { grid.innerHTML = `<div class="empty-state">${escapeHtml(t(key.endsWith('Near') ? 'fy.none' : 'fy.none_zones'))}</div>`; return; }
   const loan = _fyLoan();
   const shown = list.slice(0, _fyShown[key]);
-  grid.innerHTML = shown.map(s => saleCardHtml(s.l, loan)).join('');
-  // Rent or buy: what owning costs a month next to what renting it would.
+  grid.innerHTML = shown.map(s => saleCardHtml(s.l, loan, { fit: s.fit })).join('');
+  // The card's own line already says owning vs renting; add the reasons.
   grid.querySelectorAll('.card').forEach((card, i) => {
-    const s = shown[i], l = s.l;
-    const own = mortgagePayment(l.price, loan) + (Number(l.spese_condominiali || l.condominium_fees) || 0);
-    const rent = l.estimated_rent_mo;
-    card.querySelector('.card-price')?.insertAdjacentHTML('afterend',
-      `<div class="fy-own">${escapeHtml(t('fy.own', { v: fmt(Math.round(own / 10) * 10) }))}${
-        rent ? ` · ${escapeHtml(t('fy.vs_rent', { v: fmt(Math.round(rent / 10) * 10) }))}` : ''}</div>${_fyWhyHtml(s)}`);
+    (card.querySelector('.card-own') || card.querySelector('.card-place'))?.insertAdjacentHTML('afterend', _fyWhyHtml(shown[i]));
   });
   if (typeof _observeScoreRings === 'function') _observeScoreRings(grid, false);
   _fyMore(grid, list, key);

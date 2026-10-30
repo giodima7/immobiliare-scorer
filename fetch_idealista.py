@@ -726,6 +726,25 @@ def _parse_ld_json(data: dict) -> list:
 
 # ── Parse helpers ─────────────────────────────────────────────────────────────
 
+# "3º piano senza ascensore" holds "ascensor" too: until 2026-10-30 every such
+# flat was stored as having a lift (3,157 rental and 502 sale rows) — the
+# cards could never say "no lift" and For you's walk-up penalty never fired.
+_NO_LIFT_RX = _re.compile(r"\b(?:senza|no|non\s+(?:c'è|ha|dispone\s+di)|priv[oa]\s+di|sin)\s+(?:l'|di\s+)?(?:ascensor|lift|elevator)", _re.I)
+_LIFT_RX = _re.compile(r"\b(?:con\s+(?:l'|di\s+)?ascensor|ascensor|lift|elevator)", _re.I)
+
+
+def lift_from_text(floor_text: str, all_text: str = "") -> Optional[bool]:
+    """True / False / None (unknown). The floor chip ("6º piano con
+    ascensore" / "senza ascensore") decides; otherwise the rest of the text,
+    a negation first."""
+    for text in (floor_text or "", all_text or ""):
+        if _NO_LIFT_RX.search(text):
+            return False
+        if _LIFT_RX.search(text):
+            return True
+    return None
+
+
 def _parse_price(text: str) -> Optional[int]:
     """Extract integer monthly rent from strings like '€ 1.200 /mese' or '1200'."""
     digits = _re.sub(r"[^\d]", "", str(text))
@@ -1024,7 +1043,7 @@ def parse_idealista_listing(raw: dict) -> Optional[dict]:
     # "definitely no balcony" from "we don't know" — use True only when confirmed.
     has_balcony = True if any(k in all_text for k in ("balcon", "terrazza", "giardino")) else None
     has_parking = True if any(k in all_text for k in ("box", "garage", "parcheggio", "posto auto")) else None
-    elevator    = True if any(k in all_text for k in ("ascensor", "lift", "elevator")) else None
+    elevator    = lift_from_text(floor_text_raw, all_text)
     furnished   = True if any(k in all_text for k in ("arredato", "arredat", "furnished")) else None
 
     omi = match_omi(neighbourhood)
@@ -1201,7 +1220,7 @@ def parse_idealista_sale_listing(raw: dict) -> Optional[dict]:
 
     has_balcony = True if any(k in all_text for k in ("balcon", "terrazza", "giardino")) else None
     has_parking = True if any(k in all_text for k in ("box", "garage", "parcheggio", "posto auto")) else None
-    elev        = True if any(k in all_text for k in ("ascensor", "lift", "elevator")) else None
+    elev        = lift_from_text(floor_text_raw, all_text)
     furnished   = True if any(k in all_text for k in ("arredato", "arredat", "furnished")) else None
 
     omi = match_omi(neighbourhood)

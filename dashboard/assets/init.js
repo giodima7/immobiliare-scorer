@@ -1034,6 +1034,14 @@ document.addEventListener('click', e => {
 document.addEventListener('click', e => {
   const opener = e.target.closest && e.target.closest('[data-open-details]');
   if (opener) { e.preventDefault(); openListingModal(opener.dataset.openDetails); return; }
+  // The whole card is the way into Details (2026-10-30 card redesign: no
+  // Details button) — except its own links, buttons and photo arrows.
+  const card = e.target.closest && e.target.closest('.card[data-card-open]');
+  if (card && !e.target.closest('a, button, input, select, label, .score-ring-wrap[data-sc-rent]')) {
+    if (card.dataset.cardOpen === 'sale' && typeof openSaleModal === 'function') openSaleModal(card.dataset.listingId);
+    else openListingModal(card.dataset.listingId);
+    return;
+  }
   const box = document.getElementById('listingModal');
   if (!box || box.hidden) return;
   if (e.target === box || e.target.closest('.lm-close')) { closeListingModal(); return; }
