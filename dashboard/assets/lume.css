@@ -3535,7 +3535,7 @@ body[data-tab="map"][data-map="sales"] #filterBar, body[data-tab="map"][data-map
                   font-size: var(--text-sm); font-weight: 500; color: var(--text-primary); cursor: pointer; outline: none; box-shadow: none; }
 .fb-sort select:hover, .fb-sort select:focus { background: transparent; box-shadow: none; }
 .fb-prefix, .fb-suffix { color: var(--text-secondary); }
-.fb-btn.on, .fb-btn[aria-expanded="true"] { background: var(--green-light); border-color: var(--green-deep); color: var(--green-ink); }
+.fb-btn.on, .fb-btn[aria-expanded="true"], .fb-btn[aria-pressed="true"] { background: var(--green-light); border-color: var(--green-deep); color: var(--green-ink); }
 .fb-badge { min-width: 18px; height: 18px; padding: 0 5px; border-radius: var(--radius-full); background: var(--green-deep);
             color: var(--text-inverse); font-size: var(--text-xs); font-weight: 700; line-height: 1;
             display: inline-flex; align-items: center; justify-content: center; }
@@ -3995,6 +3995,8 @@ body:has(#savedView.is-picking:not([hidden])) .lume-toast { bottom: calc(96px + 
 @media (max-width: 1279px) {
   .fbar .fb-btn > span[data-i18n] { position: absolute; width: 1px; height: 1px; overflow: hidden;
                                     clip: rect(0 0 0 0); white-space: nowrap; }
+  /* "My zones" says what it does: an icon alone would read as "pick areas". */
+  .fbar .fb-btn.fb-myzones > span[data-i18n] { position: static; width: auto; height: auto; overflow: visible; clip: auto; }
   .fbar .fb-btn { padding: 0 10px; }
   .fbar .msd-trigger { min-width: 118px; }
   .fb-field input { width: 84px; }
@@ -4201,7 +4203,9 @@ body:has(#savedView.is-picking:not([hidden])) .lume-toast { bottom: calc(96px + 
    "Rooms +" cut to "Room +"). */
 @media (max-width: 639px) {
   #saleFilterBar .fb-row { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
-  #saleFilterBar .fb-area { grid-column: 1 / -1; }
+  #saleFilterBar .fb-area { grid-column: 1 / span 4; grid-row: 1; }
+  #saleFilterBar #sMyZones { grid-column: 5 / span 2; grid-row: 1; width: auto; min-width: 0; padding: 0 8px; }
+  #saleFilterBar .fb-field-rent, #saleFilterBar .fb-field-narrow { grid-row: 2; }
   #saleFilterBar .fb-area .msd-trigger { width: 100%; max-width: none; }
   #saleFilterBar .fb-field-rent, #saleFilterBar .fb-field-narrow { grid-column: span 2; min-width: 0; width: auto; }
   #saleFilterBar #sDealFilter { grid-column: 1 / -1; grid-row: 3; }
@@ -4432,3 +4436,12 @@ body:has(#savedView.is-picking:not([hidden])) .lume-toast { bottom: calc(96px + 
 @media (min-width: 720px) {
   .lm-pair { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--s-6); align-items: start; }
 }
+
+/* Saved searches menu (filters.js openSavedSearchMenu) */
+.ss-menu { max-height: 70vh; overflow: auto; }
+.ss-row { display: flex; align-items: center; gap: 2px; }
+.ss-row .avatar-menu-item { flex: 1; min-width: 0; }
+.ss-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ss-empty { margin: 4px 12px 8px; font-size: var(--text-xs); color: var(--text-secondary); }
+.ss-new { display: flex; gap: 6px; padding: 8px 6px 4px; border-top: 1px solid var(--border-light); margin-top: 4px; }
+.ss-new .input { height: 32px; flex: 1; min-width: 0; }

@@ -8,7 +8,9 @@ import math
 import re
 from pathlib import Path
 
-PATH = Path(__file__).resolve().parent / "focus_areas.json"
+# In dashboard/ since 2026-10-31: the dashboard's "My zones" filter reads it too
+# (Cloudflare publishes only that folder; the repository is public anyway).
+PATH = Path(__file__).resolve().parent / "dashboard" / "focus_areas.json"
 _cache: tuple | None = None   # (mtime, compiled areas)
 
 

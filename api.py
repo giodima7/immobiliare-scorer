@@ -1089,6 +1089,7 @@ def full_dashboard():
 
 
 @app.route("/manifest.json")
+@app.route("/focus_areas.json")
 @app.route("/icon-192.png")
 @app.route("/icon-512.png")
 @app.route("/favicon.svg")
@@ -1221,7 +1222,7 @@ def rentals_by_ids():
 # The dashboard keeps them in localStorage; locally it also mirrors them here
 # so they survive a cleared browser or another browser on this machine.
 USER_DATA_PATH = BASE_DIR / "user_data.json"
-_USER_DATA_KEYS = {"rentFavourites", "favourites", "collections", "saleFavourites"}
+_USER_DATA_KEYS = {"rentFavourites", "favourites", "collections", "saleFavourites", "savedSearches"}
 _user_data_lock = threading.Lock()
 
 

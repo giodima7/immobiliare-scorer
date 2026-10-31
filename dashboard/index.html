@@ -275,6 +275,7 @@
           <input class="area-msearch-input" id="dAreaInput" type="text" placeholder="Search areas…" data-i18n-placeholder="fb.search_areas" autocomplete="off">
           <div class="area-msearch-dropdown" id="dAreaDropdown" hidden></div>
         </div>
+        <label class="fb-check"><input type="checkbox" id="dMyZones"><span data-i18n="mz.only">Only my zones</span></label>
       </div>
       <div class="drawer-row3">
         <div class="drawer-field">
@@ -445,6 +446,9 @@
         </div>
       </div>
     </div>
+    <button type="button" class="btn btn-secondary fb-btn fb-myzones" id="rMyZones" aria-pressed="false" data-i18n-title="mz.tip" title="Only the zones you drew, street by street">
+      <svg class="i" aria-hidden="true"><use href="assets/icons.svg#map-pin"></use></svg><span data-i18n="mz.label">My zones</span>
+    </button>
     <label class="fb-field fb-field-rent" data-i18n-title="fb.max_rent" title="Max rent">
       <span class="fb-prefix">€</span>
       <input type="number" id="rMaxRent" class="filter-num" placeholder="Max rent"
@@ -681,6 +685,7 @@
           </div>
         </div>
       </div>
+      <label class="fy-check"><input type="checkbox" id="fyMyZones"><span data-i18n="mz.only">Only my zones</span></label>
     </div>
   </div>
   <div class="fy-calc-head"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#percentage"></use></svg><span data-i18n="fy.calculated">Worked out by Lume</span></div>
@@ -737,6 +742,9 @@
           </div>
         </div>
       </div>
+      <button type="button" class="btn btn-secondary fb-btn fb-myzones" id="sMyZones" aria-pressed="false" data-i18n-title="mz.tip" title="Only the zones you drew, street by street">
+        <svg class="i" aria-hidden="true"><use href="assets/icons.svg#map-pin"></use></svg><span data-i18n="mz.label">My zones</span>
+      </button>
       <label class="fb-field fb-field-rent" data-i18n-title="sale.max_price_long" title="Max price">
         <span class="fb-prefix">€</span>
         <input type="number" id="sMaxPrice" class="filter-num" placeholder="Max price"

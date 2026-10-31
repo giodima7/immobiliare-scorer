@@ -34,7 +34,7 @@ SALES_PATH      = BASE_DIR / "dashboard" / "milano_sales_latest.json"
 RENTALS_PATH    = BASE_DIR / "dashboard" / "milano_rentals_latest.json"
 SEEN_PATH       = BASE_DIR / "seen_ids_sales_milano.json"
 LOG_PATH        = BASE_DIR / "sales_scans_milano.jsonl"
-CONFIG_PATH     = BASE_DIR / "focus_areas.json"
+CONFIG_PATH     = BASE_DIR / "dashboard" / "focus_areas.json"
 
 SALES_EVERY_SEC     = 12 * 3600       # once a night per site (scan_window; every 4 h until 2026-10-24)
 DELIST_AFTER_MISSES = 2
