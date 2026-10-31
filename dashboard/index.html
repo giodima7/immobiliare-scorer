@@ -911,7 +911,12 @@
       <button type="button" class="seg-btn active" data-map-type="rentals" aria-pressed="true" data-i18n="tab.rentals">Rentals</button>
       <button type="button" class="seg-btn" data-map-type="sales" aria-pressed="false" data-i18n="tab.sales">For sale</button>
     </div>
+    <div class="seg map-view" role="group" data-i18n-aria="map.view" aria-label="View">
+      <button type="button" class="seg-btn active" data-map-view="pins" aria-pressed="true" data-i18n="map.pins">Listings</button>
+      <button type="button" class="seg-btn" data-map-view="prices" aria-pressed="false" data-i18n="map.prices">Prices</button>
+    </div>
     <span><strong id="mapListingCount">–</strong></span>
+    <span class="map-price-legend" id="mapPriceLegend" aria-live="polite"></span>
     <span class="map-legend" aria-label="Legend">
       <span class="lg-item"><span class="lg-gem"></span><span data-i18n="gem.hidden">Hidden Gem</span></span>
       <span class="lg-item"><span class="lg-dot lg-good"></span><span data-i18n="gem.good">Great Value</span></span>
