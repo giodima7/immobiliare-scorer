@@ -190,8 +190,48 @@ def condition_group(listing: dict) -> str:
     """
     Map a listing's raw `condition` string to one of:
       'premium' | 'standard' | 'needs_work' | 'unknown'
-    Tolerates messy/spelling variants via keyword fallback.
+    Tolerates messy/spelling variants via keyword fallback. A condition the
+    words leave unknown takes the hint assign_condition_hints set, if any.
     """
+    group = _stated_condition_group(listing)
+    if group == 'unknown':
+        return listing.get('_cond_hint') or group
+    return group
+
+
+def assign_condition_hints(listings: list, index: dict) -> int:
+    """Idealista's "Buono stato" says nothing about renovated vs lived-in,
+    and an unknown condition is compared with the raw zone median —
+    renovated flats included — so a dated flat looked like a deal
+    (id_37205061: −24.5 % on Idealista, −6.9 % as its own Immobiliare copy;
+    2,245 of ~2,650 Idealista sales were unknown, 2026-10-31). The group
+    then comes from the flat's copy on another site (index groups), else
+    from the condition its photos showed (photo_condition, 1–5). Returns
+    the rows hinted."""
+    groups, group_of = index.get("groups") or [], index.get("group_of") or {}
+    by_obj = {id(l): l for l in listings}
+    n = 0
+    for l in listings:
+        l.pop('_cond_hint', None)
+    for l in listings:
+        if _stated_condition_group(l) != 'unknown':
+            continue
+        g = group_of.get(id(l))
+        known = [_stated_condition_group(by_obj[i]) for i in (groups[g] if g is not None else ())
+                 if i != id(l) and i in by_obj]
+        known = [k for k in known if k != 'unknown']
+        pc = l.get('photo_condition')
+        if known:
+            l['_cond_hint'] = max(set(known), key=known.count)
+        elif isinstance(pc, (int, float)):
+            l['_cond_hint'] = 'needs_work' if pc <= 2 else 'standard' if pc < 4 else 'premium'
+        else:
+            continue
+        n += 1
+    return n
+
+
+def _stated_condition_group(listing: dict) -> str:
     raw = listing.get('condition')
     if not raw:
         return 'unknown'
