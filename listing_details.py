@@ -192,10 +192,17 @@ ADVERTISER_KEYS = ("agency_type", "agency_name")
 
 
 def apply_details(listings: list, cache: dict | None = None) -> int:
-    """Fill listing fields from the detail cache. Returns rows touched."""
+    """Fill listing fields from the detail cache, then the costs the
+    description gives (fetch_rentals.repair_costs). Returns rows touched."""
+    from fetch_rentals import repair_costs
     cache = load_cache() if cache is None else cache
-    if not cache:
-        return 0
+    n = _apply_cache(listings, cache) if cache else 0
+    for l in listings:
+        repair_costs(l)
+    return n
+
+
+def _apply_cache(listings: list, cache: dict) -> int:
     n = 0
     for l in listings:
         e = cache.get(str(l.get("id")))
