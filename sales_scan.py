@@ -288,6 +288,22 @@ def enrich_rows(rows: list) -> int:
     return len(todo)
 
 
+def _relocate(rows: list) -> int:
+    """Zone-only sales to the street their text names (fetch_subito
+    relocate_zone_only); neighbourhood names from sales and rentals, as the
+    rentals cover the whole city."""
+    try:
+        from fetch_subito import relocate_zone_only
+        try:
+            rentals = json.loads(RENTALS_PATH.read_text())
+        except (OSError, ValueError):
+            rentals = []
+        return relocate_zone_only(rows, rows + rentals)
+    except Exception as exc:
+        print(f"  [place] skipped ({type(exc).__name__}: {exc})")
+        return 0
+
+
 def _dist_m(a: tuple, b: tuple) -> float:
     r = math.pi / 180
     x = (b[1] - a[1]) * r * math.cos((a[0] + b[0]) / 2 * r)
@@ -342,6 +358,7 @@ def rescore_sales(log=print) -> dict:
     from dashboard_io import write_snapshot
     with _locked():
         rows = json.loads(SALES_PATH.read_text())
+        _relocate(rows)
         applied = apply_details(rows)
         with contextlib.redirect_stderr(open("/dev/null", "w")):
             scored = scoring.score_all_sales(rows)
@@ -405,6 +422,7 @@ def run_sales(source: str, log=print) -> dict:
         rows, counts = _merge(existing, fresh, ROW_SOURCE[source], set(complete.values()), seen)
         rec.update(counts)
         rec["geocoded"] = enrich_rows(rows)
+        rec["moved"] = _relocate(rows)
         # Listing pages read by the drip (condo fees, heating, gallery…).
         from listing_details import apply_details
         rec["pages_applied"] = apply_details(rows)

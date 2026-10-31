@@ -2211,6 +2211,11 @@ def rescore_output() -> None:
             print(f"  [rescore] skipped ({exc})")
             return
         t0 = time.time()
+        try:                       # zone-only addresses: the street their text names (fetch_subito)
+            from fetch_subito import relocate_zone_only
+            relocate_zone_only(rows, rows)
+        except Exception as exc:
+            print(f"  [place] skipped ({type(exc).__name__}: {exc})")
         scored = score_all(rows)
         clean = [{k: v for k, v in l.items() if k != "omi"} for l in scored]
         from dashboard_io import write_snapshot

@@ -640,6 +640,73 @@ def settle_places(rows: list, pool: list, source: str = SOURCE) -> dict:
     return out
 
 
+# A listing whose address is only a neighbourhood ("Navigli - Porta Genova,
+# Milano", "Isola, Milano" — the site's zone, picked by the agency) sits
+# where the geocoder put that name: the zone's centre, or somewhere else
+# entirely ("Isola" landed near Corsico, 12 km off). When the opening of its
+# description names a street or a metro stop more than RELOCATE_M away, the
+# pin moves there (2026-10-31: 19 sales and 4 rentals; id_36728487 says
+# "VIALE FAMAGOSTA", was pinned in the Navigli and scored 95 as 34 % below
+# neighbours it doesn't have).
+RELOCATE_M = 1000
+_STREETISH_RX = re.compile(r"^(?:via|viale|v\.le|piazza|p\.za|piazzale|p\.le|corso|c\.so|largo|vicolo|alzaia|"
+                           r"ripa|strada|galleria|bastioni|foro|passaggio|metro)\b|\d", re.I)
+_relocate_seen: dict = {}
+
+
+def _zone_only(l: dict) -> bool:
+    head = (l.get("address") or "").split(",")[0].strip()
+    return bool(head) and not _STREETISH_RX.search(head)
+
+
+def relocate_zone_only(rows: list, pool: list) -> int:
+    """Move zone-only listings to the street or metro stop their description
+    opens with (see above): new pin, neighbourhood from the listings around
+    it (settle_places), OMI zone and POIs re-read and written to the
+    enrichment cache — which every scan re-applies, so the old pin doesn't
+    come back. Subito's own rows are placed from their text already."""
+    moved = []
+    for l in rows:
+        if l.get("is_stale") or l.get("source") == SOURCE or not l.get("description") or not _zone_only(l):
+            continue
+        text = l["description"][:400]
+        key = (str(l.get("id")), text)
+        if key not in _relocate_seen:
+            _relocate_seen[key] = place_from_text(text)
+        hit = _relocate_seen[key]
+        if not hit:
+            continue
+        lat, lon, prec, addr = hit
+        if l.get("latitude") is not None and l.get("longitude") is not None \
+                and _dist_m((float(l["latitude"]), float(l["longitude"])), (lat, lon)) <= RELOCATE_M:
+            continue
+        l.update(latitude=lat, longitude=lon, geo_precision=prec, place_from_text=addr,
+                 neighbourhood=None, omi_source=None, omi_compr_mid=None)
+        if prec in ("civico", "near", "street"):
+            l["address"] = addr
+        moved.append(l)
+    if not moved:
+        return 0
+    settle_places(moved, pool, source=moved[0].get("source") or "")
+    import enrichment_cache as ec
+    from enrich_geo import enrich_batch
+    ec.load()
+    entries = []
+    for l, g in zip(moved, enrich_batch(moved)):
+        # The scans merge every cached field back over what they parse, so the
+        # place and its name stay when the site's zone label comes back.
+        g = {k: v for k, v in g.items() if v is not None}
+        g.update({k: l[k] for k in ("latitude", "longitude", "geo_precision", "place_from_text", "neighbourhood", "address")
+                  if l.get(k) is not None})
+        l.update(g)
+        # The scans' cache keys: an Immobiliare rental row may carry no source.
+        entries.append((l.get("source") or "immobiliare", l["id"], g))
+    ec.bulk_save(entries)
+    for l in moved:
+        print(f"  [place] {l['id']} moved to {l['place_from_text']} → {l.get('neighbourhood')}", flush=True)
+    return len(moved)
+
+
 # ── Run ──────────────────────────────────────────────────────────────────────
 
 def run_subito(args=None, log=print) -> dict:
