@@ -151,6 +151,7 @@ function renderMustGrid(container, counts, active = new Set(rentMustActive()), m
 function rentActiveFilterChips(f) {
   const chips = [];
   const add = (key, label) => chips.push({ key, label });
+  if (f.myZones) add('myZones', t('mz.label'));
   if (f.areas && f.areas.length) add('areas', f.areas.length > 2 ? `${f.areas.slice(0, 2).join(', ')} +${f.areas.length - 2}` : f.areas.join(', '));
   if (f.maxRent)   add('maxRent', t('chip.max_rent', { n: fmt(f.maxRent) }));
   if (f.minRooms)  add('minRooms', t('chip.min_rooms', { n: f.minRooms }));
@@ -179,6 +180,9 @@ function renderRentFilterExtras(f, shown) {
     if (sel && typeof rentSortKey !== 'undefined' && sel.value !== rentSortKey) sel.value = rentSortKey;
   });
   document.querySelectorAll('.seg .seg-btn').forEach(b => b.setAttribute('aria-pressed', String(b.classList.contains('active'))));
+  const mz = document.getElementById('rMyZones');
+  if (mz) { mz.setAttribute('aria-pressed', String(!!f.myZones)); mz.classList.toggle('on', !!f.myZones); }
+  const dmz = document.getElementById('dMyZones'); if (dmz) dmz.checked = !!f.myZones;
   const counts = rentMustCounts(f);
   renderMustGrid(document.getElementById('rMustGrid'), counts);
   renderMustGrid(document.getElementById('dMustGrid'), counts);
@@ -220,6 +224,7 @@ function renderRentFilterExtras(f, shown) {
       : `<span class="fchips-count"><strong>${fmt(shown)}</strong> ${escapeHtml(t(shown === 1 ? 'chip.flat' : 'chip.flats'))}`
         + (typeof _rentLoadingMore !== 'undefined' && _rentLoadingMore ? ` ${escapeHtml(t('chip.so_far'))}` : '')
         + `</span>`)
+    + `<button type="button" class="btn btn-ghost btn-sm" data-ss-menu="rent">${icon('bookmark')}<span>${escapeHtml(t('ss.button'))}${(n => n ? ' · ' + n : '')(savedSearches('rent').length)}</span></button>`
     + alertBtn;
 }
 
@@ -233,6 +238,7 @@ function clearRentFilter(key) {
       if (typeof filterAreaMsd !== 'undefined' && filterAreaMsd) filterAreaMsd.clear();
       rentSelectedAreas = [];
       break;
+    case 'myZones':  el('rMyZones')?.setAttribute('aria-pressed', 'false'); break;
     case 'maxRent':  el('rMaxRent').value = ''; break;
     case 'minRooms': el('rMinRooms').value = ''; break;
     case 'minSqm':   el('rMinSqm').value = ''; break;
@@ -269,4 +275,128 @@ function toggleRentPanel(which) {
     p.hidden = !open;
     document.getElementById(k === 'must' ? 'rMustBtn' : 'rMoreBtn')?.setAttribute('aria-expanded', String(open));
   }
+}
+
+// ── My zones (dashboard/focus_areas.json) ─────────────────────────────────────
+// The zones the user drew street by street — circles and polygons, the same
+// file that makes the scanners and the photo reading go there first. One
+// switch in Rentals, For sale (and so the Map) and For you; by position only,
+// not by the site's neighbourhood names (2026-10-31: "Cadore up to Piazzale
+// Libia, not as far as Lodi TIBB" is no neighbourhood).
+let MY_ZONES = null;               // [{name, center, radius_m, polygon}] once loaded
+
+async function loadMyZones() {
+  if (MY_ZONES) return MY_ZONES;
+  try {
+    const r = await fetch('focus_areas.json', { cache: 'no-cache' });
+    MY_ZONES = r.ok ? ((await r.json()).areas || []) : [];
+  } catch { MY_ZONES = []; }
+  if (!MY_ZONES.length) console.warn('My zones: focus_areas.json not available');
+  return MY_ZONES;
+}
+
+function _inPolygon(lat, lng, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [y1, x1] = poly[i], [y2, x2] = poly[j];
+    if ((y1 > lat) !== (y2 > lat) && lng < (x2 - x1) * (lat - y1) / (y2 - y1) + x1) inside = !inside;
+  }
+  return inside;
+}
+
+// In one of the zones. Before the file has loaded — or when it couldn't be
+// read — everything passes (it emptied the grid: "0 flats", 2026-10-31).
+function inMyZones(l) {
+  if (!MY_ZONES || !MY_ZONES.length) return true;
+  const lat = +l.latitude, lng = +l.longitude;
+  if (!lat || !lng) return false;
+  return MY_ZONES.some(z => (z.polygon && _inPolygon(lat, lng, z.polygon))
+    || (z.center && z.radius_m && _km([lat, lng], z.center) * 1000 <= z.radius_m));
+}
+
+// ── Saved searches ────────────────────────────────────────────────────────────
+// A name and the filters of Rentals or For sale, kept like the saved
+// listings (this browser, the local copy, the account — so the iPhone and
+// the Mac share them). {id, name, kind: 'rent'|'sale', f, at}.
+function savedSearches(kind) {
+  return (Storage.get('savedSearches', []) || []).filter(s => !kind || s.kind === kind);
+}
+
+function saveSearch(kind, name) {
+  const f = kind === 'sale'
+    ? (({ down, rate, years, ...rest }) => rest)(saleFilters())      // the mortgage terms are settings
+    : rentFilterState();
+  const all = Storage.get('savedSearches', []) || [];
+  const s = { id: 'ss_' + Math.random().toString(36).slice(2, 10), name: name.slice(0, 60), kind, f, at: new Date().toISOString() };
+  Storage.set('savedSearches', [s, ...all]);
+  return s;
+}
+
+function deleteSearch(id) {
+  Storage.set('savedSearches', (Storage.get('savedSearches', []) || []).filter(s => s.id !== id));
+}
+
+function applySearch(id) {
+  const s = savedSearches().find(x => x.id === id);
+  if (!s) return;
+  if (s.kind === 'sale') {
+    const cur = saleFilters();
+    Storage.set('saleFilters', { ...SALE_DEFAULTS, ...s.f, down: cur.down, rate: cur.rate, years: cur.years });
+    if (typeof _saleAreaMsd !== 'undefined' && _saleAreaMsd) _saleAreaMsd.setSelected(s.f.areas || []);
+    renderSales();
+  } else {
+    document.getElementById('rBtnReset')?.click();                  // start clean, then the saved state
+    rentMust = new Set(); rentIncludeUnknown = false;
+    applyRentFilterState(s.f);
+    renderRentals();
+    saveFilters();
+  }
+  showToast(t('ss.applied', { name: s.name }));
+}
+
+// The menu under "Saved searches": apply, delete, save the current filters.
+function openSavedSearchMenu(btn, kind) {
+  closeAvatarMenu();
+  const esc = escapeHtml, rect = btn.getBoundingClientRect();
+  const list = savedSearches(kind);
+  const menu = document.createElement('div');
+  menu.className = 'avatar-menu ss-menu';
+  menu.id = 'active-avatar-menu';
+  menu.setAttribute('role', 'menu');
+  menu.innerHTML = `<div class="avatar-menu-header">${esc(t('ss.title'))}</div>
+    ${list.length ? list.map(s => `<div class="ss-row">
+        <button type="button" class="avatar-menu-item" role="menuitem" data-ss-apply="${esc(s.id)}">${icon('bookmark')} <span class="ss-name">${esc(s.name)}</span></button>
+        <button type="button" class="btn btn-ghost btn-sm btn-icon" data-ss-delete="${esc(s.id)}" aria-label="${esc(t('ss.delete', { name: s.name }))}" title="${esc(t('ss.delete', { name: s.name }))}">${icon('trash')}</button>
+      </div>`).join('') : `<p class="ss-empty">${esc(t('ss.none'))}</p>`}
+    <form class="ss-new" autocomplete="off">
+      <input type="text" class="input" maxlength="60" placeholder="${esc(t('ss.name_ph'))}" aria-label="${esc(t('ss.name_ph'))}">
+      <button type="submit" class="btn btn-primary btn-sm">${esc(t('ss.save'))}</button>
+    </form>`;
+  document.body.appendChild(menu);
+  const w = Math.min(300, window.innerWidth - 16);
+  menu.style.width = `${w}px`;
+  menu.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - w - 8))}px`;
+  menu.style.top = `${rect.bottom + 6}px`;
+  menu.addEventListener('click', e => {
+    const ap = e.target.closest('[data-ss-apply]'), del = e.target.closest('[data-ss-delete]');
+    if (ap) { closeAvatarMenu(); applySearch(ap.dataset.ssApply); }
+    if (del) {
+      const s = savedSearches().find(x => x.id === del.dataset.ssDelete);
+      deleteSearch(del.dataset.ssDelete);
+      closeAvatarMenu();
+      if (s) showActionToast(t('ss.deleted', { name: s.name }), t('fav.undo'),
+        () => Storage.set('savedSearches', [s, ...(Storage.get('savedSearches', []) || [])]));
+    }
+  });
+  menu.querySelector('form').addEventListener('submit', e => {
+    e.preventDefault();
+    const name = e.target.querySelector('input').value.trim();
+    if (!name) { e.target.querySelector('input').focus(); return; }
+    saveSearch(kind, name);
+    closeAvatarMenu();
+    showToast(t('ss.saved', { name }));
+  });
+  menu.addEventListener('keydown', e => { if (e.key === 'Escape') { closeAvatarMenu(); btn.focus(); } });
+  _avatarMenuOutside = (e) => { if (!menu.contains(e.target) && e.target !== btn) closeAvatarMenu(); };
+  setTimeout(() => document.addEventListener('click', _avatarMenuOutside, true), 0);
 }

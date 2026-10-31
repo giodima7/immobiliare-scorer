@@ -37,6 +37,7 @@ function getRentFilters() {
     minEnergy: document.getElementById('rMinEnergy').value,
     minPhoto:  parseFloat(document.getElementById('rMinPhoto')?.value) || 0,
     gemFilter: document.querySelector('#rGemFilter .gem-tab.active')?.dataset.gem || '',
+    myZones:   document.getElementById('rMyZones')?.getAttribute('aria-pressed') === 'true',
     fListed:   document.getElementById('rListed')?.value || '',
     // filters.js: must-haves (lift = elevator above), condition, discount, contract
     must:           rentMustActive(),
@@ -70,6 +71,7 @@ function applyRentFilters(data, f) {
     // it's active the user is looking for one specific listing, not
     // narrowing by other criteria.
     if (f.idQuery && !idMatches(l, f.idQuery)) return false;
+    if (f.myZones && !inMyZones(l)) return false;
     // Fake / bait / misrepresented listings (score 0) — the sales filter
     // already hides them; rentals showed 231 of them in the grid.
     if (l.excluded) return false;

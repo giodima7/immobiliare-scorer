@@ -18,7 +18,7 @@ const SALE_SINCE = '2026-10-18';   // first sales sweep: nothing is "new" that d
 const SALE_DEFAULTS = { areas: [], maxPrice: 0, minRooms: 0, minSqm: 0, deal: '', sort: 'score',
                         down: 20, rate: 3.5, years: 25, condition: '', listed: '', source: '',
                         minFloor: '', maxMetro: '', minEnergy: '', minPhoto: '',
-                        must: [], includeUnknown: false, minScore: 0 };
+                        must: [], includeUnknown: false, minScore: 0, myZones: false };
 // Find by ID: looking for one flat, not a standing filter — not saved.
 let _saleIdQuery = '';
 // The Must-haves that make sense for a flat to buy (filters.js, loaded later).
@@ -116,6 +116,7 @@ function _initSaleBar() {
     if (e.target.checked !== saleFilters().must.includes('no_ringhiera')) _toggleSaleMust('no_ringhiera');
   });
   el('sMustBtn')?.addEventListener('click', e => { e.stopPropagation(); _toggleSalePanel('must'); });
+  el('sMyZones')?.addEventListener('click', () => _setSaleFilters({ myZones: !saleFilters().myZones }));
   document.addEventListener('keydown', e => { if (e.key === 'Escape') _toggleSalePanel(null); });
   el('sSortSelect')?.addEventListener('change', e => _setSaleFilters({ sort: e.target.value }));
   el('sCondition')?.addEventListener('change', e => _setSaleFilters({ condition: e.target.value }));
@@ -134,6 +135,8 @@ function _initSaleBar() {
   el('sActiveChips')?.addEventListener('click', e => {
     const b = e.target.closest('[data-sclear]');
     if (b) _clearSaleFilter(b.dataset.sclear);
+    const ss = e.target.closest('[data-ss-menu]');
+    if (ss) { e.stopPropagation(); openSavedSearchMenu(ss, 'sale'); }
   });
   document.addEventListener('click', e => {
     // A must-have tile re-renders while handling its own click: detached target.
@@ -168,6 +171,8 @@ function _syncSaleBar(f) {
   set('sMinScore', f.minScore || ''); set('sIdSearch', _saleIdQuery);
   const inc = document.getElementById('sIncludeUnknown'); if (inc) inc.checked = !!f.includeUnknown;
   const ring = document.getElementById('sHideRinghiera'); if (ring) ring.checked = f.must.includes('no_ringhiera');
+  const mz = document.getElementById('sMyZones');
+  if (mz) { mz.setAttribute('aria-pressed', String(!!f.myZones)); mz.classList.toggle('on', !!f.myZones); }
   const seg = (sel, attr, cur) => document.querySelectorAll(sel).forEach(b => {
     const on = (b.dataset[attr] || '') === (cur || '');
     b.classList.toggle('active', on);
@@ -194,6 +199,7 @@ function _syncSaleBar(f) {
 
 function _saleChips(f) {
   const c = [], add = (key, label) => c.push({ key, label });
+  if (f.myZones)   add('myZones', t('mz.label'));
   if (f.areas.length) add('areas', f.areas.length > 2 ? `${f.areas.slice(0, 2).join(', ')} +${f.areas.length - 2}` : f.areas.join(', '));
   if (f.maxPrice)  add('maxPrice', t('chip.max_rent', { n: fmt(f.maxPrice) }));
   if (f.minRooms)  add('minRooms', t('chip.min_rooms', { n: f.minRooms }));
@@ -220,7 +226,8 @@ function _renderSaleChips(f, shown) {
   box.innerHTML = chips.map(c =>
     `<button type="button" class="fchip" data-sclear="${esc(c.key)}" aria-label="${esc(t('chip.remove') + ': ' + c.label)}">${esc(c.label)}${icon('x')}</button>`).join('')
     + (chips.length ? `<button type="button" class="btn btn-ghost btn-sm" data-sclear="all">${esc(t('filter.clear_filters'))}</button>` : '')
-    + `<span class="fchips-count"><strong>${fmt(shown)}</strong> ${esc(t(shown === 1 ? 'sale.flat' : 'sale.flats'))}</span>`;
+    + `<span class="fchips-count"><strong>${fmt(shown)}</strong> ${esc(t(shown === 1 ? 'sale.flat' : 'sale.flats'))}</span>`
+    + `<button type="button" class="btn btn-ghost btn-sm" data-ss-menu="sale">${icon('bookmark')}<span>${escapeHtml(t('ss.button'))}${(n => n ? ' · ' + n : '')(savedSearches('sale').length)}</span></button>`;
 }
 
 function _clearSaleFilter(key) {
@@ -244,6 +251,7 @@ function _saleMatches(l, f) {
   const sc = window.sharedCollection;                 // a sale collection's link
   if (sc?.kind === 'sale' && !sc._ids.has(String(l.id))) return false;
   if (_saleIdQuery) return idMatches(l, _saleIdQuery);   // one flat: the other filters don't apply
+  if (f.myZones && !inMyZones(l)) return false;
   if (f.areas.length) {
     // Both sites' names: "porta romana" ⊂ "porta romana - medaglie d'oro".
     const nb = (l.neighbourhood || '').toLowerCase();

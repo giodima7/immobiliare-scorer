@@ -394,6 +394,7 @@ document.getElementById('rSortSelect')?.addEventListener('change', e => {
   saveFilters();
 });
 document.getElementById('rBtnReset').addEventListener('click', () => {
+  document.getElementById('rMyZones')?.setAttribute('aria-pressed', 'false');
   const _idEl = document.getElementById('rIdSearch');
   if (_idEl) _idEl.value = '';
   filterAreaMsd.clear();
@@ -1018,6 +1019,8 @@ document.getElementById('rMoreBtn')?.addEventListener('click', () => toggleRentP
 document.getElementById('rActiveChips')?.addEventListener('click', e => {
   const chip = e.target.closest('[data-clear]');
   if (chip) { clearRentFilter(chip.dataset.clear); return; }
+  const ss = e.target.closest('[data-ss-menu]');
+  if (ss) { e.stopPropagation(); openSavedSearchMenu(ss, 'rent'); return; }
   if (e.target.closest('[data-save-alert]')) saveDigestFilters();
 });
 // Empty state: "Remove: N flats" drops the filter that blocks the most.
@@ -1026,6 +1029,21 @@ document.getElementById('rentGrid')?.addEventListener('click', e => {
   if (b) clearRentFilter(b.dataset.clearEmpty);
 });
 document.getElementById('rMoreDone')?.addEventListener('click', () => toggleRentPanel(null));
+// "My zones": the zones drawn street by street (filters.js inMyZones).
+document.getElementById('rMyZones')?.addEventListener('click', e => {
+  const b = e.currentTarget;
+  b.setAttribute('aria-pressed', String(b.getAttribute('aria-pressed') !== 'true'));
+  renderRentals(); saveFilters();
+});
+document.getElementById('dMyZones')?.addEventListener('change', e => {
+  document.getElementById('rMyZones')?.setAttribute('aria-pressed', String(e.target.checked));
+  renderRentals(); saveFilters();
+});
+loadMyZones().then(() => {
+  if (getRentFilters().myZones) renderRentals();
+  if (typeof saleFilters === 'function' && saleFilters().myZones && ALL_SALE.length) renderSales();
+  if (activeTab === 'foryou' && typeof renderForYou === 'function') renderForYou();
+});
 // "Hide suspicious prices" — a must-have key, shown as a checkbox.
 document.querySelectorAll('.hide-suspect').forEach(cb => cb.addEventListener('change', () => {
   if (cb.checked !== rentMust.has('safe')) toggleRentMust('safe');

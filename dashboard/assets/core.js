@@ -381,7 +381,7 @@ const Storage = {
 // Locally (IS_LIVE) favourites and collections are mirrored to api.py
 // (/api/user-data → user_data.json), so a cleared or different browser on
 // this machine keeps them. Online they stay in this browser's storage.
-const _USER_DATA_KEYS = ['rentFavourites', 'favourites', 'collections', 'saleFavourites'];
+const _USER_DATA_KEYS = ['rentFavourites', 'favourites', 'collections', 'saleFavourites', 'savedSearches'];
 
 function _pushUserData(name, value) {
   let live = false;
@@ -416,7 +416,7 @@ async function _syncUserDataFromServer() {
 // the other's favourites): each saved id or collection carries {on, at, item}
 // and the two sides merge item by item, the later change winning — adding on
 // one browser and removing on another both survive.
-const _ACCOUNT_KEYS = ['rentFavourites', 'favourites', 'collections', 'saleFavourites'];
+const _ACCOUNT_KEYS = ['rentFavourites', 'favourites', 'collections', 'saleFavourites', 'savedSearches'];
 const _itemId = x => String(x && typeof x === 'object' ? x.id : x);
 const _lwwKey = name => Storage.key(name) + '_lww';
 let _acctTimer = null;
@@ -560,10 +560,8 @@ function updateUserAvatar() {
 // Inputs that don't exist yet (sales area MSD is lazy, built when the user
 // first opens the Sales tab) are handled by writing to the underlying var
 // (saleSelectedAreas) here and re-syncing the MSD trigger when it's built.
-function restoreFilters() {
-  const filters = Storage.get('filters');
-  if (!filters) return;
-
+// Put a saved Rentals filter state back in the bar (see rentFilterState).
+function applyRentFilterState(r) {
   const setVal = (id, val) => {
     const el = document.getElementById(id);
     if (el && val != null && val !== '') el.value = val;
@@ -578,13 +576,6 @@ function restoreFilters() {
     if (!tabs.length) return;
     tabs.forEach(t => t.classList.toggle('active', (t.dataset[dataAttr] || '') === val));
   };
-
-  // Back-compat: old payload was flat (rentals-only); new payload nests
-  // under `rentals` + `sales` keys.
-  const r = filters.rentals || filters;
-  const s = filters.sales   || {};
-
-  // Rentals
   setVal('rMaxRent',   r.maxRent);
   setVal('rMinSqm',    r.minSqm);
   setVal('rMinRooms',  r.minRooms);
@@ -622,6 +613,35 @@ function restoreFilters() {
       try { filterAreaMsd.setSelected(r.areas); } catch (_) {}
     }
   }
+  const mz = document.getElementById('rMyZones');
+  if (mz) mz.setAttribute('aria-pressed', String(!!r.myZones));
+}
+
+function restoreFilters() {
+  const filters = Storage.get('filters');
+  if (!filters) return;
+
+  const setVal = (id, val) => {
+    const el = document.getElementById(id);
+    if (el && val != null && val !== '') el.value = val;
+  };
+  const setChk = (id, val) => {
+    const el = document.getElementById(id);
+    if (el && val != null) el.checked = !!val;
+  };
+  const setTab = (groupSel, dataAttr, val) => {
+    if (val == null) return;
+    const tabs = document.querySelectorAll(groupSel);
+    if (!tabs.length) return;
+    tabs.forEach(t => t.classList.toggle('active', (t.dataset[dataAttr] || '') === val));
+  };
+
+  // Back-compat: old payload was flat (rentals-only); new payload nests
+  // under `rentals` + `sales` keys.
+  const r = filters.rentals || filters;
+  const s = filters.sales   || {};
+
+  applyRentFilterState(r);
 
   // Sales
   setVal('sMaxPrice',     s.maxPrice);
@@ -654,32 +674,39 @@ function restoreFilters() {
 
 }
 
+// The Rentals filters as saved (reload, saved searches).
+function rentFilterState() {
+  const get = id => document.getElementById(id);
+  return {
+    areas:     Array.isArray(typeof rentSelectedAreas !== 'undefined' ? rentSelectedAreas : null)
+               ? rentSelectedAreas.slice() : [],
+    maxRent:   get('rMaxRent')?.value,
+    minSqm:    get('rMinSqm')?.value,
+    minRooms:  get('rMinRooms')?.value,
+    maxMetro:  get('rMaxMetro')?.value,
+    minFloor:  get('rMinFloor')?.value,
+    minEnergy: get('rMinEnergy')?.value,
+    minPhoto:  get('rMinPhoto')?.value,
+    fListed:   get('rListed')?.value,
+    minScore:  get('rScore')?.value,
+    elevator:  get('rElevator')?.checked,
+    showStale: get('rShowStale')?.checked,
+    must:           typeof rentMust !== 'undefined' ? [...rentMust] : [],
+    includeUnknown: typeof rentIncludeUnknown !== 'undefined' ? rentIncludeUnknown : false,
+    condition:      get('rCondition')?.value || '',
+    minDiscount:    get('rMinDiscount')?.value || '',
+    contract:       get('rContract')?.value || '',
+    source:    document.querySelector('#rSourceFilter .sort-tab.active')?.dataset.rsource || '',
+    gemFilter: document.querySelector('#rGemFilter .gem-tab.active')?.dataset.gem || '',
+    sortKey:   typeof rentSortKey !== 'undefined' ? rentSortKey : 'score_total',
+    myZones:   document.getElementById('rMyZones')?.getAttribute('aria-pressed') === 'true',
+  };
+}
+
 function saveFilters() {
   const get = id => document.getElementById(id);
   const filters = {
-    rentals: {
-      areas:     Array.isArray(typeof rentSelectedAreas !== 'undefined' ? rentSelectedAreas : null)
-                 ? rentSelectedAreas.slice() : [],
-      maxRent:   get('rMaxRent')?.value,
-      minSqm:    get('rMinSqm')?.value,
-      minRooms:  get('rMinRooms')?.value,
-      maxMetro:  get('rMaxMetro')?.value,
-      minFloor:  get('rMinFloor')?.value,
-      minEnergy: get('rMinEnergy')?.value,
-      minPhoto:  get('rMinPhoto')?.value,
-      fListed:   get('rListed')?.value,
-      minScore:  get('rScore')?.value,
-      elevator:  get('rElevator')?.checked,
-      showStale: get('rShowStale')?.checked,
-      must:           typeof rentMust !== 'undefined' ? [...rentMust] : [],
-      includeUnknown: typeof rentIncludeUnknown !== 'undefined' ? rentIncludeUnknown : false,
-      condition:      get('rCondition')?.value || '',
-      minDiscount:    get('rMinDiscount')?.value || '',
-      contract:       get('rContract')?.value || '',
-      source:    document.querySelector('#rSourceFilter .sort-tab.active')?.dataset.rsource || '',
-      gemFilter: document.querySelector('#rGemFilter .gem-tab.active')?.dataset.gem || '',
-      sortKey:   typeof rentSortKey !== 'undefined' ? rentSortKey : 'score_total',
-    },
+    rentals: rentFilterState(),
     sales: {
       areas:        Array.isArray(typeof saleSelectedAreas !== 'undefined' ? saleSelectedAreas : null)
                     ? saleSelectedAreas.slice() : [],

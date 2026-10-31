@@ -7,7 +7,7 @@
 // Estimates, not financial advice.
 
 const FY_DEFAULTS = { income: 0, cash: 0, share: 33, reserve: 0, costs: 8,
-                      areas: [], mode: 'rent', noStudio: true, floor: '', minSqm: 0, onlyNew: false };
+                      areas: [], mode: 'rent', noStudio: true, floor: '', minSqm: 0, onlyNew: false, myZones: false };
 
 // "New since the last scan": first seen in the latest scan window — weekdays
 // from 07:30 (scan_window.json, 2026-10-26). Rows stamped before
@@ -97,6 +97,7 @@ function _fyZoneCentres(areas) {
 
 // 1 inside a chosen zone, down to 0.3 at FY_NEAR_KM from its centre's edge; null = too far.
 function _fyZone(l, p, centres) {
+  if (p.myZones) return inMyZones(l) ? { fit: 1 } : null;    // the zones drawn street by street
   if (!p.areas.length) return { fit: 1 };
   const nb = (l.neighbourhood || '').toLowerCase();
   if (nb && p.areas.some(a => { const al = a.toLowerCase(); return nb.includes(al) || al.includes(nb); })) return { fit: 1 };
@@ -457,6 +458,7 @@ function _fyInitForm() {
     const el = document.getElementById(id);
     if (el && document.activeElement !== el) el.value = loan[key];
   }
+  const fmz = document.getElementById('fyMyZones'); if (fmz) fmz.checked = !!p.myZones;
   // Zones: the neighbourhoods of the loaded rentals and sales, most listings first.
   const counts = {};
   for (const l of [...(ALL_RENT || []), ...(ALL_SALE || [])]) {
@@ -473,6 +475,7 @@ function _fyInitForm() {
       items: _FY_AREA_ITEMS, onChange: areas => _fySave({ areas }),
     });
     _fyMsd.setSelected(p.areas);
+    document.getElementById('fyMyZones')?.addEventListener('change', e => _fySave({ myZones: e.target.checked }));
     for (const id of [...Object.keys(_FY_FIELDS), ...Object.keys(_FY_LOAN_FIELDS)]) {
       document.getElementById(id)?.addEventListener('input', () => {
         clearTimeout(_fyTimer);
