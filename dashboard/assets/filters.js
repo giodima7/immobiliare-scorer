@@ -291,6 +291,7 @@ async function loadMyZones() {
     const r = await fetch('focus_areas.json', { cache: 'no-cache' });
     MY_ZONES = r.ok ? ((await r.json()).areas || []) : [];
   } catch { MY_ZONES = []; }
+  if (!MY_ZONES.length) console.warn('My zones: focus_areas.json not available');
   return MY_ZONES;
 }
 
@@ -303,9 +304,10 @@ function _inPolygon(lat, lng, poly) {
   return inside;
 }
 
-// In one of the zones. Before the file has loaded, everything passes.
+// In one of the zones. Before the file has loaded — or when it couldn't be
+// read — everything passes (it emptied the grid: "0 flats", 2026-10-31).
 function inMyZones(l) {
-  if (!MY_ZONES) return true;
+  if (!MY_ZONES || !MY_ZONES.length) return true;
   const lat = +l.latitude, lng = +l.longitude;
   if (!lat || !lng) return false;
   return MY_ZONES.some(z => (z.polygon && _inPolygon(lat, lng, z.polygon))
