@@ -911,23 +911,20 @@
 ═══════════════════════════════════════════════════════════════ -->
 <div id="savedView" hidden>
   <div class="page">
-    <section class="page-section">
-      <div class="section-head">
-        <h1 class="page-title" data-i18n="saved.favourites">Favourites</h1>
-        <span class="section-meta" id="savedFavCount"></span>
-      </div>
-      <div class="grid grid-flush" id="savedGrid"></div>
-    </section>
-    <section class="page-section">
-      <div class="section-head">
-        <h2 class="section-title" data-i18n="saved.collections">Collections</h2>
-      </div>
-      <form class="inline-form" id="savedNewColForm" autocomplete="off">
-        <input type="text" class="input" id="savedNewColName" maxlength="60" data-i18n-placeholder="col.new_placeholder" placeholder="New collection name">
-        <button type="submit" class="btn btn-secondary"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#plus"></use></svg><span data-i18n="col.create">Create</span></button>
-      </form>
-      <div class="collections-list" id="savedCollections"></div>
-    </section>
+    <div class="saved-head">
+      <h1 class="page-title" data-i18n="tab.saved">Saved</h1>
+      <div class="seg saved-kind" id="savedKind" role="group"></div>
+    </div>
+    <div class="saved-chips" id="savedChips" role="radiogroup"></div>
+    <form class="inline-form saved-newcol" id="savedNewColForm" autocomplete="off" hidden>
+      <input type="text" class="input" id="savedNewColName" maxlength="60" data-i18n-placeholder="col.new_placeholder" placeholder="New collection name">
+      <button type="submit" class="btn btn-primary"><span data-i18n="col.create">Create</span></button>
+      <button type="button" class="btn btn-ghost btn-icon" data-col-new-cancel data-i18n-aria="alert_modal.cancel" aria-label="Cancel"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#x"></use></svg></button>
+    </form>
+    <div class="saved-colbar" id="savedColbar" hidden></div>
+    <div class="saved-pickhead" id="savedPickHead" hidden></div>
+    <div class="grid grid-flush" id="savedGrid"></div>
+    <div class="saved-pickbar" id="savedPickBar" hidden></div>
   </div>
 </div>
 

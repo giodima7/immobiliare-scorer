@@ -45,7 +45,7 @@ function getRentFilters() {
 function applyRentFilters(data, f) {
   // Shared-collection mode: hard-restrict to the IDs in the URL before any
   // other filter runs. The user can still narrow further with the filter bar.
-  if (window.sharedCollection) {
+  if (window.sharedCollection && window.sharedCollection.kind !== 'sale') {
     const ids = new Set(window.sharedCollection.listing_ids.map(String));
     data = data.filter(l => ids.has(String(l.id)));
   }
@@ -279,7 +279,7 @@ function renderRentals() {
   if (activeTab === 'map' && _mapDataType === 'rentals') _mapRender();
 
   // Shared-collection banner — render above the grid when ?c=… is active
-  if (window.sharedCollection) {
+  if (window.sharedCollection && window.sharedCollection.kind !== 'sale') {
     renderSharedCollectionBanner(_rentFilteredData.length, window.sharedCollection.listing_ids.length);
   }
   // ?l= deep-link highlight (single-listing share)

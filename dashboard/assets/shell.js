@@ -378,8 +378,11 @@ function toggleRentFav(id) {
   const ids = getRentFavs();
   const i   = ids.indexOf(String(id));
   if (i === -1) ids.push(String(id)); else ids.splice(i, 1);
+  // Un-saved: out of its collections too (a collection is a subset of Saved).
+  const touched = i === -1 ? [] : Collections.removeEverywhere(id, 'rent');
   saveRentFavs(ids);
   updateFavBadge();
+  if (i === -1) _setSavedView('rent'); else _savedUnsaveToast(String(id), 'rent', touched);
   if (typeof activeTab !== 'undefined' && activeTab === 'saved' && typeof renderSaved === 'function') renderSaved();
   return i === -1;
 }
@@ -392,8 +395,10 @@ function toggleSaleFav(id) {
   const ids = getSaleFavs();
   const i   = ids.indexOf(String(id));
   if (i === -1) ids.push(String(id)); else ids.splice(i, 1);
+  const touched = i === -1 ? [] : Collections.removeEverywhere(id, 'sale');
   Storage.set('saleFavourites', ids);
   updateFavBadge();
+  if (i === -1) _setSavedView('sale'); else _savedUnsaveToast(String(id), 'sale', touched);
   if (typeof activeTab !== 'undefined' && activeTab === 'saved' && typeof renderSaved === 'function') renderSaved();
   return i === -1;
 }
@@ -559,6 +564,8 @@ async function init() {
     await _syncUserDataFromServer();
     _loadLocalAlertIdentity();
   }
+  // Saved waits for this (collections.js renderSaved): render it now.
+  if (activeTab === 'saved' && typeof renderSaved === 'function') renderSaved();
 
   // The cities config (display name, map centre) and the listings load in
   // parallel — the baked-in fallback covers Milan until the config lands.
@@ -655,6 +662,7 @@ const TAB_STORAGE_KEY = 'active_tab';
 
 function switchTab(tab, opts) {
   const persist = !opts || opts.persist !== false;
+  if (tab !== 'saved' && typeof _savedPick !== 'undefined' && _savedPick) _savedPickEnd();   // leaving drops a half-made choice
   activeTab = tab;
   document.body.dataset.tab = tab;
   if (typeof _mapPlaceSaleBar === 'function') _mapPlaceSaleBar();   // For sale's bar back home, or onto the map

@@ -189,6 +189,8 @@ function _clearSaleFilter(key) {
 }
 
 function _saleMatches(l, f) {
+  const sc = window.sharedCollection;                 // a sale collection's link
+  if (sc?.kind === 'sale' && !sc._ids.has(String(l.id))) return false;
   if (f.areas.length) {
     // Both sites' names: "porta romana" ⊂ "porta romana - medaglie d'oro".
     const nb = (l.neighbourhood || '').toLowerCase();
@@ -244,6 +246,7 @@ function renderSales() {
   }
   const rows = _saleSorted(ALL_SALE.filter(l => _saleMatches(l, f)), f);
   _renderSaleChips(f, rows.length);
+  if (window.sharedCollection?.kind === 'sale') renderSharedCollectionBanner(rows.length, window.sharedCollection.listing_ids.length);
   if (activeTab === 'map' && _mapDataType === 'sales') _mapRender();
   if (!rows.length) {
     grid.innerHTML = `<div class="empty-state">${esc(t(ALL_SALE.length ? 'sale.none' : 'sale.empty'))}
