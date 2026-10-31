@@ -15,6 +15,8 @@ let _map            = null;
 let _clusterGroup   = null;
 let _mapRenderer    = null;
 let _mapDataType    = Storage.get('mapType', 'rentals') === 'sales' ? 'sales' : 'rentals';
+let _mapView        = Storage.get('mapView', 'pins') === 'prices' ? 'prices' : 'pins';
+let _priceLayer     = null;           // the price grid (Prices view)
 let _mapAllListings = [];         // geo-valid dataset for viewport rendering
 let _mapRenderedIds = new Set();  // IDs already added to cluster
 
@@ -213,7 +215,7 @@ function _mapApplyTheme() {
   const name = isDarkTheme() ? 'Dark' : 'Light';
   _tileLayer?.setUrl(_ESRI(name, 'Base'));
   _labelLayer?.setUrl(_ESRI(name, 'Reference'));
-  if (_map && _isMobile) _mapRender();
+  if (_map && (_isMobile || _mapView === 'prices')) _mapRender();
 }
 
 function _mapInit() {
@@ -236,7 +238,10 @@ function _mapInit() {
     ...tileOpts,
     attribution: 'Tiles © <a href="https://www.esri.com">Esri</a> — Esri, HERE, Garmin, © OpenStreetMap contributors',
   }).addTo(_map);
-  _labelLayer = L.tileLayer(_ESRI(name, 'Reference'), tileOpts).addTo(_map);
+  // Street names in a pane of their own: above the price grid in the Prices
+  // view (its cells hid them), under the pins otherwise.
+  _map.createPane('mapLabels').style.pointerEvents = 'none';
+  _labelLayer = L.tileLayer(_ESRI(name, 'Reference'), { ...tileOpts, pane: 'mapLabels' }).addTo(_map);
 
   // Cluster group replaces L.layerGroup — collapses dense areas into single DOM nodes
   _clusterGroup = L.markerClusterGroup({
@@ -261,8 +266,15 @@ function _mapInit() {
   const onMove = _isMobile
     ? _mapDebounce(_renderVisibleMarkers, 150)
     : _renderVisibleMarkers;
-  _map.on('moveend', onMove);
-  _map.on('zoomend', onMove);
+  _map.on('moveend', () => { if (_mapView === 'pins') onMove(); });
+  _map.on('zoomend', () => { if (_mapView === 'pins') onMove(); else _mapRenderPrices(); });
+  document.querySelectorAll('[data-map-view]').forEach(b => b.addEventListener('click', () => {
+    if (b.dataset.mapView === _mapView) return;
+    _mapView = b.dataset.mapView;
+    Storage.set('mapView', _mapView);
+    _map.closePopup();
+    _mapRender();
+  }));
 
   window.addEventListener('resize', _mapDebounce(_sizeMapView, 150));
   document.querySelectorAll('[data-map-type]').forEach(b => b.addEventListener('click', () => {
@@ -325,6 +337,22 @@ function _mapRender() {
   });
   _mapRenderedIds.clear();
   _clusterGroup.clearLayers();
+  document.querySelectorAll('[data-map-view]').forEach(b => {
+    const on = b.dataset.mapView === _mapView;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-pressed', String(on));
+  });
+  document.getElementById('mapView')?.setAttribute('data-view', _mapView);
+  const labels = _map.getPane('mapLabels');
+  if (labels) labels.style.zIndex = _mapView === 'prices' ? 450 : 250;
+  const capEl = document.getElementById('mapCapNotice');
+  if (_mapView === 'prices') {
+    if (capEl) capEl.hidden = true;
+    _mapRenderPrices();
+    _sizeMapView();
+    return;                          // the grid keeps the view where it is
+  }
+  _priceLayer?.clearLayers();
 
   // Render markers currently in viewport (moveend will add more as user pans)
   _renderVisibleMarkers();
@@ -345,4 +373,95 @@ function _mapRender() {
       _map.setView([_dLat, _dLng], _dZ);
     }
   }, 50);
+}
+
+// ── Prices view: a grid of median €/m² (2026-10-31) ──────────────────────────
+// Every live listing of the kind shown, not the filtered list: a price cap in
+// the filter bar would paint its own ceiling. A cell needs 5 listings; cells
+// are 500 m wide zoomed out, 350 m, then 250 m (density measured that day:
+// 350 m cells with 5+ listings hold 94 % of the rentals). Rentals: all-in
+// rent per m² a month; sales: price per m². Colours: one blue ramp in seven
+// quantile classes (dataviz sequential), darkest = dearest; flipped in the
+// dark theme so the dear cells stay the ones that stand out.
+const _PRICE_RAMP = ['#cde2fb', '#9ec5f4', '#6da7ec', '#3987e5', '#256abf', '#184f95', '#0d366b'];
+const _PRICE_MIN_N = 5;
+
+function _priceSource() {
+  const _city = (typeof currentCity === 'string' && currentCity) || 'milano';
+  const rows = _mapDataType === 'sales' ? ALL_SALE : ALL_RENT;
+  return rows.filter(l => !l.is_stale && !l.excluded && l.latitude && l.longitude
+                       && l.geo_precision !== 'metro' && l.geo_precision !== 'zone'
+                       && _coordsInsideCity(l.latitude, l.longitude, _city));
+}
+
+function _pricePerSqm(l) {
+  if (!l.sqm || l.sqm < 20 || l.sqm > 300) return null;
+  const p = _mapDataType === 'sales' ? l.price : monthlyCost(l).total;
+  return p > 0 ? p / l.sqm : null;
+}
+
+function _median(a) {
+  const s = a.slice().sort((x, y) => x - y), m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+// "€24,1" a month or "€6.780"; and what 60 m² comes to at that rate.
+function _priceLabel(v) {
+  return _mapDataType === 'sales' ? `€${fmt(Math.round(v / 10) * 10)}` : `€${fmt(Math.round(v * 10) / 10, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`;
+}
+function _price60(v) {
+  return _mapDataType === 'sales' ? `€${fmt(Math.round(v * 60 / 1000))}k` : `€${fmt(Math.round(v * 60 / 10) * 10)}`;
+}
+
+function _mapRenderPrices() {
+  if (!_map) return;
+  if (!_priceLayer) _priceLayer = L.layerGroup().addTo(_map);
+  _priceLayer.clearLayers();
+  const z = _map.getZoom();
+  const cell = z <= 12 ? 500 : z <= 13 ? 350 : 250;
+  const dLat = cell / 111000, dLng = cell / (111000 * Math.cos(45.46 * Math.PI / 180));
+  const cells = new Map();
+  let n = 0;
+  for (const l of _priceSource()) {
+    const v = _pricePerSqm(l);
+    if (v == null) continue;
+    n++;
+    const k = `${Math.floor(l.latitude / dLat)}:${Math.floor(l.longitude / dLng)}`;
+    if (!cells.has(k)) cells.set(k, []);
+    cells.get(k).push(v);
+  }
+  const shown = [...cells].filter(([, v]) => v.length >= _PRICE_MIN_N)
+                          .map(([k, v]) => ({ k, med: _median(v), n: v.length }));
+  // Seven classes at the quantiles of the cells' medians.
+  const meds = shown.map(c => c.med).sort((a, b) => a - b);
+  const breaks = [1, 2, 3, 4, 5, 6].map(i => meds[Math.min(meds.length - 1, Math.floor(i * meds.length / 7))]);
+  const ramp = isDarkTheme() ? _PRICE_RAMP.slice().reverse() : _PRICE_RAMP;
+  const cls = v => breaks.filter(b => v >= b).length;
+  const unit = t(_mapDataType === 'sales' ? 'map.price_unit_sale' : 'map.price_unit_rent');
+  for (const c of shown) {
+    const [i, j] = c.k.split(':').map(Number);
+    const rect = L.rectangle([[i * dLat, j * dLng], [(i + 1) * dLat, (j + 1) * dLng]], {
+      renderer: _mapRenderer, stroke: true, weight: 1, color: isDarkTheme() ? '#1b1b19' : '#ffffff',
+      fillColor: ramp[cls(c.med)], fillOpacity: 0.5,
+    });
+    rect.bindTooltip(`<strong>${escapeHtml(_priceLabel(c.med))}</strong> ${escapeHtml(unit)}<br>`
+      + `${escapeHtml(t('map.price_60', { v: _price60(c.med) }))}<br>`
+      + `<span class="map-price-n">${escapeHtml(t('map.price_n', { n: fmt(c.n) }))}</span>`, { sticky: true, direction: 'top' });
+    _priceLayer.addLayer(rect);
+  }
+  _renderPriceLegend(meds, breaks, ramp, unit);
+  document.getElementById('mapListingCount').textContent = t('map.price_count', { n: fmt(n), c: fmt(shown.length) });
+}
+
+// Seven swatches with their lower bounds; the ends say what 60 m² costs.
+function _renderPriceLegend(meds, breaks, ramp, unit) {
+  const box = document.getElementById('mapPriceLegend');
+  if (!box) return;
+  if (!meds.length) { box.innerHTML = ''; return; }
+  const esc = escapeHtml;
+  const lows = [meds[0], ...breaks];
+  box.innerHTML = `<span class="mpl-unit">${esc(unit)}</span>
+    <span class="mpl-ramp">${ramp.map((c, i) => `<span class="mpl-step" style="background:${c}" title="${esc(_priceLabel(lows[i]))}+"></span>`).join('')}</span>
+    <span class="mpl-ends"><span>${esc(_priceLabel(meds[0]))}</span><span>${esc(_priceLabel(meds[meds.length - 1]))}</span></span>
+    <span class="mpl-60">${esc(t('map.price_60_range', { lo: _price60(meds[0]), hi: _price60(meds[meds.length - 1]) }))}</span>`;
 }
