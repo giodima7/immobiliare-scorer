@@ -11,7 +11,33 @@
 // "include not-yet-known" lets a strict filter stay usable meanwhile.
 // "lift" is the long-standing #rElevator checkbox (map, drawer and saved
 // filters already read it); the others live in rentMust.
+// Parquet, a liveable living room, a real bedroom (2026-10-31): what the
+// photo reading saw (photo_features, photo_tags, photo_flags), the parquet
+// also from the description (text_flags, scoring.stamp_text_flags).
+function _mustParquet(l) {
+  const floors = l.photo_features?.floors;
+  if (floors === 'parquet' || (l.text_flags || []).includes('parquet')) return true;
+  return floors ? false : null;
+}
+function _mustLiving(l) {
+  const tags = l.photo_tags || [], sep = l.photo_features?.separate_living;
+  if (tags.includes('small_living') || tags.includes('student_layout') || sep === false) return false;
+  return tags.includes('big_living') || sep === true ? true : null;
+}
+function _mustBedroom(l) {
+  if ((l.photo_flags || []).includes('no_bedroom') || l.text_says_studio || l.bedrooms === 0) return false;
+  return l.bedrooms >= 1 ? true : null;
+}
+// A casa di ringhiera — the description (text_flags) or the photo note says so.
+function isRinghiera(l) {
+  return (l.text_flags || []).includes('ringhiera')
+      || /\b(?:di|a) ringhiera|ringhiera milanese|ballatoio/i.test(l.photo_note_it || '');
+}
+
 const RENT_MUSTS = [
+  { key: 'parquet',   icon: 'list-details',    value: _mustParquet },
+  { key: 'living',    icon: 'maximize',        value: _mustLiving },
+  { key: 'bedroom',   icon: 'bed',             value: _mustBedroom },
   { key: 'furnished', icon: 'armchair',        value: l => l.furnished ?? null },
   { key: 'balcony',   icon: 'plant',           value: l => l.has_balcony ?? null },
   { key: 'parking',   icon: 'car',             value: l => l.has_parking ?? null },
@@ -20,7 +46,12 @@ const RENT_MUSTS = [
   { key: 'baths',     icon: 'bath',            value: l => l.bathrooms != null ? l.bathrooms >= 2 : null },
   { key: 'renovated', icon: 'sparkles',        value: l => { const g = conditionGroup(l.condition); return g === 'unknown' ? null : g === 'premium'; } },
   { key: 'safe',      icon: 'alert-triangle',  value: l => !l.price_suspect },
+  { key: 'no_ringhiera', icon: 'building',     value: l => !isRinghiera(l) },
 ];
+// Exclusions, shown as checkboxes under the tiles rather than as tiles.
+const MUST_CHECKS = ['safe', 'no_ringhiera'];
+// For sale: no "furnished", no price-suspect flag.
+const SALE_MUST_KEYS = ['parquet', 'living', 'bedroom', 'balcony', 'parking', 'lift', 'heating', 'baths', 'renovated', 'no_ringhiera'];
 const RENT_MUST_BY_KEY = Object.fromEntries(RENT_MUSTS.map(m => [m.key, m]));
 
 let rentMust = new Set();          // active must-have keys, except 'lift' (#rElevator)
@@ -47,7 +78,9 @@ function toggleRentMust(key) {
 
 // Same grouping as comps_engine.condition_group (Python).
 function conditionGroup(raw) {
-  const c = String(raw || '').toLowerCase().trim();
+  // Immobiliare's sale pages say "da_ristrutturare": read as "renovated" until
+  // 2026-10-31 (132 sales).
+  const c = String(raw || '').toLowerCase().replace(/_/g, ' ').trim();
   if (!c || c.includes('idealista')) return 'unknown';
   if ((c.includes('da ') && c.includes('ristruttur')) || c.includes('fatiscent')) return 'needs_work';
   if (['ristruttur', 'ottim', 'nuovo', 'costruz'].some(k => c.includes(k))) return 'premium';
@@ -76,10 +109,9 @@ function passesExtraFilters(l, f) {
 }
 
 // Yes / not-yet-known counts per must-have over what the other filters keep.
-function rentMustCounts(f) {
-  const base = applyRentFilters(ALL_RENT, { ...f, must: [], elevator: false });
+function mustCounts(base, musts = RENT_MUSTS) {
   const counts = {};
-  for (const m of RENT_MUSTS) {
+  for (const m of musts) {
     let yes = 0, unknown = 0;
     for (const l of base) {
       const v = m.value(l);
@@ -90,14 +122,16 @@ function rentMustCounts(f) {
   }
   return counts;
 }
+function rentMustCounts(f) {
+  return mustCounts(applyRentFilters(ALL_RENT, { ...f, must: [], elevator: false }));
+}
 
 // Must-have tiles: name on top, "5.768 · +5.798 not known yet" below.
 // 'safe' (hide suspicious prices) is an exclusion, so it's a separate
 // checkbox (.hide-suspect), not a tile.
-function renderMustGrid(container, counts) {
+function renderMustGrid(container, counts, active = new Set(rentMustActive()), musts = RENT_MUSTS) {
   if (!container) return;
-  const active = new Set(rentMustActive());
-  container.innerHTML = RENT_MUSTS.filter(m => m.key !== 'safe').map(m => {
+  container.innerHTML = musts.filter(m => !MUST_CHECKS.includes(m.key)).map(m => {
     const c = counts[m.key] || { yes: 0, unknown: 0 };
     const unk = c.unknown > 0 ? ` · ${escapeHtml(t('must.unknown_n', { n: fmt(c.unknown) }))}` : '';
     return `<button type="button" class="must-chip${active.has(m.key) ? ' on' : ''}" data-must="${m.key}"
@@ -106,7 +140,10 @@ function renderMustGrid(container, counts) {
               <span class="must-count"><strong>${fmt(c.yes)}</strong>${unk}</span>
             </button>`;
   }).join('');
-  document.querySelectorAll('.hide-suspect').forEach(cb => { cb.checked = active.has('safe'); });
+  if (musts === RENT_MUSTS) {
+    document.querySelectorAll('.hide-suspect').forEach(cb => { cb.checked = active.has('safe'); });
+    document.querySelectorAll('.hide-ringhiera:not(#sHideRinghiera)').forEach(cb => { cb.checked = active.has('no_ringhiera'); });
+  }
 }
 
 // ── Active-filter chips ───────────────────────────────────────────────────────
@@ -124,7 +161,6 @@ function rentActiveFilterChips(f) {
   if (f.condition)   add('condition', t('cond.' + f.condition));
   if (f.minDiscount) add('minDiscount', t('chip.min_discount', { n: f.minDiscount }));
   if (f.contract)    add('contract', f.contract);
-  if (f.fascia)      add('fascia', t('fascia.' + f.fascia));
   if (f.maxMetro)    add('maxMetro', t('chip.max_metro', { n: fmt(f.maxMetro) }));
   if (f.minFloor > -999) add('minFloor', t('chip.min_floor', { n: f.minFloor }));
   if (f.source)      add('source', f.source === 'private' ? t('filter.private') : siteName(f.source));
@@ -152,7 +188,7 @@ function renderRentFilterExtras(f, shown) {
   document.getElementById('rMustBtn')?.classList.toggle('on', nMust > 0);
 
   const chips = rentActiveFilterChips(f);
-  const moreKeys = ['condition', 'minDiscount', 'contract', 'fascia', 'maxMetro', 'minFloor', 'source',
+  const moreKeys = ['condition', 'minDiscount', 'contract', 'maxMetro', 'minFloor', 'source',
                     'minEnergy', 'minScore', 'fListed', 'idQuery', 'showStale'];
   const nMore = chips.filter(c => moreKeys.includes(c.key)).length;
   const moreBadge = document.getElementById('rMoreBadge');
@@ -207,7 +243,6 @@ function clearRentFilter(key) {
     case 'condition':   el('rCondition').value = ''; break;
     case 'minDiscount': el('rMinDiscount').value = ''; break;
     case 'contract':    el('rContract').value = ''; break;
-    case 'fascia':      el('rFascia').value = ''; break;
     case 'maxMetro':    el('rMaxMetro').value = ''; break;
     case 'minFloor':    el('rMinFloor').value = ''; break;
     case 'source':

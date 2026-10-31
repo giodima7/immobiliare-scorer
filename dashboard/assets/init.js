@@ -355,7 +355,7 @@ document.getElementById('btnStopScanner').addEventListener('click', async () => 
 });
 
 // ── from controls.js · Rentals filter event listeners ──
-['rFascia','rMaxMetro','rMinFloor','rMinEnergy','rMinPhoto','rListed'].forEach(id =>
+['rMaxMetro','rMinFloor','rMinEnergy','rMinPhoto','rListed'].forEach(id =>
   document.getElementById(id).addEventListener('change', () => { renderRentals(); saveFilters(); }));
 ['rMaxRent','rMinSqm','rMinRooms'].forEach(id =>
   document.getElementById(id).addEventListener('input', _renderRentalsDebounced));
@@ -398,7 +398,6 @@ document.getElementById('rBtnReset').addEventListener('click', () => {
   if (_idEl) _idEl.value = '';
   filterAreaMsd.clear();
   rentSelectedAreas = [];
-  document.getElementById('rFascia').value    = '';
   // OMI Zone filter removed from the bar — no rOmiZone reset needed.
   document.getElementById('rMaxRent').value   = '';
   document.getElementById('rMinSqm').value    = '';
@@ -591,7 +590,7 @@ document.getElementById('btnCacheClear')?.addEventListener('click', async () => 
   if (typeof _populateDrawerAreaFromActive === 'function') _populateDrawerAreaFromActive();
 
   const pairs = [['rMaxRent', 'dMaxRent'], ['rMinSqm', 'dMinSqm'], ['rMinRooms', 'dMinRooms'],
-                 ['rFascia', 'dFascia'], ['rMaxMetro', 'dMaxMetro'], ['rCondition', 'dCondition'],
+                 ['rMaxMetro', 'dMaxMetro'], ['rCondition', 'dCondition'],
                  ['rMinDiscount', 'dMinDiscount'], ['rScore', 'dScore']];
 
   function syncFromBar() {
@@ -1030,6 +1029,9 @@ document.getElementById('rMoreDone')?.addEventListener('click', () => toggleRent
 // "Hide suspicious prices" — a must-have key, shown as a checkbox.
 document.querySelectorAll('.hide-suspect').forEach(cb => cb.addEventListener('change', () => {
   if (cb.checked !== rentMust.has('safe')) toggleRentMust('safe');
+}));
+document.querySelectorAll('.hide-ringhiera:not(#sHideRinghiera)').forEach(cb => cb.addEventListener('change', () => {
+  if (cb.checked !== rentMust.has('no_ringhiera')) toggleRentMust('no_ringhiera');
 }));
 // Panels close on Escape (focus back on their button) and on a click
 // outside the filter bar.

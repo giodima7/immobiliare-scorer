@@ -101,6 +101,7 @@ SCHEMA_COLUMNS: frozenset[str] = frozenset({
     # ── Extreme-underpricing flag (migration 010) ───────────────────────
     "extreme_underpricing", "extreme_underpricing_delta",
     "description",
+    "text_flags",                    # parquet / ringhiera from the description (migration 024)
     # ── Location / proximity ────────────────────────────────────────────
     "latitude", "longitude",
     "omi_zona", "omi_fascia", "omi_descr",

@@ -10,12 +10,17 @@
 function getIdQuery(inputId) {
   return (document.getElementById(inputId)?.value || '').trim().toLowerCase();
 }
+// The id, or the id of a copy folded into this card (also_on): a code read
+// on the other site finds the flat too.
+function idMatches(l, q) {
+  return String(l.id ?? '').toLowerCase().includes(q)
+      || (l.also_on || []).some(a => String(a.id ?? '').toLowerCase().includes(q));
+}
 
 function getRentFilters() {
   return {
     idQuery:   getIdQuery('rIdSearch'),
     areas:     rentSelectedAreas,
-    fascia:    document.getElementById('rFascia').value,
     // OMI Zone filter removed from the bar — Area + Fascia cover the same
     // intent and work across cities. Field kept as '' so applyRentFilters'
     // `if (f.omiZone && …)` branch becomes an effective no-op without
@@ -64,9 +69,7 @@ function applyRentFilters(data, f) {
     // Header ID search short-circuits the rest of the filters — when
     // it's active the user is looking for one specific listing, not
     // narrowing by other criteria.
-    if (f.idQuery) {
-      if (!String(l.id ?? '').toLowerCase().includes(f.idQuery)) return false;
-    }
+    if (f.idQuery && !idMatches(l, f.idQuery)) return false;
     // Fake / bait / misrepresented listings (score 0) — the sales filter
     // already hides them; rentals showed 231 of them in the grid.
     if (l.excluded) return false;
@@ -79,7 +82,6 @@ function applyRentFilters(data, f) {
       // a neighbourhood used to pass every area filter.
       if (!nb || !f.areas.some(a => { const al = a.toLowerCase(); return nb.includes(al) || al.includes(nb); })) return false;
     }
-    if (f.fascia   && l.omi_fascia !== f.fascia)               return false;
     if (f.omiZone  && l.omi_zona  !== f.omiZone)              return false;
     if (f.maxRent  && monthlyCost(l).total > f.maxRent)       return false;   // all-in when known
     if (f.minSqm   && l.sqm < f.minSqm)                       return false;

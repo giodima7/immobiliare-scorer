@@ -228,8 +228,9 @@ function _fyLiveBuy(l, p, loan, why) {
     parts.push('AB'.includes(ec) ? 1 : 'CD'.includes(ec) ? 0.75 : 'E'.includes(ec) ? 0.5 : 0.25);
     if ('FG'.includes(ec)) why.push({ bad: true, w: 2, t: t_('fy.w_energy', { c: ec }) });
   }
-  if (/ristruttur|rinnov/i.test(l.condition || '') && !/da ristruttur/i.test(l.condition || '')) parts.push(1);
-  if (/da ristruttur/i.test(l.condition || '')) { parts.push(0.3); why.push({ bad: true, w: 2, t: t_('fy.w_works') }); }
+  const cond = (l.condition || '').replace(/_/g, ' ');   // "da_ristrutturare" on sale pages
+  if (/ristruttur|rinnov/i.test(cond) && !/da ristruttur/i.test(cond)) parts.push(1);
+  if (/da ristruttur/i.test(cond)) { parts.push(0.3); why.push({ bad: true, w: 2, t: t_('fy.w_works') }); }
   // Savings past the minimum down payment and the costs: what could be kept
   // back (they go into the down payment, lowering the payment above).
   const left = p.cash - l.price * (loan.down + p.costs) / 100;
