@@ -3865,7 +3865,10 @@ body.pv-open { overflow: hidden; }
 #mapView { display: flex; flex-direction: column; height: auto; min-height: 420px; }
 #mapView[hidden] { display: none !important; }
 #mapContainer { flex: none; height: 480px; min-height: 360px; margin: var(--s-3) var(--s-6) var(--s-4); border-radius: var(--radius-lg);
-                overflow: hidden; box-shadow: var(--shadow-card); }
+                overflow: hidden; box-shadow: var(--shadow-card);
+                /* Leaflet's panes go up to z-index 1000: kept inside, so the filter bar's
+                   dropdowns and the sticky header stay above the map. */
+                isolation: isolate; }
 .map-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-4); padding: var(--s-3) var(--s-6) 0;
                font-size: var(--text-sm); color: var(--text-secondary); }
 .map-toolbar strong { color: var(--text-primary); }
