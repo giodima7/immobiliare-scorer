@@ -3925,8 +3925,8 @@ body:has(#savedView.is-picking:not([hidden])) .lume-toast { bottom: calc(96px + 
 .map-price-legend { display: none; align-items: center; gap: 6px 10px; flex-wrap: wrap; margin-left: auto; font-size: var(--text-xs); }
 #mapView[data-view="prices"] .map-price-legend { display: inline-flex; }
 #mapView[data-view="prices"] .map-legend { display: none; }
-.mpl-ramp { display: inline-flex; gap: 2px; }
-.mpl-step { width: 18px; height: 10px; border-radius: 2px; }
+.mpl-bar { width: 110px; height: 10px; border-radius: 5px; }
+.map-price-pop { font-size: var(--text-sm); line-height: 1.5; }
 .mpl-ends { display: inline-flex; gap: 4px; color: var(--text-primary); font-weight: 600; }
 .mpl-ends span + span::before { content: "–"; margin-right: 4px; color: var(--text-secondary); font-weight: 400; }
 .mpl-60 { color: var(--text-secondary); }
