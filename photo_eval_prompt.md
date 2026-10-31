@@ -102,6 +102,9 @@ Fields, one object per listing, in the order given:
   "red_flags": [ zero or more of:
      "render"          (computer renderings, not photos),
      "other_flat"      (photos look like different flats / a showroom),
+     "not_in_city"     (windows, balcony or outside shots show sea, a lake,
+                        mountains or open countryside: the flat is not in
+                        Milan, whatever the listing says),
      "no_interiors"    (only exterior, building, plan or stock images),
      "few_photos"      (fewer than 4 useful interior photos),
      "works_needed"    (visible damage, old wiring/plumbing, works to do),
@@ -128,7 +131,7 @@ deal_check: "confirms" when the photos match a good flat for the rent;
 "doubt" when something needs checking on a visit (few photos, one dated room,
 rooms not shown, possible render); "contradicts" when the photos explain the
 low price (needs works, basement, attic, no real bedroom, renders only, not
-the flat described). The grade and deal_check should agree: a grade of 4 or
+the flat described, not in Milan). The grade and deal_check should agree: a grade of 4 or
 less is a "contradicts".
 
 Reply with ONE JSON array of these objects and nothing else — no prose, no
