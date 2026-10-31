@@ -366,6 +366,7 @@ def rescore_sales(log=print) -> dict:
         cap = scoring._load_settings().get("photo_contradicts_cap", 69)
         for l in scored:
             scoring.apply_photo_verdict(l, evals, cap)
+            scoring.apply_gem_rule(l)
         estimate_rents(scored)
         write_snapshot(SALES_PATH, [{k: v for k, v in l.items() if k != "omi"} for l in scored])
     rec = {"pages_applied": applied, "excluded": sum(1 for l in scored if l.get("excluded")),
@@ -433,6 +434,7 @@ def run_sales(source: str, log=print) -> dict:
         cap = scoring._load_settings().get("photo_contradicts_cap", 69)
         for l in scored:
             scoring.apply_photo_verdict(l, evals, cap)
+            scoring.apply_gem_rule(l)
         rec["photo_verdicts"] = sum(1 for l in scored if l.get("photo_deal"))
         rec["rent_estimates"] = estimate_rents(scored)
         clean = [{k: v for k, v in l.items() if k != "omi"} for l in scored]

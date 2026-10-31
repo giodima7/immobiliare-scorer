@@ -2391,6 +2391,30 @@ def apply_photo_verdict(l: dict, evals: dict, cap: int, grade_max: float = 4,
             l["score_cap_reason"] = "; ".join(x for x in (l.get("score_cap_reason"), reason) if x)
 
 
+# Hidden Gem = a Great Value price and a flat the photos show is lovely
+# (2026-10-31, the user: "le hidden gems dovrebbero essere fair pick + great
+# value … ci clicco e sono decrepite"). That day 14 of the 35 rental gems had
+# photos graded 4.5–6.5 or none read: "cucina e bagni anni '70–'80",
+# "cantiere in corso". The price rules pick the candidates (Great Value or
+# the old Hidden Gem); the photos decide: 79 rental gems and 5 sale gems
+# then, the rest Great Value. Unread photos: Great Value until read.
+GEM_PHOTO_MIN = 7
+GEM_NOT_TAGS = frozenset({"dated_kitchen", "dated_bathroom", "damp", "cracks", "plan_mismatch",
+                          "windowless_bathroom", "dark", "facing_wall", "shabby_building"})
+
+
+def apply_gem_rule(l: dict) -> None:
+    """After the photo verdict: a labelled listing is a Hidden Gem when its
+    photos are graded GEM_PHOTO_MIN+, don't contradict the deal and show no
+    dated kitchen or bathroom or defect — otherwise a Great Value."""
+    if not (l.get("good_value") or l.get("hidden_gem")):
+        return
+    g = l.get("photo_grade")
+    lovely = (isinstance(g, (int, float)) and g >= GEM_PHOTO_MIN and l.get("photo_deal") != "contradicts"
+              and not (set(l.get("photo_tags") or []) & GEM_NOT_TAGS))
+    l["hidden_gem"], l["good_value"] = lovely, not lovely
+
+
 def zone_normal_psqm(pool: list, lo: float = 50, hi: float = 90, min_n: int = 8) -> dict:
     """All-in €/m² (ask_psqm_effective) a normal-size flat — lo–hi m² — asks
     in each neighbourhood, live rows only; key "" holds the city median."""
@@ -2537,6 +2561,7 @@ def score_all(listings: list, settings: dict | None = None,
             apply_small_flat_brake(merged, small_ref, settings["small_brake_max_sqm"],
                                    settings.get("small_brake_ratio", 1.25),
                                    settings.get("small_brake_cap", 69))
+        apply_gem_rule(merged)
         scored.append(merged)
 
     scored.sort(key=lambda x: x.get("score_total", 0) or 0, reverse=True)
