@@ -56,6 +56,13 @@
       "radius_m": 600
     }
   ],
+  "criteria": {
+    "_doc": "The flats the user would live in (2026-10-31): in a focus area, at least min_sqm, floor >= min_floor (unknown passes), within budget (rentals all-in, sales price). photo_eval reads their photos before everything else when the reading doesn't say the floors or the living room yet.",
+    "min_sqm": 60,
+    "min_floor": 1,
+    "max_rent": 2200,
+    "max_price": 450000
+  },
   "sales": {
     "_doc": "Sales (compravendita) scanned in these areas only: Immobiliare macro-areas and Idealista (sub)zones covering the focus areas, filtered by max price and min rooms.",
     "max_price": 800000,

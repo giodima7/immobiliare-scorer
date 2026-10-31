@@ -52,6 +52,30 @@ def in_focus(l: dict) -> bool:
     return False
 
 
+def criteria() -> dict:
+    try:
+        return json.loads(PATH.read_text()).get("criteria") or {}
+    except (OSError, ValueError):
+        return {}
+
+
+def fits_criteria(l: dict, c: dict | None = None) -> bool:
+    """A live flat the user would live in (focus_areas.json "criteria"): a
+    focus area, the size, the floor (unknown passes), the budget — all-in
+    rent for a rental, price for a sale."""
+    c = criteria() if c is None else c
+    if not c or l.get("is_stale") or l.get("excluded") or l.get("_excluded") or not in_focus(l):
+        return False
+    if (l.get("sqm") or 0) < (c.get("min_sqm") or 0):
+        return False
+    if l.get("floor_n") is not None and l["floor_n"] < (c.get("min_floor") or -99):
+        return False
+    if l.get("rent_mo"):
+        cost = l.get("effective_rent_mo") or l["rent_mo"]
+        return not c.get("max_rent") or cost <= c["max_rent"]
+    return bool(l.get("price")) and (not c.get("max_price") or l["price"] <= c["max_price"])
+
+
 # Scan areas that hold the focus areas, per site — the zone slots sweep them
 # first each time the window opens (2026-10-30, the user: "always prioritise
 # Corso Genova, Porta Romana, Crocetta, Guastalla, Missori and Solari").

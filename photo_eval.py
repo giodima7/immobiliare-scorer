@@ -286,11 +286,51 @@ def cmd_select(args) -> None:
                               not (l.get("good_value") or l.get("hidden_gem") or l.get("photo_deal") == "contradicts"),
                               -(l.get("score_total") or 0)))
     todo += again
+    # Before all of it: the flats the user would live in (focus_areas.json
+    # "criteria") whose reading doesn't say the floors or the living room —
+    # the Parquet and Liveable living room filters read those (2026-10-31:
+    # known for 39 % / 32 % of such rentals, 19 % / 15 % of sales). One copy
+    # per flat: its twins share the reading (scoring.twin_photo_evals).
+    crit = criteria_queue(rows, done)
+    crit_ids = {str(l["id"]) for l in crit}
+    todo = crit + [l for l in todo if str(l["id"]) not in crit_ids]
     CACHE.mkdir(exist_ok=True)
     QUEUE.write_text(json.dumps([{**context(l), "photos": photo_urls(l),
                                   "floorplans": (l.get("floorplans") or [])[:4]} for l in todo],
                                 ensure_ascii=False, indent=1))
-    print(f"readable: {len(top)} · to read: {len(todo)} ({len(again)} again, older rubric) → {QUEUE}")
+    print(f"readable: {len(top)} · to read: {len(todo)} ({len(crit)} for your criteria first, "
+          f"{len(again)} again, older rubric) → {QUEUE}")
+
+
+def lacks_layout(r: dict | None) -> bool:
+    """The reading doesn't say the floors or whether there's a living room."""
+    f = (r or {}).get("features") or {}
+    return not f.get("floors") or f.get("separate_living") is None
+
+
+def criteria_queue(rows: list, done: dict) -> list:
+    """Flats fitting the user's criteria whose photos would tell the floors
+    or the living room: never read, photos changed, or an older reading the
+    run step reads again — one per flat, best score first."""
+    try:
+        from focus_areas import fits_criteria
+    except Exception:
+        return []
+    out, groups = [], set()
+    for l in sorted(rows, key=lambda x: (-len(photo_urls(x)), -(x.get("score_total") or 0))):
+        if not fits_criteria(l) or len(photo_urls(l)) < MIN_PHOTOS:
+            continue
+        r = done.get(str(l["id"]))
+        g = l.get("dup_group") or l["id"]
+        if g in groups or not lacks_layout(r):
+            continue
+        if r and r.get("fingerprint") == fingerprint(photo_urls(l)) and not (
+                outdated(r) or missed_words(r, l) or needs_bedrooms(r, l)):
+            continue                     # read as it is now: reading again says the same
+        groups.add(g)
+        out.append(l)
+    out.sort(key=lambda l: -(l.get("score_total") or 0))
+    return out
 
 
 # ── sheets ───────────────────────────────────────────────────────────────────
