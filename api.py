@@ -1332,6 +1332,7 @@ def api_photo_feedback():
             _st = _sc._load_settings()
             _sc.apply_photo_verdict(row, _sc.load_photo_evals(), cap, _st.get("photo_grade_cap_max", 4),
                                     _st.get("photo_grade_points", 0), _st.get("w_property", 0.25))
+            _sc.apply_gem_rule(row)
             from dashboard_io import write_snapshot
             write_snapshot(path, rows)
         if "rentals" in path.name:
