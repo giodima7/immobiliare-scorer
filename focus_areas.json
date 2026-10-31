@@ -1,5 +1,5 @@
 {
-  "_doc": "Areas whose listings get their listing page (costs) and photos read first. label: regex on the neighbourhood name; center/radius_m: also any listing within that distance.",
+  "_doc": "Areas whose listings get their listing page (costs) and photos read first. label: regex on the neighbourhood name; center/radius_m: also any listing within that distance; polygon ([lat, lon] corners): also any listing inside it.",
   "areas": [
     {
       "name": "Porta Romana",
@@ -54,6 +54,44 @@
         9.1655
       ],
       "radius_m": 600
+    },
+    {
+      "name": "Cadore - Montenero",
+      "_doc": "2026-10-31, the user: from the end of Viale Bligny / start of Viale Sabotino, Via Caldara, Viale Montenero, Via Maffei, Piazzale Libia, Viale Regina Margherita, Via Friuli, Via Colletta — not as far as the Lodi TIBB stop. Corso XXII Marzo and Viale Umbria are the edges.",
+      "polygon": [
+        [
+          45.4515,
+          9.194
+        ],
+        [
+          45.4612,
+          9.1985
+        ],
+        [
+          45.4614,
+          9.2148
+        ],
+        [
+          45.4487,
+          9.215
+        ],
+        [
+          45.4487,
+          9.2062
+        ],
+        [
+          45.4463,
+          9.2058
+        ],
+        [
+          45.4463,
+          9.201
+        ],
+        [
+          45.4492,
+          9.194
+        ]
+      ]
     }
   ],
   "criteria": {

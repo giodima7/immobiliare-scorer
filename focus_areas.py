@@ -25,8 +25,20 @@ def _areas() -> list:
             raw = []
         _cache = (mtime, [(re.compile(a["label"], re.I) if a.get("label") else None,
                            tuple(a["center"]) if a.get("center") else None,
-                           float(a.get("radius_m") or 0)) for a in raw])
+                           float(a.get("radius_m") or 0),
+                           [tuple(p) for p in a.get("polygon") or []]) for a in raw])
     return _cache[1]
+
+
+def _in_polygon(lat: float, lon: float, poly: list) -> bool:
+    """Ray casting over [lat, lon] corners — an area drawn street by street
+    (2026-10-31: Cadore–Montenero up to Piazzale Libia, short of Lodi TIBB)."""
+    inside = False
+    for i in range(len(poly)):
+        (y1, x1), (y2, x2) = poly[i], poly[i - 1]
+        if (y1 > lat) != (y2 > lat) and lon < (x2 - x1) * (lat - y1) / (y2 - y1) + x1:
+            inside = not inside
+    return inside
 
 
 def _dist_m(a: tuple, b: tuple) -> float:
@@ -37,12 +49,18 @@ def _dist_m(a: tuple, b: tuple) -> float:
 
 def in_focus(l: dict) -> bool:
     """The listing's neighbourhood matches a focus area's label, or it lies
-    within that area's radius."""
+    within that area's radius or polygon."""
     nb = l.get("neighbourhood") or ""
     lat, lon = l.get("latitude"), l.get("longitude")
-    for label, center, radius in _areas():
+    for label, center, radius, poly in _areas():
         if label and label.search(nb):
             return True
+        if poly and lat and lon:
+            try:
+                if _in_polygon(float(lat), float(lon), poly):
+                    return True
+            except (TypeError, ValueError):
+                pass
         if center and radius and lat and lon:
             try:
                 if _dist_m(center, (float(lat), float(lon))) <= radius:
