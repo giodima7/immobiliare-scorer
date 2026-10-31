@@ -626,14 +626,52 @@ def _cost_per_month(raw) -> Optional[int]:
     return round(value / 12) if "anno" in str(raw).lower() else value
 
 
+# 2026-10-31: "Richiesta Euro 1.250,00 comprensivo di spese condominiali"
+# (Immobiliare 133822540) and "incluse spese condominiali" were missed — the
+# rule wanted canone/affitto/prezzo right before "comprensivo": 22 rentals.
 _CONDO_INCLUDED_RX = _re.compile(
     r"(?<!non )\b(?:spese(?:\s+condominiali)?|condominio)\s+(?:sono\s+)?(?:incluse|inclusa|incluso|compres[aeio])\b"
-    r"|\b(?:canone|affitto|prezzo)\s+(?:è\s+)?comprensiv[oa]\s+(?:delle\s+|di\s+)?spese\b", _re.I)
+    r"|(?<!non )\bcomprensiv[oa]\s+(?:anche\s+)?(?:delle\s+|di\s+|le\s+)?spese(?!\s+(?:di\s+)?(?:riscaldamento|utenze|luce|gas))"
+    r"|\bincluse?\s+(?:le\s+)?spese\s+condominiali\b", _re.I)
 
 
 def condo_included(text) -> bool:
     """The listing says the rent already covers the condo fees."""
     return bool(text) and bool(_CONDO_INCLUDED_RX.search(str(text).replace("\xa0", " ")))
+
+
+def condo_from_text(text, rent) -> tuple[Optional[int], bool]:
+    """(fee, included) from "€ 1.250 comprensivo di spese condominiali": the
+    amount stated just before is the total — above the site's rent by up to
+    €600, the difference is the condo fee (133822540: €1,200 + €50);
+    otherwise the rent covers them."""
+    t = str(text or "").replace("\xa0", " ")
+    m = _CONDO_INCLUDED_RX.search(t)
+    if not m:
+        return None, False
+    nums = _re.findall(r"\d{1,2}[.\s]\d{3}|\d{3,4}", t[max(0, m.start() - 60):m.start()])
+    if nums and rent:
+        total = int(_re.sub(r"[.\s]", "", nums[-1]))
+        if rent < total <= rent + 600:
+            return total - int(rent), False
+    return None, True
+
+
+def repair_costs(l: dict) -> None:
+    """Costs a rental's own words give that its fields miss: the condo fee or
+    "condo included" (condo_from_text), and a deposit of "3" read as €3 — a
+    number of months (45 rentals, 2026-10-31)."""
+    if (l.get("rent_mo") and l.get("description") and l.get("spese_condominiali") is None
+            and not l.get("condominium_fees") and l.get("condo_included") is not True):
+        fee, included = condo_from_text(l["description"], l["rent_mo"])
+        if fee:
+            l["spese_condominiali"] = fee
+        elif included:
+            l["condo_included"] = True
+    dep = l.get("deposit_eur")
+    if isinstance(dep, (int, float)) and 0 < dep <= 12:
+        l["deposit_months"] = l.get("deposit_months") or int(dep)
+        l.pop("deposit_eur", None)
 
 
 def _parse_condo_from_description(desc):
@@ -788,6 +826,8 @@ def parse_rental(item: dict) -> Optional[dict]:
         deposit_months = int(m_dep.group(1))
     elif _re.search(r"\d", deposit_raw):
         deposit_eur = _cost_per_month(deposit_raw.replace("/mese", ""))
+        if deposit_eur is not None and deposit_eur <= 12:     # "3": months, not €3
+            deposit_months, deposit_eur = deposit_eur, None
 
     # Rooms — try numeric field first, then parse from Italian title.
     # Immobiliare returns string values like '5+' / '3+' for large
