@@ -1214,15 +1214,21 @@ def apply_extreme_underpricing_flag(listing: dict, comps_delta_pct: float | None
     good_value, sets _extreme_underpricing + _extreme_underpricing_delta
     so the dashboard can render a warning banner.
 
-    Idempotent: re-running on an already-flagged listing is a no-op.
+    Idempotent: re-running on an already-flagged listing is a no-op; a
+    listing back above the threshold (or without comps) loses the flag.
     """
-    if comps_delta_pct is None:
-        return
     try:
         dp = float(comps_delta_pct)
     except (TypeError, ValueError):
-        return
-    if dp >= EXTREME_UNDERPRICING_THRESHOLD_PCT:
+        dp = None
+    if dp is None or dp >= EXTREME_UNDERPRICING_THRESHOLD_PCT:
+        # Rows come back from the snapshot with the flag under its column
+        # name: without this, a listing once −42.5 % kept the "verify"
+        # banner (and stayed out of For you) at −37 %, uncapped at 96
+        # (Immobiliare 133402426, 2026-10-31; 29 rows that day).
+        for k in ("_extreme_underpricing", "_extreme_underpricing_delta",
+                  "extreme_underpricing", "extreme_underpricing_delta"):
+            listing.pop(k, None)
         return
     listing["_extreme_underpricing"]       = True
     listing["_extreme_underpricing_delta"] = dp
@@ -2154,6 +2160,9 @@ PHOTO_FIELDS = ("photo_deal", "photo_confidence", "photo_condition", "photo_kitc
                 "photo_bathroom", "photo_light", "photo_flags", "photo_note_it",
                 "photo_note_en", "photo_read_at", "photo_by_user", "photo_user_note",
                 "photo_sonnet_deal", "photo_grade", "photo_bedrooms", "photo_features", "photo_tags")
+# Why a listing whose photos show sea, a lake or mountains is hidden (red flag
+# "not_in_city"); apply_photo_verdict lifts only an exclusion with this reason.
+PHOTO_ELSEWHERE_REASON = "Photos show a place outside the city (sea, lake or mountains)"
 
 
 def load_photo_evals() -> dict:
@@ -2208,16 +2217,24 @@ def apply_photo_verdict(l: dict, evals: dict, cap: int, grade_max: float = 4,
                         grade_points: float = 0, w_property: float = 0.25,
                         tag_mean: float | None = None, tag_max: float = 15) -> None:
     """Stamp what the photos showed (photo_* fields) when the answer is for
-    the listing's current photos; a confident "contradicts" strips the deal
-    label and caps the score at `cap` (reason in score_cap_reason)."""
+    the listing's current photos; a confident "contradicts" (or photos that
+    may be of another flat) strips the deal label and caps the score at
+    `cap` (reason in score_cap_reason); photos of a place outside the city
+    exclude the listing."""
     for k in PHOTO_FIELDS:
         l.pop(k, None)
     # Its own reasons from an earlier pass go first: sales keep the row's
     # score_cap_reason between passes, and "photos contradict the deal → max
     # 69" piled up dozens of times (4.5k characters, 74 sales, 2026-10-25).
     kept = [x for x in (l.get("score_cap_reason") or "").split("; ")
-            if x and not x.startswith(("photos contradict", "photos graded", "you judged the photos"))]
+            if x and not x.startswith(("photos contradict", "photos graded", "you judged the photos",
+                                       "photos may show"))]
     l["score_cap_reason"] = "; ".join(kept) or None
+    # An exclusion the photos made last pass is the photos' to make again.
+    for k in ("_excluded", "excluded"):
+        if l.get(k + "_reason") == PHOTO_ELSEWHERE_REASON:
+            l.pop(k, None)
+            l.pop(k + "_reason", None)
     r = evals.get(str(l.get("id")))
     if not r:
         return
@@ -2281,9 +2298,20 @@ def apply_photo_verdict(l: dict, evals: dict, cap: int, grade_max: float = 4,
     # verdict resting on that alone never caps (the user, 2026-10-19; 7 of
     # 611 caps). Rubric v3 tells the reader the same.
     flags = set(r.get("red_flags") or [])
+    # Sea, a lake or mountains out of the window: the flat isn't in the city
+    # it's listed in — out, like a fake (2026-10-31, Immobiliare 133402426:
+    # an "attico in Cadore" on Lake Como, read "doubt, low" → 96). Your own
+    # verdict on the photos overrides it.
+    if "not_in_city" in flags and not r.get("by_user") and not (l.get("_excluded") or l.get("excluded")):
+        l.update({"_excluded": True, "_excluded_reason": PHOTO_ELSEWHERE_REASON,
+                  "score_total": 0, "hidden_gem": False, "good_value": False})
+        return
     info_only = bool(flags) and flags <= {"rooms_not_shown", "few_photos"} and not r.get("by_user")
+    # Photos that may be of another flat can't back the deal up, however
+    # unsure the reader is (11 "doubt" readings that day, up to 96).
+    other = "other_flat" in flags and not r.get("by_user")
     if not info_only and ((r.get("deal_check") == "contradicts" and r.get("confidence") in ("medium", "high"))
-                          or low_grade):
+                          or low_grade or other):
         l["hidden_gem"] = False
         l["good_value"] = False
         if (l.get("score_total") or 0) > cap:
@@ -2291,7 +2319,8 @@ def apply_photo_verdict(l: dict, evals: dict, cap: int, grade_max: float = 4,
             l["score_was_capped"] = True
             reason = (f"you judged the photos not convincing → max {cap}" if r.get("by_user")
                       else f"photos graded {r['grade']}/10 → max {cap}" if low_grade and r.get("deal_check") != "contradicts"
-                      else f"photos contradict the deal → max {cap}")
+                      else f"photos contradict the deal → max {cap}" if r.get("deal_check") == "contradicts"
+                      else f"photos may show another flat → max {cap}")
             l["score_cap_reason"] = "; ".join(x for x in (l.get("score_cap_reason"), reason) if x)
 
 
