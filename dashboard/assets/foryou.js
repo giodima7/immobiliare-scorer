@@ -7,7 +7,7 @@
 // Estimates, not financial advice.
 
 const FY_DEFAULTS = { income: 0, cash: 0, share: 33, reserve: 0, costs: 8,
-                      areas: [], mode: 'rent', noStudio: true, floor: '', onlyNew: false };
+                      areas: [], mode: 'rent', noStudio: true, floor: '', minSqm: 0, onlyNew: false };
 
 // "New since the last scan": first seen in the latest scan window — weekdays
 // from 07:30 (scan_window.json, 2026-10-26). Rows stamped before
@@ -127,9 +127,11 @@ function _fyLowFloor(l) {
       || /rialzat/i.test(`${l.floor_label || ''} ${l.floor || ''}`) || String(l.floor || '').trim().toUpperCase() === 'R';
 }
 
-// The user's "leave out" choices. A floor not stated passes, flagged.
+// The user's "leave out" choices. A floor not stated passes, flagged; a size
+// not stated doesn't, as in Rentals and For sale.
 function _fyPrefsOk(l, p, why) {
   if (p.noStudio && ((l.rooms || 0) < 2 || l.text_says_studio)) return false;
+  if (p.minSqm && (l.sqm ?? 0) < p.minSqm) return false;
   if (p.floor) {
     if (l.floor_n == null && !l.floor) { why?.push({ bad: true, w: 1, t: t_('fy.w_floor_unknown') }); return true; }
     if (_fyLowFloor(l)) return false;
@@ -421,12 +423,18 @@ const _FY_LOAN_FIELDS = { fyDown: 'down', fyRate: 'rate', fyYears: 'years' };
 
 function _fyInitPrefs(p) {
   const studio = document.getElementById('fyNoStudio'), floor = document.getElementById('fyFloor');
+  const sqm = document.getElementById('fyMinSqm');
   if (studio) studio.checked = !!p.noStudio;
   if (floor) floor.value = p.floor || '';
+  if (sqm && document.activeElement !== sqm) sqm.value = p.minSqm || '';
   if (studio && !studio.dataset.wired) {
     studio.dataset.wired = '1';
     studio.addEventListener('change', () => _fySave({ noStudio: studio.checked }));
     floor?.addEventListener('change', () => _fySave({ floor: floor.value }));
+    sqm?.addEventListener('input', () => {
+      clearTimeout(_fyTimer);
+      _fyTimer = setTimeout(() => _fySave({ minSqm: parseInt(sqm.value, 10) || 0 }), 300);
+    });
   }
 }
 

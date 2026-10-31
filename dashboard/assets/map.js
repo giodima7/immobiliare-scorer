@@ -14,8 +14,7 @@ let _mapInitialised = false;
 let _map            = null;
 let _clusterGroup   = null;
 let _mapRenderer    = null;
-let _mapDataType    = 'rentals';  // 'rentals' | 'sales'
-let _mapToggleBound = false;
+let _mapDataType    = Storage.get('mapType', 'rentals') === 'sales' ? 'sales' : 'rentals';
 let _mapAllListings = [];         // geo-valid dataset for viewport rendering
 let _mapRenderedIds = new Set();  // IDs already added to cluster
 
@@ -55,7 +54,7 @@ function _createMapMarker(l, lat, lng) {
     ? `<div class="map-marker mk-good">${icon('coin')}</div>`
     : `<div class="map-marker sc-${scoreClass(score)}">${score}</div>`;
   return L.marker([lat, lng], {
-    title: `${formatAddress(l.neighbourhood || '')} · €${fmt(monthlyCost(l).total)}`,
+    title: `${formatAddress(l.neighbourhood || '')} · €${fmt(_mapDataType === 'sales' ? l.price : monthlyCost(l).total)}`,
     icon: L.divIcon({ className: '', html, iconSize: [32, 32], iconAnchor: [16, 16], popupAnchor: [0, -18] }),
   });
 }
@@ -63,11 +62,12 @@ function _createMapMarker(l, lat, lng) {
 // ── Popup factory ─────────────────────────────────────────────────────────────
 function _createMapPopup(l) {
   const score = l.score_total ?? 0;
+  const sale  = _mapDataType === 'sales';
   const nb    = formatAddress(l.neighbourhood || l.address || '–');
   const thumb = l.thumbnail ? l.thumbnail.replace('/xxs-c.', '/xs-c.') : null;
   const img   = thumb ? `<img class="map-popup-img" src="${_safeUrl(thumb)}" onerror="this.style.display='none'" alt="">` : '';
   // The card's line: a suspect price reads "verify", never a green discount.
-  const delta = _dealDeltaHtml(l);
+  const delta = sale ? _saleDeltaHtml(l) : _dealDeltaHtml(l);
   const comps = delta ? `<div class="map-popup-comps">${delta}</div>` : '';
   const specs = _specsParts(l);
   const rawAddr = String(l.address || '').trim()
@@ -83,11 +83,13 @@ function _createMapPopup(l) {
           ${sub ? `<div class="map-popup-sub">${escapeHtml(sub)}</div>` : ''}
         </div>
       </div>
-      <div class="map-popup-price">€${fmt(monthlyCost(l).total)}<span class="price-unit"> ${escapeHtml(t(monthlyCost(l).known ? 'cost.all_in' : 'cost.rent_only'))}</span></div>
+      <div class="map-popup-price">${sale
+        ? `€${fmt(l.price)}${l.sqm ? `<span class="price-unit"> · €${fmt(Math.round(l.price / l.sqm))}/m²</span>` : ''}`
+        : `€${fmt(monthlyCost(l).total)}<span class="price-unit"> ${escapeHtml(t(monthlyCost(l).known ? 'cost.all_in' : 'cost.rent_only'))}</span>`}</div>
       ${comps}
       ${specs.length ? `<div class="map-popup-grid">${specs.map(x => `<span>${escapeHtml(x)}</span>`).join('')}</div>` : ''}
       <div class="map-popup-actions">
-        <button type="button" class="btn btn-secondary btn-sm" data-open-details="${escapeHtml(String(l.id))}">${escapeHtml(t('card.details'))}</button>
+        <button type="button" class="btn btn-secondary btn-sm" ${sale ? 'data-open-sale' : 'data-open-details'}="${escapeHtml(String(l.id))}">${escapeHtml(t('card.details'))}</button>
         <a class="btn btn-primary btn-sm map-popup-link" href="${_safeUrl(l.url)}" target="_blank" rel="noopener">${escapeHtml(t('card.open'))}</a>
       </div>
     </div>`;
@@ -144,9 +146,49 @@ function _renderVisibleMarkers() {
   if (capEl) capEl.hidden = !capped;
 }
 
-// The map shows exactly what the Rentals list shows (same filter bar).
+// The map shows exactly what the Rentals list shows (same filter bar) — or,
+// switched to sales, what For sale shows.
 function _getMapData() {
+  if (_mapDataType === 'sales') {
+    const f = saleFilters();
+    return ALL_SALE.filter(l => _saleMatches(l, f));
+  }
   return applyRentFilters(ALL_RENT, getRentFilters());
+}
+
+// Rentals or sales: render, loading them first when the tab hasn't yet.
+// Sales render through renderSales, which syncs their bar and redraws the map.
+function _mapShow() {
+  document.querySelectorAll('[data-map-type]').forEach(b => {
+    const on = b.dataset.mapType === _mapDataType;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-pressed', String(on));
+  });
+  _mapPlaceSaleBar();
+  if (_mapDataType === 'sales') { if (ALL_SALE.length) renderSales(); else loadSales(); return; }
+  if (ALL_RENT.length) _mapRender();
+  else loadRentals().then(() => { if (activeTab === 'map') _mapRender(); });
+}
+
+// Sales on the map: For sale's own filter bar and chips move above it (their
+// controls keep their listeners) and go back when the map shows rentals or
+// another tab opens; the Rentals bar hides meanwhile (lume.css, data-map).
+const _mapSaleHomes = {};
+function _mapPlaceSaleBar() {
+  const toolbar = document.querySelector('#mapView .map-toolbar');
+  if (!toolbar) return;
+  const onMap = activeTab === 'map' && _mapDataType === 'sales';
+  document.body.dataset.map = _mapDataType;
+  for (const id of ['saleFilterBar', 'sActiveChips']) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    if (onMap && el.parentElement !== toolbar.parentElement) {
+      if (!_mapSaleHomes[id]) { _mapSaleHomes[id] = document.createComment(id); el.before(_mapSaleHomes[id]); }
+      toolbar.before(el);
+    } else if (!onMap && _mapSaleHomes[id] && el.parentElement === toolbar.parentElement) {
+      _mapSaleHomes[id].after(el);
+    }
+  }
 }
 
 // The map fills the window below the filter bar and toolbar.
@@ -223,6 +265,13 @@ function _mapInit() {
   _map.on('zoomend', onMove);
 
   window.addEventListener('resize', _mapDebounce(_sizeMapView, 150));
+  document.querySelectorAll('[data-map-type]').forEach(b => b.addEventListener('click', () => {
+    if (b.dataset.mapType === _mapDataType) return;
+    _mapDataType = b.dataset.mapType;
+    Storage.set('mapType', _mapDataType);
+    _map.closePopup();
+    _mapShow();
+  }));
 }
 
 // Per-city tight bboxes for map filtering. Matches enrich_geo._CITY_BBOXES

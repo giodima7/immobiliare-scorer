@@ -657,6 +657,7 @@ function switchTab(tab, opts) {
   const persist = !opts || opts.persist !== false;
   activeTab = tab;
   document.body.dataset.tab = tab;
+  if (typeof _mapPlaceSaleBar === 'function') _mapPlaceSaleBar();   // For sale's bar back home, or onto the map
   ['foryouView','rentalsView','salesView','mapView','savedView','insightsView','settingsView'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -697,8 +698,7 @@ function switchTab(tab, opts) {
       _mapInit();
       _sizeMapView();
       if (_map) _map.invalidateSize();  // Leaflet needs this when container was hidden
-      if (!ALL_RENT.length) loadRentals().then(() => _mapRender());
-      else _mapRender();
+      _mapShow();
     }).catch(e => showToast(t('error.lib', { what: 'Leaflet' }) + ' ' + e.message));
   } else if (tab === 'saved') {
     stopScannerPoll();

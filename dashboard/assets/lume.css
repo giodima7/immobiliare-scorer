@@ -3509,6 +3509,8 @@ body[data-tab="saved"] #filterBar, body[data-tab="insights"] #filterBar, body[da
 body[data-tab="sales"] #filterBar, body[data-tab="sales"] #rActiveChips,
 body[data-tab="saved"] #rActiveChips, body[data-tab="insights"] #rActiveChips, body[data-tab="settings"] #rActiveChips,
 body[data-tab="foryou"] #filterBar, body[data-tab="foryou"] #rActiveChips { display: none; }
+/* The map showing sales: For sale's own bar sits above it (map.js _mapPlaceSaleBar). */
+body[data-tab="map"][data-map="sales"] #filterBar, body[data-tab="map"][data-map="sales"] #rActiveChips { display: none; }
 
 /* ── Filter bar: one sticky row; panels open as popovers below it ── */
 .filters.fbar { display: block; padding: 10px 12px; margin: var(--s-4) var(--s-6) 0; z-index: var(--z-sticky); }
@@ -3958,7 +3960,8 @@ body.pv-open { overflow: hidden; }
   /* Sales keep their bar inline on a phone (no drawer): it scrolls away
      instead of taking half the screen, and the Rentals drawer button goes. */
   #saleFilterBar { position: static; margin: var(--s-3) var(--s-3) 0; }
-  body[data-tab="sales"] .mobile-filter-btn, body[data-tab="foryou"] .mobile-filter-btn { display: none !important; }
+  body[data-tab="sales"] .mobile-filter-btn, body[data-tab="foryou"] .mobile-filter-btn,
+  body[data-tab="map"][data-map="sales"] .mobile-filter-btn { display: none !important; }
   .fchips { margin: var(--s-3) var(--s-3) 0; }
   .grid { padding: var(--s-3); gap: var(--s-3); }
   .page { padding: var(--s-4) var(--s-3) 64px; }
@@ -4038,6 +4041,7 @@ body.pv-open { overflow: hidden; }
 .fy-zones, .fy-prefs { display: flex; align-items: center; gap: 10px 16px; margin-top: 12px; flex-wrap: wrap; }
 .fy-check { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-sm); }
 .fy-check select { width: auto; height: 32px; }
+.fy-check input[type=number] { width: 72px; height: 32px; }
 .fy-zones-label { font-size: var(--text-xs); color: var(--text-secondary); }
 .fy-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .fy-tile { background: var(--bg-muted); border-radius: 12px; padding: 12px 14px; }
