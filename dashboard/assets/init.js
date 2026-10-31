@@ -187,12 +187,15 @@ if (!window._digestActionDelegatorBound) {
 document.addEventListener('click', e => {
   const sale = e.target.closest && e.target.closest('.btn-fav[data-sale-id]');
   if (sale) {
-    const on = toggleSaleFav(sale.dataset.saleId);
-    document.querySelectorAll(`.btn-fav[data-sale-id="${CSS.escape(sale.dataset.saleId)}"]`).forEach(b => {
-      b.classList.toggle('is-fav', on); b.setAttribute('aria-pressed', String(on));
-      b.title = t(on ? 'card.unsave' : 'card.save'); b.setAttribute('aria-label', b.title);
+    const id = sale.dataset.saleId;
+    const on = toggleSaleFav(id);
+    setSaleFavUi(id, on);
+    if (sale.closest('#listingModal')) _lmRefreshCollections();
+    // As rentals: one tap more files it in a collection.
+    else if (on) showActionToast(t('fav.saved'), t('fav.to_collection'), () => {
+      openSaleModal(id);
+      setTimeout(() => document.querySelector('#listingModal [data-lm-collections]')?.click(), 0);
     });
-    if (on) showActionToast(t('fav.saved'));
     return;
   }
   const btn = e.target.closest && e.target.closest('.btn-fav[data-rent-id]');
@@ -422,7 +425,6 @@ document.getElementById('rBtnReset').addEventListener('click', () => {
   document.querySelectorAll('#rSourceFilter .sort-tab').forEach(t =>
     t.classList.toggle('active', (t.dataset.rsource || '') === ''));
   rentSortKey = 'score_total';
-  if (window.sharedCollection && window.sharedCollection.own) exitSharedCollection();
   renderRentals();
   saveFilters();
 });
@@ -1062,7 +1064,7 @@ document.addEventListener('click', e => {
   if (!box || box.hidden) return;
   if (e.target === box || e.target.closest('.lm-close')) { closeListingModal(); return; }
   const fav = e.target.closest('[data-lm-fav]');
-  if (fav) { setFavUi(fav.dataset.lmFav, toggleRentFav(fav.dataset.lmFav)); return; }
+  if (fav) { setFavUi(fav.dataset.lmFav, toggleRentFav(fav.dataset.lmFav)); _lmRefreshCollections(); return; }
   const colBtn = e.target.closest('[data-lm-collections]');
   if (colBtn) {
     const panel = document.getElementById('lmCollections');
@@ -1070,7 +1072,7 @@ document.addEventListener('click', e => {
     panel.hidden = !panel.hidden;
     colBtn.setAttribute('aria-expanded', String(!panel.hidden));
     if (!panel.hidden) {
-      renderLmCollections(colBtn.dataset.lmCollections);
+      renderLmCollections(colBtn.dataset.lmCollections, colBtn.dataset.lmKind);
       panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       panel.querySelector('input')?.focus();
     }
@@ -1079,11 +1081,16 @@ document.addEventListener('click', e => {
 document.addEventListener('change', e => {
   const cb = e.target.closest && e.target.closest('[data-col-toggle]');
   if (!cb || !_lmListing) return;
-  const id = String(_lmListing.id);
+  const id = String(_lmListing.id), kind = document.getElementById('lmCollections')?.dataset.kind || 'rent';
   if (cb.checked) {
     if (Collections.addListing(cb.dataset.colToggle, id) === 'full') { cb.checked = false; showToast(t('col.full')); }
+    else if (!_favIds(kind).includes(id)) {           // in a collection = saved
+      _addFavs([id], kind);
+      showToast(t('col.saved_to', { name: Collections.getAll().find(c => c.id === cb.dataset.colToggle)?.name || '' }));
+    }
   } else Collections.removeListing(cb.dataset.colToggle, id);
-  renderLmCollections(id);
+  renderLmCollections(id, kind);
+  if (activeTab === 'saved') renderSaved();
 });
 document.addEventListener('submit', e => {
   const form = e.target.closest && e.target.closest('[data-col-new]');
@@ -1091,34 +1098,81 @@ document.addEventListener('submit', e => {
   e.preventDefault();
   const name = form.querySelector('input').value.trim();
   if (!name) return;
-  const col = Collections.create(name);
+  const kind = form.dataset.colKind || 'rent';
+  const col = Collections.create(name, kind);
   Collections.addListing(col.id, form.dataset.colNew);
-  renderLmCollections(form.dataset.colNew);
+  _addFavs([form.dataset.colNew], kind);
+  renderLmCollections(form.dataset.colNew, kind);
   showToast(t('col.created', { name: col.name }));
+  if (activeTab === 'saved') renderSaved();
 });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeListingModal();
   _lmTrapFocus(e);
 });
 
-// ── Saved view: new collection, collection actions ──
+// ── Saved view: Rentals | For sale, chips, collection bar, choosing flats ──
+document.getElementById('savedView')?.addEventListener('click', e => {
+  const el = e.target.closest('[data-saved-kind], [data-saved-col], [data-col-new-chip], [data-col-new-cancel], [data-col-pick], [data-col-more], [data-saved-go], [data-saved-gone], [data-pick-cancel], [data-pick-save]');
+  if (!el) return;
+  const d = el.dataset, form = document.getElementById('savedNewColForm');
+  if (d.savedKind) {
+    if (d.savedKind === _savedView().kind) return;
+    _setSavedView(d.savedKind);
+    if (form) form.hidden = true;
+    document.getElementById('savedGrid').innerHTML = '';
+    renderSaved();
+  } else if (d.savedCol !== undefined) {
+    _setSavedView(null, d.savedCol);
+    renderSaved();
+  } else if (d.colNewChip !== undefined) {
+    if (!form) return;
+    form.hidden = false;
+    document.getElementById('savedNewColName').focus();
+  } else if (d.colNewCancel !== undefined) {
+    form.hidden = true;
+    document.getElementById('savedNewColName').value = '';
+  } else if (d.colPick !== undefined) {
+    const v = _savedView();
+    if (v.col[v.kind]) _savedPickStart(v.col[v.kind]);
+  } else if (d.colMore !== undefined) _savedColMenu(el);
+  else if (d.savedGo) switchTab(d.savedGo === 'sale' ? 'sales' : 'rentals');
+  else if (d.savedGone !== undefined) _savedRemoveGone();
+  else if (d.pickCancel !== undefined) { _savedPickEnd(); renderSaved(); }
+  else if (d.pickSave !== undefined) _savedPickSave();
+});
 document.getElementById('savedNewColForm')?.addEventListener('submit', e => {
   e.preventDefault();
   const input = document.getElementById('savedNewColName');
   const name = input.value.trim();
   if (!name) { input.focus(); return; }
-  Collections.create(name);
   input.value = '';
-  renderSavedCollections();
-  showToast(t('col.created', { name }));
+  e.currentTarget.hidden = true;
+  _savedNewCollection(name);
 });
-document.getElementById('savedCollections')?.addEventListener('click', e => {
-  const btn = e.target.closest('[data-col-action]');
-  if (!btn) return;
-  const card = btn.closest('[data-col-id]');
-  const id = card.dataset.colId;
-  ({ view: () => viewCollection(id), share: () => shareCollection(id),
-     rename: () => _renameCollectionInline(card), delete: () => deleteCollectionConfirm(id) })[btn.dataset.colAction]?.();
+document.getElementById('savedNewColName')?.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { e.target.value = ''; document.getElementById('savedNewColForm').hidden = true; }
+});
+// Choosing flats: a tap anywhere on a card ticks it (nothing opens), capture
+// phase so the card's own Details opener never sees it.
+document.getElementById('savedGrid')?.addEventListener('click', e => {
+  if (!_savedPick) return;
+  const card = e.target.closest('.card[data-listing-id]');
+  if (!card) return;
+  e.preventDefault(); e.stopPropagation();
+  _savedPickToggle(card);
+}, true);
+document.getElementById('savedGrid')?.addEventListener('keydown', e => {
+  if (!_savedPick || (e.key !== ' ' && e.key !== 'Enter')) return;
+  const card = e.target.closest('.card[data-listing-id]');
+  if (!card) return;
+  e.preventDefault();
+  _savedPickToggle(card);
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && _savedPick && activeTab === 'saved' && document.getElementById('listingModal')?.hidden !== false) {
+    _savedPickEnd(); renderSaved();
+  }
 });
 
 // System theme changes (theme "follows the system")

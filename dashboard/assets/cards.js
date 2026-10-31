@@ -671,6 +671,14 @@ function renderRentalCard(l, opts = {}) {
   return card;
 }
 
+// The sale ♡ buttons (cards, Details) of one listing.
+function setSaleFavUi(id, on) {
+  document.querySelectorAll(`.btn-fav[data-sale-id="${CSS.escape(String(id))}"]`).forEach(b => {
+    b.classList.toggle('is-fav', on); b.setAttribute('aria-pressed', String(on));
+    b.title = t(on ? 'card.unsave' : 'card.save'); b.setAttribute('aria-label', b.title);
+  });
+}
+
 // Every favourite toggle (cards, Details) ends here so all copies agree.
 function setFavUi(id, on) {
   document.querySelectorAll(`.btn-fav[data-rent-id="${CSS.escape(String(id))}"]`).forEach(b => {

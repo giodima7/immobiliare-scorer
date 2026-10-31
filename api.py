@@ -1222,6 +1222,7 @@ def rentals_by_ids():
 # so they survive a cleared browser or another browser on this machine.
 USER_DATA_PATH = BASE_DIR / "user_data.json"
 _USER_DATA_KEYS = {"rentFavourites", "favourites", "collections", "saleFavourites"}
+_user_data_lock = threading.Lock()
 
 
 @app.route("/api/user-data", methods=["GET"])
@@ -1236,14 +1237,18 @@ def user_data_get():
 def user_data_put(name):
     if name not in _USER_DATA_KEYS:
         return jsonify({"error": "unknown key"}), 400
-    try:
-        data = _json.loads(USER_DATA_PATH.read_text())
-    except (OSError, ValueError):
-        data = {}
-    data[name] = request.get_json(silent=True)
-    tmp = USER_DATA_PATH.with_suffix(".json.tmp")
-    tmp.write_text(_json.dumps(data, ensure_ascii=False, indent=1))
-    tmp.replace(USER_DATA_PATH)
+    # One write at a time: a heart and a collection saved together (Saved's
+    # undo, choosing flats) arrive as two PUTs, and the second one read the
+    # file before the first wrote it — the heart was lost (2026-10-31).
+    with _user_data_lock:
+        try:
+            data = _json.loads(USER_DATA_PATH.read_text())
+        except (OSError, ValueError):
+            data = {}
+        data[name] = request.get_json(silent=True)
+        tmp = USER_DATA_PATH.with_suffix(".json.tmp")
+        tmp.write_text(_json.dumps(data, ensure_ascii=False, indent=1))
+        tmp.replace(USER_DATA_PATH)
     return jsonify({"ok": True})
 
 

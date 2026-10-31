@@ -846,8 +846,8 @@ function _lmAboutHtml(l, kind) {
     ${l.agency_name ? `<div>${esc(t('lm.agency', { v: l.agency_name }))}</div>` : ''}
     <div>${dates}</div>
     <div class="lm-note">${icon(l.detail_fetched_at || subito ? 'check' : 'clock')}<span>${esc(provenance)}</span></div>
-    ${kind === 'sale' ? '' : `<button type="button" class="btn btn-secondary btn-sm lm-col-btn" data-lm-collections="${id}" aria-expanded="false" aria-controls="lmCollections">${icon('folder')}<span>${esc(t('lm.add_collection'))}</span></button>
-    <div class="lm-collections" id="lmCollections" hidden></div>`}
+    <button type="button" class="btn btn-secondary btn-sm lm-col-btn" data-lm-collections="${id}" data-lm-kind="${kind === 'sale' ? 'sale' : 'rent'}" aria-expanded="false" aria-controls="lmCollections">${icon('folder')}<span>${esc(_lmColLabel(l.id, kind === 'sale' ? 'sale' : 'rent'))}</span></button>
+    <div class="lm-collections" id="lmCollections" data-kind="${kind === 'sale' ? 'sale' : 'rent'}" hidden></div>
   </section>`;
 }
 
@@ -968,12 +968,31 @@ function listingModalHtml(l) {
   return lmSheetHtml(l, 'rent');
 }
 
-// "Collection" in Details: tick the collections this flat belongs to, or
-// make a new one — inline, no prompt().
-function renderLmCollections(listingId) {
+// The Collection button says where the flat already is.
+function _lmColLabel(listingId, kind) {
+  const inCols = Collections.ofKind(kind).filter(c => c.listing_ids.includes(String(listingId)));
+  return inCols.length > 1 ? t('lm.in_collections', { n: fmt(inCols.length) })
+    : inCols.length ? t('lm.in_collection', { name: inCols[0].name }) : t('lm.add_collection');
+}
+
+// After a ♡ in Details: the button's label, and the open list of collections.
+function _lmRefreshCollections() {
+  const btn = document.querySelector('#listingModal [data-lm-collections]');
+  if (!btn) return;
+  const id = btn.dataset.lmCollections, kind = btn.dataset.lmKind || 'rent';
+  const span = btn.querySelector('span');
+  if (span) span.textContent = _lmColLabel(id, kind);
+  if (!document.getElementById('lmCollections')?.hidden) renderLmCollections(id, kind);
+}
+
+// "Collection" in Details: tick the collections (of this flat's kind) it
+// belongs to, or make a new one — inline, no prompt().
+function renderLmCollections(listingId, kind = 'rent') {
   const box = document.getElementById('lmCollections');
   if (!box) return;
-  const cols = Collections.getAll();
+  const cols = Collections.ofKind(kind);
+  const span = document.querySelector('#listingModal [data-lm-collections] span');
+  if (span) span.textContent = _lmColLabel(listingId, kind);
   box.innerHTML = `
     <h3 class="lm-section-title" style="margin-top:0">${escapeHtml(t('lm.collection'))}</h3>
     ${cols.length ? cols.map(c => `
@@ -982,7 +1001,7 @@ function renderLmCollections(listingId) {
         <span>${escapeHtml(c.name)}</span>
         <span class="col-count">${fmt(c.listing_ids.length)}</span>
       </label>`).join('') : `<p class="lm-unknown-line">${escapeHtml(t('col.none_yet'))}</p>`}
-    <form class="lm-col-new" data-col-new="${escapeHtml(String(listingId))}" autocomplete="off">
+    <form class="lm-col-new" data-col-new="${escapeHtml(String(listingId))}" data-col-kind="${kind}" autocomplete="off">
       <input type="text" class="input" maxlength="60" placeholder="${escapeHtml(t('col.new_placeholder'))}" aria-label="${escapeHtml(t('col.new_placeholder'))}">
       <button type="submit" class="btn btn-secondary">${icon('plus')}<span>${escapeHtml(t('col.create'))}</span></button>
     </form>`;
