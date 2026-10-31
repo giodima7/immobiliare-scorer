@@ -244,6 +244,7 @@ function renderSales() {
   }
   const rows = _saleSorted(ALL_SALE.filter(l => _saleMatches(l, f)), f);
   _renderSaleChips(f, rows.length);
+  if (activeTab === 'map' && _mapDataType === 'sales') _mapRender();
   if (!rows.length) {
     grid.innerHTML = `<div class="empty-state">${esc(t(ALL_SALE.length ? 'sale.none' : 'sale.empty'))}
       ${ALL_SALE.length && _saleChips(f).length ? `<button type="button" class="btn btn-secondary btn-sm" data-sclear-grid>${esc(t('filter.clear_filters'))}</button>` : ''}</div>`;

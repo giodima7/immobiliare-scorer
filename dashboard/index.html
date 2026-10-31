@@ -679,6 +679,9 @@
           <option value="2" data-i18n="fy.floor_2">2nd floor and up</option>
         </select>
       </label>
+      <label class="fy-check"><span data-i18n="fy.sqm_under">Smaller than</span>
+        <input type="number" id="fyMinSqm" class="input" min="0" step="5" inputmode="numeric" placeholder="–"><span>m²</span>
+      </label>
     </div>
     <div class="fy-zones">
       <span class="fy-zones-label"><svg class="i" aria-hidden="true"><use href="assets/icons.svg#map-pin"></use></svg><span data-i18n="fy.zones">Zones</span></span>
@@ -882,10 +885,14 @@
 </div>
 
 <!-- ══════════════════════════════════════════════════════════════
-     MAP VIEW — uses the same filters as the list
+     MAP VIEW — rentals or sales, with the filters of their own tab
 ═══════════════════════════════════════════════════════════════ -->
 <div id="mapView" hidden>
   <div class="map-toolbar">
+    <div class="seg map-type" role="group" data-i18n-aria="map.type" aria-label="Show">
+      <button type="button" class="seg-btn active" data-map-type="rentals" aria-pressed="true" data-i18n="tab.rentals">Rentals</button>
+      <button type="button" class="seg-btn" data-map-type="sales" aria-pressed="false" data-i18n="tab.sales">For sale</button>
+    </div>
     <span><strong id="mapListingCount">–</strong></span>
     <span class="map-legend" aria-label="Legend">
       <span class="lg-item"><span class="lg-gem"></span><span data-i18n="gem.hidden">Hidden Gem</span></span>
