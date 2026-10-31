@@ -362,7 +362,7 @@ def rescore_sales(log=print) -> dict:
         applied = apply_details(rows)
         with contextlib.redirect_stderr(open("/dev/null", "w")):
             scored = scoring.score_all_sales(rows)
-        evals = scoring.load_photo_evals()
+        evals = scoring.twin_photo_evals(scored, scoring.load_photo_evals())   # one verdict per flat
         cap = scoring._load_settings().get("photo_contradicts_cap", 69)
         for l in scored:
             scoring.apply_photo_verdict(l, evals, cap)
@@ -429,7 +429,7 @@ def run_sales(source: str, log=print) -> dict:
         with contextlib.redirect_stderr(open("/dev/null", "w")):
             scored = scoring.score_all_sales(rows)
         # What the photos showed (photo_eval): same stamp and cap as rentals.
-        evals = scoring.load_photo_evals()
+        evals = scoring.twin_photo_evals(scored, scoring.load_photo_evals())   # one verdict per flat
         cap = scoring._load_settings().get("photo_contradicts_cap", 69)
         for l in scored:
             scoring.apply_photo_verdict(l, evals, cap)

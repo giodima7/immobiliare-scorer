@@ -46,7 +46,7 @@ import sys
 from pathlib import Path
 from re import compile as re_compile
 
-from comps_engine import get_comps_benchmark, build_comps_index, SHORTLET_PLATFORMS
+from comps_engine import get_comps_benchmark, build_comps_index, assign_condition_hints, SHORTLET_PLATFORMS
 from listing_details import apply_details, fill_from_twins, stamp_dup_groups, stamp_relistings
 import omi_lookup
 
@@ -2097,6 +2097,7 @@ def score_all_sales(listings: list, settings: dict | None = None) -> list:
 
     comps_index = build_comps_index(listings)
     stamp_dup_groups(listings, listings, comps_index)
+    assign_condition_hints(listings, comps_index)   # "Buono stato (Idealista)" → the twin's / photos' group
     scored = []
     for l in listings:
         s = score_sale_listing(l, listings, settings, comps_index)
@@ -2181,6 +2182,38 @@ def load_photo_evals() -> dict:
     return evals
 
 
+def twin_photo_evals(rows: list, evals: dict) -> dict:
+    """One photo verdict per flat. Its copies on two sites (dup_group) were
+    read apart and could disagree: 133697902's 23 photos read as a "fake
+    bilocale" (contradicts — out of For you), its Idealista copy's 35 as a
+    real bedroom, which it has (2026-10-31: 11 sales and 87 rentals split
+    like that). Every copy takes the reading of the copy with the most
+    photos — the user's own verdict first. Returns evals with those entries
+    (via_twin: apply_photo_verdict skips the gallery check, made on the
+    copy the reading comes from)."""
+    from photo_eval import fingerprint, photo_urls
+    groups: dict = {}
+    for l in rows:
+        if l.get("dup_group") and not l.get("is_stale"):
+            groups.setdefault(l["dup_group"], []).append(l)
+    out = dict(evals)
+    for copies in groups.values():
+        if len(copies) < 2:
+            continue
+        read = []
+        for l in copies:
+            r = evals.get(str(l.get("id")))
+            if r and (r.get("by_user") or r.get("fingerprint") == fingerprint(photo_urls(l))):
+                read.append((bool(r.get("by_user")), l.get("photo_count") or len(photo_urls(l)), str(l.get("id")), r))
+        if not read:
+            continue
+        _, _, best_id, best = max(read, key=lambda x: x[:2])
+        for l in copies:
+            if str(l.get("id")) != best_id:
+                out[str(l.get("id"))] = {**best, "via_twin": best_id}
+    return out
+
+
 PHOTO_TAG_POINTS = {
     "bright": 4, "open_view": 3, "big_living": 3, "dual_aspect": 3, "quiet_courtyard": 3, "recently_renovated": 3,
     "high_ceilings": 2, "new_bathroom": 2, "new_kitchen": 2, "big_windows": 2, "big_bedroom": 2, "big_kitchen": 2,
@@ -2226,7 +2259,7 @@ def apply_photo_verdict(l: dict, evals: dict, cap: int, grade_max: float = 4,
     # (id_37131214: judged on 18 Oct, gallery changed since — the verdict
     # carried the old fingerprint, so neither it nor Sonnet's new reading
     # applied, and it stayed a Hidden Gem at 89).
-    if not r.get("by_user") and r.get("fingerprint") != fingerprint(photo_urls(l)):
+    if not r.get("by_user") and not r.get("via_twin") and r.get("fingerprint") != fingerprint(photo_urls(l)):
         return                       # photos changed since: wait for a re-read
     l.update({
         "photo_deal": r.get("deal_check"), "photo_confidence": r.get("confidence"),
@@ -2414,10 +2447,11 @@ def score_all(listings: list, settings: dict | None = None,
         fill_from_twins(pool, comps_index)
     if settings.get("property_impute_unknown"):
         settings = {**settings, "_feature_means": _property_feature_means(pool, settings, comps_index)}
-    photo_evals = load_photo_evals() if settings.get("photo_contradicts_cap") else {}
+    raw_evals = load_photo_evals() if settings.get("photo_contradicts_cap") else {}
+    photo_evals = twin_photo_evals(listings, raw_evals) if raw_evals else {}
     tag_mean = None
-    if settings.get("photo_tags_score") and photo_evals:
-        pts = [p for p in (photo_tag_points(r, settings.get("photo_tag_max", 15)) for r in photo_evals.values()) if p is not None]
+    if settings.get("photo_tags_score") and raw_evals:
+        pts = [p for p in (photo_tag_points(r, settings.get("photo_tag_max", 15)) for r in raw_evals.values()) if p is not None]
         tag_mean = sum(pts) / len(pts) if pts else None
     small_ref = zone_normal_psqm(pool) if settings.get("small_brake_max_sqm") else {}
     scored = []
