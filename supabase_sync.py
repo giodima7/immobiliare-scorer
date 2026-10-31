@@ -159,6 +159,7 @@ def _normalise(v):
 
 
 _live_columns: tuple[float, frozenset[str]] | None = None
+_schema_unreachable = False
 
 
 def schema_columns() -> frozenset[str]:
@@ -166,13 +167,17 @@ def schema_columns() -> frozenset[str]:
     OpenAPI description (refreshed every 10 min). A field added locally
     before its migration ran is then skipped instead of failing every batch
     with "column not found", and starts syncing once the migration is in.
-    Falls back to SCHEMA_COLUMNS when the description can't be read."""
-    global _live_columns
-    if _live_columns and time.time() - _live_columns[0] < 600:
+    Falls back to the last live set, else SCHEMA_COLUMNS, when the
+    description can't be read — and flags it (_schema_unreachable): a
+    different column set changes every row's hash, so the 2026-10-31 outage
+    turned each push into a full one (26k rows) against a database already
+    out of disk IO."""
+    global _live_columns, _schema_unreachable
+    if _live_columns and time.time() - _live_columns[0] < (60 if _schema_unreachable else 600):
         return _live_columns[1]
     base = (os.environ.get("SUPABASE_URL") or SUPABASE_URL).rstrip("/")
     key = os.environ.get("SUPABASE_SERVICE_KEY") or SUPABASE_KEY
-    cols = SCHEMA_COLUMNS
+    cols = _live_columns[1] if _live_columns else SCHEMA_COLUMNS
     if base and key:
         try:
             req = urllib.request.Request(f"{base}/rest/v1/", headers={
@@ -183,8 +188,9 @@ def schema_columns() -> frozenset[str]:
             live = (spec.get("definitions") or {}).get("listings", {}).get("properties") or {}
             if live:
                 cols = frozenset(live)
+            _schema_unreachable = not live
         except Exception:
-            pass
+            _schema_unreachable = True
     _live_columns = (time.time(), cols)
     return cols
 
@@ -374,12 +380,33 @@ def upsert_batch(rows: list[dict], idx: int, total: int) -> bool:
     return ok
 
 
-# What push_local_json last sent, per row: {"day": date of the last full
-# push, "rows": {id: content hash}}. The spread scan rewrites the file ~18
-# times a day, and a full upsert of ~21k rows took 2–4 min (one batch timed
-# out on 2026-10-17 with two pushes running at once), so pushes send only
-# rows whose content changed. The first push of each day is full, which
-# repairs anything changed online behind our back.
+# What push_local_json last sent, per row: {"v": CHANGE_KEY_VERSION,
+# "full_at": epoch of the last full push, "rows": {id: hash of the row's
+# change key}}. The spread scan rewrites the file ~18 times a day (a
+# catch-up window far more), and a full upsert of ~21k rows took 2–4 min
+# (one batch timed out on 2026-10-17 with two pushes running at once), so
+# pushes send only rows whose content changed. A full push once a week
+# repairs anything changed online behind our back — daily until 2026-10-31,
+# when that day's full push plus a night of catch-up pushes (~80k row
+# writes) ran the Nano database out of disk IO and the dashboard went dark.
+FULL_PUSH_EVERY_SEC = 7 * 86400
+CHANGE_KEY_VERSION = 2
+# Recomputed from the pool around a listing on every rescore. A listing no
+# longer on the sites (is_stale) is in none of the dashboard's lists — it is
+# fetched only as a comparable flat (price, size, photo) — so a change in
+# these alone isn't worth a write: 353 of the 896 rows one slot rewrote
+# (2026-10-31). Anything else changing (is_stale, price) still sends the row.
+_POOL_PREFIXES = ("score_", "comps_", "boosted_", "extreme_underpricing", "ldi_",
+                  "suggested_rent", "estimated_", "vs_omi_")
+_POOL_FIELDS = {"price_z", "good_value", "hidden_gem", "dup_group"}
+# Not on the dashboard as numbers: the count only in a tooltip ("based on N
+# rentals"), the €/m² nowhere (the estimate in € and the yield are, and stay
+# exact). Each new rental nearby moves both on ~1,000 sales while the
+# estimate holds; without them a sales rescore sends 324 rows, not 1,007
+# (2026-10-31).
+_NOT_SHOWN = {"estimated_rent_n_comps", "estimated_rent_psqm"}
+
+
 def _pushed_state_path(path: Path) -> Path:
     return BASE_DIR / f".pushed_{path.stem}.json"
 
@@ -388,11 +415,24 @@ def _row_hash(row: dict) -> str:
     return hashlib.sha1(json.dumps(row, sort_keys=True, default=str).encode()).hexdigest()[:16]
 
 
+def _change_key(row: dict) -> dict:
+    """The part of a row whose change is worth a write (see above). The row
+    itself goes whole, so online values stay exact once it is sent."""
+    if row.get("is_stale"):
+        return {k: v for k, v in row.items()
+                if k not in _POOL_FIELDS and not k.startswith(_POOL_PREFIXES)}
+    return {k: v for k, v in row.items() if k not in _NOT_SHOWN}
+
+
 def sync_file(path: Path, listing_type: str, batch_size: int = 200,
               only_changed: bool = False) -> bool:
     if not path.exists():
         print(f"[supabase_sync] {path.name} not found — skipping")
         return True
+    schema_columns()
+    if _schema_unreachable:
+        print(f"[supabase_sync] Supabase unreachable — {path.name} not pushed (rows go next time)")
+        return False
 
     with open(path) as fh:
         listings = json.load(fh)
@@ -401,14 +441,20 @@ def sync_file(path: Path, listing_type: str, batch_size: int = 200,
     total = len(rows)
     state = None
     if only_changed:
-        today = datetime.date.today().isoformat()
         try:
             state = json.loads(_pushed_state_path(path).read_text())
         except (OSError, ValueError):
             state = {}
-        if state.get("day") != today:
-            state = {"day": today, "rows": {}}   # first push of the day: full
-        hashes = {str(r["id"]): _row_hash(r) for r in rows}
+        hashes = {str(r["id"]): _row_hash(_change_key(r)) for r in rows}
+        if state.get("v") != CHANGE_KEY_VERSION and state.get("rows"):
+            # Hashes of whole rows (before 2026-10-31): a row whose whole hash
+            # still matches went online as it is — keep it rather than resend all.
+            old = state["rows"]
+            state = {"v": CHANGE_KEY_VERSION, "full_at": time.time(),
+                     "rows": {str(r["id"]): hashes[str(r["id"])] for r in rows
+                              if old.get(str(r["id"])) == _row_hash(r)}}
+        if time.time() - (state.get("full_at") or 0) >= FULL_PUSH_EVERY_SEC:
+            state = {"v": CHANGE_KEY_VERSION, "full_at": time.time(), "rows": {}}   # weekly: full
         sent = {i: h for i, h in state["rows"].items() if i in hashes}   # drop trimmed ids
         rows = [r for r in rows if sent.get(str(r["id"])) != hashes[str(r["id"])]]
         state["rows"] = sent
@@ -416,14 +462,20 @@ def sync_file(path: Path, listing_type: str, batch_size: int = 200,
     print(f"[supabase_sync] {listing_type}s: {len(rows)} rows in {len(batches)} batches"
           + (f" (changed, of {total})" if only_changed else ""))
 
-    failed = 0
+    failed = in_a_row = 0
     for i, b in enumerate(batches, 1):
         if upsert_batch(b, i, len(batches)):
+            in_a_row = 0
             if state is not None:
                 for r in b:
                     state["rows"][str(r["id"])] = hashes[str(r["id"])]
         else:
             failed += 1
+            in_a_row += 1
+            if in_a_row >= 3:   # the database is down or out of IO: don't hammer it
+                failed += len(batches) - i
+                print(f"  3 batches failed in a row — stopping; the other {len(batches) - i} go next time")
+                break
         time.sleep(0.1)   # gentle rate limit — Supabase free tier is fine
     if state is not None:
         tmp = _pushed_state_path(path).with_suffix(".tmp")
