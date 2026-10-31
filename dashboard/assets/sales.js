@@ -17,11 +17,17 @@ const SALE_SINCE = '2026-10-18';   // first sales sweep: nothing is "new" that d
 
 const SALE_DEFAULTS = { areas: [], maxPrice: 0, minRooms: 0, minSqm: 0, deal: '', sort: 'score',
                         down: 20, rate: 3.5, years: 25, condition: '', listed: '', source: '',
-                        minFloor: '', maxMetro: '', minEnergy: '', minPhoto: '' };
+                        minFloor: '', maxMetro: '', minEnergy: '', minPhoto: '',
+                        must: [], includeUnknown: false, minScore: 0 };
+// Find by ID: looking for one flat, not a standing filter — not saved.
+let _saleIdQuery = '';
+// The Must-haves that make sense for a flat to buy (filters.js, loaded later).
+const _saleMusts = () => SALE_MUST_KEYS.map(k => RENT_MUST_BY_KEY[k]);
 
 function saleFilters() {
   const f = Object.assign({}, SALE_DEFAULTS, Storage.get('saleFilters', {}) || {});
   if (!Array.isArray(f.areas)) f.areas = [];
+  if (!Array.isArray(f.must)) f.must = [];
   delete f.area;                    // the old "my areas" switch
   return f;
 }
@@ -96,7 +102,21 @@ function _initSaleBar() {
     timer = setTimeout(() => _setSaleFilters({ [key]: Number(el(id).value) || 0 }), 300);
   });
   num('sMaxPrice', 'maxPrice'); num('sMinRooms', 'minRooms'); num('sMinSqm', 'minSqm');
-  num('sDown', 'down'); num('sRate', 'rate'); num('sYears', 'years');
+  num('sDown', 'down'); num('sRate', 'rate'); num('sYears', 'years'); num('sMinScore', 'minScore');
+  el('sIdSearch')?.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => { _saleIdQuery = el('sIdSearch').value.trim().toLowerCase(); renderSales(); }, 250);
+  });
+  el('sMustGrid')?.addEventListener('click', e => {
+    const chip = e.target.closest('[data-must]');
+    if (chip) _toggleSaleMust(chip.dataset.must);
+  });
+  el('sIncludeUnknown')?.addEventListener('change', e => _setSaleFilters({ includeUnknown: e.target.checked }));
+  el('sHideRinghiera')?.addEventListener('change', e => {
+    if (e.target.checked !== saleFilters().must.includes('no_ringhiera')) _toggleSaleMust('no_ringhiera');
+  });
+  el('sMustBtn')?.addEventListener('click', e => { e.stopPropagation(); _toggleSalePanel('must'); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') _toggleSalePanel(null); });
   el('sSortSelect')?.addEventListener('change', e => _setSaleFilters({ sort: e.target.value }));
   el('sCondition')?.addEventListener('change', e => _setSaleFilters({ condition: e.target.value }));
   el('sListed')?.addEventListener('change', e => _setSaleFilters({ listed: e.target.value }));
@@ -108,24 +128,33 @@ function _initSaleBar() {
     b.addEventListener('click', () => _setSaleFilters({ deal: b.dataset.sdeal })));
   document.querySelectorAll('#sSourceFilter [data-ssource]').forEach(b =>
     b.addEventListener('click', () => _setSaleFilters({ source: b.dataset.ssource })));
-  el('sMoreBtn')?.addEventListener('click', e => { e.stopPropagation(); _toggleSaleMore(); });
-  el('sMoreDone')?.addEventListener('click', () => _toggleSaleMore(false));
+  el('sMoreBtn')?.addEventListener('click', e => { e.stopPropagation(); _toggleSalePanel('more'); });
+  el('sMoreDone')?.addEventListener('click', () => _toggleSalePanel(null));
   el('sBtnReset')?.addEventListener('click', () => _clearSaleFilter('all'));
   el('sActiveChips')?.addEventListener('click', e => {
     const b = e.target.closest('[data-sclear]');
     if (b) _clearSaleFilter(b.dataset.sclear);
   });
   document.addEventListener('click', e => {
-    if (!e.target.closest('#saleFilterBar') && !e.target.closest('.msd-panel')) _toggleSaleMore(false);
+    // A must-have tile re-renders while handling its own click: detached target.
+    if (e.target.isConnected && !e.target.closest('#saleFilterBar') && !e.target.closest('.msd-panel')) _toggleSalePanel(null);
   });
 }
 
-function _toggleSaleMore(open) {
-  const p = document.getElementById('sMorePanel');
-  if (!p) return;
-  const show = open === undefined ? p.hidden : !!open;
-  p.hidden = !show;
-  document.getElementById('sMoreBtn')?.setAttribute('aria-expanded', String(show));
+// Must-haves / More filters: one panel open at a time (as Rentals).
+function _toggleSalePanel(which) {
+  for (const [k, id] of [['must', 'sMustPanel'], ['more', 'sMorePanel']]) {
+    const p = document.getElementById(id);
+    if (!p) continue;
+    const show = k === which && p.hidden;
+    p.hidden = !show;
+    document.getElementById(k === 'must' ? 'sMustBtn' : 'sMoreBtn')?.setAttribute('aria-expanded', String(show));
+  }
+}
+
+function _toggleSaleMust(key) {
+  const must = saleFilters().must;
+  _setSaleFilters({ must: must.includes(key) ? must.filter(k => k !== key) : [...must, key] });
 }
 
 // Inputs, segments and badges from the saved filters (a reload, a chip ×).
@@ -136,6 +165,9 @@ function _syncSaleBar(f) {
   set('sDown', f.down); set('sRate', f.rate); set('sYears', f.years);
   set('sSortSelect', f.sort); set('sCondition', f.condition); set('sListed', f.listed);
   set('sMinFloor', f.minFloor); set('sMaxMetro', f.maxMetro); set('sMinEnergy', f.minEnergy); set('sMinPhoto', f.minPhoto);
+  set('sMinScore', f.minScore || ''); set('sIdSearch', _saleIdQuery);
+  const inc = document.getElementById('sIncludeUnknown'); if (inc) inc.checked = !!f.includeUnknown;
+  const ring = document.getElementById('sHideRinghiera'); if (ring) ring.checked = f.must.includes('no_ringhiera');
   const seg = (sel, attr, cur) => document.querySelectorAll(sel).forEach(b => {
     const on = (b.dataset[attr] || '') === (cur || '');
     b.classList.toggle('active', on);
@@ -144,10 +176,20 @@ function _syncSaleBar(f) {
   seg('#sDealFilter [data-sdeal]', 'sdeal', f.deal);
   seg('#sSourceFilter [data-ssource]', 'ssource', f.source);
   if (_saleAreaMsd) _saleAreaMsd.setSelected(f.areas);
-  const nMore = _saleChips(f).filter(c => ['condition', 'listed', 'source', 'minFloor', 'maxMetro', 'minEnergy'].includes(c.key)).length;
+  const nMore = _saleChips(f).filter(c => ['condition', 'listed', 'source', 'minFloor', 'maxMetro', 'minEnergy', 'minScore', 'idQuery'].includes(c.key)).length;
   const badge = document.getElementById('sMoreBadge');
   if (badge) { badge.textContent = nMore || ''; badge.hidden = !nMore; }
   document.getElementById('sMoreBtn')?.classList.toggle('on', nMore > 0);
+  const nMust = f.must.length;
+  const mBadge = document.getElementById('sMustBadge');
+  if (mBadge) { mBadge.textContent = nMust || ''; mBadge.hidden = !nMust; }
+  document.getElementById('sMustBtn')?.classList.toggle('on', nMust > 0);
+  // Tiles with "N · +M not known yet" over what the other filters keep.
+  const grid = document.getElementById('sMustGrid');
+  if (grid) {
+    const base = ALL_SALE.filter(l => _saleMatches(l, { ...f, must: [] }));
+    renderMustGrid(grid, mustCounts(base, _saleMusts()), new Set(f.must), _saleMusts());
+  }
 }
 
 function _saleChips(f) {
@@ -158,12 +200,16 @@ function _saleChips(f) {
   if (f.minSqm)    add('minSqm', t('chip.min_sqm', { n: f.minSqm }));
   if (f.deal)      add('deal', t(f.deal === 'below' ? 'sale.deal_below' : 'sale.deal_yield'));
   if (f.condition) add('condition', t('cond.' + f.condition));
-  if (f.listed)    add('listed', t('chip.listed_days', { n: f.listed }));
+  if (f.listed)    add('listed', f.listed === 'today' ? t('chip.listed_today') : t('chip.listed_days', { n: f.listed }));
   if (f.minFloor !== '') add('minFloor', t('chip.min_floor', { n: f.minFloor }));
   if (f.maxMetro)  add('maxMetro', t('chip.max_metro', { n: fmt(Number(f.maxMetro)) }));
   if (f.minEnergy) add('minEnergy', t('chip.min_energy', { v: f.minEnergy }));
   if (f.minPhoto)  add('minPhoto', t('chip.min_photo', { n: f.minPhoto }));
   if (f.source)    add('source', siteName(f.source));
+  for (const k of f.must) add('must:' + k, t('must.' + k));
+  if (f.includeUnknown) add('includeUnknown', t('chip.include_unknown'));
+  if (f.minScore)  add('minScore', t('chip.min_score', { n: f.minScore }));
+  if (_saleIdQuery) add('idQuery', 'ID ' + _saleIdQuery);
   return c;
 }
 
@@ -178,6 +224,12 @@ function _renderSaleChips(f, shown) {
 }
 
 function _clearSaleFilter(key) {
+  if (key.startsWith('must:')) { _toggleSaleMust(key.slice(5)); return; }
+  if (key === 'idQuery' || key === 'all') {
+    _saleIdQuery = '';
+    const idEl = document.getElementById('sIdSearch'); if (idEl) idEl.value = '';
+    if (key === 'idQuery') { renderSales(); return; }
+  }
   if (key === 'all') {
     const f = saleFilters();   // the mortgage inputs and the sort are settings, not filters
     Storage.set('saleFilters', Object.assign({}, SALE_DEFAULTS, { sort: f.sort, down: f.down, rate: f.rate, years: f.years }));
@@ -191,6 +243,7 @@ function _clearSaleFilter(key) {
 function _saleMatches(l, f) {
   const sc = window.sharedCollection;                 // a sale collection's link
   if (sc?.kind === 'sale' && !sc._ids.has(String(l.id))) return false;
+  if (_saleIdQuery) return idMatches(l, _saleIdQuery);   // one flat: the other filters don't apply
   if (f.areas.length) {
     // Both sites' names: "porta romana" ⊂ "porta romana - medaglie d'oro".
     const nb = (l.neighbourhood || '').toLowerCase();
@@ -205,9 +258,16 @@ function _saleMatches(l, f) {
     const g = conditionGroup(l.condition);
     if (f.condition === 'premium' ? g !== 'premium' : g === 'needs_work') return false;
   }
-  if (f.listed) {
+  if (f.listed === 'today') {
+    if (l.first_seen_date !== _localDateStr(new Date())) return false;
+  } else if (f.listed) {
     const d = new Date(); d.setDate(d.getDate() - Number(f.listed));
     if (!l.first_seen_date || l.first_seen_date < d.toISOString().slice(0, 10)) return false;
+  }
+  if (f.minScore && (l.score_total ?? 0) < f.minScore) return false;
+  for (const k of f.must) {
+    const v = RENT_MUST_BY_KEY[k]?.value(l);
+    if (!(v === true || (v == null && f.includeUnknown))) return false;
   }
   if (f.source && (l.source || 'sale') !== f.source) return false;
   // As Rentals: an unknown floor or metro distance doesn't pass; an unknown
@@ -405,7 +465,7 @@ document.addEventListener('click', e => {
   // "Change down payment, rate, years" in Details → the bar's More filters.
   if (e.target.closest && e.target.closest('[data-sale-mortgage]')) {
     document.querySelector('#listingModal .lm-close')?.click();
-    _toggleSaleMore(true);
+    _toggleSalePanel('more');
     document.getElementById('sDown')?.focus();
   }
 });

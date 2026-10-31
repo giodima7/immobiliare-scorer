@@ -4005,7 +4005,9 @@ body:has(#savedView.is-picking:not([hidden])) .lume-toast { bottom: calc(96px + 
   .mobile-filter-btn { display: inline-flex !important; }
   /* Sales keep their bar inline on a phone (no drawer): it scrolls away
      instead of taking half the screen, and the Rentals drawer button goes. */
-  #saleFilterBar { position: static; margin: var(--s-3) var(--s-3) 0; }
+  /* Relative, not static: its panels (Must-haves, More filters) open under it,
+     not under the page (2026-10-31). */
+  #saleFilterBar { position: relative; top: auto; margin: var(--s-3) var(--s-3) 0; }
   body[data-tab="sales"] .mobile-filter-btn, body[data-tab="foryou"] .mobile-filter-btn,
   body[data-tab="map"][data-map="sales"] .mobile-filter-btn { display: none !important; }
   .fchips { margin: var(--s-3) var(--s-3) 0; }
@@ -4202,9 +4204,10 @@ body:has(#savedView.is-picking:not([hidden])) .lume-toast { bottom: calc(96px + 
   #saleFilterBar .fb-area { grid-column: 1 / -1; }
   #saleFilterBar .fb-area .msd-trigger { width: 100%; max-width: none; }
   #saleFilterBar .fb-field-rent, #saleFilterBar .fb-field-narrow { grid-column: span 2; min-width: 0; width: auto; }
-  #saleFilterBar #sDealFilter { grid-column: 1 / span 5; grid-row: 3; }
-  #saleFilterBar #sMoreBtn { grid-column: 6; grid-row: 3; width: auto; min-width: 0; padding: 0; }
+  #saleFilterBar #sDealFilter { grid-column: 1 / -1; grid-row: 3; }
   #saleFilterBar .fb-sort { grid-column: span 3; grid-row: 4; min-width: 0; width: auto; }
+  #saleFilterBar #sMustBtn, #saleFilterBar #sMoreBtn { grid-column: span 3; grid-row: 5; width: auto; min-width: 0; }
+  #saleFilterBar .fb-btn > span[data-i18n] { position: static; width: auto; height: auto; overflow: visible; clip: auto; }
   #saleFilterBar #sDealFilter .seg-btn { flex: 1 1 0; min-width: 0; padding: 0 6px; }
   #saleFilterBar .fb-field input { min-width: 0; width: 100%; }
   #saleFilterBar .fb-sort select { min-width: 0; text-overflow: ellipsis; }

@@ -647,7 +647,7 @@ function _lmDescHtml(l) {
 
 // A clean condition / energy class, or null for junk ("Bilocale", "8").
 function _cleanCondition(v) {
-  const s = String(v || '').toLowerCase();
+  const s = String(v || '').toLowerCase().replace(/_/g, ' ');   // "da_ristrutturare" (sale pages)
   if (!s) return null;
   if (/da ristruttur/.test(s)) return { v: t('cond.to_renovate'), tone: 'warn' };
   if (/ottim|ristruttur/.test(s)) return { v: t('cond.renovated') };

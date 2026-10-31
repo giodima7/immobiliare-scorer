@@ -1239,6 +1239,39 @@ def apply_extreme_underpricing_flag(listing: dict, comps_delta_pct: float | None
     listing["good_value"] = False
 
 
+# ── What the description says (text_flags) ───────────────────────────────────
+# Words the dashboard filters on but only finds in the description, which a
+# grid load leaves out (2026-10-31: parquet, and no case di ringhiera):
+# stamped here as text_flags. Measured on 9,045 descriptions that day: 697
+# say "parquet" (4 only as "effetto parquet" / "parquet laminato"), 216
+# mention "ringhiera" (6 a railing or "non di ringhiera").
+_TEXT_PARQUET = _re.compile(r"\bparquet\b", _re.I)
+_TEXT_FAKE_PARQUET = _re.compile(r"(?:effetto|finto|simil|tipo|imitazione)[\s-]+parquet|parquet\s+(?:in\s+)?(?:laminato|vinilico|sintetico)", _re.I)
+_TEXT_RINGHIERA = _re.compile(r"ringhier\w*|\bballatoi\w*", _re.I)
+_TEXT_NOT_RINGHIERA = _re.compile(r"\bno\s+ringhiera|\bnon\s+(?:è\s+|in\s+|di\s+|a\s+)?(?:una\s+)?(?:casa\s+di\s+)?ringhiera"
+                                r"|ringhier[ae]\s+(?:in|di)\s+(?:ferro|vetro|metallo|acciaio|legno|ottone|cristallo)", _re.I)
+
+
+def text_flags(description: str | None) -> list[str]:
+    """['parquet', 'ringhiera'] — what the listing's own words say."""
+    d = description or ""
+    out = []
+    if len(_TEXT_PARQUET.findall(d)) > len(_TEXT_FAKE_PARQUET.findall(d)):
+        out.append("parquet")
+    if any(not _TEXT_NOT_RINGHIERA.search(d[max(0, m.start() - 40):m.end() + 30])
+           for m in _TEXT_RINGHIERA.finditer(d)):
+        out.append("ringhiera")
+    return out
+
+
+def stamp_text_flags(listing: dict) -> None:
+    flags = text_flags(listing.get("description"))
+    if flags:
+        listing["text_flags"] = flags
+    else:
+        listing.pop("text_flags", None)
+
+
 def apply_absolute_value_gate(score_total: float, ask_psqm: float, sqm: float) -> tuple[int, bool]:
     """
     Hard score ceiling for small, very expensive listings.
@@ -2114,6 +2147,7 @@ def score_all_sales(listings: list, settings: dict | None = None) -> list:
         # we never apply the flag to already-excluded rows (they have
         # score_total=0 and no comps delta — the function is a no-op).
         apply_extreme_underpricing_flag(merged, merged.get("comps_sale_delta_pct"))
+        stamp_text_flags(merged)
         scored.append(merged)
 
     scored.sort(key=lambda x: x.get("score_total", 0) or 0, reverse=True)
@@ -2491,6 +2525,7 @@ def score_all(listings: list, settings: dict | None = None,
         # comps are equally suspicious — fake listings exist on both
         # sides of the market).
         apply_extreme_underpricing_flag(merged, merged.get("comps_delta_pct"))
+        stamp_text_flags(merged)
         if photo_evals:
             apply_photo_verdict(merged, photo_evals, settings["photo_contradicts_cap"],
                                 settings.get("photo_grade_cap_max", 4),

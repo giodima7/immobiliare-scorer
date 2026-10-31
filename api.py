@@ -1382,7 +1382,9 @@ def sales():
     path = _resolve_city_path(city, "sale")
     if not path.exists():
         return jsonify([])
-    return send_file(path, mimetype="application/json")
+    # Revalidate every time (a 304 when unchanged): without it the browser
+    # kept a copy from before a rescore and showed the old sales.
+    return send_file(path, mimetype="application/json", max_age=0)
 
 
 SCAN_PREFS_PATH      = BASE_DIR / "scan_prefs.json"

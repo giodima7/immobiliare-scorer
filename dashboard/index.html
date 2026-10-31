@@ -315,6 +315,8 @@
           <span data-i18n="fb.include_unknown">Include listings where it's not known yet</span></label>
         <label class="fb-check"><input type="checkbox" class="hide-suspect" id="dHideSuspect">
           <span data-i18n="must.safe">Hide suspicious prices</span></label>
+        <label class="fb-check"><input type="checkbox" class="hide-ringhiera" id="dHideRinghiera">
+          <span data-i18n="must.no_ringhiera">Hide case di ringhiera</span></label>
       </div>
       <div class="drawer-row2">
         <div class="drawer-field">
@@ -341,16 +343,6 @@
             <option value="500">500 m</option>
             <option value="800">800 m</option>
             <option value="1200">1.200 m</option>
-          </select>
-        </div>
-        <div class="drawer-field">
-          <label class="field-label" for="dFascia" data-i18n="filter.fascia">Zone</label>
-          <select class="input" id="dFascia">
-            <option value="" data-i18n="filter.any">Any</option>
-            <option value="B" data-i18n="fascia.B">Central</option>
-            <option value="C" data-i18n="fascia.C">Semi-central</option>
-            <option value="D" data-i18n="fascia.D">Outskirts</option>
-            <option value="E" data-i18n="fascia.E">Outer outskirts</option>
           </select>
         </div>
       </div>
@@ -515,6 +507,8 @@
         <span data-i18n="fb.include_unknown">Include listings where it's not known yet</span></label>
       <label class="fb-check"><input type="checkbox" class="hide-suspect" id="rHideSuspect">
         <span data-i18n="must.safe">Hide suspicious prices</span></label>
+      <label class="fb-check"><input type="checkbox" class="hide-ringhiera" id="rHideRinghiera">
+        <span data-i18n="must.no_ringhiera">Hide case di ringhiera</span></label>
     </div>
     <p class="fb-hint" data-i18n="fb.must_hint">Counts are listings known to have it. Unknowns shrink daily as listing pages are read.</p>
   </div>
@@ -552,6 +546,7 @@
         <label class="field-label" for="rMinFloor" data-i18n="filter.min_floor">Min floor</label>
         <select id="rMinFloor" class="input">
           <option value="" data-i18n="filter.any">Any</option>
+          <option value="1">1+</option>
           <option value="2">2+</option>
           <option value="4">4+</option>
           <option value="6">6+</option>
@@ -565,16 +560,6 @@
           <option value="7" data-i18n="listed.7">Last 7 days</option>
           <option value="14" data-i18n="listed.14">Last 14 days</option>
           <option value="30" data-i18n="listed.30">Last 30 days</option>
-        </select>
-      </div>
-      <div class="field">
-        <label class="field-label" for="rFascia" data-i18n="filter.fascia">Zone</label>
-        <select id="rFascia" class="input">
-          <option value="" data-i18n="filter.any">Any</option>
-          <option value="B" data-i18n="fascia.B">Central</option>
-          <option value="C" data-i18n="fascia.C">Semi-central</option>
-          <option value="D" data-i18n="fascia.D">Outskirts</option>
-          <option value="E" data-i18n="fascia.E">Outer outskirts</option>
         </select>
       </div>
       <div class="field">
@@ -767,6 +752,11 @@
                min="0" step="5" inputmode="numeric" data-i18n-aria="fb.sqm_min" aria-label="Min m²">
         <span class="fb-suffix">+</span>
       </label>
+      <button type="button" class="btn btn-secondary fb-btn" id="sMustBtn" data-i18n-title="fb.must" title="Must-haves" aria-expanded="false" aria-controls="sMustPanel">
+        <svg class="i" aria-hidden="true"><use href="assets/icons.svg#adjustments-horizontal"></use></svg>
+        <span data-i18n="fb.must">Must-haves</span>
+        <span class="fb-badge" id="sMustBadge" hidden></span>
+      </button>
       <div class="seg" id="sDealFilter" role="group" data-i18n-aria="fb.deal_type" aria-label="Deals">
         <button type="button" class="seg-btn active" data-sdeal="" aria-pressed="true" data-i18n="gem.all">All</button>
         <button type="button" class="seg-btn" data-sdeal="below" aria-pressed="false" data-i18n="sale.deal_below">10%+ below nearby</button>
@@ -799,6 +789,17 @@
         <span data-i18n="fb.more">More filters</span>
         <span class="fb-badge" id="sMoreBadge" hidden></span>
       </button>
+    </div>
+
+    <div class="fb-panel" id="sMustPanel" hidden>
+      <div class="must-grid" id="sMustGrid"></div>
+      <div class="fb-panel-foot">
+        <label class="fb-check"><input type="checkbox" id="sIncludeUnknown">
+          <span data-i18n="fb.include_unknown">Include listings where it's not known yet</span></label>
+        <label class="fb-check"><input type="checkbox" class="hide-ringhiera" id="sHideRinghiera">
+          <span data-i18n="must.no_ringhiera">Hide case di ringhiera</span></label>
+      </div>
+      <p class="fb-hint" data-i18n="fb.must_hint">Counts are listings known to have it. Unknowns shrink daily as listing pages are read.</p>
     </div>
 
     <div class="fb-panel" id="sMorePanel" hidden>
@@ -855,6 +856,7 @@
           <label class="field-label" for="sListed" data-i18n="filter.listed">Listed</label>
           <select id="sListed" class="input">
             <option value="" data-i18n="filter.any">Any</option>
+            <option value="today" data-i18n="listed.today">Today</option>
             <option value="7" data-i18n="listed.7">Last 7 days</option>
             <option value="14" data-i18n="listed.14">Last 14 days</option>
             <option value="30" data-i18n="listed.30">Last 30 days</option>
@@ -867,6 +869,14 @@
             <button type="button" class="seg-btn" data-ssource="sale" aria-pressed="false">Immobiliare</button>
             <button type="button" class="seg-btn" data-ssource="idealista_sale" aria-pressed="false">Idealista</button>
           </div>
+        </div>
+        <div class="field">
+          <label class="field-label" for="sMinScore" data-i18n="filter.min_score">Min score</label>
+          <input type="number" id="sMinScore" class="input" min="0" max="100" step="5" placeholder="0" inputmode="numeric">
+        </div>
+        <div class="field">
+          <label class="field-label" for="sIdSearch" data-i18n="fb.find_id">Find by ID</label>
+          <input type="search" id="sIdSearch" class="input" placeholder="133406894" autocomplete="off">
         </div>
       </div>
       <p class="fb-hint" data-i18n="sale.estimate_hint">Payments, rents and yields are estimates to get your bearings, not financial advice.</p>
