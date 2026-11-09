@@ -23,6 +23,13 @@ to pass the challenge on every scan.
 Browser: $BROWSER_EXECUTABLE_PATH, else Chrome (current, auto-updating),
 else Edge. The installed Edge is v122 (March 2024) — an outdated browser
 is itself a bot signal.
+
+Windows never take the focus (2026-11-09). Chrome activates itself when
+it opens its startup window, even when launched with `open -g`, so a slot
+used to bring Chrome to the front for ~2 s before minimizing — about once
+every 15 minutes during the day. It now starts with no window
+(--no-startup-window) and the session opens its own window in the
+background, already minimized for background sessions.
 """
 
 from __future__ import annotations
@@ -171,7 +178,7 @@ class BrowserSession:
             cfg = uc.Config(user_data_dir=str(self.profile), browser_executable_path=exe,
                             headless=False, lang=self.lang)
             cfg.host, cfg.port = "127.0.0.1", self._port
-            args = cfg() + [f"--lang={self.lang}"]
+            args = cfg() + [f"--lang={self.lang}", "--no-startup-window"]
             if self.background:
                 # A minimized window's pages must not be throttled.
                 args += ["--disable-backgrounding-occluded-windows",
@@ -189,8 +196,7 @@ class BrowserSession:
                     self.browser = await timed(uc.start(config=cfg), EVAL_TIMEOUT,
                                                "attach to browser")
                     _ACTIVE.add(self)
-                    if self.background:
-                        await self.minimize()
+                    await self._open_window()
                     print(f"  [browser] {Path(exe).name} ready ({self.name}, "
                           f"attempt {attempt}{', minimized' if self.background else ''})", flush=True)
                     return self.browser
@@ -216,6 +222,16 @@ class BrowserSession:
         return (self._proc is not None and self._proc.poll() is None
                 and self._port is not None
                 and await asyncio.to_thread(_port_answers, self._port))
+
+    async def _open_window(self) -> None:
+        """Open the session's one window behind the user's, without taking
+        the focus; background sessions get it minimized from the start."""
+        from nodriver import cdp
+        state = cdp.target.WindowState.MINIMIZED if self.background else None
+        await timed(self.browser.connection.send(cdp.target.create_target(
+            "about:blank", new_window=True, background=True, window_state=state)),
+            what="open window")
+        await timed(self.browser.update_targets(), what="list tabs")
 
     async def minimize(self) -> None:
         """Minimize the window (it stays a real, headed browser — headless
