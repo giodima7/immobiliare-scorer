@@ -23,9 +23,13 @@ import ctypes
 import os
 import sys
 
-# A fresh daemon is ~150 MB; a rescore of the ~20k-listing file peaks
-# around 1.1 GB. Two daemons at the limit still leave a 16 GB Mac room.
-LIMIT_MB = float(os.environ.get("LUME_DAEMON_MAX_MB") or 2500)
+# Measured after the 2026-11-21 restart: a fresh daemon ~150 MB; the
+# Immobiliare one peaked at 2.2–2.4 GB catching up 4.5 days (sales sweep,
+# rescores) and settled around 1.1 GB; Idealista ~0.6 GB. 4 GB leaves those
+# peaks alone and still stops a leak (3.5–6 GB a day) within a day; two
+# daemons at the limit plus api.py still fit a 16 GB Mac. The [memory] log
+# lines are there to retune it.
+LIMIT_MB = float(os.environ.get("LUME_DAEMON_MAX_MB") or 4000)
 
 _RUSAGE_INFO_V2 = 2
 _PHYS_FOOTPRINT_OFFSET = 72   # rusage_info_v2: uuid[16], then 7 uint64 before ri_phys_footprint

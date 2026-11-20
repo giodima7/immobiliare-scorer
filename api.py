@@ -1796,6 +1796,11 @@ def scanner_status():
     # restarts it): `running` alone hid a dead one behind the other.
     immo_st.update(_watchdog_status("immobiliare"))
     ideal_st.update(_watchdog_status("idealista"))
+    # phys_footprint, the number that matters (RSS hides swapped memory).
+    # api.py isn't restarted on memory: that would also stop the daemons.
+    from memory_guard import footprint_mb
+    immo_st["memory_mb"]  = round(footprint_mb(_scanner_proc.pid) or 0) if running_immo else None
+    ideal_st["memory_mb"] = round(footprint_mb(_idealista_proc.pid) or 0) if running_idealista else None
 
     # Top-level fields from immobiliare (for backward compat with existing JS)
     result = {
@@ -1820,6 +1825,7 @@ def scanner_status():
         # finishes (so post-enrichment the row drops to 0).
         "geo_pending": _all_pending(),
         "pipeline": _pipeline_status(),
+        "api_memory_mb": round(footprint_mb() or 0),
     }
     return jsonify(result)
 
@@ -3274,7 +3280,7 @@ def cache_clear_single():
     listing_id = str(body.get("listing_id", "")).strip()
     if not listing_id:
         return jsonify({"error": "listing_id required"}), 400
-    cache_path = BASE_DIR / "enriched_cache.json"
+    from enrichment_cache import CACHE_PATH as cache_path
     if not cache_path.exists():
         return jsonify({"cleared": False, "reason": "cache not found"}), 404
     try:

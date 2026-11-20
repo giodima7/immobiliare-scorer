@@ -123,3 +123,6 @@ photo_eval_milano.json
 geocode_cache_milano.json
 geocode_cache_milano.json.tmp
 data_sources/
+
+# Big files the scanners rewrite all day, out of Spotlight (data_dir.py)
+data.noindex/

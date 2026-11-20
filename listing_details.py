@@ -16,6 +16,7 @@ rescored last, the details are there.
 """
 from __future__ import annotations
 
+import data_dir
 import asyncio
 import fcntl
 import json
@@ -27,7 +28,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
-DETAIL_CACHE_PATH = BASE_DIR / "detail_cache_milano.json"
+DETAIL_CACHE_PATH = data_dir.path("detail_cache_milano.json")   # data.noindex/: no Spotlight
 RENTALS_PATH = BASE_DIR / "dashboard" / "milano_rentals_latest.json"
 SALES_PATH = BASE_DIR / "dashboard" / "milano_sales_latest.json"     # sales_scan.py
 SALE_SOURCE = {"immobiliare": "sale", "idealista": "idealista_sale"}
