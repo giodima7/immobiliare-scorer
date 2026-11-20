@@ -2824,6 +2824,10 @@ def _spread_loop(args, log) -> None:
                 raise
             log(f"✗ Slot error: {e}\n{traceback.format_exc()}")
         next_slot = time.time() + (2 * _gap() if blocked else _gap())
+        # Between slots, no browser open: a daemon grown past the limit restarts
+        # itself in place (memory_guard, 2026-11-21).
+        import memory_guard
+        memory_guard.check("immobiliare", log)
 
 
 def daemon_loop(args):

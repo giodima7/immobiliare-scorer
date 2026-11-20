@@ -56,6 +56,19 @@ _idealista_proc = None # subprocess.Popen for fetch_idealista.py --daemon (prima
 # after the user clicked Stop or restarted api.py.
 _scanner_extras: list = []
 
+# Daemon watchdog (2026-11-21). The Immobiliare daemon was killed when the
+# Mac ran out of memory on 2026-11-16 and stayed down for 4.5 days: the
+# status said "running" because the Idealista daemon still was, and nothing
+# started it again. While the scanner is meant to run (Start, until Stop),
+# _daemon_watchdog restarts a daemon that died — after 1, 2, 4… minutes,
+# at most WATCHDOG_MAX_RESTARTS a day — and /scanner-status says it's down.
+_scanner_wanted = False
+_scanner_body: dict = {}
+_scanner_city = "milano"
+WATCHDOG_MAX_RESTARTS = 6
+_watchdog: dict = {s: {"down_since": None, "exit_code": None, "restarts": []}
+                   for s in ("immobiliare", "idealista")}
+
 
 def _sweep_orphan_scanner_pids() -> list[int]:
     """
@@ -1469,10 +1482,14 @@ def start_scanner():
     targets. Additional cities are spawned as separate processes that exit
     once the scan completes — they don't loop on a 60-minute cadence.
     """
-    global _scanner_proc, _idealista_proc
+    global _scanner_proc, _idealista_proc, _scanner_wanted, _scanner_body, _scanner_city
     with _scanner_lock:
         if _scanner_proc and _scanner_proc.poll() is None:
             return jsonify({"error": "already running", "pid": _scanner_proc.pid}), 409
+        if _idealista_proc and _idealista_proc.poll() is None:
+            # The Immobiliare daemon died but Idealista's didn't: starting
+            # both would run two Idealista daemons. The watchdog restarts it.
+            return jsonify({"error": "already running", "pid": _idealista_proc.pid}), 409
         body   = request.get_json(silent=True) or {}
         cities = body.get("cities") or ["milano"]
         if not isinstance(cities, list) or not cities:
@@ -1487,6 +1504,9 @@ def start_scanner():
         # (fetch_idealista.py uses browser automation — no API credentials needed)
         _idealista_proc = _start_idealista_proc(body, primary)
         result["idealista_pid"] = _idealista_proc.pid
+        _scanner_wanted, _scanner_body, _scanner_city = True, dict(body), primary
+        for w in _watchdog.values():
+            w.update(down_since=None, exit_code=None, restarts=[])
         # Extra cities: one-shot subprocess each (no --daemon so they exit
         # once their pass is done). These show up in scanner.log alongside
         # the daemon. They run in parallel — fetch_rentals.py is mostly
@@ -1513,6 +1533,61 @@ def start_scanner():
         return jsonify(result)
 
 
+def _daemon_watchdog() -> None:
+    """Restart a scanner daemon that died while the scanner is meant to run
+    (see _scanner_wanted). Backs off 1, 2, 4… minutes; gives up after
+    WATCHDOG_MAX_RESTARTS in 24 h and leaves the status saying it's down."""
+    global _scanner_proc, _idealista_proc
+    while True:
+        _time.sleep(30)
+        try:
+            with _scanner_lock:
+                if not _scanner_wanted:
+                    continue
+                for source in ("immobiliare", "idealista"):
+                    proc = _scanner_proc if source == "immobiliare" else _idealista_proc
+                    w = _watchdog[source]
+                    if proc is None:
+                        continue
+                    if proc.poll() is None:
+                        w["down_since"] = None
+                        continue
+                    now = _time.time()
+                    if not w["down_since"]:
+                        w["down_since"], w["exit_code"] = now, proc.returncode
+                        print(f"[watchdog] {source} daemon (pid {proc.pid}) exited "
+                              f"with {proc.returncode}", flush=True)
+                    w["restarts"] = [t for t in w["restarts"] if now - t < 86400]
+                    if len(w["restarts"]) >= WATCHDOG_MAX_RESTARTS:
+                        continue
+                    if now - w["down_since"] < 60 * 2 ** len(w["restarts"]):
+                        continue
+                    start = _start_scanner_proc if source == "immobiliare" else _start_idealista_proc
+                    new = start(_scanner_body, _scanner_city)
+                    if source == "immobiliare":
+                        _scanner_proc = new
+                    else:
+                        _idealista_proc = new
+                    w["restarts"].append(now)
+                    w["down_since"] = None
+                    print(f"[watchdog] restarted the {source} daemon (pid {new.pid}, "
+                          f"{len(w['restarts'])} in 24 h)", flush=True)
+        except Exception as exc:
+            print(f"[watchdog] {type(exc).__name__}: {exc}", flush=True)
+
+
+def _watchdog_status(source: str) -> dict:
+    from datetime import datetime as _dt
+    w = _watchdog[source]
+    return {
+        "down_since": (_dt.fromtimestamp(w["down_since"]).isoformat(timespec="seconds")
+                       if w["down_since"] else None),
+        "exit_code": w["exit_code"],
+        "restarts_24h": sum(1 for t in w["restarts"] if _time.time() - t < 86400),
+        "gave_up": bool(w["down_since"]) and len(w["restarts"]) >= WATCHDOG_MAX_RESTARTS,
+    }
+
+
 @app.route("/stop-scanner", methods=["POST"])
 def stop_scanner():
     """
@@ -1525,8 +1600,9 @@ def stop_scanner():
         the daemons that survived an api.py restart and kept cron-
         firing every 60 min as ghosts)
     """
-    global _scanner_proc, _idealista_proc
+    global _scanner_proc, _idealista_proc, _scanner_wanted
     with _scanner_lock:
+        _scanner_wanted = False          # the watchdog leaves them stopped
         stopped = []
         if _scanner_proc and _scanner_proc.poll() is None:
             _scanner_proc.terminate()
@@ -1716,6 +1792,10 @@ def scanner_status():
     # `scanning` = a scan is in progress right now (marker the daemon writes).
     immo_st["scanning"]  = running_immo and _marker_alive(BASE_DIR / ".scan_running_immobiliare")
     ideal_st["scanning"] = running_idealista and _marker_alive(BASE_DIR / ".scan_running_idealista")
+    # A daemon that died while the scanner is meant to run (the watchdog
+    # restarts it): `running` alone hid a dead one behind the other.
+    immo_st.update(_watchdog_status("immobiliare"))
+    ideal_st.update(_watchdog_status("idealista"))
 
     # Top-level fields from immobiliare (for backward compat with existing JS)
     result = {
@@ -3979,6 +4059,7 @@ if __name__ == "__main__":
     # Auto-push to Supabase whenever a scan cycle rewrites the local JSON.
     # Background daemon — dies with the parent process on Ctrl+C.
     threading.Thread(target=_supabase_autosync_watcher, daemon=True).start()
+    threading.Thread(target=_daemon_watchdog, daemon=True).start()
 
     print(f"\n  Immobiliare Scorer")
     print(f"  Dashboard  → http://localhost:8000/")

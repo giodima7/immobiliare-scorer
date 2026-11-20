@@ -38,8 +38,26 @@ async function updateScannerStatus() {
     let label = t('scan.stopped');
     if (scanning)        label = t('scan.scanning');
     else if (anyRunning) label = t('scan.daily_on');
+    // A daemon that died while the scanner should run (api.py's watchdog
+    // restarts it): say so, instead of "on" because the other one is.
+    const down = [['immobiliare', 'Immobiliare'], ['idealista', 'Idealista']]
+      .filter(([k]) => st[k] && st[k].down_since)
+      .map(([k, site]) => {
+        const s = st[k].down_since;   // "2026-11-16T20:19:38" → "16/11 20:19"
+        return t(st[k].gave_up ? 'scan.daemon_gave_up' : 'scan.daemon_down',
+                 { site, when: `${s.slice(8, 10)}/${s.slice(5, 7)} ${s.slice(11, 16)}` });
+      });
+    if (down.length) label = down.join(' · ');
     lbl.textContent   = label;
-    lbl.style.color   = anyRunning ? 'var(--green-ink)' : 'var(--text-secondary)';
+    lbl.style.color   = down.length ? 'var(--amber-ink)'
+                      : anyRunning ? 'var(--green-ink)' : 'var(--text-secondary)';
+    dot.classList.toggle('status-down', down.length > 0);
+    const pill = document.getElementById('statusPill');
+    if (pill) {
+      if (down.length) pill.title = down.join('\n');
+      else if (pill.classList.contains('is-down')) setStatusPill(IS_LIVE);   // back up: the usual tooltip
+      pill.classList.toggle('is-down', down.length > 0);
+    }
 
     document.getElementById('btnStartScanner').disabled = anyRunning;
     document.getElementById('btnStopScanner').disabled  = !anyRunning;

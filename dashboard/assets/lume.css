@@ -2445,6 +2445,7 @@ input[type=range] { padding: 0; width: 100px; accent-color: var(--green-deep); }
   background: var(--green-deep);
   animation: settings-pulse 1.2s ease-in-out infinite;
 }
+.status-dot.status-down    { background: var(--amber); animation: none; }
 @keyframes settings-pulse {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.4; }
@@ -3492,6 +3493,7 @@ header { gap: 10px; padding: 10px 24px; z-index: var(--z-sticky); }
                width: 20px; height: 20px; cursor: help; }
 .status-pill .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); }
 .status-pill.is-live .status-dot { background: var(--green-deep); box-shadow: 0 0 0 3px var(--green-light); }
+.status-pill.is-down .status-dot { background: var(--amber); box-shadow: 0 0 0 3px var(--amber-light); }
 .mobile-filter-btn .fb-badge { position: absolute; top: -6px; right: -6px; }
 .hdr-btn.mobile-filter-btn { display: none; }
 .msd-trigger { justify-content: space-between; gap: 8px; }
