@@ -8,11 +8,20 @@ at once would get the scanners blocked, so the scanner daemons drip them
 in while they wait for the next daily scan: a few pages every ~20 min
 during the day, the listings that could earn a label first.
 
-Results live in their own file (DETAIL_CACHE_PATH, keyed by listing id)
+Results live in their own store (DETAIL_DB_PATH, one row per listing id)
 instead of being written into the shared listings file: three processes
 already rewrite that file, and a re-scan replaces whole rows. score_all()
 applies the cache on every scoring run (apply_details), so whichever path
 rescored last, the details are there.
+
+The store is SQLite since 2026-11-21. It was one JSON file (25k entries,
+70 MB, 83 % photo lists and descriptions) rewritten whole after every batch
+of pages — 27–124 times a day, 0.9–6.8 GB — and parsed whole by every
+reader. Each full load or save left hundreds of MB in the process (macOS
+keeps freed large blocks: +2.6 GB after 10 loads). Now a batch writes its
+own rows (~14 ms, nothing kept) and a full load parses one small JSON per
+row (+22 MB kept, peak +171 MB, 290 ms vs 360–460 ms); load_cache(slim=True)
+leaves the photo lists and descriptions out (peak +63 MB).
 """
 from __future__ import annotations
 
@@ -23,12 +32,16 @@ import json
 import os
 import random
 import re
+import sqlite3
 import time
 from datetime import date, datetime
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
-DETAIL_CACHE_PATH = data_dir.path("detail_cache_milano.json")   # data.noindex/: no Spotlight
+DETAIL_DB_PATH = data_dir.path("detail_cache_milano.sqlite")      # data.noindex/: no Spotlight
+# The JSON store before 2026-11-21: imported into DETAIL_DB_PATH by the first
+# process that opens it, then renamed *.json.imported (kept as a backup).
+DETAIL_JSON_PATH = data_dir.path("detail_cache_milano.json")
 RENTALS_PATH = data_dir.listings_path("milano", "rental")   # data.noindex/: no Spotlight
 SALES_PATH = data_dir.listings_path("milano", "sale")       # sales_scan.py
 SALE_SOURCE = {"immobiliare": "sale", "idealista": "idealista_sale"}
@@ -160,25 +173,90 @@ NEW_DAYS          = 3            # first seen within this many days → next
 
 # ── Cache I/O ─────────────────────────────────────────────────────────────────
 
-def load_cache() -> dict:
+# The big fields: what load_cache(slim=True) leaves out. build_queue, the
+# Casa.it pass and api.py's scanner status only look at flags and dates.
+SLIM_DROP = ("photos", "description", "floorplans")
+
+
+def _dumps(entry: dict) -> str:
+    return json.dumps(entry, ensure_ascii=False, separators=(",", ":"))
+
+
+_db_ready = False         # this process has set the store up (below)
+
+
+def _db() -> sqlite3.Connection:
+    """A connection to the store. WAL: readers never wait for a writer, and
+    writers wait for each other (up to 60 s)."""
+    global _db_ready
+    if not _db_ready or DETAIL_JSON_PATH.exists():
+        _setup()
+        _db_ready = True
+    con = sqlite3.connect(DETAIL_DB_PATH, timeout=60, isolation_level=None)
+    con.execute("PRAGMA synchronous=NORMAL")
+    return con
+
+
+def _setup() -> None:
+    """Create the table and, once, import the old JSON store — under a file
+    lock: the processes that start together (api.py starts both daemons at
+    once) would otherwise race to switch the file to WAL ("database is
+    locked" at once, no waiting) and import it twice. Measured 2026-11-21."""
+    with open(DETAIL_DB_PATH.with_name(DETAIL_DB_PATH.name + ".lock"), "w") as lock_fh:
+        fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX)
+        con = sqlite3.connect(DETAIL_DB_PATH, timeout=60, isolation_level=None)
+        try:
+            con.execute("PRAGMA journal_mode=WAL")
+            con.execute("CREATE TABLE IF NOT EXISTS details (id TEXT PRIMARY KEY, data TEXT NOT NULL)")
+            if not DETAIL_JSON_PATH.exists():
+                return
+            old = json.loads(DETAIL_JSON_PATH.read_text())
+            con.execute("BEGIN IMMEDIATE")
+            try:
+                # OR IGNORE: a row already in the table is never older.
+                con.executemany("INSERT OR IGNORE INTO details (id, data) VALUES (?, ?)",
+                                ((str(k), _dumps(v)) for k, v in old.items()))
+                con.execute("COMMIT")
+            except BaseException:
+                con.execute("ROLLBACK")
+                raise
+            os.replace(DETAIL_JSON_PATH, DETAIL_JSON_PATH.with_name(DETAIL_JSON_PATH.name + ".imported"))
+            print(f"  [details] imported {len(old)} entries from {DETAIL_JSON_PATH.name} "
+                  f"into {DETAIL_DB_PATH.name}", flush=True)
+        finally:
+            con.close()
+
+
+def load_cache(slim: bool = False) -> dict:
+    """{listing id: entry}. slim=True leaves SLIM_DROP out of the fields."""
+    col = ("json_remove(data, " + ", ".join(f"'$.fields.{k}'" for k in SLIM_DROP) + ")") if slim else "data"
     try:
-        return json.loads(DETAIL_CACHE_PATH.read_text())
-    except (OSError, ValueError):
+        con = _db()
+        try:
+            return {k: json.loads(v) for k, v in con.execute(f"SELECT id, {col} FROM details")}
+        finally:
+            con.close()
+    except (sqlite3.Error, OSError, ValueError) as exc:
+        print(f"  [details] cache unreadable ({type(exc).__name__}: {exc}) — treated as empty", flush=True)
         return {}
 
 
 def save_entries(entries: dict) -> None:
-    """Merge {id: entry} into the cache under a lock, atomically."""
+    """Write {id: entry}, one row each (an entry replaces the listing's old one)."""
     if not entries:
         return
-    lock_path = DETAIL_CACHE_PATH.with_suffix(".json.lock")
-    with open(lock_path, "w") as lock_fh:
-        fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX)
-        cache = load_cache()
-        cache.update(entries)
-        tmp = DETAIL_CACHE_PATH.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(cache, ensure_ascii=False, separators=(",", ":")))
-        os.replace(tmp, DETAIL_CACHE_PATH)
+    rows = [(str(k), _dumps(v)) for k, v in entries.items()]
+    con = _db()
+    try:
+        con.execute("BEGIN IMMEDIATE")
+        con.executemany("INSERT OR REPLACE INTO details (id, data) VALUES (?, ?)", rows)
+        con.execute("COMMIT")
+    except BaseException:
+        if con.in_transaction:
+            con.execute("ROLLBACK")
+        raise
+    finally:
+        con.close()
 
 
 # ── Applying details to listings (called from scoring.score_all) ─────────────
@@ -560,7 +638,7 @@ def build_queue(source: str, cache: dict | None = None,
     fees, gallery) right after the focus areas. Then, postponed: possible
     deals (price_z ≤ PRIORITY_Z, lowest first), listings first seen in the
     last NEW_DAYS days, the rest."""
-    cache = load_cache() if cache is None else cache
+    cache = load_cache(slim=True) if cache is None else cache
     try:
         rows = json.loads(rentals_path.read_text())
     except (OSError, ValueError):

@@ -15,6 +15,11 @@ Endpoints:
 """
 from __future__ import annotations   # makes X | None annotations lazy — works on Python 3.9
 
+if __name__ == "__main__":
+    import memory_guard as _memory_guard
+    _memory_guard.malloc_env()          # before anything big is loaded (re-execs once)
+
+import functools
 import json as _json
 import subprocess
 import sys
@@ -327,8 +332,39 @@ def _resolve_city_path(city: str, kind: str) -> Path:
 # recompute when the file mtime changes or the TTL expires.
 _GEO_PENDING_CACHE: dict[str, dict] = {}   # key: "{city}:{kind}" → {count, total, mtime, computed_at}
 _GEO_PENDING_TTL = 60.0  # seconds
+# /scanner-status (_all_pending): at most this often, even when the file
+# changed. The rentals file is rewritten many times an hour while the
+# daemons catch up, and each recount parses it (120 MB) plus the enrichment
+# cache (55 MB): one cold count peaks at ~1.7 GB (2026-11-21). The workers
+# still invalidate the counts when they finish, and the geo queue's own
+# check (poll=False) keeps the short rule.
+_GEO_PENDING_POLL_SEC = 300.0
 
-def _count_pending_for(city: str, kind: str) -> dict:
+
+def _single_flight(fn):
+    """While one thread computes fn(), the others get its last value instead
+    of computing it again in parallel (or wait for the very first one).
+    Each dashboard tab polls /scanner-status every 10 s; on 2026-11-21 the
+    polls overlapped while the API was busy, and every one of them parsed
+    the same 100+ MB files at once (4 concurrent: 4.3–4.7 GB peak)."""
+    lock = threading.Lock()
+    last: dict = {}
+
+    @functools.wraps(fn)
+    def wrapper():
+        had_value = "value" in last
+        if not lock.acquire(blocking=not had_value):
+            return last["value"]                   # another thread is computing
+        try:
+            if had_value or "value" not in last:   # else the first call finished while we waited
+                last["value"] = fn()
+        finally:
+            lock.release()
+        return last["value"]
+    return wrapper
+
+
+def _count_pending_for(city: str, kind: str, poll: bool = False) -> dict:
     """
     Return {"count": N pending, "total": N listings, "stale": bool}.
     `count` mirrors what the worker would actually process; `stale`
@@ -346,9 +382,9 @@ def _count_pending_for(city: str, kind: str) -> dict:
 
     cached = _GEO_PENDING_CACHE.get(key)
     now    = _time.time()
-    if (cached
-            and cached.get("mtime") == mtime
-            and (now - cached.get("computed_at", 0)) < _GEO_PENDING_TTL):
+    age    = now - (cached or {}).get("computed_at", 0)
+    if cached and ((cached.get("mtime") == mtime and age < _GEO_PENDING_TTL)
+                   or (poll and age < _GEO_PENDING_POLL_SEC)):
         return {"count": cached["count"], "total": cached["total"], "stale": False}
 
     try:
@@ -384,12 +420,13 @@ def _count_pending_for(city: str, kind: str) -> dict:
     return {"count": pending, "total": len(data), "stale": False}
 
 
+@_single_flight
 def _all_pending() -> dict:
     """Per-(city, kind) pending counts for the four active cities."""
     out = {}
     for city in ("milano", "roma", "napoli", "la_maddalena"):
         for kind in ("rental", "sale"):
-            out[_geo_job_key(city, kind)] = _count_pending_for(city, kind)
+            out[_geo_job_key(city, kind)] = _count_pending_for(city, kind, poll=True)
     return out
 
 
@@ -1666,6 +1703,7 @@ def _casait_status(today: str) -> dict:
     return _subito_status(today, _fc, _fc.CASAIT_EVERY_SEC)
 
 
+@_single_flight
 def _pipeline_status() -> dict:
     if _pipeline_cache["data"] is not None and _time.time() - _pipeline_cache["at"] < 60:
         return _pipeline_cache["data"]
@@ -1677,7 +1715,7 @@ def _pipeline_status() -> dict:
         import photo_eval as _pe
         from fetch_rentals import DISCOVER_EVERY_SEC
         today = _date.today().isoformat()
-        cache = _ld.load_cache()
+        cache = _ld.load_cache(slim=True)     # flags and dates only
         results = _pe.load_results()
         rows = _json.loads(data_dir.listings_path("milano", "rental").read_text())
         top = {"listings": 0, "page_read": 0, "costs_known": 0, "photos_read": 0, "photos_waiting": 0}
@@ -1822,8 +1860,8 @@ def scanner_status():
         "geo_queue_running": bool(_geo_orchestrator_thread
                                   and _geo_orchestrator_thread.is_alive()),
         # Per-(city, kind) preview: how many listings the worker WOULD
-        # process if the user clicked Run-all right now. Cached for
-        # _GEO_PENDING_TTL seconds and auto-invalidated whenever a worker
+        # process if the user clicked Run-all right now. Recounted at most
+        # every _GEO_PENDING_POLL_SEC seconds, and whenever a worker
         # finishes (so post-enrichment the row drops to 0).
         "geo_pending": _all_pending(),
         "pipeline": _pipeline_status(),
