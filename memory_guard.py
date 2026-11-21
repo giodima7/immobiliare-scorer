@@ -67,3 +67,33 @@ def check(name: str, log=print) -> None:
     sys.stdout.flush()
     sys.stderr.flush()
     os.execv(sys.executable, [sys.executable, "-u", *sys.argv])
+
+
+# macOS's malloc keeps freed large blocks (> ~1 MB) in a per-process cache
+# for reuse, and phys_footprint counts them. Every json.loads of a big file
+# frees a few: the bytes read, then the str — 269 MB for the 70 MB detail
+# cache, which holds 78 emoji, so the whole str is 4 bytes a character.
+# Measured 2026-11-21 (Python 3.14.0, macOS 26.5.1), in a fresh process:
+#   10 loads of the detail cache: +2,562 MB kept → +7 MB with the cache off
+#   20 detail-cache saves:        +2,261 MB kept → +0 MB, 687 vs 761 ms a save
+#   api.py replay (autosync push + one tab polling /scanner-status for
+#   150 s): 3,780 MB at the end → 424 MB
+# That cache is how api.py reached a 13 GB footprint after the restart that
+# night. malloc_zone_pressure_relief() frees none of it; PYTHONMALLOC=malloc
+# is worse. libmalloc reads MallocLargeCache only when a process starts,
+# hence the re-exec. Children (the daemons api.py starts, and their Chrome)
+# inherit it, so they don't re-exec.
+MALLOC_ENV = {"MallocLargeCache": "0"}
+
+
+def malloc_env() -> None:
+    """Re-exec this process once with MALLOC_ENV set (macOS only). Call it
+    first thing in a long-running entry point; LUME_MALLOC_CACHE=1 skips it."""
+    if sys.platform != "darwin" or os.environ.get("LUME_MALLOC_CACHE") == "1":
+        return
+    if all(os.environ.get(k) == v for k, v in MALLOC_ENV.items()):
+        return
+    os.environ.update(MALLOC_ENV)
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os.execv(sys.executable, [sys.executable, *sys.orig_argv[1:]])

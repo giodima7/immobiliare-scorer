@@ -2997,4 +2997,6 @@ def main():
 
 
 if __name__ == "__main__":
+    import memory_guard
+    memory_guard.malloc_env()          # run from api.py it is already set
     main()

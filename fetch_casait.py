@@ -609,7 +609,7 @@ def _run(args, log) -> dict:
     known = {k for k in seen if str(k).startswith("ca_")}
     zone, first_page = next_zone(state)
     budget = int(state.get("budget") or BUDGET_START)
-    cache = ld.load_cache()
+    cache = ld.load_cache(slim=True)          # _detail_queue only asks which ids are in it
     items, stats, pages = asyncio.run(_sweep(known, zone, _detail_queue(pool, cache),
                                              first_page=first_page, budget=budget))
     rec.update({k: stats.get(k) for k in ("pages", "discover_pages", "zone", "zone_pages", "zone_total_pages",
