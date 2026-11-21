@@ -50,14 +50,15 @@ def main() -> None:
 def report(recs: list, since: datetime, log: Path, source: str) -> None:
     span_h = max((recs[-1]["_at"] - recs[0]["_at"]).total_seconds() / 3600, 1)
 
-    complete = [r for r in recs if r["complete"]]
+    slots = [r for r in recs if r.get("kind") != "discover"]   # discover runs have no area
+    complete = [r for r in slots if r["complete"]]
     pages = sum(r["pages"] for r in recs)
     disc = [r["discover"] for r in recs if r.get("discover")]
     dpages = sum(d["pages"] for d in disc)
     print(f"Slots {recs[0]['_at']:%d/%m %H:%M} → {recs[-1]['_at']:%d/%m %H:%M} ({span_h:.0f} h)")
-    print(f"  {len(recs)} slots · {len(complete)} read their area in full · "
-          f"{len(recs) - len(complete)} not")
-    for r in recs:
+    print(f"  {len(slots)} slots · {len(complete)} read their area in full · "
+          f"{len(slots) - len(complete)} not")
+    for r in slots:
         if not r["complete"]:
             why = "; ".join(r.get("skipped") or []) or f"{r['parse_failed']} unreadable page(s)"
             print(f"    ✗ {r['_at']:%d/%m %H:%M} {r['area']}: {why[:120]}")
@@ -70,7 +71,7 @@ def report(recs: list, since: datetime, log: Path, source: str) -> None:
     for r in complete:
         by_area[r["area"]].append(r["_at"])
     print("\nAreas (complete sweeps, longest gap between two):")
-    for area in sorted({r["area"] for r in recs}):
+    for area in sorted({r["area"] for r in slots}):
         ts = sorted(by_area.get(area, []))
         gaps = [(b - a).total_seconds() / 3600 for a, b in zip(ts, ts[1:])]
         gap = f"{max(gaps):.1f} h" if gaps else "—"
