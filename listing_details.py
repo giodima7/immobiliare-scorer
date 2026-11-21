@@ -29,8 +29,8 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
 DETAIL_CACHE_PATH = data_dir.path("detail_cache_milano.json")   # data.noindex/: no Spotlight
-RENTALS_PATH = BASE_DIR / "dashboard" / "milano_rentals_latest.json"
-SALES_PATH = BASE_DIR / "dashboard" / "milano_sales_latest.json"     # sales_scan.py
+RENTALS_PATH = data_dir.listings_path("milano", "rental")   # data.noindex/: no Spotlight
+SALES_PATH = data_dir.listings_path("milano", "sale")       # sales_scan.py
 SALE_SOURCE = {"immobiliare": "sale", "idealista": "idealista_sale"}
 
 # Fields a listing page can supply. apply_details() only fills gaps, with

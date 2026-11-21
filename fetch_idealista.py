@@ -47,6 +47,8 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import urlencode
 
+import data_dir
+
 import nodriver as uc
 
 from browser_session import BrowserSession, PageTimeout, timed
@@ -115,9 +117,10 @@ IDEALISTA_ZONE_BASE      = f"https://www.idealista.it/affitto-case/{CITY_SLUG}/"
 IDEALISTA_BASE           = IDEALISTA_CITY_BASE   # external alias
 IDEALISTA_SALE_CITY_BASE = f"https://www.idealista.it/vendita-case/{CITY_SLUG}-{CITY_SLUG}/"
 IDEALISTA_SALE_ZONE_BASE = f"https://www.idealista.it/vendita-case/{CITY_SLUG}/"
-# Output paths derived per city (matches fetch_rentals / fetch_listings).
-OUTPUT_PATH      = DASHBOARD_DIR / f"{CITY_KEY}_rentals_latest.json"
-SALE_OUTPUT_PATH = DASHBOARD_DIR / f"{CITY_KEY}_sales_latest.json"
+# Output paths derived per city (matches fetch_rentals / fetch_listings),
+# in data.noindex/ (data_dir.listings_path: no Spotlight).
+OUTPUT_PATH      = data_dir.listings_path(CITY_KEY, "rental")
+SALE_OUTPUT_PATH = data_dir.listings_path(CITY_KEY, "sale")
 
 
 def _apply_city(city: str) -> None:
@@ -138,8 +141,8 @@ def _apply_city(city: str) -> None:
     IDEALISTA_BASE           = IDEALISTA_CITY_BASE
     IDEALISTA_SALE_CITY_BASE = f"https://www.idealista.it/vendita-case/{CITY_SLUG}-{CITY_SLUG}/"
     IDEALISTA_SALE_ZONE_BASE = f"https://www.idealista.it/vendita-case/{CITY_SLUG}/"
-    OUTPUT_PATH              = DASHBOARD_DIR / f"{CITY_KEY}_rentals_latest.json"
-    SALE_OUTPUT_PATH         = DASHBOARD_DIR / f"{CITY_KEY}_sales_latest.json"
+    OUTPUT_PATH              = data_dir.listings_path(CITY_KEY, "rental")
+    SALE_OUTPUT_PATH         = data_dir.listings_path(CITY_KEY, "sale")
     # fetch_rentals reads OUTPUT_PATH from its own module — set there too
     # so legacy paths from imports stay in sync.
     try:

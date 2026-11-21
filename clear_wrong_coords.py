@@ -45,11 +45,13 @@ import sys
 import unicodedata
 from pathlib import Path
 
+import data_dir
+
 BASE_DIR = Path(__file__).resolve().parent
 DASHBOARD_DIR = BASE_DIR / "dashboard"
-RENTAL_PATH   = DASHBOARD_DIR / "milano_rentals_latest.json"
+RENTAL_PATH   = data_dir.listings_path("milano", "rental")
 LEGACY_RENTAL = DASHBOARD_DIR / "rentals_latest.json"
-SALE_PATH     = DASHBOARD_DIR / "milano_sales_latest.json"
+SALE_PATH     = data_dir.listings_path("milano", "sale")
 
 # Duomo coords — the Nominatim default for unresolved Milan queries.
 DUOMO_LAT, DUOMO_LNG = 45.4641, 9.1919

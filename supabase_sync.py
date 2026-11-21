@@ -672,12 +672,12 @@ def _input_path(city: str, listing_type: str) -> Path:
     moved away from the bare rentals_latest.json / sales_latest.json
     names so multiple cities' scans can co-exist on disk.
 
-    Falls back to the legacy name when the new one is missing — keeps
-    the very first Milan run after the rename working without manual
+    Falls back to the legacy dashboard/ name when the new one is missing —
+    keeps the very first Milan run after the rename working without manual
     file shuffling.
     """
     suffix = "rentals" if listing_type == "rental" else "sales"
-    new    = DASH_DIR / f"{city}_{suffix}_latest.json"
+    new    = data_dir.listings_path(city, listing_type)
     if new.exists():
         return new
     legacy = DASH_DIR / f"{suffix}_latest.json"

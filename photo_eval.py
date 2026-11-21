@@ -42,7 +42,7 @@ from datetime import datetime
 from pathlib import Path
 
 BASE = Path(__file__).resolve().parent
-DATA = BASE / "dashboard" / "milano_rentals_latest.json"
+DATA = data_dir.listings_path("milano", "rental")   # data.noindex/: no Spotlight
 CACHE = BASE / "photo_eval_cache"
 SHEETS = CACHE / "sheets"
 QUEUE = CACHE / "queue.json"
@@ -74,7 +74,7 @@ CONDITION_FROM_LISTING = {   # stated condition → the 1–5 scale of the promp
 
 
 # ── Data ─────────────────────────────────────────────────────────────────────
-SALES = BASE / "dashboard" / "milano_sales_latest.json"     # sales_scan.py
+SALES = data_dir.listings_path("milano", "sale")     # sales_scan.py
 
 
 def load_listings() -> list[dict]:

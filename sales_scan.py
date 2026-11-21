@@ -4,7 +4,7 @@ Both scanner daemons run run_sales(<their site>) between slots every
 SALES_EVERY_SEC: one browser session sweeps the site's sale areas from
 focus_areas.json ("sales": Immobiliare macro-areas, Idealista (sub)zones,
 max price, min rooms) — ~580 listings / 24 pages on Immobiliare on
-2026-10-18 — and the result is merged into dashboard/milano_sales_latest.json:
+2026-10-18 — and the result is merged into data.noindex/milano_sales_latest.json:
 
 - first / last seen (seen_ids_sales_milano.json), price drops;
 - de-listing like the rentals: a listing missing from DELIST_AFTER_MISSES
@@ -29,9 +29,11 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlencode
 
+import data_dir
+
 BASE_DIR        = Path(__file__).resolve().parent
-SALES_PATH      = BASE_DIR / "dashboard" / "milano_sales_latest.json"
-RENTALS_PATH    = BASE_DIR / "dashboard" / "milano_rentals_latest.json"
+SALES_PATH      = data_dir.listings_path("milano", "sale")     # data.noindex/: no Spotlight
+RENTALS_PATH    = data_dir.listings_path("milano", "rental")
 SEEN_PATH       = BASE_DIR / "seen_ids_sales_milano.json"
 LOG_PATH        = BASE_DIR / "sales_scans_milano.jsonl"
 CONFIG_PATH     = BASE_DIR / "dashboard" / "focus_areas.json"

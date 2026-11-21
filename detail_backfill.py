@@ -53,6 +53,8 @@ import urllib.request
 from pathlib import Path
 from typing import Iterable
 
+import data_dir
+
 import nodriver as uc
 
 from browser_session import BrowserSession
@@ -265,9 +267,8 @@ def _patch_local_file(listing_id: str, update: dict, city: str = "milano") -> bo
     """Mirror the update into the city's local JSON file if the row is
     present there. Localhost dashboard reads this file, so updating it
     keeps the two views consistent."""
-    for fname in (f"dashboard/{city}_rentals_latest.json",
-                  f"dashboard/rentals_latest.json"):
-        p = BASE_DIR / fname
+    for p in (data_dir.listings_path(city, "rental"),
+              BASE_DIR / "dashboard" / "rentals_latest.json"):
         if not p.exists():
             continue
         try:

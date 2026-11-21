@@ -20,12 +20,14 @@ import sys
 from datetime import date, timedelta
 from pathlib import Path
 
+import data_dir
+
 BASE_DIR  = Path(__file__).resolve().parent
 DASHBOARD = BASE_DIR / "dashboard"
 
 FILES = [
-    DASHBOARD / "milano_rentals_latest.json",
-    DASHBOARD / "milano_sales_latest.json",
+    data_dir.listings_path("milano", "rental"),
+    data_dir.listings_path("milano", "sale"),
     DASHBOARD / "rentals_latest.json",
     DASHBOARD / "sales_latest.json",
 ]
