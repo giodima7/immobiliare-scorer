@@ -21,11 +21,12 @@ session that reads the sheets itself. Efficiency comes from:
     python3 photo_eval.py ingest results.json   # store answers from a session
     python3 photo_eval.py report                # agreement with stated condition
 
-Files: photo_eval_cache/ (queue, sheets, batches) and photo_eval_milano.json
+Files: photo_eval_cache/ (queue, sheets, batches) and data.noindex/photo_eval_milano.json
 (the answers) — both local, not in git.
 """
 from __future__ import annotations
 
+import data_dir
 import argparse
 import base64
 import hashlib
@@ -45,7 +46,7 @@ DATA = BASE / "dashboard" / "milano_rentals_latest.json"
 CACHE = BASE / "photo_eval_cache"
 SHEETS = CACHE / "sheets"
 QUEUE = CACHE / "queue.json"
-RESULTS = BASE / "photo_eval_milano.json"
+RESULTS = data_dir.path("photo_eval_milano.json")   # data.noindex/: no Spotlight
 PROMPT = BASE / "photo_eval_prompt.md"
 # The user's own verdicts on photos Sonnet read (Details → "Tu cosa ne
 # pensi?", api.py /api/photo-feedback). They override Sonnet's for that

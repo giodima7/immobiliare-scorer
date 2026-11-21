@@ -17,7 +17,7 @@ from pathlib import Path
 
 
 def trim(max_age_days: int) -> None:
-    path = Path("enriched_cache.json")
+    from enrichment_cache import CACHE_PATH as path
     if not path.exists():
         print("No cache file found — skipping")
         return

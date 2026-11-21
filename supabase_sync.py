@@ -24,6 +24,7 @@ Dependencies: standard library only (urllib + json). No `supabase-py`.
 
 from __future__ import annotations
 
+import data_dir
 import argparse
 import datetime
 import hashlib
@@ -409,7 +410,7 @@ _NOT_SHOWN = {"estimated_rent_n_comps", "estimated_rent_psqm"}
 
 
 def _pushed_state_path(path: Path) -> Path:
-    return BASE_DIR / f".pushed_{path.stem}.json"
+    return data_dir.path(f".pushed_{path.stem}.json")
 
 
 def _row_hash(row: dict) -> str:

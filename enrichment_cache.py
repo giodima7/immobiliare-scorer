@@ -8,12 +8,13 @@ via the Overpass API; results are stored in enriched_cache.json. Subsequent
 fetches look up the cache instead of calling Overpass again.
 
 Key format : "{source}:{listing_id}"    e.g. "immobiliare:12345678"
-Cache file : BASE_DIR/enriched_cache.json
+Cache file : data.noindex/enriched_cache.json
 Thread-safe: module-level lock protects all reads/writes. Process-safe: the
 API and both scanner daemons write the file; each write merges only the
 keys this process added or changed into what's on disk, under a file lock.
 """
 
+import data_dir
 import fcntl
 import json
 import threading
@@ -22,7 +23,7 @@ from datetime import datetime
 from pathlib import Path
 
 BASE_DIR   = Path(__file__).parent
-CACHE_PATH = BASE_DIR / "enriched_cache.json"
+CACHE_PATH = data_dir.path("enriched_cache.json")   # data.noindex/: no Spotlight
 # Bookkeeping keys in an entry, not listing fields: when it was written and
 # a failed placement (api.py GEO_RETRY_DAYS). Left out when an entry is
 # merged into a listing.

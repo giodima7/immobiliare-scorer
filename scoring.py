@@ -38,6 +38,7 @@ Formula
 # Current calibration: Milan residential market, May 2026.
 
 from __future__ import annotations
+import data_dir
 import json
 import math
 from datetime import date
@@ -2190,7 +2191,7 @@ def _property_feature_means(pool: list, settings: dict, comps_index: dict) -> di
 
 
 # ── Photo verdicts (photo_eval.py) ────────────────────────────────────────────
-PHOTO_EVALS_PATH = Path(__file__).resolve().parent / "photo_eval_milano.json"
+PHOTO_EVALS_PATH = data_dir.path("photo_eval_milano.json")   # written by photo_eval.py
 PHOTO_FIELDS = ("photo_deal", "photo_confidence", "photo_condition", "photo_kitchen",
                 "photo_bathroom", "photo_light", "photo_flags", "photo_note_it",
                 "photo_note_en", "photo_read_at", "photo_by_user", "photo_user_note",

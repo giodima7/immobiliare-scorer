@@ -30,6 +30,14 @@ used to bring Chrome to the front for ~2 s before minimizing — about once
 every 15 minutes during the day. It now starts with no window
 (--no-startup-window) and the session opens its own window in the
 background, already minimized for background sessions.
+
+Finished sessions are freed (2026-11-21). nodriver keeps every Browser it
+starts in a module-level set until the program exits — with its tabs, CDP
+connections and their last messages — so each daemon kept every session
+it ever opened (100+ a day). They grew by GBs a day until the Mac ran out
+of memory: 47 GB for the Idealista daemon after 11 days, swap full, the
+Immobiliare daemon killed on 2026-11-16. stop() now drops the browser from
+that set. Measured on a local page: +8.5 MB per session before, flat after.
 """
 
 from __future__ import annotations
@@ -131,6 +139,20 @@ def _kill_profile_leftovers(profile_dir: Path) -> int:
         except OSError:
             pass
     return killed
+
+
+def _forget(browser: uc.Browser) -> None:
+    """Let a stopped browser be garbage-collected: nodriver's registry of
+    every Browser it started (emptied only at exit) and the browser's own
+    tab list are the references that kept each session alive."""
+    try:
+        uc.util.get_registered_instances().discard(browser)
+    except Exception:
+        pass
+    try:
+        browser.targets.clear()
+    except Exception:
+        pass
 
 
 def _port_answers(port: int, timeout: float = 2.0) -> bool:
@@ -253,12 +275,13 @@ class BrowserSession:
     def stop(self) -> None:
         _ACTIVE.discard(self)
         if self.browser is not None:
+            browser, self.browser = self.browser, None
             try:
                 asyncio.get_running_loop()
-                self.browser.stop()   # closes the CDP connection (we own the process)
+                browser.stop()   # closes the CDP connection (we own the process)
             except Exception:
                 pass   # no loop (atexit / SIGTERM): terminating the process closes it
-            self.browser = None
+            _forget(browser)
         if self._proc is not None and self._proc.poll() is None:
             self._proc.terminate()
             try:
