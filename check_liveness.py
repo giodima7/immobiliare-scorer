@@ -35,6 +35,8 @@ import urllib.request
 from datetime import date
 from pathlib import Path
 
+import data_dir
+
 import nodriver as uc
 
 from browser_session import BrowserSession
@@ -49,11 +51,11 @@ DEFAULT_DELAY = 4.0
 
 FILES = {
     "rental": [
-        DASHBOARD / "milano_rentals_latest.json",
+        data_dir.listings_path("milano", "rental"),
         DASHBOARD / "rentals_latest.json",
     ],
     "sale": [
-        DASHBOARD / "milano_sales_latest.json",
+        data_dir.listings_path("milano", "sale"),
         DASHBOARD / "sales_latest.json",
     ],
 }

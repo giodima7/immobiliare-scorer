@@ -32,6 +32,8 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Optional
 
+import data_dir
+
 _OVERPASS_ENDPOINTS = [
     "https://overpass.openstreetmap.fr/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
@@ -875,7 +877,7 @@ _twin_index: dict = {}
 
 
 def _twin_coords_index(city: str) -> dict:
-    path = Path(__file__).resolve().parent / "dashboard" / f"{city}_rentals_latest.json"
+    path = data_dir.listings_path(city, "rental")
     try:
         mtime = path.stat().st_mtime_ns
     except OSError:

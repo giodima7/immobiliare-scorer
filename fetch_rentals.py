@@ -31,6 +31,8 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import urlencode
 
+import data_dir
+
 import random
 
 import nodriver as uc
@@ -60,7 +62,7 @@ CUSTOM_MAPPINGS_PATH = BASE_DIR / "custom_omi_mappings.json"
 AREA_SETTINGS_PATH   = BASE_DIR / "area_settings.json"
 # Defaults — overwritten by _apply_city() once main() parses --city.
 SEEN_IDS_PATH    = BASE_DIR / "seen_ids_milano.json"
-OUTPUT_PATH      = DASHBOARD_DIR / "milano_rentals_latest.json"
+OUTPUT_PATH      = data_dir.listings_path("milano", "rental")   # data.noindex/: no Spotlight
 
 # ── Staleness thresholds ──────────────────────────────────────────────────────
 # A listing is "stale" (probably off-market) once it has been absent from
@@ -224,7 +226,7 @@ def _apply_city(city: str) -> None:
     CITY_LABEL    = cfg["label"]
     CITY_SLUG     = cfg["slug"]
     SEEN_IDS_PATH = BASE_DIR      / f"seen_ids_{city}.json"
-    OUTPUT_PATH   = DASHBOARD_DIR / f"{city}_rentals_latest.json"
+    OUTPUT_PATH   = data_dir.listings_path(city, "rental")
 
 DAEMON_INTERVAL_SEC = 24 * 60 * 60   # one scan per day
 DAEMON_RETRY_SEC    = 60 * 60        # after a failed scan

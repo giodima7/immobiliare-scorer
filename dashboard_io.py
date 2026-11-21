@@ -2,7 +2,8 @@
 dashboard_io.py
 ───────────────
 Centralised writer for the dashboard's JSON snapshots
-(rentals_latest.json / sales_latest.json / latest.json).
+(data.noindex/<city>_{rentals,sales}_latest.json — see data_dir.listings_path —
+and the legacy dashboard/rentals_latest.json / sales_latest.json / latest.json).
 
 Cloudflare Pages caps assets at 25 MiB per file. Indented pretty-printed JSON
 adds ~30% to file size and pushes the rentals snapshot over the limit. This

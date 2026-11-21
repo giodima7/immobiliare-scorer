@@ -34,6 +34,8 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import urlencode
 
+import data_dir
+
 import random
 
 import nodriver as uc
@@ -1522,7 +1524,7 @@ def _stamp_and_apply_staleness(scored: list, latest_path: str) -> list:
 def export(listings: list, prefix: str, city: str | None = None):
     """
     Export scored listings. `city` (if set) is used to derive the per-city
-    dashboard mirror path (e.g. dashboard/milano_sales_latest.json).
+    dashboard mirror path (e.g. data.noindex/milano_sales_latest.json).
     When city is None the legacy combined dashboard/sales_latest.json is
     used — back-compat for --all-cities runs.
     """
@@ -1566,11 +1568,14 @@ def export(listings: list, prefix: str, city: str | None = None):
     #     entries not in *this* scan so they have a chance to be re-seen),
     #   - marks 7-day-unseen entries as is_stale,
     #   - trims 30-day-unseen entries entirely.
-    import os as _os
-    dashboard_dir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "dashboard")
-    _os.makedirs(dashboard_dir, exist_ok=True)
-    latest_name = f"{city}_sales_latest.json" if city else "sales_latest.json"
-    latest_path = _os.path.join(dashboard_dir, latest_name)
+    # Per city: data.noindex/<city>_sales_latest.json (data_dir: no Spotlight).
+    if city:
+        latest_path = str(data_dir.listings_path(city, "sale"))
+    else:
+        import os as _os
+        dashboard_dir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "dashboard")
+        _os.makedirs(dashboard_dir, exist_ok=True)
+        latest_path = _os.path.join(dashboard_dir, "sales_latest.json")
     merged = _stamp_and_apply_staleness(json_listings, latest_path)
     write_snapshot(latest_path, merged)
 

@@ -24,6 +24,8 @@ from pathlib import Path
 
 from flask import Flask, Response, jsonify, request, send_file, stream_with_context
 
+import data_dir
+
 BASE_DIR      = Path(__file__).parent
 DASHBOARD_DIR = BASE_DIR / "dashboard"
 SCRIPT        = BASE_DIR / "fetch_listings.py"
@@ -304,16 +306,16 @@ def _geo_needs_enrich(l: dict, cached: dict | None, pois_version: str | None) ->
 
 def _resolve_city_path(city: str, kind: str) -> Path:
     """
-    Resolve the JSON path for a (city, kind) pair, falling back to the
-    legacy un-prefixed file for Milan when the new per-city file hasn't
-    been written yet. Returns the per-city path either way — callers
-    that need to create the file use this as the write target.
+    Resolve the JSON path for a (city, kind) pair: data.noindex/<city>_…
+    (data_dir.listings_path), falling back to the legacy un-prefixed
+    dashboard/ file for Milan when the per-city file hasn't been written
+    yet. Returns the per-city path either way — callers that need to
+    create the file use this as the write target.
     """
-    suffix = "rentals_latest.json" if kind == "rental" else "sales_latest.json"
-    p = DASHBOARD_DIR / f"{city}_{suffix}"
+    p = data_dir.listings_path(city, kind)
     if p.exists() or city != "milano":
         return p
-    legacy = DASHBOARD_DIR / suffix
+    legacy = DASHBOARD_DIR / ("rentals_latest.json" if kind == "rental" else "sales_latest.json")
     return legacy if legacy.exists() else p
 
 
@@ -1330,7 +1332,7 @@ def api_photo_feedback():
         return jsonify(_pe.load_feedback())
     body = request.get_json(silent=True) or {}
     lid = str(body.get("id") or "")
-    for path in (DASHBOARD_DIR / "milano_rentals_latest.json", DASHBOARD_DIR / "milano_sales_latest.json"):
+    for path in (data_dir.listings_path("milano", "rental"), data_dir.listings_path("milano", "sale")):
         with open(path.with_suffix(path.suffix + ".lock"), "w") as lock_fh:
             fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX)
             try:
@@ -1677,7 +1679,7 @@ def _pipeline_status() -> dict:
         today = _date.today().isoformat()
         cache = _ld.load_cache()
         results = _pe.load_results()
-        rows = _json.loads((DASHBOARD_DIR / "milano_rentals_latest.json").read_text())
+        rows = _json.loads(data_dir.listings_path("milano", "rental").read_text())
         top = {"listings": 0, "page_read": 0, "costs_known": 0, "photos_read": 0, "photos_waiting": 0}
         for l in rows:
             if l.get("is_stale") or l.get("excluded") or not ((l.get("score_total") or 0) >= _pe.MIN_SCORE or l.get("hidden_gem")):
@@ -2658,12 +2660,12 @@ def api_archive_listing():
     candidates = []
     if listing_type == "rental":
         candidates = [
-            DASHBOARD_DIR / "milano_rentals_latest.json",
+            data_dir.listings_path("milano", "rental"),
             DASHBOARD_DIR / "rentals_latest.json",
         ]
     else:
         candidates = [
-            DASHBOARD_DIR / "milano_sales_latest.json",
+            data_dir.listings_path("milano", "sale"),
             DASHBOARD_DIR / "sales_latest.json",
         ]
     local_hit = False
@@ -3972,7 +3974,7 @@ def _parse_idealista_detail(dom: dict) -> dict:
 
 def _supabase_autosync_watcher() -> None:
     """
-    Background loop: when dashboard/{rentals,sales}_latest.json is rewritten
+    Background loop: when data.noindex/milano_{rentals,sales}_latest.json is rewritten
     (a scanner cycle finished, or rescore/enrich mutated it), push the new
     rows to Supabase so the deployed dashboard sees them on next reload.
 
@@ -3993,14 +3995,14 @@ def _supabase_autosync_watcher() -> None:
     # except a start-up rescore — so restarts pushed May data online, and
     # the nightly scans never reached Supabase on their own.
     paths = [
-        (DASHBOARD_DIR / "milano_rentals_latest.json", "rental"),
-        (DASHBOARD_DIR / "milano_sales_latest.json", "sale"),     # sales_scan.py
+        (data_dir.listings_path("milano", "rental"), "rental"),
+        (data_dir.listings_path("milano", "sale"), "sale"),     # sales_scan.py
     ]
     # Prime baselines from current mtime so we don't re-push on startup.
     last_mtime: dict[str, float] = {
         str(p): (p.stat().st_mtime if p.exists() else 0.0) for p, _ in paths
     }
-    print("  Autosync  → watching dashboard/*.json for scanner cycles", flush=True)
+    print("  Autosync  → watching data.noindex/milano_*_latest.json for scanner cycles", flush=True)
 
     POLL_SEC    = 30
     QUIET_SEC   = 10  # require file unchanged for this long before syncing

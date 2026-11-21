@@ -79,9 +79,10 @@ jobs:
         run: |
           python3 -c "
           import json, os
+          import data_dir
           city = '${{ matrix.city }}'
           for kind in ('rentals', 'sales'):
-              path = f'dashboard/{city}_{kind}_latest.json'
+              path = data_dir.listings_path(city, kind)
               if os.path.exists(path):
                   data = json.load(open(path))
                   print(f'{city}/{kind}: {len(data)} listings')

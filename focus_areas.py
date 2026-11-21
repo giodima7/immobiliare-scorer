@@ -8,6 +8,8 @@ import math
 import re
 from pathlib import Path
 
+import data_dir
+
 # In dashboard/ since 2026-10-31: the dashboard's "My zones" filter reads it too
 # (Cloudflare publishes only that folder; the repository is public anyway).
 PATH = Path(__file__).resolve().parent / "dashboard" / "focus_areas.json"
@@ -107,7 +109,7 @@ _PRIORITY_CACHE: dict = {}
 def priority_slugs(source: str, min_n: int = 15, min_share: float = 0.10) -> set:
     """{scan_area} of `source` with ≥ min_n live listings in a focus area
     making up ≥ min_share of the area's live listings."""
-    rentals = Path(__file__).resolve().parent / "dashboard" / "milano_rentals_latest.json"
+    rentals = data_dir.listings_path("milano", "rental")
     try:
         mtime = rentals.stat().st_mtime
     except OSError:
